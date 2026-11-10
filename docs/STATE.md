@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 1, Track lab ([issue #1](https://github.com/TechnologicTEC/Random-Racing/issues/1))
 - **Branch:** `milestone-1-track-lab` (one pull request per milestone, merged after sign-off)
-- **Last finished step:** 6 (straight/corner analysis)
-- **Next step:** 7 (scoring)
+- **Last finished step:** 7 (scoring)
+- **Next step:** 8 (candidate pipeline, then mid-point check)
 
 ## Milestone 1 steps
 
@@ -20,7 +20,7 @@ Updated at the end of every work session. A new session should read this first, 
 | 4 | Viewer shell: canvas, pan/zoom, seed controls, seed in URL | Done |
 | 5 | Validation rules | Done |
 | 6 | Straight/corner analysis and corner types | Done |
-| 7 | Scoring and breakdown panel | To do |
+| 7 | Scoring (breakdown panel lands with step 8) | Done |
 | 8 | Pipeline of 30 candidates, names, candidates panel. **Mid-point check with Tane** | To do |
 | 9 | Variety pass: layout operators and tuning | To do |
 | 10 | Contact sheet, batch stats, Playwright screenshots, cross-browser determinism | To do |

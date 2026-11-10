@@ -38,6 +38,35 @@ export interface TrackConfig {
   curvatureWindow: number;
   layout: LayoutConfig;
   analysis: AnalysisConfig;
+  score: ScoreConfig;
+}
+
+/** How valid layouts are rated for fun. Each part scores 0 to 1. */
+export interface ScoreConfig {
+  /** How much each part counts towards the total. Elevation is 0 until Milestone 2 adds terrain. */
+  weights: { straights: number; cornerMix: number; drift: number; flow: number; elevation: number };
+  /** A straight this long earns full marks, in metres (brief: 150). */
+  longStraight: number;
+  /** How many long straights a lap should have (brief: at least two). */
+  targetLongStraights: number;
+  /** A corner suits drifting when its tightest radius is between these, in metres... */
+  driftMinRadius: number;
+  driftMaxRadius: number;
+  /** ...it is at least this long, in metres (room to charge a boost)... */
+  driftMinLength: number;
+  /** ...and it turns at least this far, in degrees. */
+  driftMinDegrees: number;
+  /** Number of drift corners that earns full marks. */
+  targetDriftCorners: number;
+  /** Flow: laps with fewer or more real corners than this lose marks. */
+  flowMinCorners: number;
+  flowMaxCorners: number;
+  /** Flow: kinks beyond this many lose marks. */
+  flowMaxKinks: number;
+  /** Flow: a straight shorter than this between two corners turning the same way is a stutter, in metres. */
+  stutterStraightMax: number;
+  /** Flow: at least this share of corners should turn the less common way (0 to 0.5). */
+  minorityTurnShare: number;
 }
 
 /** How the lap is split into straights and corners, and how corners are named. */
@@ -116,6 +145,21 @@ export const config: GameConfig = {
       chicaneMaxDegrees: 80,
       chicaneMaxGap: 30,
       chicaneMaxLength: 200,
+    },
+    score: {
+      weights: { straights: 0.25, cornerMix: 0.25, drift: 0.25, flow: 0.25, elevation: 0 },
+      longStraight: 150,
+      targetLongStraights: 2,
+      driftMinRadius: 20,
+      driftMaxRadius: 90,
+      driftMinLength: 30,
+      driftMinDegrees: 45,
+      targetDriftCorners: 5,
+      flowMinCorners: 6,
+      flowMaxCorners: 16,
+      flowMaxKinks: 2,
+      stutterStraightMax: 40,
+      minorityTurnShare: 0.2,
     },
   },
 };

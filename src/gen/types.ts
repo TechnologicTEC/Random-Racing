@@ -79,3 +79,24 @@ export interface CornerSection {
 }
 
 export type Section = StraightSection | CornerSection;
+
+export type ScoreKey = 'straights' | 'cornerMix' | 'drift' | 'flow' | 'elevation';
+
+/** One part of the fun score. */
+export interface ScorePart {
+  key: ScoreKey;
+  /** 0 (poor) to 1 (ideal). */
+  score: number;
+  /** Share of the total this part carries. */
+  weight: number;
+  /** True when the part cannot be measured yet and is left out of the total. */
+  pending: boolean;
+  /** The measurements behind the score, for the debug view. */
+  facts: Record<string, number>;
+}
+
+export interface ScoreBreakdown {
+  /** Weighted average of the parts that are not pending, 0 to 1. */
+  total: number;
+  parts: ScorePart[];
+}
