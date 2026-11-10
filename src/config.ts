@@ -20,6 +20,16 @@ export interface TrackConfig {
   /** Shortest and longest allowed lap, in metres. */
   lapLengthMin: number;
   lapLengthMax: number;
+  /** Tightest allowed corner radius, in metres (brief: about 15). */
+  minCornerRadius: number;
+  /** Separate sections must stay at least this many road widths apart (brief: about 2.5). */
+  sectionGapWidths: number;
+  /**
+   * Two points count as separate sections when they are more than this far
+   * apart along the lap, in metres. Keeps the two sides of one hairpin from
+   * being judged against each other.
+   */
+  sectionGapMinArc: number;
   /** The whole track must stay within this distance of the island centre, in metres. */
   buildableRadius: number;
   /** Distance between centre-line samples, in metres. */
@@ -54,6 +64,9 @@ export const config: GameConfig = {
     roadWidth: 13,
     lapLengthMin: 1400,
     lapLengthMax: 2400,
+    minCornerRadius: 15,
+    sectionGapWidths: 2.5,
+    sectionGapMinArc: 90,
     buildableRadius: 500,
     sampleSpacing: 2,
     curvatureWindow: 4,

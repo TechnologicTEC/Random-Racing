@@ -144,6 +144,27 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.lab-verdict {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  color: var(--lab-bad);
+}
+
+.lab-verdict[data-valid="true"] {
+  color: var(--lab-good);
+}
+
+.lab-verdict li::before {
+  content: "\2716\00a0\00a0";
+}
+
+.lab-verdict[data-valid="true"] li::before {
+  content: "\2714\00a0\00a0";
+}
+
 .lab-hint {
   margin: auto 0 0;
   color: var(--lab-muted);

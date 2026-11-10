@@ -4,7 +4,9 @@ import { createRng } from '../../core/rng';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
 import { generateControlPoints } from '../../gen/track/layout';
 import { sampleClosedSpline } from '../../gen/track/spline';
+import { validateLayout } from '../../gen/track/validate';
 import { drawLab, type LabScene } from './draw';
+import { describeViolation } from './format';
 import { fitView, panBy, zoomAt, type View } from './view';
 
 const TEMPLATE = `
@@ -33,6 +35,7 @@ const TEMPLATE = `
       <section class="lab-section">
         <h2>Track</h2>
         <dl class="lab-facts" data-ref="facts" data-testid="facts"></dl>
+        <ul class="lab-verdict" data-ref="verdict" data-testid="verdict"></ul>
       </section>
 
       <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one.</p>
@@ -55,6 +58,7 @@ export function mountTrackLab(root: HTMLElement): void {
   const input = ref<HTMLInputElement>('input');
   const errorEl = ref('error');
   const factsEl = ref('facts');
+  const verdictEl = ref('verdict');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser cannot draw to a 2D canvas');
 
@@ -84,7 +88,8 @@ export function mountTrackLab(root: HTMLElement): void {
     seed = Math.min(MAX_SEED, Math.max(0, Math.floor(next)));
     const controlPoints = generateControlPoints(createRng(seed, 'track'), cfg);
     const line = sampleClosedSpline(controlPoints, cfg.sampleSpacing, cfg.curvatureWindow);
-    scene = { controlPoints, line };
+    const violations = validateLayout(line, cfg);
+    scene = { controlPoints, line, violations };
 
     input.value = String(seed);
     errorEl.textContent = '';
@@ -92,6 +97,14 @@ export function mountTrackLab(root: HTMLElement): void {
     addFact('Share code', formatSeedCode(seed, GENERATOR_VERSION));
     addFact('Lap length', `${Math.round(line.length)} m`);
     addFact('Control points', String(controlPoints.length));
+
+    verdictEl.innerHTML = '';
+    verdictEl.dataset.valid = String(violations.length === 0);
+    for (const text of violations.length === 0 ? ['Valid layout'] : violations.map(describeViolation)) {
+      const item = document.createElement('li');
+      item.textContent = text;
+      verdictEl.append(item);
+    }
 
     const url = new URL(window.location.href);
     url.searchParams.set('seed', String(seed));

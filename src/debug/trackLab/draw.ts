@@ -1,12 +1,13 @@
 import type { TrackConfig } from '../../config';
 import type { Vec2 } from '../../core/vec2';
-import type { CenterLine } from '../../gen/types';
+import type { CenterLine, Violation } from '../../gen/types';
 import { screenToWorld, worldToScreen, type View } from './view';
 
 /** What the lab draws for one seed. */
 export interface LabScene {
   controlPoints: readonly Vec2[];
   line: CenterLine;
+  violations: readonly Violation[];
 }
 
 const COLORS = {
@@ -20,6 +21,7 @@ const COLORS = {
   controlPoint: '#f2b441',
   start: '#ffffff',
   label: '#9aa7b4',
+  bad: '#ff7a70',
 };
 
 /** Draws the whole lab view. The context is expected to be scaled so one unit is one CSS pixel. */
@@ -33,6 +35,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
     drawRoad(ctx, view, scene.line, cfg.roadWidth);
     drawControlPoints(ctx, view, scene.controlPoints);
     drawStart(ctx, view, scene.line, cfg.roadWidth);
+    drawViolations(ctx, view, scene.violations);
   }
   drawScaleBar(ctx, view);
 }
@@ -159,4 +162,23 @@ function drawScaleBar(ctx: CanvasRenderingContext2D, view: View): void {
   ctx.font = '12px ui-monospace, "Cascadia Mono", Consolas, monospace';
   ctx.textBaseline = 'bottom';
   ctx.fillText(metres >= 1000 ? `${metres / 1000} km` : `${metres} m`, x + 6, y - 6);
+}
+
+/** A red ring where each rule was broken. Lap-length problems have no place, so they are skipped. */
+function drawViolations(ctx: CanvasRenderingContext2D, view: View, violations: readonly Violation[]): void {
+  ctx.strokeStyle = COLORS.bad;
+  ctx.lineWidth = 2.5;
+  for (const violation of violations) {
+    if (violation.kind === 'lap-too-short' || violation.kind === 'lap-too-long') continue;
+    const { sx, sy } = worldToScreen(view, violation.x, violation.z);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 13, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sx - 5, sy - 5);
+    ctx.lineTo(sx + 5, sy + 5);
+    ctx.moveTo(sx + 5, sy - 5);
+    ctx.lineTo(sx - 5, sy + 5);
+    ctx.stroke();
+  }
 }

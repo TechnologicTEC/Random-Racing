@@ -21,7 +21,27 @@ export function sampleClosedSpline(points: readonly Vec2[], spacing: number, cur
   if (points.length < 4) throw new Error('A closed spline needs at least four control points');
 
   const traced = traceSpline(points);
-  const length = traced.distance[traced.distance.length - 1]!;
+  return resampleClosedPath(traced.x, traced.z, spacing, curvatureWindow);
+}
+
+/**
+ * Resamples a closed path at even steps and measures direction and curvature.
+ * The path is a list of points whose last point equals its first.
+ */
+export function resampleClosedPath(
+  pathX: readonly number[],
+  pathZ: readonly number[],
+  spacing: number,
+  curvatureWindow = 4,
+): CenterLine {
+  const distance: number[] = [0];
+  for (let i = 1; i < pathX.length; i++) {
+    const dx = pathX[i]! - pathX[i - 1]!;
+    const dz = pathZ[i]! - pathZ[i - 1]!;
+    distance.push(distance[i - 1]! + Math.sqrt(dx * dx + dz * dz));
+  }
+
+  const length = distance[distance.length - 1]!;
   const count = Math.max(8, Math.round(length / spacing));
   const step = length / count;
 
@@ -30,12 +50,12 @@ export function sampleClosedSpline(points: readonly Vec2[], spacing: number, cur
   let segment = 0;
   for (let i = 0; i < count; i++) {
     const target = i * step;
-    while (traced.distance[segment + 1]! < target) segment++;
-    const from = traced.distance[segment]!;
-    const to = traced.distance[segment + 1]!;
+    while (distance[segment + 1]! < target) segment++;
+    const from = distance[segment]!;
+    const to = distance[segment + 1]!;
     const t = to > from ? (target - from) / (to - from) : 0;
-    x[i] = traced.x[segment]! + (traced.x[segment + 1]! - traced.x[segment]!) * t;
-    z[i] = traced.z[segment]! + (traced.z[segment + 1]! - traced.z[segment]!) * t;
+    x[i] = pathX[segment]! + (pathX[segment + 1]! - pathX[segment]!) * t;
+    z[i] = pathZ[segment]! + (pathZ[segment + 1]! - pathZ[segment]!) * t;
   }
 
   const tx = new Float64Array(count);
@@ -75,8 +95,6 @@ export function curvatureThrough(ax: number, az: number, bx: number, bz: number,
 interface TracedCurve {
   x: number[];
   z: number[];
-  /** Distance along the curve to each traced point; the last entry is the full lap. */
-  distance: number[];
 }
 
 /** Walks the whole spline in small steps, returning a fine polyline that ends where it began. */
@@ -84,7 +102,6 @@ function traceSpline(points: readonly Vec2[]): TracedCurve {
   const n = points.length;
   const x: number[] = [points[0]!.x];
   const z: number[] = [points[0]!.z];
-  const distance: number[] = [0];
 
   for (let i = 0; i < n; i++) {
     const p0 = points[(i - 1 + n) % n]!;
@@ -113,16 +130,12 @@ function traceSpline(points: readonly Vec2[]): TracedCurve {
       const u = s / steps;
       const px = s === steps ? p2.x : ((ax * u + bx) * u + m1x) * u + p1.x;
       const pz = s === steps ? p2.z : ((az * u + bz) * u + m1z) * u + p1.z;
-      const last = x.length - 1;
-      const dx = px - x[last]!;
-      const dz = pz - z[last]!;
       x.push(px);
       z.push(pz);
-      distance.push(distance[last]! + Math.sqrt(dx * dx + dz * dz));
     }
   }
 
-  return { x, z, distance };
+  return { x, z };
 }
 
 function gap(a: Vec2, b: Vec2): number {

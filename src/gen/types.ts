@@ -27,3 +27,23 @@ export interface CenterLine {
    */
   curvature: Float64Array;
 }
+
+export type ViolationKind =
+  | 'self-intersection'
+  | 'corner-too-tight'
+  | 'sections-too-close'
+  | 'lap-too-short'
+  | 'lap-too-long'
+  | 'out-of-bounds';
+
+/** One reason a candidate layout was rejected, with where it happened. */
+export interface Violation {
+  kind: ViolationKind;
+  /** Where to mark the problem on the map, in metres. */
+  x: number;
+  z: number;
+  /** The measured value (a radius, gap, length or distance in metres). */
+  value: number;
+  /** The limit it broke, in metres. */
+  limit: number;
+}
