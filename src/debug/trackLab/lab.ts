@@ -1,13 +1,9 @@
 import './lab.css';
 import { config, GENERATOR_VERSION } from '../../config';
-import { createRng } from '../../core/rng';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { analyseSections } from '../../gen/track/analysis';
-import { generateControlPoints } from '../../gen/track/layout';
-import { sampleClosedSpline } from '../../gen/track/spline';
-import { validateLayout } from '../../gen/track/validate';
-import { drawLab, SECTION_COLORS, type LabScene } from './draw';
-import { describeViolation } from './format';
+import { generateTrack, hashTrack, type Candidate, type TrackResult } from '../../gen';
+import { drawLab, SECTION_COLORS } from './draw';
+import { describeScorePart, describeViolation } from './format';
 import { fitView, panBy, zoomAt, type View } from './view';
 
 const TEMPLATE = `
@@ -15,7 +11,7 @@ const TEMPLATE = `
     <aside class="lab-side">
       <header>
         <h1 class="lab-title">Seed Circuit track lab</h1>
-        <p class="lab-sub">Generator v${GENERATOR_VERSION}</p>
+        <p class="lab-sub">Generator v${GENERATOR_VERSION} · <a href="?sheet=20" data-ref="sheetLink" data-testid="sheet-link">Contact sheet of 20 seeds</a></p>
       </header>
 
       <section class="lab-section">
@@ -35,17 +31,44 @@ const TEMPLATE = `
 
       <section class="lab-section">
         <h2>Track</h2>
+        <p class="lab-name" data-ref="name" data-testid="track-name"></p>
         <dl class="lab-facts" data-ref="facts" data-testid="facts"></dl>
         <ul class="lab-verdict" data-ref="verdict" data-testid="verdict"></ul>
       </section>
 
-      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one.</p>
+      <section class="lab-section">
+        <h2>Fun score</h2>
+        <div class="lab-total"><span data-ref="totalLabel"></span><strong data-ref="total" data-testid="score-total"></strong></div>
+        <div class="lab-bars" data-ref="bars" data-testid="score-bars"></div>
+      </section>
+
+      <section class="lab-section">
+        <h2>Candidates</h2>
+        <div class="lab-chips" data-ref="chips" data-testid="candidates"></div>
+        <p class="lab-note" data-ref="tally" data-testid="candidate-tally"></p>
+        <label class="lab-check">
+          <input type="checkbox" data-ref="ghosts" data-testid="rejected-toggle" />
+          Show rejected layouts on the map
+        </label>
+      </section>
+
+      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts.</p>
     </aside>
     <main class="lab-stage">
       <canvas data-ref="canvas" data-testid="track-canvas"></canvas>
     </main>
   </div>
 `;
+
+const CORNER_LABELS = {
+  hairpin: 'Hairpins',
+  sweeper: 'Sweepers',
+  chicane: 'Chicane corners',
+  corner: 'Other corners',
+  kink: 'Kinks',
+} as const;
+
+const asPoints = (score: number): string => String(Math.round(score * 100));
 
 /** Builds the track lab inside the given element. */
 export function mountTrackLab(root: HTMLElement): void {
@@ -57,22 +80,32 @@ export function mountTrackLab(root: HTMLElement): void {
   };
   const canvas = ref<HTMLCanvasElement>('canvas');
   const input = ref<HTMLInputElement>('input');
+  const ghostsBox = ref<HTMLInputElement>('ghosts');
   const errorEl = ref('error');
   const factsEl = ref('facts');
   const verdictEl = ref('verdict');
+  const barsEl = ref('bars');
+  const chipsEl = ref('chips');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser cannot draw to a 2D canvas');
 
   const cfg = config.track;
-  let seed = 0;
-  let scene: LabScene | null = null;
+  let result: TrackResult | null = null;
+  let selectedIndex = 0;
   let view: View = fitView(1, 1, cfg.buildableRadius, 24);
   let fitted = true;
 
   function render(): void {
     const dpr = window.devicePixelRatio || 1;
     ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawLab(ctx!, view, scene, cfg);
+    if (!result) {
+      drawLab(ctx!, view, null, cfg);
+      return;
+    }
+    const ghosts = ghostsBox.checked
+      ? result.candidates.filter((c) => c.violations.length > 0 && c.index !== selectedIndex)
+      : [];
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner: selectedIndex === result.winnerIndex, ghosts }, cfg);
   }
 
   function resize(): void {
@@ -86,42 +119,115 @@ export function mountTrackLab(root: HTMLElement): void {
   }
 
   function setSeed(next: number): void {
-    seed = Math.min(MAX_SEED, Math.max(0, Math.floor(next)));
-    const controlPoints = generateControlPoints(createRng(seed, 'track'), cfg);
-    const line = sampleClosedSpline(controlPoints, cfg.sampleSpacing, cfg.curvatureWindow);
-    const violations = validateLayout(line, cfg);
-    const sections = analyseSections(line, cfg);
-    scene = { controlPoints, line, violations, sections };
+    const seed = Math.min(MAX_SEED, Math.max(0, Math.floor(next)));
+    const started = performance.now();
+    result = generateTrack(seed, cfg);
+    const elapsed = performance.now() - started;
+    selectedIndex = result.winnerIndex;
 
     input.value = String(seed);
     errorEl.textContent = '';
-    factsEl.innerHTML = '';
-    addFact('Share code', formatSeedCode(seed, GENERATOR_VERSION));
-    addFact('Lap length', `${Math.round(line.length)} m`);
-    addFact('Control points', String(controlPoints.length));
-
-    const straights = sections.filter((s) => s.type === 'straight');
-    const corners = sections.filter((s) => s.type === 'corner');
-    const longest = Math.max(0, ...straights.map((s) => s.length));
-    addFact('Straights over 150 m', String(straights.filter((s) => s.length >= 150).length), SECTION_COLORS.longStraight);
-    addFact('Longest straight', `${Math.round(longest)} m`);
-    for (const kind of ['hairpin', 'sweeper', 'chicane', 'corner', 'kink'] as const) {
-      const label = { hairpin: 'Hairpins', sweeper: 'Sweepers', chicane: 'Chicane corners', corner: 'Other corners', kink: 'Kinks' }[kind];
-      addFact(label, String(corners.filter((c) => c.kind === kind).length), SECTION_COLORS[kind]);
-    }
-
-    verdictEl.innerHTML = '';
-    verdictEl.dataset.valid = String(violations.length === 0);
-    for (const text of violations.length === 0 ? ['Valid layout'] : violations.map(describeViolation)) {
-      const item = document.createElement('li');
-      item.textContent = text;
-      verdictEl.append(item);
-    }
+    ref('name').textContent = result.name;
 
     const url = new URL(window.location.href);
     url.searchParams.set('seed', String(seed));
     window.history.replaceState(null, '', url);
     document.body.dataset.labSeed = String(seed);
+    document.body.dataset.labHash = hashTrack(result);
+    document.body.dataset.labMs = elapsed.toFixed(1);
+    ref<HTMLAnchorElement>('sheetLink').href = `?sheet=20&from=${seed}`;
+
+    renderChips();
+    renderSelected();
+  }
+
+  function select(index: number): void {
+    selectedIndex = index;
+    for (const chip of chipsEl.querySelectorAll<HTMLButtonElement>('button')) {
+      chip.setAttribute('aria-pressed', String(Number(chip.dataset.index) === index));
+    }
+    renderSelected();
+  }
+
+  /** One button per candidate: its score out of 100, or a cross if rejected. */
+  function renderChips(): void {
+    if (!result) return;
+    chipsEl.innerHTML = '';
+    for (const candidate of result.candidates) {
+      const valid = candidate.violations.length === 0;
+      const isWinner = candidate.index === result.winnerIndex;
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'lab-chip';
+      chip.dataset.index = String(candidate.index);
+      chip.dataset.valid = String(valid);
+      chip.dataset.winner = String(isWinner);
+      chip.dataset.testid = 'candidate-chip';
+      chip.textContent = candidate.score ? asPoints(candidate.score.total) : '✖';
+      const summary = valid
+        ? `scored ${asPoints(candidate.score!.total)}${isWinner ? ' (winner)' : ''}`
+        : `rejected: ${candidate.violations.map(describeViolation).join('; ')}`;
+      chip.title = `Candidate ${candidate.index + 1}, ${summary}`;
+      chip.setAttribute('aria-label', chip.title);
+      chip.setAttribute('aria-pressed', String(candidate.index === selectedIndex));
+      chip.addEventListener('click', () => select(candidate.index));
+      chipsEl.append(chip);
+    }
+    const validCount = result.candidates.filter((c) => c.violations.length === 0).length;
+    const fallbackNote = result.fallback ? ' No candidate was valid, so a plain oval was used.' : '';
+    ref('tally').textContent =
+      `${validCount} valid, ${result.candidates.length - validCount} rejected. Outlined: the winner.${fallbackNote}`;
+  }
+
+  /** Fills the Track and Fun score panels for the candidate being shown. */
+  function renderSelected(): void {
+    if (!result) return;
+    const candidate: Candidate = result.candidates[selectedIndex]!;
+    const isWinner = selectedIndex === result.winnerIndex;
+
+    factsEl.innerHTML = '';
+    addFact('Share code', formatSeedCode(result.seed, result.generatorVersion));
+    addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
+    addFact('Lap length', `${Math.round(candidate.line.length)} m`);
+    addFact('Generated in', `${document.body.dataset.labMs} ms`);
+
+    const straights = candidate.sections.filter((s) => s.type === 'straight');
+    const corners = candidate.sections.filter((s) => s.type === 'corner');
+    addFact('Straights over 150 m', String(straights.filter((s) => s.length >= 150).length), SECTION_COLORS.longStraight);
+    for (const kind of ['hairpin', 'sweeper', 'chicane', 'corner', 'kink'] as const) {
+      addFact(CORNER_LABELS[kind], String(corners.filter((c) => c.kind === kind).length), SECTION_COLORS[kind]);
+    }
+
+    verdictEl.innerHTML = '';
+    const valid = candidate.violations.length === 0;
+    verdictEl.dataset.valid = String(valid);
+    const lines = valid ? ['✔ Valid layout'] : candidate.violations.map((v) => `✖ ${describeViolation(v)}`);
+    for (const text of lines) {
+      const item = document.createElement('li');
+      item.textContent = text;
+      verdictEl.append(item);
+    }
+
+    barsEl.innerHTML = '';
+    ref('totalLabel').textContent = candidate.score ? 'Total out of 100' : 'Rejected layouts are not scored';
+    ref('total').textContent = candidate.score ? asPoints(candidate.score.total) : '–';
+    for (const part of candidate.score?.parts ?? []) {
+      const { label, detail } = describeScorePart(part);
+      const bar = document.createElement('div');
+      bar.className = 'lab-bar';
+      bar.dataset.pending = String(part.pending);
+      bar.innerHTML = `
+        <div class="lab-bar-head"><span></span><span></span></div>
+        <div class="lab-bar-track"><div class="lab-bar-fill"></div></div>
+        <p class="lab-bar-detail"></p>`;
+      const [name, value] = bar.querySelectorAll('span');
+      name!.textContent = label;
+      value!.textContent = part.pending ? '–' : asPoints(part.score);
+      bar.querySelector<HTMLElement>('.lab-bar-fill')!.style.width = `${part.pending ? 0 : part.score * 100}%`;
+      bar.querySelector('.lab-bar-detail')!.textContent = detail;
+      barsEl.append(bar);
+    }
+
     render();
   }
 
@@ -143,6 +249,9 @@ export function mountTrackLab(root: HTMLElement): void {
   function randomSeed(): number {
     return 1 + Math.floor(Math.random() * 99999);
   }
+  const currentSeed = (): number => result?.seed ?? 0;
+  const previousSeed = (): number => (currentSeed() === 0 ? MAX_SEED : currentSeed() - 1);
+  const nextSeed = (): number => (currentSeed() === MAX_SEED ? 0 : currentSeed() + 1);
 
   ref<HTMLFormElement>('form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -151,23 +260,27 @@ export function mountTrackLab(root: HTMLElement): void {
       errorEl.textContent = `Type a whole number from 0 to ${MAX_SEED}, or a code like v${GENERATOR_VERSION}-48213.`;
       return;
     }
-    if (parsed.version !== null && parsed.version !== GENERATOR_VERSION) {
-      setSeed(parsed.seed);
-      errorEl.textContent = `That code is from generator v${parsed.version}. Showing the seed with v${GENERATOR_VERSION}; the track may differ.`;
-      return;
-    }
     setSeed(parsed.seed);
+    if (parsed.version !== null && parsed.version !== GENERATOR_VERSION) {
+      errorEl.textContent = `That code is from generator v${parsed.version}. Showing the seed with v${GENERATOR_VERSION}; the track may differ.`;
+    }
   });
-  ref('prev').addEventListener('click', () => setSeed(seed === 0 ? MAX_SEED : seed - 1));
-  ref('next').addEventListener('click', () => setSeed(seed === MAX_SEED ? 0 : seed + 1));
+  ref('prev').addEventListener('click', () => setSeed(previousSeed()));
+  ref('next').addEventListener('click', () => setSeed(nextSeed()));
   ref('random').addEventListener('click', () => setSeed(randomSeed()));
+  ghostsBox.addEventListener('change', render);
 
   window.addEventListener('keydown', (event) => {
-    if (event.target instanceof HTMLInputElement || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.key === 'ArrowLeft') setSeed(seed === 0 ? MAX_SEED : seed - 1);
-    else if (event.key === 'ArrowRight') setSeed(seed === MAX_SEED ? 0 : seed + 1);
-    else if (event.key === 'n' || event.key === 'N') setSeed(randomSeed());
-    else return;
+    // Typing in the seed box must not trigger shortcuts; other controls should not block them.
+    if (event.target === input || event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === 'arrowleft') setSeed(previousSeed());
+    else if (key === 'arrowright') setSeed(nextSeed());
+    else if (key === 'n') setSeed(randomSeed());
+    else if (key === 'r') {
+      ghostsBox.checked = !ghostsBox.checked;
+      render();
+    } else return;
     event.preventDefault();
   });
 

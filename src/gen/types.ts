@@ -3,6 +3,8 @@
  * typed arrays, so it can be posted from a Web Worker or sent over a network.
  */
 
+import type { Vec2 } from '../core/vec2';
+
 /**
  * A closed centre line sampled at even steps along its length.
  * Sample i sits `i * spacing` metres from the start; the loop closes from the
@@ -99,4 +101,30 @@ export interface ScoreBreakdown {
   /** Weighted average of the parts that are not pending, 0 to 1. */
   total: number;
   parts: ScorePart[];
+}
+
+/** One layout tried for a seed, with its verdict. */
+export interface Candidate {
+  /** Position in the order candidates were generated, starting at 0. */
+  index: number;
+  controlPoints: Vec2[];
+  line: CenterLine;
+  /** Why it was rejected; empty when valid. */
+  violations: Violation[];
+  sections: Section[];
+  /** Null when rejected. */
+  score: ScoreBreakdown | null;
+}
+
+/** Everything generation decided for one seed. */
+export interface TrackResult {
+  seed: number;
+  generatorVersion: number;
+  name: string;
+  /** Every candidate that was tried, in order. */
+  candidates: Candidate[];
+  /** The chosen candidate. Its lap starts at the start/finish line. */
+  winnerIndex: number;
+  /** True if no candidate was valid and a plain oval was used instead. */
+  fallback: boolean;
 }

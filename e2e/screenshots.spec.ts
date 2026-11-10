@@ -13,6 +13,13 @@ const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : DEF
 test.describe('screenshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Screenshots are taken in Chromium only');
 
+  test('contact sheet', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1120 });
+    await page.goto('/?sheet=20&from=1');
+    await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+    await page.screenshot({ path: 'test-results/screens/sheet-from-00001.png', fullPage: true });
+  });
+
   for (const seed of seeds) {
     test(`seed ${seed}`, async ({ page }) => {
       await page.goto(`/?seed=${seed}`);

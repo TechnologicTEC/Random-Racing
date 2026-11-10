@@ -6,15 +6,15 @@
  * an argument, which keeps generation pure and easy to test.
  */
 
-/**
- * Bumped whenever the generator changes what a seed produces. It stays at 0
- * during development and becomes 1 at release.
- */
-export const GENERATOR_VERSION = 0;
+export { GENERATOR_VERSION } from './gen/version';
 
 export interface TrackConfig {
   /** Candidate layouts generated per round for each seed. */
   candidatesPerRound: number;
+  /** If a whole round is rejected, try again, up to this many rounds in total. */
+  maxRounds: number;
+  /** The start line sits this far along the longest straight (0 = its start, 1 = its end). */
+  startLineFraction: number;
   /** Road width in metres (brief: 12 to 14). */
   roadWidth: number;
   /** Shortest and longest allowed lap, in metres. */
@@ -115,6 +115,8 @@ export interface GameConfig {
 export const config: GameConfig = {
   track: {
     candidatesPerRound: 30,
+    maxRounds: 5,
+    startLineFraction: 0.4,
     roadWidth: 13,
     lapLengthMin: 1400,
     lapLengthMax: 2400,

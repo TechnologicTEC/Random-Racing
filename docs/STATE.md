@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 1, Track lab ([issue #1](https://github.com/TechnologicTEC/Random-Racing/issues/1))
 - **Branch:** `milestone-1-track-lab` (one pull request per milestone, merged after sign-off)
-- **Last finished step:** 7 (scoring)
-- **Next step:** 8 (candidate pipeline, then mid-point check)
+- **Last finished step:** 8 (candidate pipeline, viewer rebuilt around it, contact sheet)
+- **Next step:** mid-point check with Tane, then 9 (variety pass)
 
 ## Milestone 1 steps
 
@@ -21,9 +21,9 @@ Updated at the end of every work session. A new session should read this first, 
 | 5 | Validation rules | Done |
 | 6 | Straight/corner analysis and corner types | Done |
 | 7 | Scoring (breakdown panel lands with step 8) | Done |
-| 8 | Pipeline of 30 candidates, names, candidates panel. **Mid-point check with Tane** | To do |
+| 8 | Pipeline of 30 candidates, names, candidates panel, contact sheet. **Mid-point check with Tane** | Done, waiting for Tane's feedback |
 | 9 | Variety pass: layout operators and tuning | To do |
-| 10 | Contact sheet, batch stats, Playwright screenshots, cross-browser determinism | To do |
+| 10 | Batch stats, Playwright screenshots of 20 seeds, cross-browser determinism (contact sheet already done in step 8) | To do |
 | 11 | Wrap-up: 20 fresh seeds, docs, pull request | To do |
 
 ## Working agreements
@@ -57,9 +57,14 @@ Updated at the end of every work session. A new session should read this first, 
 
 ## Known issues and risks
 
-- `Math.sin`, `Math.cos` and similar are not guaranteed bit-identical across browsers, so a seed could in theory differ between Chrome and Firefox. Step 10 adds a cross-browser hash test. If it fails, replace the offending functions with fixed versions in `src/core`.
+- **Layouts are bland (step 9 fixes this).** The placeholder layout is a ring of points with noise, so every track is a wobbly loop: always clockwise, no hairpins, no truly straight straights, "chicanes" that are only gentle wiggles.
+- **The score is too generous.** Those bland loops score 82 to 92 out of 100. Causes to fix in step 9: anything gentler than a 400 m radius counts as "straight", so long curves earn straight marks; chicanes are detected from small direction changes; five drift corners is too easy a target.
+- The lab sidebar is taller than a 720-pixel-high window, so the candidates panel needs a scroll.
+
+- Cross-browser determinism: generation avoids browser-dependent maths by design (see Decisions). Step 10 still adds a test that Chromium, Firefox and Node agree on track hashes.
 
 ## Session log
 
 - **2026-11-11:** Plan approved. Opened issues #1 to #6, created the branch and this file.
 - **2026-11-11:** Steps 1 to 4 done. Added `src/core/dmath.ts` (own sin/cos built from plain arithmetic) and extended the architecture guard to ban `Math.sin`, `Math.cos`, `Math.hypot` and other browser-dependent functions from `src/core` and `src/gen`, so the cross-browser risk is designed out rather than only tested for.
+- **2026-11-11:** Steps 5 to 8 done: validation, section analysis, scoring, the 30-candidate pipeline with fallback, track names, track hashing. Viewer rebuilt around the pipeline (score bars, candidate chips, rejected overlay) and the contact sheet (`?sheet=20`) pulled forward from step 10. 184 unit tests and 22 Playwright tests pass. Seeds 1 to 200 all give a valid winner with no fallback, about 30 ms per seed in Node and 65 ms in the browser. Stopped for the mid-point check.

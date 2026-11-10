@@ -65,8 +65,55 @@ test('rejects a seed that is not a number and keeps the current track', async ({
 
 test('shows the same track for the same seed after a reload', async ({ page }) => {
   await openLab(page, '?seed=31337');
-  const first = await page.getByTestId('facts').innerText();
+  const hash = await page.locator('body').getAttribute('data-lab-hash');
+  const name = await page.getByTestId('track-name').innerText();
+  expect(hash).toMatch(/^[0-9a-f]{8}$/);
   await page.reload();
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
-  expect(await page.getByTestId('facts').innerText()).toBe(first);
+  await expect(page.locator('body')).toHaveAttribute('data-lab-hash', hash!);
+  await expect(page.getByTestId('track-name')).toHaveText(name);
+});
+
+test('shows a valid winner with a score and its breakdown', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  await expect(page.getByTestId('verdict')).toContainText('Valid layout');
+  const total = Number(await page.getByTestId('score-total').innerText());
+  expect(total).toBeGreaterThan(0);
+  expect(total).toBeLessThanOrEqual(100);
+  await expect(page.getByTestId('score-bars')).toContainText('Long straights');
+  await expect(page.getByTestId('score-bars')).toContainText('Corner mix');
+  await expect(page.getByTestId('score-bars')).toContainText('Drift corners');
+  await expect(page.getByTestId('score-bars')).toContainText('Flow');
+  await expect(page.getByTestId('score-bars')).toContainText('needs terrain');
+});
+
+test('lists all 30 candidates and explains a rejected one when clicked', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const chips = page.getByTestId('candidate-chip');
+  await expect(chips).toHaveCount(30);
+  await expect(page.locator('[data-testid="candidate-chip"][data-winner="true"]')).toHaveCount(1);
+
+  const rejected = page.locator('[data-testid="candidate-chip"][data-valid="false"]').first();
+  await rejected.click();
+  await expect(rejected).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-valid', 'false');
+  await expect(page.getByTestId('score-total')).toHaveText('–');
+});
+
+test('overlays the rejected layouts when asked', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const before = await brightPixelCount(page);
+  await page.getByTestId('rejected-toggle').check();
+  expect(await brightPixelCount(page)).toBeGreaterThan(before);
+  await page.keyboard.press('r');
+  await expect(page.getByTestId('rejected-toggle')).not.toBeChecked();
+});
+
+test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) => {
+  await openLab(page, '?sheet=20&from=1');
+  const cards = page.getByTestId('sheet-card');
+  await expect(cards).toHaveCount(20);
+  await expect(cards.nth(2)).toContainText(/^3 /);
+  await cards.nth(2).click();
+  await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '3');
 });
