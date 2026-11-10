@@ -6,16 +6,16 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 1, Track lab ([issue #1](https://github.com/TechnologicTEC/Random-Racing/issues/1))
 - **Branch:** `milestone-1-track-lab` (one pull request per milestone, merged after sign-off)
-- **Last finished step:** 0 (issues opened, branch created)
-- **Next step:** 1 (scaffold)
+- **Last finished step:** 2 (seeded RNG, seed codes, architecture guard)
+- **Next step:** 3 (spline)
 
 ## Milestone 1 steps
 
 | # | Step | Status |
 | --- | --- | --- |
 | 0 | Issues, branch, this file | Done |
-| 1 | Scaffold: Vite, TypeScript, Vitest, Playwright, central config | To do |
-| 2 | Seeded RNG, streams, seed codes, architecture guard test | To do |
+| 1 | Scaffold: Vite, TypeScript, Vitest, Playwright, central config | Done |
+| 2 | Seeded RNG, streams, seed codes, architecture guard test | Done |
 | 3 | Spline: closed Catmull-Rom, even resampling, curvature | To do |
 | 4 | Viewer shell: canvas, pan/zoom, seed controls, seed in URL | To do |
 | 5 | Validation rules | To do |
