@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 1, Track lab ([issue #1](https://github.com/TechnologicTEC/Random-Racing/issues/1))
 - **Branch:** `milestone-1-track-lab` (one pull request per milestone, merged after sign-off)
-- **Last finished step:** 2 (seeded RNG, seed codes, architecture guard)
-- **Next step:** 3 (spline)
+- **Last finished step:** 4 (viewer shell)
+- **Next step:** 5 (validation rules)
 
 ## Milestone 1 steps
 
@@ -16,8 +16,8 @@ Updated at the end of every work session. A new session should read this first, 
 | 0 | Issues, branch, this file | Done |
 | 1 | Scaffold: Vite, TypeScript, Vitest, Playwright, central config | Done |
 | 2 | Seeded RNG, streams, seed codes, architecture guard test | Done |
-| 3 | Spline: closed Catmull-Rom, even resampling, curvature | To do |
-| 4 | Viewer shell: canvas, pan/zoom, seed controls, seed in URL | To do |
+| 3 | Spline: closed Catmull-Rom, even resampling, curvature | Done |
+| 4 | Viewer shell: canvas, pan/zoom, seed controls, seed in URL | Done |
 | 5 | Validation rules | To do |
 | 6 | Straight/corner analysis and corner types | To do |
 | 7 | Scoring and breakdown panel | To do |
@@ -46,6 +46,7 @@ Updated at the end of every work session. A new session should read this first, 
 | 2026-11-11 | Generation runs on the main thread in M1; Web Worker in M2 | Takes milliseconds without terrain |
 | 2026-11-11 | Extra hard rule: track must fit the buildable circle. Start line goes on the longest straight | Not in the brief's list but needed |
 | 2026-11-11 | Pinned Vite 8.3.5, TypeScript 7.0.2, Vitest 5.0.5, Playwright 1.64.1 | Newest releases at least two weeks old |
+| 2026-11-11 | Generation code may only use exact maths (`+ - * /`, `Math.sqrt`, and `core/dmath.ts` for sin/cos); enforced by the architecture test | Browsers may round `Math.sin` etc. differently, which would break "same seed, same track" |
 | 2026-11-11 | Three.js (0.187.0) and Rapier (0.21.0) not installed until M2 and M3; re-check versions then | Not needed for the 2D lab |
 
 ## Notes for later milestones
@@ -61,3 +62,4 @@ Updated at the end of every work session. A new session should read this first, 
 ## Session log
 
 - **2026-11-11:** Plan approved. Opened issues #1 to #6, created the branch and this file.
+- **2026-11-11:** Steps 1 to 4 done. Added `src/core/dmath.ts` (own sin/cos built from plain arithmetic) and extended the architecture guard to ban `Math.sin`, `Math.cos`, `Math.hypot` and other browser-dependent functions from `src/core` and `src/gen`, so the cross-browser risk is designed out rather than only tested for.

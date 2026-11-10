@@ -9,7 +9,17 @@ const FORBIDDEN_CODE: Array<[RegExp, string]> = [
   [/\bperformance\b/, 'reads the clock (performance)'],
 ];
 
-const FORBIDDEN_PACKAGES = [/^three(\/|$)/, /^@dimforge\//];
+/**
+ * Math members that give the same answer in every browser. Anything else
+ * (sin, cos, hypot, pow...) is implementation-defined and banned from pure code.
+ */
+const EXACT_MATH = new Set([
+  'sqrt', 'abs', 'floor', 'ceil', 'round', 'trunc', 'min', 'max', 'sign', 'imul', 'fround', 'clz32',
+  'PI', 'SQRT2', 'SQRT1_2', 'E',
+  'random', // reported by its own rule above
+]);
+
+const FORBIDDEN_PACKAGES =[/^three(\/|$)/, /^@dimforge\//];
 
 /** Which top-level folders each pure layer may import from. */
 const ALLOWED_LAYERS: Record<string, string[]> = {
@@ -32,6 +42,14 @@ export function findViolations(path: string, source: string): string[] {
 
   for (const [pattern, message] of FORBIDDEN_CODE) {
     if (pattern.test(code)) violations.push(message);
+  }
+
+  const inexact = new Set<string>();
+  for (const match of code.matchAll(/\bMath\.(\w+)/g)) {
+    if (!EXACT_MATH.has(match[1]!)) inexact.add(match[1]!);
+  }
+  for (const name of inexact) {
+    violations.push(`uses Math.${name}, which can differ between browsers (see core/dmath.ts)`);
   }
 
   const segments = path.replace(/^\.\//, '').split('/');

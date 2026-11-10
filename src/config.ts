@@ -20,6 +20,28 @@ export interface TrackConfig {
   /** Shortest and longest allowed lap, in metres. */
   lapLengthMin: number;
   lapLengthMax: number;
+  /** The whole track must stay within this distance of the island centre, in metres. */
+  buildableRadius: number;
+  /** Distance between centre-line samples, in metres. */
+  sampleSpacing: number;
+  /** Curvature is measured through points this far before and after a sample, in metres. */
+  curvatureWindow: number;
+  layout: LayoutConfig;
+}
+
+export interface LayoutConfig {
+  /** Number of control points around the loop (brief: 10 to 18). */
+  controlPointsMin: number;
+  controlPointsMax: number;
+  /** Average distance of control points from the centre, in metres. */
+  baseRadiusMin: number;
+  baseRadiusMax: number;
+  /** How far noise pushes points in and out, as a fraction of the base radius. */
+  radialNoise: number;
+  /** How far points slide around the loop, as a fraction of the gap between them. */
+  angleJitter: number;
+  /** Neighbouring control points are never closer than this, in metres. */
+  minPointGap: number;
 }
 
 export interface GameConfig {
@@ -32,5 +54,17 @@ export const config: GameConfig = {
     roadWidth: 13,
     lapLengthMin: 1400,
     lapLengthMax: 2400,
+    buildableRadius: 500,
+    sampleSpacing: 2,
+    curvatureWindow: 4,
+    layout: {
+      controlPointsMin: 10,
+      controlPointsMax: 18,
+      baseRadiusMin: 230,
+      baseRadiusMax: 330,
+      radialNoise: 0.3,
+      angleJitter: 0.3,
+      minPointGap: 40,
+    },
   },
 };

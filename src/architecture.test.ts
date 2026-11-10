@@ -39,6 +39,20 @@ describe('findViolations', () => {
     expect(findViolations('./gen/a.ts', 'const t = performance.now();')).toHaveLength(1);
   });
 
+  it.each(['sin', 'cos', 'tan', 'atan2', 'acos', 'hypot', 'pow', 'exp', 'log', 'cbrt'])(
+    'catches Math.%s, which can differ between browsers',
+    (name) => {
+      expect(findViolations('./gen/a.ts', `const v = Math.${name}(1);`)).toEqual([
+        `uses Math.${name}, which can differ between browsers (see core/dmath.ts)`,
+      ]);
+    },
+  );
+
+  it('allows the Math functions that are exact everywhere', () => {
+    const source = 'const v = Math.sqrt(Math.abs(Math.floor(Math.min(1, Math.max(2, Math.round(3.5))))));';
+    expect(findViolations('./gen/a.ts', source)).toEqual([]);
+  });
+
   it('catches Three.js and Rapier imports', () => {
     expect(findViolations('./gen/a.ts', `import * as THREE from 'three';`)).toHaveLength(1);
     expect(findViolations('./gen/a.ts', `import { Vector3 } from "three/src/math/Vector3.js";`)).toHaveLength(1);
