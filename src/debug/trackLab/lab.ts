@@ -2,10 +2,11 @@ import './lab.css';
 import { config, GENERATOR_VERSION } from '../../config';
 import { createRng } from '../../core/rng';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
+import { analyseSections } from '../../gen/track/analysis';
 import { generateControlPoints } from '../../gen/track/layout';
 import { sampleClosedSpline } from '../../gen/track/spline';
 import { validateLayout } from '../../gen/track/validate';
-import { drawLab, type LabScene } from './draw';
+import { drawLab, SECTION_COLORS, type LabScene } from './draw';
 import { describeViolation } from './format';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -89,7 +90,8 @@ export function mountTrackLab(root: HTMLElement): void {
     const controlPoints = generateControlPoints(createRng(seed, 'track'), cfg);
     const line = sampleClosedSpline(controlPoints, cfg.sampleSpacing, cfg.curvatureWindow);
     const violations = validateLayout(line, cfg);
-    scene = { controlPoints, line, violations };
+    const sections = analyseSections(line, cfg);
+    scene = { controlPoints, line, violations, sections };
 
     input.value = String(seed);
     errorEl.textContent = '';
@@ -97,6 +99,16 @@ export function mountTrackLab(root: HTMLElement): void {
     addFact('Share code', formatSeedCode(seed, GENERATOR_VERSION));
     addFact('Lap length', `${Math.round(line.length)} m`);
     addFact('Control points', String(controlPoints.length));
+
+    const straights = sections.filter((s) => s.type === 'straight');
+    const corners = sections.filter((s) => s.type === 'corner');
+    const longest = Math.max(0, ...straights.map((s) => s.length));
+    addFact('Straights over 150 m', String(straights.filter((s) => s.length >= 150).length), SECTION_COLORS.longStraight);
+    addFact('Longest straight', `${Math.round(longest)} m`);
+    for (const kind of ['hairpin', 'sweeper', 'chicane', 'corner', 'kink'] as const) {
+      const label = { hairpin: 'Hairpins', sweeper: 'Sweepers', chicane: 'Chicane corners', corner: 'Other corners', kink: 'Kinks' }[kind];
+      addFact(label, String(corners.filter((c) => c.kind === kind).length), SECTION_COLORS[kind]);
+    }
 
     verdictEl.innerHTML = '';
     verdictEl.dataset.valid = String(violations.length === 0);
@@ -113,9 +125,15 @@ export function mountTrackLab(root: HTMLElement): void {
     render();
   }
 
-  function addFact(label: string, value: string): void {
+  function addFact(label: string, value: string, swatch?: string): void {
     const dt = document.createElement('dt');
     dt.textContent = label;
+    if (swatch) {
+      const dot = document.createElement('span');
+      dot.className = 'lab-swatch';
+      dot.style.background = swatch;
+      dt.prepend(dot);
+    }
     const dd = document.createElement('dd');
     dd.textContent = value;
     factsEl.append(dt, dd);

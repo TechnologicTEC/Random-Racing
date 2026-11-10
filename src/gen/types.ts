@@ -47,3 +47,35 @@ export interface Violation {
   /** The limit it broke, in metres. */
   limit: number;
 }
+
+export type CornerKind = 'hairpin' | 'sweeper' | 'chicane' | 'kink' | 'corner';
+
+/** A stretch of the lap that is effectively straight. */
+export interface StraightSection {
+  type: 'straight';
+  /** First sample of the section; sections may wrap past the end of the lap. */
+  startIndex: number;
+  sampleCount: number;
+  /** Length in metres. */
+  length: number;
+}
+
+/** A stretch of the lap that turns one way. */
+export interface CornerSection {
+  type: 'corner';
+  startIndex: number;
+  sampleCount: number;
+  length: number;
+  direction: 'left' | 'right';
+  /** Total change of heading through the corner, in degrees. */
+  turnDegrees: number;
+  /** Radius at the tightest point, in metres. */
+  minRadius: number;
+  /** Average radius over the whole corner, in metres. */
+  meanRadius: number;
+  /** Sample at the tightest point. */
+  apexIndex: number;
+  kind: CornerKind;
+}
+
+export type Section = StraightSection | CornerSection;

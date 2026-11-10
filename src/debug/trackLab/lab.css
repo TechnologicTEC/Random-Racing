@@ -144,6 +144,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.lab-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
 .lab-verdict {
   list-style: none;
   margin: 10px 0 0;

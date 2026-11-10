@@ -37,6 +37,31 @@ export interface TrackConfig {
   /** Curvature is measured through points this far before and after a sample, in metres. */
   curvatureWindow: number;
   layout: LayoutConfig;
+  analysis: AnalysisConfig;
+}
+
+/** How the lap is split into straights and corners, and how corners are named. */
+export interface AnalysisConfig {
+  /** Anything curving more gently than this radius counts as straight, in metres. */
+  straightRadius: number;
+  /** Straight stretches shorter than this are merged into the corners beside them, in metres. */
+  minStraightLength: number;
+  /** Bends that turn less than this are treated as part of a straight, in degrees. */
+  minCornerDegrees: number;
+  /** A corner turning less than this is a kink, in degrees. */
+  kinkMaxDegrees: number;
+  /** A hairpin turns at least this far, in degrees, with an average radius no bigger than hairpinMaxRadius. */
+  hairpinMinDegrees: number;
+  hairpinMaxRadius: number;
+  /** A sweeper never gets tighter than this radius, in metres. */
+  sweeperMinRadius: number;
+  /** A chicane is two opposite corners, each turning between these angles, in degrees... */
+  chicaneMinDegrees: number;
+  chicaneMaxDegrees: number;
+  /** ...with no more than this much straight between them, in metres... */
+  chicaneMaxGap: number;
+  /** ...and no longer than this from start to end, in metres. */
+  chicaneMaxLength: number;
 }
 
 export interface LayoutConfig {
@@ -78,6 +103,19 @@ export const config: GameConfig = {
       radialNoise: 0.3,
       angleJitter: 0.3,
       minPointGap: 40,
+    },
+    analysis: {
+      straightRadius: 400,
+      minStraightLength: 20,
+      minCornerDegrees: 6,
+      kinkMaxDegrees: 25,
+      hairpinMinDegrees: 130,
+      hairpinMaxRadius: 45,
+      sweeperMinRadius: 70,
+      chicaneMinDegrees: 12,
+      chicaneMaxDegrees: 80,
+      chicaneMaxGap: 30,
+      chicaneMaxLength: 200,
     },
   },
 };
