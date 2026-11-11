@@ -41,6 +41,8 @@ test.describe('screenshots', () => {
       if (!process.env.CANDIDATE) {
         await expect(page.getByTestId('verdict')).toHaveAttribute('data-valid', 'true');
         await expect(page.getByTestId('candidate-tally')).not.toContainText('plain oval');
+        // The road must sit cleanly in the island: no ground through it, none of it hanging.
+        await expect(page.getByTestId('fit-facts')).toHaveAttribute('data-clean', 'true');
       }
       await page.screenshot({ path: `test-results/screens/seed-${String(seed).padStart(5, '0')}.png` });
     });

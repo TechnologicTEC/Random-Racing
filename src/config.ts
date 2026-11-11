@@ -251,6 +251,13 @@ export interface RoadConfig {
   maxBankSlope: number;
   /** The solver repeats at most this many times to bring tied sections within reach of each other. */
   solverRounds: number;
+  /** The ground under the road and verge sits this far below the road surface, in metres, so it can never show through. */
+  sink: number;
+  /** Beyond the verge, the ground blends back to natural over at least and at most this distance, in metres (brief: 10 to 25). */
+  blendMin: number;
+  blendMax: number;
+  /** The blend is made wide enough that a cutting or embankment averages about this slope, as a fraction. */
+  blendSlope: number;
   /** The road should sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). */
   maxFill: number;
   /** The road should sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). */
@@ -342,11 +349,26 @@ export interface SceneryConfig {
   bumpFade: number;
 }
 
+/** What covers the ground: sand, grass or bare rock. Heights in metres above the sea, slopes as fractions. */
+export interface CoverConfig {
+  /** Sand gives way to grass between these heights. */
+  sandTop: Range;
+  /** Grass thins to rock between these heights... */
+  rockHeight: Range;
+  /** ...and between these slopes. */
+  rockSlope: Range;
+  /** Grass returns over this distance beyond the verge, in metres. */
+  roadsideFade: number;
+  /** Size of the patches of lusher and drier ground: metres per unit of noise. */
+  variationScale: number;
+}
+
 export interface WorldConfig {
   relief: ReliefConfig;
   tile: TileConfig;
   coast: CoastConfig;
   scenery: SceneryConfig;
+  cover: CoverConfig;
 }
 
 export interface GameConfig {
@@ -464,6 +486,10 @@ export const config: GameConfig = {
     coupleMinArc: 110,
     maxBankSlope: 0.45,
     solverRounds: 8,
+    sink: 0.25,
+    blendMin: 10,
+    blendMax: 25,
+    blendSlope: 0.4,
     maxFill: 6,
     maxCut: 8,
   },
@@ -504,6 +530,13 @@ export const config: GameConfig = {
       bumpHeight: 1.5,
       bumpScale: 45,
       bumpFade: 30,
+    },
+    cover: {
+      sandTop: [1.0, 2.6],
+      rockHeight: [34, 46],
+      rockSlope: [0.55, 0.85],
+      roadsideFade: 3,
+      variationScale: 55,
     },
   },
 };

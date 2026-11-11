@@ -33,11 +33,21 @@ export function heightColour(height: number): Rgb {
   return [...stops[stops.length - 1]![1]];
 }
 
+/** Cut and fill shallower than this, in metres, is not tinted. */
+const TINT_FROM = 0.3;
+/** Cut or fill this deep, in metres, gets the strongest tint. */
+const TINT_FULL = 4;
+const CUT_TINT: Rgb = [226, 70, 58];
+const FILL_TINT: Rgb = [66, 122, 236];
+
 /**
  * A top-down picture of a height grid, one pixel per sample, as RGBA bytes.
  * Land is shaded as if lit from the top left, so hills and banks can be read.
+ *
+ * @param natural the ground before the road was built. When given, cuttings
+ *   (ground now lower) are tinted red and embankments (ground now higher) blue.
  */
-export function terrainPixels(field: HeightField): Uint8ClampedArray<ArrayBuffer> {
+export function terrainPixels(field: HeightField, natural: HeightField | null = null): Uint8ClampedArray<ArrayBuffer> {
   const { size, cell, height } = field;
   const pixels = new Uint8ClampedArray(size * size * 4);
   for (let iz = 0; iz < size; iz++) {
@@ -54,21 +64,38 @@ export function terrainPixels(field: HeightField): Uint8ClampedArray<ArrayBuffer
         const facing = (east - west + (south - north)) / (4 * cell);
         light = Math.min(1.4, Math.max(0.55, 1 + facing * 1.6));
       }
-      const [r, g, b] = heightColour(here);
-      pixels[c * 4] = r * light;
-      pixels[c * 4 + 1] = g * light;
-      pixels[c * 4 + 2] = b * light;
+      let [r, g, b] = heightColour(here);
+      r *= light;
+      g *= light;
+      b *= light;
+      if (natural) {
+        const dug = natural.height[c]! - here;
+        const depth = Math.abs(dug);
+        if (depth > TINT_FROM) {
+          const strength = 0.7 * Math.min(1, (depth - TINT_FROM) / (TINT_FULL - TINT_FROM)) + 0.15;
+          const tint = dug > 0 ? CUT_TINT : FILL_TINT;
+          r += (tint[0] - r) * strength;
+          g += (tint[1] - g) * strength;
+          b += (tint[2] - b) * strength;
+        }
+      }
+      pixels[c * 4] = r;
+      pixels[c * 4 + 1] = g;
+      pixels[c * 4 + 2] = b;
       pixels[c * 4 + 3] = 255;
     }
   }
   return pixels;
 }
 
-/** Turns a height grid into a picture the lab can draw under a track. Browser only. */
-export function terrainPicture(field: HeightField): TerrainPicture {
+/**
+ * Turns a height grid into a picture the lab can draw under a track. Browser only.
+ * Give the natural ground as well to tint cuttings and embankments.
+ */
+export function terrainPicture(field: HeightField, natural: HeightField | null = null): TerrainPicture {
   const canvas = document.createElement('canvas');
   canvas.width = field.size;
   canvas.height = field.size;
-  canvas.getContext('2d')?.putImageData(new ImageData(terrainPixels(field), field.size, field.size), 0, 0);
+  canvas.getContext('2d')?.putImageData(new ImageData(terrainPixels(field, natural), field.size, field.size), 0, 0);
   return { image: canvas, origin: field.origin, cell: field.cell, size: field.size };
 }

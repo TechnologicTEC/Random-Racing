@@ -1,11 +1,11 @@
 import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { hashTrack, measureProfile, type Candidate, type TrackResult } from '../../gen';
+import { hashTrack, measureProfile, type Candidate, type FitReport, type TrackResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
-import { describeProfile, describeScorePart, describeViolation } from './format';
+import { describeFit, describeProfile, describeScorePart, describeViolation } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -54,6 +54,12 @@ const TEMPLATE = `
       </section>
 
       <section class="lab-section">
+        <h2>Road fit</h2>
+        <dl class="lab-facts" data-ref="fitFacts" data-testid="fit-facts"></dl>
+        <p class="lab-note" data-ref="fitVerdict"></p>
+      </section>
+
+      <section class="lab-section">
         <h2>Fun score</h2>
         <div class="lab-total"><span data-ref="totalLabel"></span><strong data-ref="total" data-testid="score-total"></strong></div>
         <div class="lab-bars" data-ref="bars" data-testid="score-bars"></div>
@@ -70,6 +76,10 @@ const TEMPLATE = `
         <label class="lab-check">
           <input type="checkbox" data-ref="island" data-testid="island-toggle" checked />
           Show the island under the winning track
+        </label>
+        <label class="lab-check">
+          <input type="checkbox" data-ref="tint" data-testid="tint-toggle" checked />
+          Tint cuttings red and embankments blue
         </label>
       </section>
 
@@ -123,6 +133,7 @@ export function mountTrackLab(root: HTMLElement): void {
   const input = ref<HTMLInputElement>('input');
   const ghostsBox = ref<HTMLInputElement>('ghosts');
   const islandBox = ref<HTMLInputElement>('island');
+  const tintBox = ref<HTMLInputElement>('tint');
   const errorEl = ref('error');
   const factsEl = ref('facts');
   const verdictEl = ref('verdict');
@@ -142,8 +153,9 @@ export function mountTrackLab(root: HTMLElement): void {
     rulesEl.textContent = `What-if rules from the URL: ${overrides.notes.join(', ')}. Layouts are still built for the normal rules.`;
   }
   let result: TrackResult | null = null;
-  /** The island built around the winner. Other candidates have no island. */
+  /** The island built around the winner, plain and with cut and fill tinted. Other candidates have no island. */
   let island: TerrainPicture | null = null;
+  let islandTinted: TerrainPicture | null = null;
   /** The seed last asked for. Its track may still be on its way from the worker. */
   let wantedSeed = 0;
   let selectedIndex = 0;
@@ -161,7 +173,7 @@ export function mountTrackLab(root: HTMLElement): void {
       ? result.candidates.filter((c) => c.violations.length > 0 && c.index !== selectedIndex)
       : [];
     const isWinner = selectedIndex === result.winnerIndex;
-    const terrain = isWinner && islandBox.checked ? island : null;
+    const terrain = isWinner && islandBox.checked ? (tintBox.checked ? islandTinted : island) : null;
     drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain }, cfg);
   }
 
@@ -189,7 +201,9 @@ export function mountTrackLab(root: HTMLElement): void {
     // A newer seed was asked for while this one was generating: drop this answer.
     if (wantedSeed !== seed) return;
     result = generated.result.track;
-    island = terrainPicture(generated.result.natural);
+    island = terrainPicture(generated.result.ground);
+    islandTinted = terrainPicture(generated.result.ground, generated.result.natural);
+    renderFit(generated.result.report);
     const elapsed = generated.ms;
     selectedIndex = result.winnerIndex;
 
@@ -303,6 +317,24 @@ export function mountTrackLab(root: HTMLElement): void {
     render();
   }
 
+  /** Lists how the winning road sits in its island. */
+  function renderFit(report: FitReport): void {
+    const fitEl = ref('fitFacts');
+    const { clean, facts } = describeFit(report, gameConfig.road.coupleDistance);
+    fitEl.innerHTML = '';
+    fitEl.dataset.clean = String(clean);
+    for (const [label, value] of facts) {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      fitEl.append(dt, dd);
+    }
+    ref('fitVerdict').textContent = clean
+      ? 'For the winning track. The road sits cleanly in the island.'
+      : 'For the winning track. The road does not sit cleanly: see the last two lines.';
+  }
+
   /** Draws the road height chart and lists its facts for the candidate being shown. */
   function renderElevation(candidate: Candidate): void {
     const width = Math.max(1, elevationCanvas.clientWidth);
@@ -367,6 +399,7 @@ export function mountTrackLab(root: HTMLElement): void {
   ref('random').addEventListener('click', () => void setSeed(randomSeed()));
   ghostsBox.addEventListener('change', render);
   islandBox.addEventListener('change', render);
+  tintBox.addEventListener('change', render);
 
   window.addEventListener('keydown', (event) => {
     // Typing in the seed box must not trigger shortcuts; other controls should not block them.

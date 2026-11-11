@@ -4,32 +4,54 @@ import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
 import type { WorldResult } from './types';
 import { GENERATOR_VERSION } from './version';
+import { buildCover } from './world/cover';
+import { fitRoad } from './world/fit';
 import { buildIsland } from './world/island';
+import { fitReport } from './world/report';
 
 /**
- * Generates everything for a seed: the track, then the island around it.
- * Seed in, plain data out.
+ * Generates everything for a seed: the track, the island around it, the road
+ * cut into the island, and what covers the ground. Seed in, plain data out.
  */
 export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const track = generateTrack(seed, config);
   const winner = track.candidates[track.winnerIndex]!;
-  const island = buildIsland(track.seed, winner.line, winner.profile, config);
+  const { line, profile } = winner;
+  const island = buildIsland(track.seed, line, profile, config);
+
+  // The road is level from side to side until banking is added.
+  const shape = { natural: island.natural, near: island.near, line, height: profile.height, cross: null };
+  const fitted = fitRoad(shape, config);
+  const cover = buildCover(track.seed, fitted.ground, fitted.corridor, island.near, config);
+  const report = fitReport({ ...shape, ground: fitted.ground, corridor: fitted.corridor }, config);
+
   return {
     seed: track.seed,
     generatorVersion: GENERATOR_VERSION,
     track,
     natural: island.natural,
+    ground: fitted.ground,
+    cover,
+    report,
   };
 }
 
 /**
- * A fingerprint of a whole world: the track's fingerprint plus every height
- * of the island. Two runs with the same fingerprint produced the same world.
+ * A fingerprint of a whole world: the track's fingerprint plus every height,
+ * every cover value and the fit report. Two runs with the same fingerprint
+ * produced the same world.
  */
 export function hashWorld(world: WorldResult): string {
   const hasher = createHasher();
   hasher.text(hashTrack(world.track));
   hasher.numbers([world.natural.size, world.natural.cell, world.natural.origin]);
   hasher.numbers(world.natural.height);
+  hasher.numbers(world.ground.height);
+  hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.variation);
+  const { report } = world;
+  for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {
+    if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);
+  }
+  hasher.numbers([report.groundThroughRoad, report.roadFloating]);
   return hasher.digest();
 }

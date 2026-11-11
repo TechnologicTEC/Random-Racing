@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeProfile, describeScorePart, describeViolation, summariseTracks } from './format';
+import { describeFit, describeProfile, describeScorePart, describeViolation, summariseTracks } from './format';
 
 describe('describeViolation', () => {
   it('explains each kind of rejection in plain words with the numbers', () => {
@@ -77,6 +77,43 @@ describe('describeProfile', () => {
   it('leaves out the bank line when no sections are close together', () => {
     const labels = describeProfile({ ...stats, steepestBank: 0 }).map(([label]) => label);
     expect(labels).not.toContain('Steepest bank between sections');
+  });
+});
+
+describe('describeFit', () => {
+  const spot = (value: number) => ({ x: 0, z: 0, value, sample: 0 });
+  const report = {
+    deepestCut: spot(5.05), tallestFill: spot(4.6), steepestBank: spot(0.584), closestSections: spot(46.2),
+    nearestWater: spot(43.6), groundThroughRoad: 0, roadFloating: 0,
+  };
+
+  it('lists how the road sits in the island, in plain words', () => {
+    expect(describeFit(report)).toEqual({
+      clean: true,
+      facts: [
+        ['Deepest cutting', '5.1 m'],
+        ['Tallest embankment', '4.6 m'],
+        ['Steepest bank', '58%'],
+        ['Sea nearest the road', '44 m'],
+        ['Closest sections', '46 m apart'],
+        ['Ground through the road', 'none'],
+        ['Road left hanging', 'none'],
+      ],
+    });
+  });
+
+  it('says so when no sections are close', () => {
+    const facts = describeFit({ ...report, closestSections: null }).facts;
+    expect(facts).toContainEqual(['Closest sections', 'none within 55 m']);
+  });
+
+  it('is not clean when ground shows through or the road hangs', () => {
+    const poking = describeFit({ ...report, groundThroughRoad: 3 });
+    expect(poking.clean).toBe(false);
+    expect(poking.facts).toContainEqual(['Ground through the road', '3 points']);
+    const hanging = describeFit({ ...report, roadFloating: 1 });
+    expect(hanging.clean).toBe(false);
+    expect(hanging.facts).toContainEqual(['Road left hanging', '1 point']);
   });
 });
 

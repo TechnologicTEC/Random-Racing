@@ -1,4 +1,4 @@
-import type { ProfileStats, ScorePart, TrackResult, Violation } from '../../gen/types';
+import type { FitReport, ProfileStats, ScorePart, TrackResult, Violation } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -71,6 +71,34 @@ export function describeProfile(stats: ProfileStats): Array<[label: string, valu
   ];
   if (stats.steepestBank > 0) facts.push(['Steepest bank between sections', percent(stats.steepestBank)]);
   return facts;
+}
+
+/**
+ * The fit report as label and value pairs, and whether the road sits cleanly:
+ * no ground showing through it and none of it left hanging.
+ *
+ * @param shareDistance sections closer than this share the ground between them, in metres
+ */
+export function describeFit(
+  report: FitReport,
+  shareDistance = 55,
+): { clean: boolean; facts: Array<[label: string, value: string]> } {
+  const points = (count: number): string => (count === 0 ? 'none' : plural(count, 'point'));
+  return {
+    clean: report.groundThroughRoad === 0 && report.roadFloating === 0,
+    facts: [
+      ['Deepest cutting', `${short(report.deepestCut.value)} m`],
+      ['Tallest embankment', `${short(report.tallestFill.value)} m`],
+      ['Steepest bank', `${Math.round(report.steepestBank.value * 100)}%`],
+      ['Sea nearest the road', `${Math.round(report.nearestWater.value)} m`],
+      [
+        'Closest sections',
+        report.closestSections ? `${Math.round(report.closestSections.value)} m apart` : `none within ${shareDistance} m`,
+      ],
+      ['Ground through the road', points(report.groundThroughRoad)],
+      ['Road left hanging', points(report.roadFloating)],
+    ],
+  };
 }
 
 /** One line describing a batch of generated tracks, for judging variety at a glance. */

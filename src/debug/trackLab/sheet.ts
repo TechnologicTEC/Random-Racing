@@ -55,7 +55,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
   // Thumbnails are small, so their islands are built on a coarse grid: 16 times fewer heights, and as many times quicker.
   const sheetConfig: GameConfig = { ...config, world: { ...config.world, tile: { ...config.world.tile, cell: 8 } } };
 
-  const addCard = (seed: number, result: TrackResult, natural: HeightField): void => {
+  const addCard = (seed: number, result: TrackResult, ground: HeightField): void => {
     const winner = result.candidates[result.winnerIndex]!;
 
     const card = document.createElement('a');
@@ -68,7 +68,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawThumbnail(ctx, view, winner, cfg, terrainPicture(natural));
+      drawThumbnail(ctx, view, winner, cfg, terrainPicture(ground));
     }
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';
@@ -85,7 +85,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     for (let i = 0; i < count; i++) {
       const { result } = await pending[i]!;
       results.push(result.track);
-      addCard(seeds[i]!, result.track, result.natural);
+      addCard(seeds[i]!, result.track, result.ground);
     }
     ref('summary').textContent = summariseTracks(results);
     document.body.dataset.labReady = 'true';

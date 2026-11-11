@@ -175,6 +175,46 @@ export interface Candidate {
   score: ScoreBreakdown | null;
 }
 
+/**
+ * What covers the ground, cell for cell with the height grid.
+ * Each value runs from 0 (none) to 255 (full).
+ */
+export interface Cover {
+  /** How thickly grass grows. Always 0 on the road and its verges. */
+  grass: Uint8Array;
+  sand: Uint8Array;
+  rock: Uint8Array;
+  /** Patches of lusher (low) and drier (high) ground, for varying colours. */
+  variation: Uint8Array;
+}
+
+/** One measurement from the fit report, with where on the map it was taken. */
+export interface FitSpot {
+  x: number;
+  z: number;
+  value: number;
+  /** The centre-line sample nearest to it. */
+  sample: number;
+}
+
+/** How well the road sits in the island. Heights and distances in metres, slopes as fractions. */
+export interface FitReport {
+  /** Furthest the road surface sits below the natural ground. */
+  deepestCut: FitSpot;
+  /** Furthest the road surface sits above the natural ground. */
+  tallestFill: FitSpot;
+  /** Steepest ground on the banks beside the road. */
+  steepestBank: FitSpot;
+  /** Closest approach of two separate sections of the lap, centre to centre. Null when none are near. */
+  closestSections: FitSpot | null;
+  /** Shortest distance from the road edge to the sea. */
+  nearestWater: FitSpot;
+  /** Points on the road where the ground is at or above the surface. Must be 0. */
+  groundThroughRoad: number;
+  /** Points on the road with a gap of more than half a metre under them. Must be 0. */
+  roadFloating: number;
+}
+
 /** The whole world for one seed: the track and the island around it. */
 export interface WorldResult {
   seed: number;
@@ -182,6 +222,10 @@ export interface WorldResult {
   track: TrackResult;
   /** The island's natural ground and sea bed, before the road is cut into it. */
   natural: HeightField;
+  /** The island with the road cut and filled into it. This is the ground that is drawn and driven on. */
+  ground: HeightField;
+  cover: Cover;
+  report: FitReport;
 }
 
 /** Everything track generation decided for one seed. */

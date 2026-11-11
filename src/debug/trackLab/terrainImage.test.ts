@@ -40,6 +40,24 @@ describe('terrainPixels', () => {
     for (let i = 3; i < pixels.length; i += 4) expect(pixels[i]).toBe(255);
   });
 
+  it('tints cuttings red and embankments blue when given the natural ground to compare with', () => {
+    const ground = createField(40, 4);
+    const natural = createField(40, 4);
+    ground.height.fill(10);
+    natural.height.fill(10);
+    const cut = 2 * ground.size + 2;
+    const fill = 6 * ground.size + 6;
+    const same = 4 * ground.size + 8;
+    natural.height[cut] = 14; // the ground here was dug 4 m down
+    natural.height[fill] = 6; // and here built 4 m up
+    const plain = terrainPixels(ground);
+    const tinted = terrainPixels(ground, natural);
+    const red = (pixels: Uint8ClampedArray, c: number): number => pixels[c * 4]! - pixels[c * 4 + 2]!;
+    expect(red(tinted, cut)).toBeGreaterThan(red(plain, cut) + 40);
+    expect(red(tinted, fill)).toBeLessThan(red(plain, fill) - 40);
+    for (let k = 0; k < 4; k++) expect(tinted[same * 4 + k]).toBe(plain[same * 4 + k]);
+  });
+
   it('shades slopes so hills can be read: ground rising towards the light is brighter than ground falling away', () => {
     const field = createField(40, 4);
     const { size } = field;

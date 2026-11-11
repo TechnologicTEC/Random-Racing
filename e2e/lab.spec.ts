@@ -103,6 +103,15 @@ test('shows the road height along the lap as a chart with its facts', async ({ p
   expect(drawn).toBeGreaterThan(200);
 });
 
+test('reports how the road sits in the island', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const fit = page.getByTestId('fit-facts');
+  await expect(fit).toContainText('Deepest cutting');
+  await expect(fit).toContainText('Tallest embankment');
+  await expect(fit).toContainText('Sea nearest the road');
+  await expect(fit).toHaveAttribute('data-clean', 'true');
+});
+
 /** Counts map pixels that look like sea (clearly blue) and like land (clearly green). */
 async function seaAndLand(page: Page): Promise<{ sea: number; land: number }> {
   return page.getByTestId('track-canvas').evaluate((canvas: HTMLCanvasElement) => {
