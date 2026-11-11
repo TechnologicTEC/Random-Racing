@@ -5,7 +5,7 @@ Updated at the end of every work session. A new session should read this first, 
 ## Where we are
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), not started. Milestone 1 (Track lab) is merged and signed off (PR #7)
-- **Branch:** `main`. Start each milestone on its own branch (for example `milestone-2-world`); one pull request per milestone, merged after sign-off
+- **Branch:** `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required). Start each milestone on its own branch (for example `milestone-2-world`); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** Milestone 1 complete
 - **Next step:** plan Milestone 2 in plan mode and wait for approval before writing code. Re-check Three.js version (0.187.0 was latest on 2026-11-11) and ask before adding dependencies
 
@@ -28,7 +28,10 @@ Updated at the end of every work session. A new session should read this first, 
 
 ## Working agreements
 
-- Branch + pull request per milestone. Commit and push after each step.
+- Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
+- Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
+- Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
+- Windows and PowerShell: use `python -I` scripts in the scratchpad for multi-line file edits; avoid bash heredocs containing backticks or `${}`.
 - **No Claude attribution** on commits, pull requests or issues.
 - Milestone 1 pace: short report after each step; one mid-point check (done) and a sign-off at the end.
 - No linter or formatter for now. The architecture rules are enforced by a DOM-free type check of `src/core` and `src/gen` and by `src/architecture.test.ts`.
