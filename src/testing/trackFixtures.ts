@@ -60,10 +60,11 @@ export function circleLine(radius: number, centreX = 0): CenterLine {
   return pathLine({ x: centreX, z: -radius }, 0, [{ arc: radius, degrees: 360, turn: 'right' }]);
 }
 
-/** A square with rounded corners, centred on the origin, driven clockwise. */
-export function roundedSquareLine(side: number, cornerRadius: number): CenterLine {
+/** A square with rounded corners, driven clockwise. It is centred on the origin unless turned. */
+export function roundedSquareLine(side: number, cornerRadius: number, headingDegrees = 0): CenterLine {
   const edge: PathStep[] = [{ straight: side - 2 * cornerRadius }, { arc: cornerRadius, degrees: 90, turn: 'right' }];
-  return pathLine({ x: -side / 2 + cornerRadius, z: -side / 2 }, 0, [...edge, ...edge, ...edge, ...edge]);
+  const start = headingDegrees === 0 ? { x: -side / 2 + cornerRadius, z: -side / 2 } : { x: -side / 4, z: -side / 2 };
+  return pathLine(start, headingDegrees, [...edge, ...edge, ...edge, ...edge]);
 }
 
 /** Two straights joined by two half circles, centred on the origin. */

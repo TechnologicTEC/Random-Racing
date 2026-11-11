@@ -103,11 +103,23 @@ export interface ScoreBreakdown {
   parts: ScorePart[];
 }
 
+/** The overall character of a track. Each seed has one. */
+export type LayoutStyle = 'folded' | 'stretched' | 'round';
+
+/** One corner of a layout skeleton, with the radius it is rounded to. */
+export interface Corner extends Vec2 {
+  /** Radius in metres. 0 means the track passes straight through this point. */
+  radius: number;
+}
+
 /** One layout tried for a seed, with its verdict. */
 export interface Candidate {
   /** Position in the order candidates were generated, starting at 0. */
   index: number;
-  controlPoints: Vec2[];
+  /** The corners of the layout skeleton (the control points of the brief). */
+  controlPoints: Corner[];
+  /** How many tries the layout builder needed before it produced this layout. */
+  buildAttempts: number;
   line: CenterLine;
   /** Why it was rejected; empty when valid. */
   violations: Violation[];
@@ -121,6 +133,8 @@ export interface TrackResult {
   seed: number;
   generatorVersion: number;
   name: string;
+  /** The character chosen for this seed. */
+  style: LayoutStyle;
   /** Every candidate that was tried, in order. */
   candidates: Candidate[];
   /** The chosen candidate. Its lap starts at the start/finish line. */

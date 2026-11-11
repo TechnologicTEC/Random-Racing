@@ -87,21 +87,34 @@ test('shows a valid winner with a score and its breakdown', async ({ page }) => 
   await expect(page.getByTestId('score-bars')).toContainText('needs terrain');
 });
 
-test('lists all 30 candidates and explains a rejected one when clicked', async ({ page }) => {
+test('lists all 30 candidates with exactly one winner', async ({ page }) => {
   await openLab(page, '?seed=48213');
-  const chips = page.getByTestId('candidate-chip');
-  await expect(chips).toHaveCount(30);
+  await expect(page.getByTestId('candidate-chip')).toHaveCount(30);
   await expect(page.locator('[data-testid="candidate-chip"][data-winner="true"]')).toHaveCount(1);
+  await expect(page.getByTestId('facts')).toContainText('Build attempts');
+});
 
+test('shows another candidate when its chip is clicked', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const other = page.locator('[data-testid="candidate-chip"][data-winner="false"]').first();
+  await other.click();
+  await expect(other).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('facts')).toContainText('Candidate');
+});
+
+test('explains rejected layouts under a stricter what-if rule', async ({ page }) => {
+  await openLab(page, '?seed=48213&minRadius=30');
+  await expect(page.getByTestId('rules-note')).toContainText('minimum corner radius 30 m');
   const rejected = page.locator('[data-testid="candidate-chip"][data-valid="false"]').first();
   await rejected.click();
   await expect(rejected).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-valid', 'false');
-  await expect(page.getByTestId('score-total')).toHaveText('–');
+  await expect(page.getByTestId('verdict')).toContainText('Corner too tight');
+  await expect(page.getByTestId('score-total')).toHaveText('\u2013');
 });
 
 test('overlays the rejected layouts when asked', async ({ page }) => {
-  await openLab(page, '?seed=48213');
+  await openLab(page, '?seed=48213&minRadius=30');
   const before = await brightPixelCount(page);
   await page.getByTestId('rejected-toggle').check();
   expect(await brightPixelCount(page)).toBeGreaterThan(before);

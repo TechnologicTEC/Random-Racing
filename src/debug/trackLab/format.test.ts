@@ -37,9 +37,9 @@ describe('describeScorePart', () => {
       label: 'Corner mix',
       detail: '1 hairpin, 2 sweepers, 0 chicanes',
     });
-    expect(describeScorePart(part('drift', { driftCorners: 4, target: 5 }))).toEqual({
+    expect(describeScorePart(part('drift', { driftCorners: 4, corners: 9, target: 5 }))).toEqual({
       label: 'Drift corners',
-      detail: '4 suit drifting; 5 earns full marks',
+      detail: '4 of 9 corners suit drifting; best is 5 or more, and most of them',
     });
     expect(describeScorePart(part('flow', { corners: 9, kinks: 1, left: 3, right: 6, stutters: 0 }))).toEqual({
       label: 'Flow',

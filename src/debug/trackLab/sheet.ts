@@ -70,7 +70,7 @@ export function mountContactSheet(root: HTMLElement, from: number, count: number
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';
     const score = winner.score ? Math.round(winner.score.total * 100) : 0;
-    caption.textContent = `${seed} · ${result.name} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
+    caption.textContent = `${seed} · ${result.name} · ${result.style} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
     card.append(canvas, caption);
     grid.append(card);
 

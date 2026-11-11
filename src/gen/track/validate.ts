@@ -71,21 +71,29 @@ function findSelfIntersection(line: CenterLine): Violation | null {
   return null;
 }
 
-/** Where segment A-B crosses segment C-D, or null if they do not cross. */
+/**
+ * Where segment A-B crosses segment C-D, or null if they do not cross.
+ *
+ * Segments that run in (almost) the same direction are never counted: samples
+ * along a dead-straight line are collinear only up to rounding error, and
+ * would otherwise look like crossings. Sections that really do run alongside
+ * each other are caught by the closeness check instead.
+ */
 function segmentCrossing(
   ax: number, az: number, bx: number, bz: number,
   cx: number, cz: number, dx: number, dz: number,
 ): { x: number; z: number } | null {
-  const side = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number): number =>
-    (qx - px) * (rz - pz) - (qz - pz) * (rx - px);
-  const a = side(cx, cz, dx, dz, ax, az);
-  const b = side(cx, cz, dx, dz, bx, bz);
-  const c = side(ax, az, bx, bz, cx, cz);
-  const d = side(ax, az, bx, bz, dx, dz);
-  if (a * b > 0 || c * d > 0) return null;
-  if (a === b) return null; // parallel or overlapping; the closeness check covers these
-  const t = a / (a - b);
-  return { x: ax + (bx - ax) * t, z: az + (bz - az) * t };
+  const abx = bx - ax, abz = bz - az;
+  const cdx = dx - cx, cdz = dz - cz;
+  const cross = abx * cdz - abz * cdx;
+  const lengths = (abx * abx + abz * abz) * (cdx * cdx + cdz * cdz);
+  // cross^2 / lengths is sin^2 of the angle between them: skip anything under about 0.06 degrees.
+  if (cross * cross <= lengths * 1e-6) return null;
+  const acx = cx - ax, acz = cz - az;
+  const t = (acx * cdz - acz * cdx) / cross; // position along A-B
+  const u = (acx * abz - acz * abx) / cross; // position along C-D
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: ax + abx * t, z: az + abz * t };
 }
 
 /** Finds the tightest point of the lap and reports it if it is under the minimum radius. */

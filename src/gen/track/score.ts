@@ -66,21 +66,28 @@ function scoreCornerMix(corners: readonly CornerSection[], rules: ScoreConfig): 
   };
 }
 
-/** Rewards corners long and tight enough to hold a drift and charge a boost. */
+/**
+ * Rewards corners long and tight enough to hold a drift and charge a boost.
+ * Full marks need enough of them, and for most of the lap's corners to be of
+ * that kind: drifting should be the way through nearly every corner.
+ */
 function scoreDrift(corners: readonly CornerSection[], rules: ScoreConfig): ScorePart {
-  const driftCorners = corners.filter(
+  const real = corners.filter((c) => c.kind !== 'kink');
+  const driftCorners = real.filter(
     (c) =>
       c.minRadius >= rules.driftMinRadius &&
       c.minRadius <= rules.driftMaxRadius &&
       c.length >= rules.driftMinLength &&
       c.turnDegrees >= rules.driftMinDegrees,
   ).length;
+  const enough = clamp01(driftCorners / rules.targetDriftCorners);
+  const share = real.length > 0 ? driftCorners / real.length : 0;
   return {
     key: 'drift',
-    score: clamp01(driftCorners / rules.targetDriftCorners),
+    score: enough * (0.5 + 0.5 * share),
     weight: rules.weights.drift,
     pending: false,
-    facts: { driftCorners, target: rules.targetDriftCorners },
+    facts: { driftCorners, corners: real.length, target: rules.targetDriftCorners },
   };
 }
 

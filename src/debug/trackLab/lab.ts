@@ -1,5 +1,5 @@
 import './lab.css';
-import { config, GENERATOR_VERSION } from '../../config';
+import { config, GENERATOR_VERSION, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
 import { generateTrack, hashTrack, type Candidate, type TrackResult } from '../../gen';
 import { drawLab, SECTION_COLORS } from './draw';
@@ -22,6 +22,7 @@ const TEMPLATE = `
           <button type="submit" class="primary">Go</button>
         </form>
         <p class="lab-error" data-ref="error" data-testid="seed-error" role="alert"></p>
+        <p class="lab-note" data-ref="rules" data-testid="rules-note" hidden></p>
         <div class="lab-row">
           <button type="button" data-ref="prev" data-testid="seed-prev">Previous</button>
           <button type="button" data-ref="next" data-testid="seed-next">Next</button>
@@ -70,6 +71,26 @@ const CORNER_LABELS = {
 
 const asPoints = (score: number): string => String(Math.round(score * 100));
 
+/**
+ * What-if overrides for the hard rules, for seeing which layouts a stricter
+ * rule would reject: ?minRadius=30 (metres) and ?gapWidths=4 (road widths).
+ */
+function readRuleOverrides(params: URLSearchParams): { values: Partial<TrackConfig>; notes: string[] } {
+  const values: Partial<TrackConfig> = {};
+  const notes: string[] = [];
+  const minRadius = Number(params.get('minRadius'));
+  if (params.has('minRadius') && minRadius > 0 && minRadius < 1000) {
+    values.minCornerRadius = minRadius;
+    notes.push(`minimum corner radius ${minRadius} m`);
+  }
+  const gapWidths = Number(params.get('gapWidths'));
+  if (params.has('gapWidths') && gapWidths > 0 && gapWidths < 50) {
+    values.sectionGapWidths = gapWidths;
+    notes.push(`sections at least ${gapWidths} road widths apart`);
+  }
+  return { values, notes };
+}
+
 /** Builds the track lab inside the given element. */
 export function mountTrackLab(root: HTMLElement): void {
   root.innerHTML = TEMPLATE;
@@ -89,7 +110,13 @@ export function mountTrackLab(root: HTMLElement): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser cannot draw to a 2D canvas');
 
-  const cfg = config.track;
+  const overrides = readRuleOverrides(new URL(window.location.href).searchParams);
+  const cfg: TrackConfig = { ...config.track, ...overrides.values };
+  if (overrides.notes.length > 0) {
+    const rulesEl = ref('rules');
+    rulesEl.hidden = false;
+    rulesEl.textContent = `What-if rules from the URL: ${overrides.notes.join(', ')}. Layouts are still built for the normal rules.`;
+  }
   let result: TrackResult | null = null;
   let selectedIndex = 0;
   let view: View = fitView(1, 1, cfg.buildableRadius, 24);
@@ -187,9 +214,11 @@ export function mountTrackLab(root: HTMLElement): void {
 
     factsEl.innerHTML = '';
     addFact('Share code', formatSeedCode(result.seed, result.generatorVersion));
+    addFact('Style', result.style[0]!.toUpperCase() + result.style.slice(1));
     addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);
+    addFact('Build attempts', String(candidate.buildAttempts));
 
     const straights = candidate.sections.filter((s) => s.type === 'straight');
     const corners = candidate.sections.filter((s) => s.type === 'corner');
@@ -323,5 +352,10 @@ export function mountTrackLab(root: HTMLElement): void {
   const fromUrl = parseSeedInput(new URL(window.location.href).searchParams.get('seed') ?? '');
   resize();
   setSeed(fromUrl ? fromUrl.seed : randomSeed());
+  // ?candidate=7 opens that candidate instead of the winner, for linking to a rejected layout.
+  const wanted = Number(new URL(window.location.href).searchParams.get('candidate'));
+  if (result && Number.isInteger(wanted) && wanted >= 1 && wanted <= (result as TrackResult).candidates.length) {
+    select(wanted - 1);
+  }
   document.body.dataset.labReady = 'true';
 }

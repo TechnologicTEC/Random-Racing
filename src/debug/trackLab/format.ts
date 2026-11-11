@@ -44,7 +44,7 @@ export function describeScorePart(part: ScorePart): { label: string; detail: str
     case 'drift':
       return {
         label: 'Drift corners',
-        detail: `${f.driftCorners ?? 0} suit drifting; ${f.target ?? 0} earns full marks`,
+        detail: `${f.driftCorners ?? 0} of ${plural(f.corners ?? 0, 'corner')} suit drifting; best is ${f.target ?? 0} or more, and most of them`,
       };
     case 'flow':
       return {

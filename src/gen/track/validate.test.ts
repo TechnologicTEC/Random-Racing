@@ -8,6 +8,7 @@ import {
   stadiumLine,
 } from '../../testing/trackFixtures';
 import type { Violation } from '../types';
+import { resampleClosedPath } from './spline';
 import { validateLayout } from './validate';
 
 const cfg = config.track;
@@ -34,6 +35,22 @@ describe('validateLayout: self-intersection', () => {
   it('does not call a near miss a crossing', () => {
     expect(kinds(validateLayout(hourglassLine(20), cfg))).not.toContain('self-intersection');
     expect(kinds(validateLayout(hourglassLine(40), cfg))).not.toContain('self-intersection');
+  });
+
+  it('does not mistake a dead-straight diagonal for a crossing', () => {
+    // Samples along an exact straight line are collinear, give or take rounding error.
+    // Try many four-sided loops at odd angles so that rounding goes both ways.
+    let flagged = 0;
+    for (let k = 0; k < 300; k++) {
+      const angle = 0.1 + k * 0.0137;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      const corners = [[-310.3, -207.7], [287.1, -231.9], [301.3, 199.3], [-296.9, 223.1]];
+      const xs = corners.map(([x, z]) => x! * cos - z! * sin);
+      const zs = corners.map(([x, z]) => x! * sin + z! * cos);
+      const line = resampleClosedPath([...xs, xs[0]!], [...zs, zs[0]!], 2);
+      if (kinds(validateLayout(line, cfg)).includes('self-intersection')) flagged++;
+    }
+    expect(flagged).toBe(0);
   });
 
   it('lists a crossing before any other problem', () => {

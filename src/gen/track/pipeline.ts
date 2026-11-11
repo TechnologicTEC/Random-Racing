@@ -1,14 +1,13 @@
 import type { TrackConfig } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createRng } from '../../core/rng';
-import type { Vec2 } from '../../core/vec2';
-import type { Candidate, CenterLine, StraightSection, TrackResult } from '../types';
+import type { Candidate, CenterLine, Corner, StraightSection, TrackResult } from '../types';
 import { GENERATOR_VERSION } from '../version';
 import { analyseSections } from './analysis';
-import { generateControlPoints } from './layout';
+import { generateLayout, pickStyle } from './layout';
 import { generateTrackName } from './name';
 import { scoreLayout } from './score';
-import { sampleClosedSpline } from './spline';
+import { resampleClosedPath, sampleClosedSpline } from './spline';
 import { validateLayout } from './validate';
 
 /**
@@ -21,6 +20,8 @@ import { validateLayout } from './validate';
 export function generateTrack(seed: number, cfg: TrackConfig): TrackResult {
   const normalisedSeed = seed >>> 0;
   const rng = createRng(normalisedSeed, 'track');
+  // One style per seed, so different seeds give different kinds of track.
+  const style = pickStyle(rng.fork('style'), cfg.layout);
   const candidates: Candidate[] = [];
   let winnerIndex = -1;
 
@@ -29,8 +30,9 @@ export function generateTrack(seed: number, cfg: TrackConfig): TrackResult {
     for (let i = 0; i < cfg.candidatesPerRound; i++) {
       const index = candidates.length;
       // Each candidate has its own stream, so candidates never affect each other.
-      const controlPoints = generateControlPoints(rng.fork(`candidate-${index}`), cfg);
-      candidates.push(buildCandidate(index, controlPoints, cfg, false));
+      const layout = generateLayout(rng.fork(`candidate-${index}`), cfg, style);
+      const line = resampleClosedPath(layout.x, layout.z, cfg.sampleSpacing, cfg.curvatureWindow);
+      candidates.push(buildCandidate(index, layout.corners, layout.attempts, line, cfg, false));
     }
     winnerIndex = bestCandidate(candidates);
   }
@@ -39,7 +41,9 @@ export function generateTrack(seed: number, cfg: TrackConfig): TrackResult {
   if (winnerIndex < 0) {
     fallback = true;
     winnerIndex = candidates.length;
-    candidates.push(buildCandidate(winnerIndex, fallbackOval(cfg), cfg, true));
+    const oval = fallbackOval(cfg);
+    const line = sampleClosedSpline(oval, cfg.sampleSpacing, cfg.curvatureWindow);
+    candidates.push(buildCandidate(winnerIndex, oval, 1, line, cfg, true));
   }
 
   candidates[winnerIndex] = placeStartLine(candidates[winnerIndex]!, cfg);
@@ -48,18 +52,25 @@ export function generateTrack(seed: number, cfg: TrackConfig): TrackResult {
     seed: normalisedSeed,
     generatorVersion: GENERATOR_VERSION,
     name: generateTrackName(createRng(normalisedSeed, 'name')),
+    style,
     candidates,
     winnerIndex,
     fallback,
   };
 }
 
-function buildCandidate(index: number, controlPoints: Vec2[], cfg: TrackConfig, alwaysScore: boolean): Candidate {
-  const line = sampleClosedSpline(controlPoints, cfg.sampleSpacing, cfg.curvatureWindow);
+function buildCandidate(
+  index: number,
+  controlPoints: Corner[],
+  buildAttempts: number,
+  line: CenterLine,
+  cfg: TrackConfig,
+  alwaysScore: boolean,
+): Candidate {
   const violations = validateLayout(line, cfg);
   const sections = analyseSections(line, cfg);
   const score = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg) : null;
-  return { index, controlPoints, line, violations, sections, score };
+  return { index, controlPoints, buildAttempts, line, violations, sections, score };
 }
 
 /** Index of the valid candidate with the highest score (the earliest one on a tie), or -1. */
@@ -77,13 +88,13 @@ function bestCandidate(candidates: readonly Candidate[]): number {
 }
 
 /** A plain circle sized for a mid-length lap. Used only if no candidate is valid. */
-function fallbackOval(cfg: TrackConfig): Vec2[] {
+function fallbackOval(cfg: TrackConfig): Corner[] {
   const lap = (cfg.lapLengthMin + cfg.lapLengthMax) / 2;
   const radius = Math.min(lap / TAU, cfg.buildableRadius * 0.8);
-  const points: Vec2[] = [];
+  const points: Corner[] = [];
   for (let i = 0; i < 16; i++) {
     const angle = (i * TAU) / 16;
-    points.push({ x: dcos(angle) * radius, z: dsin(angle) * radius });
+    points.push({ x: dcos(angle) * radius, z: dsin(angle) * radius, radius: 0 });
   }
   return points;
 }

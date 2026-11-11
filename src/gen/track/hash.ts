@@ -9,7 +9,7 @@ import type { TrackResult } from '../types';
 export function hashTrack(result: TrackResult): string {
   const hasher = createHasher();
   hasher.numbers([result.seed, result.generatorVersion, result.winnerIndex, result.fallback ? 1 : 0]);
-  hasher.text(result.name);
+  hasher.text(result.name).text(result.style);
   for (const candidate of result.candidates) {
     hasher.numbers(candidate.line.x).numbers(candidate.line.z).numbers(candidate.line.curvature);
     for (const violation of candidate.violations) {

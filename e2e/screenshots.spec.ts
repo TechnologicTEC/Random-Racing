@@ -9,20 +9,24 @@ const DEFAULT_SEEDS = [1, 2, 3, 7, 42, 100, 256, 999, 1234, 2024, 4096, 7777, 90
 
 declare const process: { env: Record<string, string | undefined> };
 const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : DEFAULT_SEEDS;
+/** Contact sheets start at these seeds. Override with SHEETS, for example: $env:SHEETS = "1,21,5000" */
+const sheetStarts = process.env.SHEETS ? process.env.SHEETS.split(',').map(Number) : [1];
 
 test.describe('screenshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Screenshots are taken in Chromium only');
 
-  test('contact sheet', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 1120 });
-    await page.goto('/?sheet=20&from=1');
-    await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
-    await page.screenshot({ path: 'test-results/screens/sheet-from-00001.png', fullPage: true });
-  });
+  for (const from of sheetStarts) {
+    test(`contact sheet from seed ${from}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 1120 });
+      await page.goto(`/?sheet=20&from=${from}`);
+      await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+      await page.screenshot({ path: `test-results/screens/sheet-from-${String(from).padStart(5, '0')}.png`, fullPage: true });
+    });
+  }
 
   for (const seed of seeds) {
     test(`seed ${seed}`, async ({ page }) => {
-      await page.goto(`/?seed=${seed}`);
+      await page.goto(`/?seed=${seed}${process.env.CANDIDATE ? `&candidate=${process.env.CANDIDATE}` : ''}`);
       await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
       await page.screenshot({ path: `test-results/screens/seed-${String(seed).padStart(5, '0')}.png` });
     });

@@ -93,6 +93,16 @@ describe('drift score', () => {
     expect(result.facts.driftCorners).toBe(2);
   });
 
+  it('is lower when only half the corners suit drifting', () => {
+    const lap = Array.from({ length: 5 }, () => [
+      corner('right', 90, 40), straight(100),
+      corner('left', 90, 150), straight(100), // too wide to need a drift
+    ]).flat();
+    const result = part(lap, 'drift');
+    expect(result.score).toBeCloseTo(0.75, 9);
+    expect(result.facts).toEqual({ driftCorners: 5, corners: 10, target: 5 });
+  });
+
   it('does not count corners that are too tight, too wide, too short or barely turn', () => {
     const lap = [
       corner('right', 90, 16), straight(100), // too tight to hold a slide
@@ -107,6 +117,17 @@ describe('drift score', () => {
 describe('flow score', () => {
   it('is full marks for a balanced lap of well-spaced corners', () => {
     expect(part(balancedLap(), 'flow').score).toBe(1);
+  });
+
+  it('drops when the lap is too busy', () => {
+    const lap: Section[] = [];
+    for (let i = 0; i < 18; i++) lap.push(corner(i % 2 === 0 ? 'right' : 'left', 90, 40), straight(60));
+    expect(part(lap, 'flow').score).toBeLessThan(0.7);
+  });
+
+  it('wants between 7 and 13 real corners', () => {
+    expect(cfg.score.flowMinCorners).toBe(7);
+    expect(cfg.score.flowMaxCorners).toBe(13);
   });
 
   it('drops when the lap has too few corners', () => {

@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { config, type TrackConfig } from '../../config';
-import type { Candidate, StraightSection, TrackResult } from '../types';
+import type { Candidate, CornerSection, StraightSection, TrackResult } from '../types';
 import { hashTrack } from './hash';
 import { generateTrack } from './pipeline';
 import { validateLayout } from './validate';
 
 const cfg = config.track;
 const winnerOf = (result: TrackResult): Candidate => result.candidates[result.winnerIndex]!;
+const cornersOf = (result: TrackResult): CornerSection[] =>
+  winnerOf(result).sections.filter((s): s is CornerSection => s.type === 'corner');
+/** Total turning over the lap in degrees: about +360 for a clockwise lap, -360 the other way. */
+const netTurn = (result: TrackResult): number =>
+  cornersOf(result).reduce((sum, c) => sum + (c.direction === 'right' ? c.turnDegrees : -c.turnDegrees), 0);
 
 describe('generateTrack', () => {
   const result = generateTrack(48213, cfg);
@@ -92,8 +97,69 @@ describe('generateTrack across many seeds', () => {
     }
   });
 
+  it('keeps nearly every candidate valid, so all 30 compete on fun', () => {
+    const all = results.flatMap((r) => r.candidates);
+    const valid = all.filter((c) => c.violations.length === 0).length;
+    expect(valid).toBeGreaterThan(all.length * 0.9);
+  });
+
+  it('records how many build attempts each candidate needed', () => {
+    for (const candidate of results[0]!.candidates) {
+      expect(candidate.buildAttempts).toBeGreaterThanOrEqual(1);
+      expect(candidate.buildAttempts).toBeLessThanOrEqual(cfg.layout.maxAttempts);
+    }
+  });
+
+  it('gives most tracks at least one hairpin', () => {
+    const withHairpin = results.filter((r) => cornersOf(r).some((c) => c.kind === 'hairpin')).length;
+    expect(withHairpin).toBeGreaterThan(results.length * 0.7);
+  });
+
+  it('uses all three styles', () => {
+    const styles = new Set(results.map((r) => r.style));
+    expect([...styles].sort()).toEqual(['folded', 'round', 'stretched']);
+  });
+
+  it('runs tracks in both directions', () => {
+    const clockwise = results.filter((r) => netTurn(r) > 0).length;
+    expect(clockwise).toBeGreaterThan(results.length * 0.3);
+    expect(clockwise).toBeLessThan(results.length * 0.7);
+  });
+
+  it('keeps real corner counts in the range that feels right (7 to 14)', () => {
+    for (const r of results) {
+      const real = cornersOf(r).filter((c) => c.kind !== 'kink').length;
+      expect(real, `seed ${r.seed}`).toBeGreaterThanOrEqual(7);
+      expect(real, `seed ${r.seed}`).toBeLessThanOrEqual(14);
+    }
+  });
+
   it('gives most seeds a different name', () => {
     expect(new Set(results.map((r) => r.name)).size).toBeGreaterThan(150);
+  });
+});
+
+describe('variety across 20 seeds', () => {
+  const twenty = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, cfg));
+
+  it('spreads lap lengths over at least 400 m', () => {
+    const laps = twenty.map((r) => winnerOf(r).line.length);
+    expect(Math.max(...laps) - Math.min(...laps)).toBeGreaterThan(400);
+  });
+
+  it('varies the number of corners', () => {
+    const counts = twenty.map((r) => cornersOf(r).length);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('includes every style and both directions', () => {
+    expect(new Set(twenty.map((r) => r.style)).size).toBe(3);
+    expect(new Set(twenty.map((r) => netTurn(r) > 0)).size).toBe(2);
+  });
+
+  it('never repeats a sequence of corners', () => {
+    const signatures = twenty.map((r) => cornersOf(r).map((c) => `${c.kind[0]}${c.direction[0]}`).join(''));
+    expect(new Set(signatures).size).toBe(20);
   });
 });
 
