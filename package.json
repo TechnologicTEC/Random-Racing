@@ -1,0 +1,22 @@
+{
+  "name": "random-racing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Procedural kart racer for desktop browsers. Every race happens on a world and track generated from a seed.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.pure.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

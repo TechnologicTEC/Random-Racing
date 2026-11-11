@@ -15,4 +15,14 @@ Procedural kart racer for desktop browsers. Every race happens on a world and tr
 - I'm on Windows using VS Code; give terminal commands for PowerShell.
 
 ## Commands
-(Fill in once the project is set up: how to run the dev server, tests and Playwright checks.)
+Run from the repo folder in PowerShell.
+
+- `npm install`: install the pinned dependencies (first time only).
+- `npx playwright install chromium firefox`: download the test browsers (first time only).
+- `npm run dev`: start the dev server at http://127.0.0.1:5173.
+- `npm test`: run the Vitest unit tests once. `npm run test:watch` reruns them on save.
+- `npm run typecheck`: type-check everything, then check `src/core` and `src/gen` again without browser types.
+- `npm run e2e`: run the Playwright smoke tests and screenshots (starts the dev server itself).
+- `npm run build`: type-check and build to `dist/`.
+- Screenshots land in `test-results/screens/`. To choose what is captured: `$env:SEEDS = "5,6,7"; $env:SHEETS = "1,21"; npm run e2e` (clear them afterwards with `Remove-Item Env:SEEDS, Env:SHEETS`).
+- Lab addresses: `/?seed=48213` (one seed), `/?sheet=20&from=1` (contact sheet), `/?seeds=5,99` (chosen seeds), `&candidate=7` (one candidate), `&minRadius=30` or `&gapWidths=4` (what-if rules).
