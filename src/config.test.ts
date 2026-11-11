@@ -19,4 +19,15 @@ describe('config', () => {
   it('generates about 30 candidates per seed', () => {
     expect(config.track.candidatesPerRound).toBe(30);
   });
+
+  it('gives elevation 12% of the fun score, with the weights adding up to 1', () => {
+    const weights = config.track.score.weights;
+    expect(weights.elevation).toBe(0.12);
+    const total = weights.straights + weights.cornerMix + weights.drift + weights.flow + weights.elevation;
+    expect(total).toBeCloseTo(1, 12);
+  });
+
+  it('keeps road gradients at the brief limit of about 8%', () => {
+    expect(config.road.maxGradient).toBe(0.08);
+  });
 });

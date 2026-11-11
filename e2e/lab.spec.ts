@@ -85,7 +85,8 @@ test('shows a valid winner with a score and its breakdown', async ({ page }) => 
   await expect(page.getByTestId('score-bars')).toContainText('Corner mix');
   await expect(page.getByTestId('score-bars')).toContainText('Drift corners');
   await expect(page.getByTestId('score-bars')).toContainText('Flow');
-  await expect(page.getByTestId('score-bars')).toContainText('needs terrain');
+  await expect(page.getByTestId('score-bars')).toContainText('Elevation');
+  await expect(page.getByTestId('score-bars')).toContainText('of climbing');
 });
 
 test('shows the road height along the lap as a chart with its facts', async ({ page }) => {

@@ -1,13 +1,13 @@
 import type { ScoreConfig, TrackConfig } from '../../config';
-import type { CornerSection, ScoreBreakdown, ScorePart, Section, StraightSection } from '../types';
+import type { CornerSection, ProfileStats, ScoreBreakdown, ScorePart, Section, StraightSection } from '../types';
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 /**
- * Rates how much fun a valid layout should be, from its straights and corners.
- * Each part scores 0 to 1; the total is their weighted average.
+ * Rates how much fun a valid layout should be, from its straights, its corners
+ * and how much it climbs. Each part scores 0 to 1; the total is their weighted average.
  */
-export function scoreLayout(sections: readonly Section[], cfg: TrackConfig): ScoreBreakdown {
+export function scoreLayout(sections: readonly Section[], cfg: TrackConfig, elevation: ProfileStats): ScoreBreakdown {
   const rules = cfg.score;
   const straights = sections.filter((s): s is StraightSection => s.type === 'straight');
   const corners = sections.filter((s): s is CornerSection => s.type === 'corner');
@@ -17,8 +17,7 @@ export function scoreLayout(sections: readonly Section[], cfg: TrackConfig): Sco
     scoreCornerMix(corners, rules),
     scoreDrift(corners, rules),
     scoreFlow(sections, corners, rules),
-    // Needs terrain, which arrives in Milestone 2.
-    { key: 'elevation', score: 0, weight: rules.weights.elevation, pending: true, facts: {} },
+    scoreElevation(elevation, rules),
   ];
 
   let weighted = 0;
@@ -91,6 +90,19 @@ function scoreDrift(corners: readonly CornerSection[], rules: ScoreConfig): Scor
   };
 }
 
+/** Rewards a lap that goes up and down: mostly for its height range, partly for its total climbing. */
+function scoreElevation(elevation: ProfileStats, rules: ScoreConfig): ScorePart {
+  const range = clamp01(elevation.range / rules.elevationRange);
+  const climb = clamp01(elevation.climb / rules.elevationClimb);
+  return {
+    key: 'elevation',
+    score: 0.6 * range + 0.4 * climb,
+    weight: rules.weights.elevation,
+    pending: false,
+    facts: { range: elevation.range, climb: elevation.climb, maxGradient: elevation.maxGradient },
+  };
+}
+
 /** Starts at full marks and takes points off for things that make a lap feel awkward. */
 function scoreFlow(sections: readonly Section[], corners: readonly CornerSection[], rules: ScoreConfig): ScorePart {
   const real = corners.filter((c) => c.kind !== 'kink');
@@ -114,7 +126,7 @@ function scoreFlow(sections: readonly Section[], corners: readonly CornerSection
   let penalty = 0;
   const missing = Math.max(0, rules.flowMinCorners - real.length);
   const excess = Math.max(0, real.length - rules.flowMaxCorners);
-  penalty += Math.min(0.45, (missing + excess) * 0.15);
+  penalty += Math.min(0.75, (missing + excess) * rules.flowCornerPenalty);
   penalty += Math.min(0.4, Math.max(0, kinks - rules.flowMaxKinks) * 0.08);
   penalty += Math.min(0.3, stutters * 0.1);
   const minorityShare = real.length > 0 ? Math.min(left, right) / real.length : 0;

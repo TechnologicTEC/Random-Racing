@@ -52,7 +52,10 @@ export function describeScorePart(part: ScorePart): { label: string; detail: str
         detail: `${plural(f.corners ?? 0, 'corner')} (${f.left ?? 0} left, ${f.right ?? 0} right), ${plural(f.kinks ?? 0, 'kink')}, ${plural(f.stutters ?? 0, 'stutter')}`,
       };
     case 'elevation':
-      return { label: 'Elevation', detail: 'Not scored yet: needs terrain (Milestone 2)' };
+      return {
+        label: 'Elevation',
+        detail: `${Math.round(f.range ?? 0)} m between lowest and highest point, ${Math.round(f.climb ?? 0)} m of climbing; steepest ${Math.round((f.maxGradient ?? 0) * 100)}%`,
+      };
   }
 }
 

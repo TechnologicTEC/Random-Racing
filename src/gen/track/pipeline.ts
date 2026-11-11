@@ -1,7 +1,7 @@
 import type { GenConfig, RoadConfig, TrackConfig } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createRng } from '../../core/rng';
-import { solveProfile } from '../road/profile';
+import { measureProfile, solveProfile } from '../road/profile';
 import type { Candidate, CenterLine, Corner, StraightSection, TrackResult } from '../types';
 import { createRelief, type Relief } from '../world/relief';
 import { GENERATOR_VERSION } from '../version';
@@ -82,7 +82,8 @@ function buildCandidate(
   const violations = validateLayout(line, cfg);
   const sections = analyseSections(line, cfg);
   const profile = solveProfile(line, terrain.relief, terrain.road, cfg.roadWidth);
-  const score = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg) : null;
+  const elevation = measureProfile(line, profile, terrain.road, cfg.roadWidth);
+  const score = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg, elevation) : null;
   return { index, controlPoints, buildAttempts, line, profile, violations, sections, score };
 }
 

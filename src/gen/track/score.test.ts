@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { stadiumLine } from '../../testing/trackFixtures';
-import type { CornerKind, CornerSection, ScoreKey, Section, StraightSection } from '../types';
+import type { CornerKind, CornerSection, ProfileStats, ScoreKey, Section, StraightSection } from '../types';
 import { analyseSections } from './analysis';
 import { scoreLayout } from './score';
 
@@ -22,7 +22,12 @@ function corner(
 function straight(length: number): StraightSection {
   return { type: 'straight', startIndex: 0, sampleCount: Math.round(length / 2), length };
 }
-const part = (sections: Section[], key: ScoreKey) => scoreLayout(sections, cfg).parts.find((p) => p.key === key)!;
+/** A road profile's measurements, flat unless told otherwise. */
+const heights = (range = 0, climb = 0, maxGradient = 0): ProfileStats => ({
+  min: 5, max: 5 + range, range, climb, maxGradient, tightestCrestRadius: Infinity, maxFill: 0, maxCut: 0, steepestBank: 0,
+});
+const part = (sections: Section[], key: ScoreKey, elevation = heights()) =>
+  scoreLayout(sections, cfg, elevation).parts.find((p) => p.key === key)!;
 
 /** Eight well-shaped corners, left and right, joined by 100 m straights. */
 function balancedLap(): Section[] {
@@ -130,6 +135,15 @@ describe('flow score', () => {
     expect(cfg.score.flowMaxCorners).toBe(13);
   });
 
+  it('takes the configured penalty off for each corner short of the range, enough to outweigh a hillier lap', () => {
+    // Six balanced corners: one short of the seven the flow score wants.
+    const lap: Section[] = [];
+    for (let i = 0; i < 6; i++) lap.push(corner(i % 2 === 0 ? 'right' : 'left', 90, 40), straight(100));
+    expect(part(lap, 'flow').score).toBeCloseTo(1 - cfg.score.flowCornerPenalty, 12);
+    // One missing corner must cost more of the total than a quarter of the elevation part can give back.
+    expect(cfg.score.flowCornerPenalty * cfg.score.weights.flow).toBeGreaterThan(0.25 * cfg.score.weights.elevation);
+  });
+
   it('drops when the lap has too few corners', () => {
     const lap = [corner('right', 120, 40), straight(300), corner('left', 60, 40), straight(300), corner('right', 300, 60)];
     expect(part(lap, 'flow').score).toBeLessThan(1);
@@ -160,25 +174,55 @@ describe('flow score', () => {
 });
 
 describe('elevation score', () => {
-  it('is pending until Milestone 2 and carries no weight', () => {
-    const elevation = part(balancedLap(), 'elevation');
-    expect(elevation.pending).toBe(true);
-    expect(elevation.weight).toBe(0);
+  const rules = cfg.score;
+  const elevation = (range: number, climb: number) => part(balancedLap(), 'elevation', heights(range, climb, 0.06));
+
+  it('is no longer pending and carries its share of the total', () => {
+    expect(elevation(10, 20).pending).toBe(false);
+    expect(elevation(10, 20).weight).toBe(rules.weights.elevation);
+    expect(rules.weights.elevation).toBeGreaterThan(0);
+  });
+
+  it('is zero on a flat road', () => {
+    expect(elevation(0, 0).score).toBe(0);
+  });
+
+  it('is full marks when the lap has the height range and the climbing asked for', () => {
+    expect(elevation(rules.elevationRange, rules.elevationClimb).score).toBe(1);
+    expect(elevation(rules.elevationRange * 2, rules.elevationClimb * 2).score).toBe(1);
+  });
+
+  it('grows with the height range and with the climbing', () => {
+    expect(elevation(16, 20).score).toBeGreaterThan(elevation(8, 20).score);
+    expect(elevation(16, 30).score).toBeGreaterThan(elevation(16, 20).score);
+  });
+
+  it('counts the height range for 60% and the climbing for 40%', () => {
+    expect(elevation(rules.elevationRange, 0).score).toBeCloseTo(0.6, 12);
+    expect(elevation(0, rules.elevationClimb).score).toBeCloseTo(0.4, 12);
+  });
+
+  it('reports the numbers behind the score', () => {
+    expect(elevation(12.5, 30).facts).toEqual({ range: 12.5, climb: 30, maxGradient: 0.06 });
   });
 });
 
 describe('total score', () => {
-  it('is the weighted average of the parts that are not pending', () => {
-    const result = scoreLayout(balancedLap(), cfg);
-    const live = result.parts.filter((p) => !p.pending);
-    const expected = live.reduce((sum, p) => sum + p.score * p.weight, 0) / live.reduce((sum, p) => sum + p.weight, 0);
+  it('is the weighted average of all five parts', () => {
+    const result = scoreLayout(balancedLap(), cfg, heights(12, 20));
+    expect(result.parts.map((p) => p.key)).toEqual(['straights', 'cornerMix', 'drift', 'flow', 'elevation']);
+    const expected = result.parts.reduce((sum, p) => sum + p.score * p.weight, 0) / result.parts.reduce((sum, p) => sum + p.weight, 0);
     expect(result.total).toBeCloseTo(expected, 12);
+  });
+
+  it('rates the same lap higher when it has hills', () => {
+    expect(scoreLayout(balancedLap(), cfg, heights(20, 35)).total).toBeGreaterThan(scoreLayout(balancedLap(), cfg, heights()).total);
   });
 
   it('keeps every part and the total between 0 and 1', () => {
     const laps = [balancedLap(), [corner('right', 360, 100)], analyseSections(stadiumLine(400, 60), cfg)];
     for (const lap of laps) {
-      const result = scoreLayout(lap, cfg);
+      const result = scoreLayout(lap, cfg, heights(40, 90));
       for (const p of [...result.parts, { score: result.total }]) {
         expect(p.score).toBeGreaterThanOrEqual(0);
         expect(p.score).toBeLessThanOrEqual(1);
@@ -187,7 +231,7 @@ describe('total score', () => {
   });
 
   it('gives the same score for the same input', () => {
-    expect(scoreLayout(balancedLap(), cfg)).toEqual(scoreLayout(balancedLap(), cfg));
+    expect(scoreLayout(balancedLap(), cfg, heights(9, 14))).toEqual(scoreLayout(balancedLap(), cfg, heights(9, 14)));
   });
 
   it('rates a varied lap above a plain oval', () => {
@@ -199,6 +243,6 @@ describe('total score', () => {
       corner('right', 110, 50), straight(60), corner('right', 90, 40),
     ];
     const oval = analyseSections(stadiumLine(400, 60), cfg);
-    expect(scoreLayout(varied, cfg).total).toBeGreaterThan(scoreLayout(oval, cfg).total + 0.3);
+    expect(scoreLayout(varied, cfg, heights()).total).toBeGreaterThan(scoreLayout(oval, cfg, heights()).total + 0.3);
   });
 });

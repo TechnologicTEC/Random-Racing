@@ -49,10 +49,10 @@ describe('describeScorePart', () => {
     });
   });
 
-  it('explains that elevation is waiting for terrain', () => {
-    expect(describeScorePart(part('elevation', {}, true))).toEqual({
+  it('describes the elevation part with its height range, climbing and steepest gradient', () => {
+    expect(describeScorePart(part('elevation', { range: 18.6, climb: 31.2, maxGradient: 0.0796 }))).toEqual({
       label: 'Elevation',
-      detail: 'Not scored yet: needs terrain (Milestone 2)',
+      detail: '19 m between lowest and highest point, 31 m of climbing; steepest 8%',
     });
   });
 });

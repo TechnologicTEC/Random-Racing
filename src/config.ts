@@ -45,8 +45,12 @@ export interface TrackConfig {
 
 /** How valid layouts are rated for fun. Each part scores 0 to 1. */
 export interface ScoreConfig {
-  /** How much each part counts towards the total. Elevation is 0 until Milestone 2 adds terrain. */
+  /** How much each part counts towards the total. */
   weights: { straights: number; cornerMix: number; drift: number; flow: number; elevation: number };
+  /** Elevation: a lap with this many metres between its lowest and highest point earns full marks for range. */
+  elevationRange: number;
+  /** Elevation: a lap that climbs this many metres in total earns full marks for climbing. */
+  elevationClimb: number;
   /** A straight this long earns full marks, in metres (brief: 150). */
   longStraight: number;
   /** How many long straights a lap should have (brief: at least two). */
@@ -63,6 +67,8 @@ export interface ScoreConfig {
   /** Flow: laps with fewer or more real corners than this lose marks. */
   flowMinCorners: number;
   flowMaxCorners: number;
+  /** Flow: marks lost for each real corner under or over that range (0.25 is a quarter of the flow score). */
+  flowCornerPenalty: number;
   /** Flow: kinks beyond this many lose marks. */
   flowMaxKinks: number;
   /** Flow: a straight shorter than this between two corners turning the same way is a stutter, in metres. */
@@ -359,7 +365,9 @@ export const config: GameConfig = {
       chicaneMaxLength: 200,
     },
     score: {
-      weights: { straights: 0.25, cornerMix: 0.25, drift: 0.25, flow: 0.25, elevation: 0 },
+      weights: { straights: 0.22, cornerMix: 0.22, drift: 0.22, flow: 0.22, elevation: 0.12 },
+      elevationRange: 24,
+      elevationClimb: 40,
       longStraight: 150,
       targetLongStraights: 2,
       driftMinRadius: 20,
@@ -369,6 +377,7 @@ export const config: GameConfig = {
       targetDriftCorners: 5,
       flowMinCorners: 7,
       flowMaxCorners: 13,
+      flowCornerPenalty: 0.25,
       flowMaxKinks: 2,
       stutterStraightMax: 40,
       minorityTurnShare: 0.2,
