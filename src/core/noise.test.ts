@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHasher } from './hash';
-import { createNoise, fbm, ridged } from './noise';
+import { createNoise, fbm, ridged, softRidged } from './noise';
 import { createRng } from './rng';
 
 const noiseFor = (seed: number, label = 'test') => createNoise(createRng(seed, 'world').fork(label));
@@ -105,5 +105,32 @@ describe('ridged', () => {
       max = Math.max(max, value);
     }
     expect(max).toBeGreaterThan(0.8);
+  });
+});
+
+describe('softRidged', () => {
+  it('stays within 0 to 1 and still reaches high ridges', () => {
+    const noise = noiseFor(9);
+    let max = 0;
+    for (const [x, y] of samplePoints(3000)) {
+      const value = softRidged(noise, x, y, 3);
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThanOrEqual(1);
+      max = Math.max(max, value);
+    }
+    expect(max).toBeGreaterThan(0.7);
+  });
+
+  it('rounds the ridge tops: its sharpest bend is far gentler than the plain ridges', () => {
+    const noise = noiseFor(9);
+    const bend = (fn: typeof ridged, x: number, y: number): number =>
+      Math.abs(fn(noise, x + 0.002, y, 1) - 2 * fn(noise, x, y, 1) + fn(noise, x - 0.002, y, 1));
+    let sharp = 0;
+    let soft = 0;
+    for (const [x, y] of samplePoints(20000)) {
+      sharp = Math.max(sharp, bend(ridged, x, y));
+      soft = Math.max(soft, bend(softRidged, x, y));
+    }
+    expect(soft).toBeLessThan(sharp / 4);
   });
 });

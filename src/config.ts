@@ -273,8 +273,80 @@ export interface ReliefConfig {
   maxSlope: number;
 }
 
+/** The square of world that is generated. */
+export interface TileConfig {
+  /** Width of the tile in metres. Everything beyond it is open sea. */
+  extent: number;
+  /** Metres between height samples. Smaller is finer and slower. */
+  cell: number;
+}
+
+/** Where the land ends. The coast follows the track: close where the road is low, further out where it is high. */
+export interface CoastConfig {
+  /** The slope down to the sea starts this far from the road edge, in metres. Nearer than this the ground is left alone. */
+  minShore: number;
+  /** Width of the beach, from the waterline to where the land starts to rise, in metres. */
+  beach: number;
+  /** Height of the top of the beach above the sea, in metres. */
+  beachTop: number;
+  /** How steeply the land falls from road height to the beach: gentlest and steepest, as fractions. */
+  slope: Range;
+  /** How quickly that steepness changes along the coast: metres per unit of noise. */
+  slopeScale: number;
+  /**
+   * Headlands are extra land beyond the track's own margin, wherever their
+   * noise pattern rises above `headlandLevel` (-1 to 1; higher means fewer).
+   */
+  headlandLevel: number;
+  /** How high headlands can stand: metres per unit of noise above the level. Also sets how steep their shores are. */
+  headlandHeight: number;
+  /** Size of headlands and the bays between them: metres per unit of noise. */
+  headlandScale: number;
+  /** The coast wanders outwards by up to this much, in metres. It never wanders towards the road. */
+  wobble: number;
+  wobbleScale: number;
+  /** The coastline is smoothed over this distance, in metres. */
+  smoothing: number;
+  /**
+   * Away from the road, "the height of the road near here" is averaged over
+   * this distance, in metres, so the coast does not jump where two sections of
+   * different height are equally near.
+   */
+  heightSmoothing: number;
+  /** The coast is never more than this far from the road, in metres. */
+  maxMargin: number;
+  /** How steeply the sea bed falls away from the shore, as a fraction. */
+  shelfSlope: number;
+  /** Depth of the open sea, in metres. */
+  seaDepth: number;
+  /** Open sea kept between the land and the tile edge, in metres. */
+  border: number;
+}
+
+/** Ground that is not for driving on: tall peaks and small bumps, kept away from the road. */
+export interface SceneryConfig {
+  /** Peaks start this far from the road edge, in metres... */
+  clearance: number;
+  /** ...and reach full height this much further out. */
+  fade: number;
+  /** Tallest a peak rises above the rolling ground, in metres. */
+  peakHeight: number;
+  /** Size of the peaks: metres per unit of noise. */
+  peakScale: number;
+  /** Size of the regions that have peaks at all: metres per unit of noise. */
+  regionScale: number;
+  /** Small bumps: height either side of the rolling ground, and size, in metres. */
+  bumpHeight: number;
+  bumpScale: number;
+  /** Bumps fade in over this distance from the road edge, in metres. */
+  bumpFade: number;
+}
+
 export interface WorldConfig {
   relief: ReliefConfig;
+  tile: TileConfig;
+  coast: CoastConfig;
+  scenery: SceneryConfig;
 }
 
 export interface GameConfig {
@@ -403,6 +475,35 @@ export const config: GameConfig = {
       fineScale: 320,
       fineShare: 0.15,
       maxSlope: 0.15,
+    },
+    tile: { extent: 1400, cell: 2 },
+    coast: {
+      minShore: 8,
+      beach: 22,
+      beachTop: 1.2,
+      slope: [0.15, 0.5],
+      slopeScale: 400,
+      headlandLevel: 0.15,
+      headlandHeight: 26,
+      headlandScale: 350,
+      wobble: 14,
+      wobbleScale: 120,
+      smoothing: 12,
+      heightSmoothing: 40,
+      maxMargin: 170,
+      shelfSlope: 0.12,
+      seaDepth: 22,
+      border: 30,
+    },
+    scenery: {
+      clearance: 40,
+      fade: 110,
+      peakHeight: 45,
+      peakScale: 480,
+      regionScale: 600,
+      bumpHeight: 1.5,
+      bumpScale: 45,
+      bumpFade: 30,
     },
   },
 };

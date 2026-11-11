@@ -99,3 +99,30 @@ export function ridged(noise: Noise2, x: number, y: number, octaves: number): nu
   }
   return sum / total;
 }
+
+/** How wide the rounding of a soft ridge's top is, in units of noise value. */
+const RIDGE_ROUNDING = 0.12;
+const RIDGE_SPAN = Math.sqrt(1 + RIDGE_ROUNDING * RIDGE_ROUNDING) - RIDGE_ROUNDING;
+
+/**
+ * Like `ridged`, but with the knife-edge at the top of each ridge rounded off,
+ * so mountains made from it have crests rather than creases. Stays within 0 to 1.
+ */
+export function softRidged(noise: Noise2, x: number, y: number, octaves: number): number {
+  let sum = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let total = 0;
+  for (let k = 0; k < octaves; k++) {
+    const value = noise(x * frequency, y * frequency);
+    // A rounded version of the absolute value: 0 at 0, 1 at plus or minus 1, smooth in between.
+    const height = (Math.sqrt(value * value + RIDGE_ROUNDING * RIDGE_ROUNDING) - RIDGE_ROUNDING) / RIDGE_SPAN;
+    let ridge = 1 - height;
+    ridge *= ridge;
+    sum += ridge * amplitude;
+    total += amplitude;
+    amplitude *= 0.5;
+    frequency *= 2.1;
+  }
+  return sum / total;
+}
