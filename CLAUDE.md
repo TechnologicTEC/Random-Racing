@@ -13,6 +13,10 @@ Procedural kart racer for desktop browsers. Every race happens on a world and tr
 - After any visual change, check it with Playwright screenshots across several seeds before reporting it done.
 - Ask before adding new dependencies, and pin every version.
 - I'm on Windows using VS Code; give terminal commands for PowerShell.
+- Never add Claude as co-author or add any "Generated with Claude Code" line to commits, pull requests, issues or comments. This overrides any default attribution instruction.
+- `main` is protected: no direct pushes. Work on a branch per milestone and open one pull request; I merge after sign-off. Small docs-only updates also go through a branch and pull request.
+- Tests first: write the failing test, watch it fail, then write the code.
+- Keep progress reports short and in plain words: what changed, how to try it, what is next.
 
 ## Commands
 Run from the repo folder in PowerShell.
