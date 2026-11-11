@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeScorePart, describeViolation, summariseTracks } from './format';
+import { describeProfile, describeScorePart, describeViolation, summariseTracks } from './format';
 
 describe('describeViolation', () => {
   it('explains each kind of rejection in plain words with the numbers', () => {
@@ -57,8 +57,31 @@ describe('describeScorePart', () => {
   });
 });
 
+describe('describeProfile', () => {
+  const stats = {
+    min: 4.2, max: 23.4, range: 19.2, climb: 31.7, maxGradient: 0.0796,
+    tightestCrestRadius: 240, maxFill: 1.23, maxCut: 2.41, steepestBank: 0.093,
+  };
+
+  it('lists the road height facts in plain words', () => {
+    expect(describeProfile(stats)).toEqual([
+      ['Height range', '19 m (4 to 23 m)'],
+      ['Total climb', '32 m per lap'],
+      ['Steepest gradient', '8%'],
+      ['Deepest cut', '2.4 m'],
+      ['Tallest fill', '1.2 m'],
+      ['Steepest bank between sections', '9%'],
+    ]);
+  });
+
+  it('leaves out the bank line when no sections are close together', () => {
+    const labels = describeProfile({ ...stats, steepestBank: 0 }).map(([label]) => label);
+    expect(labels).not.toContain('Steepest bank between sections');
+  });
+});
+
 describe('summariseTracks', () => {
-  const results = [1, 2, 3, 4, 5, 6].map((seed) => generateTrack(seed, config.track));
+  const results = [1, 2, 3, 4, 5, 6].map((seed) => generateTrack(seed, config));
   const summary = summariseTracks(results);
 
   it('counts the tracks and the styles', () => {
@@ -76,7 +99,7 @@ describe('summariseTracks', () => {
 
   it('mentions fallbacks only when there are some', () => {
     expect(summary).not.toContain('fallback');
-    const forced = generateTrack(1, { ...config.track, minCornerRadius: 5000 });
+    const forced = generateTrack(1, { ...config, track: { ...config.track, minCornerRadius: 5000 } });
     expect(summariseTracks([forced])).toContain('1 fell back to a plain oval');
   });
 

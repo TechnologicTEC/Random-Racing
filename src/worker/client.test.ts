@@ -39,7 +39,7 @@ describe('createGenClient', () => {
     const pending = client.track(48213, config);
     worker.flush();
     const { result } = await pending;
-    expect(hashTrack(result)).toBe(hashTrack(generateTrack(48213, config.track)));
+    expect(hashTrack(result)).toBe(hashTrack(generateTrack(48213, config)));
   });
 
   it('matches each answer to its own request, even when answers come back out of order', async () => {

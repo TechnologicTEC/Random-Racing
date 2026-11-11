@@ -88,6 +88,20 @@ test('shows a valid winner with a score and its breakdown', async ({ page }) => 
   await expect(page.getByTestId('score-bars')).toContainText('needs terrain');
 });
 
+test('shows the road height along the lap as a chart with its facts', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  await expect(page.getByTestId('elevation-facts')).toContainText('Height range');
+  await expect(page.getByTestId('elevation-facts')).toContainText('Total climb');
+  await expect(page.getByTestId('elevation-facts')).toContainText('Steepest gradient');
+  const drawn = await page.getByTestId('elevation-chart').evaluate((canvas: HTMLCanvasElement) => {
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let bright = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i]! + data[i + 1]! + data[i + 2]! > 400) bright++;
+    return bright;
+  });
+  expect(drawn).toBeGreaterThan(200);
+});
+
 test('lists all 30 candidates with exactly one winner', async ({ page }) => {
   await openLab(page, '?seed=48213');
   await expect(page.getByTestId('candidate-chip')).toHaveCount(30);

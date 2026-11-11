@@ -1,10 +1,11 @@
 import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { hashTrack, type Candidate, type TrackResult } from '../../gen';
+import { hashTrack, measureProfile, type Candidate, type TrackResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS } from './draw';
-import { describeScorePart, describeViolation } from './format';
+import { drawElevationChart } from './elevationChart';
+import { describeProfile, describeScorePart, describeViolation } from './format';
 import { fitView, panBy, zoomAt, type View } from './view';
 
 const TEMPLATE = `
@@ -36,6 +37,19 @@ const TEMPLATE = `
         <p class="lab-name" data-ref="name" data-testid="track-name"></p>
         <dl class="lab-facts" data-ref="facts" data-testid="facts"></dl>
         <ul class="lab-verdict" data-ref="verdict" data-testid="verdict"></ul>
+      </section>
+
+      <section class="lab-section">
+        <h2>Elevation</h2>
+        <canvas class="lab-elevation" data-ref="elevation" data-testid="elevation-chart"
+          aria-label="Road height along the lap, from the start line"></canvas>
+        <p class="lab-note lab-legend">
+          <span class="lab-swatch" style="background:#ffffff"></span>road
+          <span class="lab-swatch" style="background:#7d8894"></span>ground
+          <span class="lab-swatch" style="background:#ff7a70"></span>cutting
+          <span class="lab-swatch" style="background:#5ab0ff"></span>embankment
+        </p>
+        <dl class="lab-facts" data-ref="elevationFacts" data-testid="elevation-facts"></dl>
       </section>
 
       <section class="lab-section">
@@ -108,6 +122,8 @@ export function mountTrackLab(root: HTMLElement): void {
   const verdictEl = ref('verdict');
   const barsEl = ref('bars');
   const chipsEl = ref('chips');
+  const elevationCanvas = ref<HTMLCanvasElement>('elevation');
+  const elevationFactsEl = ref('elevationFacts');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser cannot draw to a 2D canvas');
 
@@ -241,6 +257,8 @@ export function mountTrackLab(root: HTMLElement): void {
       addFact(CORNER_LABELS[kind], String(corners.filter((c) => c.kind === kind).length), SECTION_COLORS[kind]);
     }
 
+    renderElevation(candidate);
+
     verdictEl.innerHTML = '';
     const valid = candidate.violations.length === 0;
     verdictEl.dataset.valid = String(valid);
@@ -272,6 +290,30 @@ export function mountTrackLab(root: HTMLElement): void {
     }
 
     render();
+  }
+
+  /** Draws the road height chart and lists its facts for the candidate being shown. */
+  function renderElevation(candidate: Candidate): void {
+    const width = Math.max(1, elevationCanvas.clientWidth);
+    const height = Math.max(1, elevationCanvas.clientHeight);
+    const dpr = window.devicePixelRatio || 1;
+    elevationCanvas.width = Math.round(width * dpr);
+    elevationCanvas.height = Math.round(height * dpr);
+    const chart = elevationCanvas.getContext('2d');
+    if (chart) {
+      chart.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawElevationChart(chart, width, height, candidate.profile);
+    }
+
+    elevationFactsEl.innerHTML = '';
+    const stats = measureProfile(candidate.line, candidate.profile, gameConfig.road, cfg.roadWidth);
+    for (const [label, value] of describeProfile(stats)) {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      elevationFactsEl.append(dt, dd);
+    }
   }
 
   function addFact(label: string, value: string, swatch?: string): void {

@@ -30,6 +30,35 @@ export interface CenterLine {
   curvature: Float64Array;
 }
 
+/** The road's height along a layout, sample for sample with its centre line. */
+export interface RoadProfile {
+  /** Height of the road's centre at each sample, in metres above the sea. */
+  height: Float64Array;
+  /** Height of the natural ground under each sample, before any cutting or filling. */
+  ground: Float64Array;
+}
+
+/** Measurements of a road profile. Heights in metres, slopes as fractions (0.08 is 8%). */
+export interface ProfileStats {
+  /** Lowest and highest point of the road. */
+  min: number;
+  max: number;
+  /** Highest minus lowest. */
+  range: number;
+  /** Total height gained over one lap, counting only the uphill parts. */
+  climb: number;
+  /** Steepest climb or descent. */
+  maxGradient: number;
+  /** Radius of the sharpest crest or dip, in metres (Infinity on a flat road). */
+  tightestCrestRadius: number;
+  /** Furthest the road sits above the natural ground. */
+  maxFill: number;
+  /** Furthest the road sits below the natural ground. */
+  maxCut: number;
+  /** Steepest bank needed between two neighbouring sections (0 when no sections are close). */
+  steepestBank: number;
+}
+
 export type ViolationKind =
   | 'self-intersection'
   | 'corner-too-tight'
@@ -121,6 +150,8 @@ export interface Candidate {
   /** How many tries the layout builder needed before it produced this layout. */
   buildAttempts: number;
   line: CenterLine;
+  /** The road's height along the line. */
+  profile: RoadProfile;
   /** Why it was rejected; empty when valid. */
   violations: Violation[];
   sections: Section[];

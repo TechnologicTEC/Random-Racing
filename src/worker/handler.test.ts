@@ -23,7 +23,7 @@ describe('handleRequest', () => {
     const { response } = posted[0]!;
     expect(response.id).toBe(4);
     if (response.type !== 'done' || response.scope !== 'track') throw new Error('expected a finished track');
-    expect(hashTrack(response.result)).toBe(hashTrack(generateTrack(48213, config.track)));
+    expect(hashTrack(response.result)).toBe(hashTrack(generateTrack(48213, config)));
   });
 
   it('reports how long generation took, using the clock it was given', () => {

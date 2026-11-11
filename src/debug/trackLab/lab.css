@@ -156,6 +156,27 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.lab-elevation {
+  display: block;
+  width: 100%;
+  height: 96px;
+  border: 1px solid var(--lab-border);
+  border-radius: 6px;
+}
+
+.lab-legend {
+  margin: 6px 0 8px;
+}
+
+.lab-legend .lab-swatch {
+  margin-left: 10px;
+  margin-right: 5px;
+}
+
+.lab-legend .lab-swatch:first-child {
+  margin-left: 0;
+}
+
 .lab-swatch {
   display: inline-block;
   width: 10px;

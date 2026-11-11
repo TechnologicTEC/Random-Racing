@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** Milestone 2 step 2 (generation runs in a Web Worker)
-- **Next step:** Milestone 2 step 3, rolling relief and the road height solver
+- **Last finished step:** Milestone 2 step 3 (relief and road heights, elevation chart in the lab)
+- **Next step:** Milestone 2 step 4, the elevation part of the fun score
 
 ## Milestone 2 steps
 
@@ -18,7 +18,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 0 | Branch, plan and decisions recorded here | Done |
 | 1 | `core/noise.ts`, `core/scalar.ts`: seeded simplex, fbm, ridged, exact maths only | Done |
 | 2 | Web Worker: protocol, handler, client; lab and contact sheet generate through it | Done |
-| 3 | Rolling relief and the road height solver (gradient, crests, close sections); elevation chart in the lab | To do |
+| 3 | Rolling relief and the road height solver (gradient, crests, close sections); elevation chart in the lab | Done |
 | 4 | Elevation score at 12% weight | To do |
 | 5 | Island: height grid, coast shaped by the track, natural ground; island map in the lab | To do |
 | 6 | Cut and fill, cover maps, fit report, `generateWorld`, world fingerprint | To do |
@@ -43,8 +43,8 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
 - `src/core`: RNG, exact maths, noise, hashing. `src/gen/track`: the Milestone 1 layout pipeline. `src/gen/road`: road heights, banking, 3D frames, kerbs, barriers and their triangle lists. `src/gen/world`: relief, island, cut and fill, cover maps, tree and rock positions. All pure, no Three.js, exact maths only.
 - `src/worker`: runs generation off the main thread. `src/render`: the only folder that imports Three.js. `src/camera`: camera maths as plain numbers. `src/app`: page wiring.
 - **Island around the track, in this order:**
-  1. *Relief* from the seed alone: rolling hills, lowlands at 3 m, hills to about 30 m, slopes under about 12%.
-  2. *Road heights* for each candidate: sample the relief along the line, then smooth and enforce gradient at most 8%, crest radius at least 200 m, at least 2 m above the sea, at most 5 m above or 6 m below the ground (no bridges or tunnels before Milestone 6).
+  1. *Relief* from the seed alone: rolling hills, lowlands at 3 m, hills to 36 m, 99% of the ground gentler than 15% (`gen/world/relief.ts`).
+  2. *Road heights* for each candidate (`gen/road/profile.ts`): sample the relief along the line, limit the gradient to 8%, then average over 33 samples so no crest or dip is tighter than 200 m radius. Always at least 2 m above the sea. Measured on 3,000 layouts: never more than 5.3 m above or below the ground (limits 6 m and 8 m), so no bridges or tunnels are needed before Milestone 6.
   3. *Elevation score* from that profile, so the winner is partly chosen for how it uses the hills.
   4. *Coast* for the winner: inside the loop is land; outside, land extends a margin past the road, small (a beach) where the road is low and wider where it is high.
   5. *Scenery*: tall ridged peaks only beyond about 40 m from the road.
@@ -117,6 +117,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-11 | Terrain where the road runs is "rolling": 15 to 30 m between a lap's lowest and highest point | Tane's choice over gentle or bold |
 | 2026-11-11 | The relief depends on the seed only; the coast and scenery are shaped by the winning track | Lets all 30 candidates be scored on elevation cheaply, and puts hills where the track climbs |
 | 2026-11-11 | Generation also produces the road, kerb and barrier triangle lists; rendering only colours them | Milestone 3 needs the same shapes for collisions, and they must be the same on every machine |
+| 2026-11-11 | `generateTrack(seed, config)` now takes the whole generation config (track, road, world), not just the track part | It needs the relief and road rules to give every candidate a height profile |
+| 2026-11-11 | Hills are 33 m tall over a 3 m lowland, 800 m per noise unit; ground height is squared so lowlands are wide | Tuned on 3,000 layouts to match the "rolling" choice: 79% of each lap is under a 6% grade |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
 ## Notes for later milestones
@@ -129,6 +131,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 
 ## Known issues and risks
 
+- **The start line can sit on a steep slope** (seed 42 starts on an 8% descent). The solver does not yet know where the start is. Worth flattening the start area before Milestone 4 puts a grid there.
+- Lap height range is 13 to 24 m for most layouts (median 19 m, up to 29 m), a little under the top of the 15 to 30 m target. `world.relief.hillHeight` raises it; cut and fill grow with it.
 - **Almost every track has a hairpin** (about 98% of seeds). Tane asked for "most", not all. The scorer rewards a hairpin, a sweeper and a chicane, so the winner nearly always has one. Could be loosened with a hairpin-free style if wanted.
 - **Folds are still modest.** Tracks fold back on themselves, but the very long double straights of a Sepang-style layout are rare, because the lap limit (2.4 km) caps how deep folds can go.
 - **Winner scores cluster between 85 and 100.** The winner is the best of 30, so this is partly expected, but the scorer could discriminate more.
@@ -147,3 +151,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12:** Tane signed off Milestone 1. PR #7 merged with a merge commit, issue #1 closed. Next: Milestone 2 planning in a fresh session.
 - **2026-11-11 (Milestone 2):** Plan approved in plan mode. Created `milestone-2-world`; recorded the step table, design and decisions here.
 - **2026-11-11 (Milestone 2):** Steps 1 and 2 done. `src/core/noise.ts` (seeded simplex, fbm, ridged) and `scalar.ts`. Generation now runs in a Web Worker (`src/worker`): the lab, the contact sheet and `window.seedCircuit.hashFor` (now async) all go through `genClient()`. The worker file has its own type check (`tsconfig.worker.json`). 282 unit tests and 50 Playwright tests pass; fingerprints still match Node in Chromium and Firefox.
+- **2026-11-11 (Milestone 2):** Step 3 done. `gen/world/relief.ts` and `gen/road/profile.ts`; every candidate now carries a `profile` (road and ground heights). `Grid` moved to `core/grid.ts`. The lab has an Elevation panel (chart plus facts). Seed screenshots are now 1250 px tall so the whole sidebar shows. Over 100 seeds (3,000 layouts): lap height range 4 to 29 m (median 19 m), cut and fill at most 5.3 m, steepest bank between close sections 27% (limit 45%), about 70 ms per seed in Node. 310 unit tests and 52 Playwright tests pass.

@@ -1,4 +1,4 @@
-import type { ScorePart, TrackResult, Violation } from '../../gen/types';
+import type { ProfileStats, ScorePart, TrackResult, Violation } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -54,6 +54,20 @@ export function describeScorePart(part: ScorePart): { label: string; detail: str
     case 'elevation':
       return { label: 'Elevation', detail: 'Not scored yet: needs terrain (Milestone 2)' };
   }
+}
+
+/** The road height facts as label and value pairs, for the lab's elevation panel. */
+export function describeProfile(stats: ProfileStats): Array<[label: string, value: string]> {
+  const percent = (fraction: number): string => `${Math.round(fraction * 100)}%`;
+  const facts: Array<[string, string]> = [
+    ['Height range', `${Math.round(stats.range)} m (${Math.round(stats.min)} to ${Math.round(stats.max)} m)`],
+    ['Total climb', `${Math.round(stats.climb)} m per lap`],
+    ['Steepest gradient', percent(stats.maxGradient)],
+    ['Deepest cut', `${short(stats.maxCut)} m`],
+    ['Tallest fill', `${short(stats.maxFill)} m`],
+  ];
+  if (stats.steepestBank > 0) facts.push(['Steepest bank between sections', percent(stats.steepestBank)]);
+  return facts;
 }
 
 /** One line describing a batch of generated tracks, for judging variety at a glance. */

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { config, type TrackConfig } from '../../config';
+import { config, type GenConfig, type TrackConfig } from '../../config';
 import type { Candidate, CornerSection, StraightSection, TrackResult } from '../types';
 import { hashTrack } from './hash';
 import { generateTrack } from './pipeline';
 import { validateLayout } from './validate';
 
 const cfg = config.track;
+/** The full config with a different set of track rules. */
+const withTrack = (track: TrackConfig): GenConfig => ({ ...config, track });
 const winnerOf = (result: TrackResult): Candidate => result.candidates[result.winnerIndex]!;
 const cornersOf = (result: TrackResult): CornerSection[] =>
   winnerOf(result).sections.filter((s): s is CornerSection => s.type === 'corner');
@@ -14,7 +16,7 @@ const netTurn = (result: TrackResult): number =>
   cornersOf(result).reduce((sum, c) => sum + (c.direction === 'right' ? c.turnDegrees : -c.turnDegrees), 0);
 
 describe('generateTrack', () => {
-  const result = generateTrack(48213, cfg);
+  const result = generateTrack(48213, config);
 
   it('records the seed and generator version', () => {
     expect(result.seed).toBe(48213);
@@ -68,18 +70,18 @@ describe('generateTrack', () => {
 
 describe('generateTrack determinism', () => {
   it('produces identical data for the same seed', () => {
-    expect(generateTrack(777, cfg)).toEqual(generateTrack(777, cfg));
-    expect(hashTrack(generateTrack(777, cfg))).toBe(hashTrack(generateTrack(777, cfg)));
+    expect(generateTrack(777, config)).toEqual(generateTrack(777, config));
+    expect(hashTrack(generateTrack(777, config))).toBe(hashTrack(generateTrack(777, config)));
   });
 
   it('produces different tracks for different seeds', () => {
-    const hashes = new Set(Array.from({ length: 20 }, (_, i) => hashTrack(generateTrack(i + 1, cfg))));
+    const hashes = new Set(Array.from({ length: 20 }, (_, i) => hashTrack(generateTrack(i + 1, config))));
     expect(hashes.size).toBe(20);
   });
 
   it('keeps each candidate the same when the number of candidates changes', () => {
-    const few = generateTrack(777, { ...cfg, candidatesPerRound: 5 });
-    const many = generateTrack(777, cfg);
+    const few = generateTrack(777, withTrack({ ...cfg, candidatesPerRound: 5 }));
+    const many = generateTrack(777, config);
     for (let i = 0; i < 5; i++) {
       expect(few.candidates[i]!.controlPoints).toEqual(many.candidates[i]!.controlPoints);
     }
@@ -88,7 +90,7 @@ describe('generateTrack determinism', () => {
 
 describe('generateTrack across many seeds', () => {
   const seeds = Array.from({ length: 200 }, (_, i) => i + 1);
-  const results = seeds.map((seed) => generateTrack(seed, cfg));
+  const results = seeds.map((seed) => generateTrack(seed, config));
 
   it('finds a valid winner for every seed from 1 to 200 without the fallback', () => {
     for (const r of results) {
@@ -140,7 +142,7 @@ describe('generateTrack across many seeds', () => {
 });
 
 describe('variety across 20 seeds', () => {
-  const twenty = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, cfg));
+  const twenty = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, config));
 
   it('spreads lap lengths over at least 400 m', () => {
     const laps = twenty.map((r) => winnerOf(r).line.length);
@@ -165,7 +167,7 @@ describe('variety across 20 seeds', () => {
 
 describe('generateTrack when nothing is valid', () => {
   const impossible: TrackConfig = { ...cfg, minCornerRadius: 5000 };
-  const result = generateTrack(5, impossible);
+  const result = generateTrack(5, withTrack(impossible));
 
   it('tries more rounds, then falls back to a plain oval and says so', () => {
     expect(result.fallback).toBe(true);
@@ -181,7 +183,7 @@ describe('generateTrack when nothing is valid', () => {
 describe('generateTrack speed', () => {
   it('generates a track in well under the 3 second budget', () => {
     const start = performance.now();
-    for (let seed = 1000; seed < 1010; seed++) generateTrack(seed, cfg);
+    for (let seed = 1000; seed < 1010; seed++) generateTrack(seed, config);
     const perSeed = (performance.now() - start) / 10;
     expect(perSeed).toBeLessThan(400);
   });

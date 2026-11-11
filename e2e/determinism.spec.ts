@@ -11,7 +11,7 @@ import { generateTrack, hashTrack } from '../src/gen';
 const SEEDS = [0, 1, 2, 3, 7, 42, 100, 999, 1234, 2024, 4096, 9001, 12345, 31337, 48213, 65535, 77777, 99999, 123456789, 4294967295];
 
 test('this browser generates exactly the same tracks as Node', async ({ page, browserName }) => {
-  const expected = SEEDS.map((seed) => hashTrack(generateTrack(seed, config.track)));
+  const expected = SEEDS.map((seed) => hashTrack(generateTrack(seed, config)));
 
   await page.goto('/?seed=1');
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');

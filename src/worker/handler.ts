@@ -15,7 +15,7 @@ export function handleRequest(
 ): void {
   try {
     const started = now();
-    const result = generateTrack(request.seed, request.config.track);
+    const result = generateTrack(request.seed, request.config);
     const ms = now() - started;
     post({ id: request.id, type: 'done', scope: 'track', result, ms }, collectBuffers(result));
   } catch (error) {

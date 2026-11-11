@@ -12,6 +12,7 @@ export function hashTrack(result: TrackResult): string {
   hasher.text(result.name).text(result.style);
   for (const candidate of result.candidates) {
     hasher.numbers(candidate.line.x).numbers(candidate.line.z).numbers(candidate.line.curvature);
+    hasher.numbers(candidate.profile.height);
     for (const violation of candidate.violations) {
       hasher.text(violation.kind).numbers([violation.x, violation.z, violation.value]);
     }

@@ -224,9 +224,61 @@ export interface StyleConfig {
   foldDepth: Range;
 }
 
+/** How the road is laid over the ground: its heights, and how it ties in with the land beside it. */
+export interface RoadConfig {
+  /** Steepest climb or descent allowed, as a fraction (brief: about 8%, so 0.08). */
+  maxGradient: number;
+  /** Hill tops and dips are rounded to at least this radius, in metres, so the car is never launched. */
+  crestMinRadius: number;
+  /** The road stays at least this far above the sea, in metres. */
+  minHeight: number;
+  /** Flat strip kept beside each road edge, in metres. Kerbs and barriers sit on it. */
+  verge: number;
+  /**
+   * Two separate sections closer than this (centre to centre, in metres) share
+   * the ground between them, so their heights are tied together.
+   */
+  coupleDistance: number;
+  /** Points count as separate sections when they are more than this far apart along the lap, in metres. */
+  coupleMinArc: number;
+  /** Steepest grass bank allowed between two tied sections, as a fraction (0.45 is a 45% slope). */
+  maxBankSlope: number;
+  /** The solver repeats at most this many times to bring tied sections within reach of each other. */
+  solverRounds: number;
+  /** The road should sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). */
+  maxFill: number;
+  /** The road should sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). */
+  maxCut: number;
+}
+
+/** The rolling ground the track is laid over. It depends only on the seed, never on the track. */
+export interface ReliefConfig {
+  /** Height of the lowest ground, in metres above the sea. */
+  lowland: number;
+  /** Hills rise this far above the lowland, in metres. */
+  hillHeight: number;
+  /** Size of the main hills: metres per unit of noise. Bigger means broader, gentler hills. */
+  scale: number;
+  /** Size of the smaller rises layered on top, in metres per unit of noise. */
+  fineScale: number;
+  /** Share of the height that comes from the smaller rises (0 to 1). */
+  fineShare: number;
+  /** Nearly all of the ground is gentler than this, as a fraction. Checked by a test, not enforced in code. */
+  maxSlope: number;
+}
+
+export interface WorldConfig {
+  relief: ReliefConfig;
+}
+
 export interface GameConfig {
   track: TrackConfig;
+  road: RoadConfig;
+  world: WorldConfig;
 }
+
+/** The parts of the config that generation needs. */
+export type GenConfig = Pick<GameConfig, 'track' | 'road' | 'world'>;
 
 export const config: GameConfig = {
   track: {
@@ -320,6 +372,28 @@ export const config: GameConfig = {
       flowMaxKinks: 2,
       stutterStraightMax: 40,
       minorityTurnShare: 0.2,
+    },
+  },
+  road: {
+    maxGradient: 0.08,
+    crestMinRadius: 200,
+    minHeight: 2,
+    verge: 2.5,
+    coupleDistance: 55,
+    coupleMinArc: 110,
+    maxBankSlope: 0.45,
+    solverRounds: 8,
+    maxFill: 6,
+    maxCut: 8,
+  },
+  world: {
+    relief: {
+      lowland: 3,
+      hillHeight: 33,
+      scale: 800,
+      fineScale: 320,
+      fineShare: 0.15,
+      maxSlope: 0.15,
     },
   },
 };

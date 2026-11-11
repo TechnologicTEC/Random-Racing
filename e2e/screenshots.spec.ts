@@ -33,6 +33,8 @@ test.describe('screenshots', () => {
 
   for (const seed of seeds) {
     test(`seed ${seed}`, async ({ page }) => {
+      // Tall enough to show the whole sidebar, including the elevation chart and score bars.
+      await page.setViewportSize({ width: 1280, height: 1250 });
       await page.goto(`/?seed=${seed}${process.env.CANDIDATE ? `&candidate=${process.env.CANDIDATE}` : ''}`);
       await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
       // Every seed must end up with a valid winner that did not need the fallback oval.
