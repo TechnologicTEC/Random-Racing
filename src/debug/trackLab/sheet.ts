@@ -1,7 +1,8 @@
 import './lab.css';
 import { config, GENERATOR_VERSION } from '../../config';
 import { MAX_SEED } from '../../core/seedCode';
-import { generateTrack, type TrackResult } from '../../gen';
+import type { TrackResult } from '../../gen';
+import { genClient } from '../../worker/client';
 import { drawThumbnail } from './draw';
 import { summariseTracks } from './format';
 import { fitView } from './view';
@@ -50,19 +51,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
 
   const dpr = window.devicePixelRatio || 1;
   const view = fitView(THUMB, THUMB, cfg.buildableRadius, 6);
-  let done = 0;
-  const results: TrackResult[] = [];
-
-  // One track per frame keeps the page responsive while the sheet fills in.
-  const addNext = (): void => {
-    if (done >= count) {
-      ref('summary').textContent = summariseTracks(results);
-      document.body.dataset.labReady = 'true';
-      return;
-    }
-    const seed = seeds[done]!;
-    const result = generateTrack(seed, cfg);
-    results.push(result);
+  const addCard = (seed: number, result: TrackResult): void => {
     const winner = result.candidates[result.winnerIndex]!;
 
     const card = document.createElement('a');
@@ -83,9 +72,21 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     caption.textContent = `${seed} · ${result.name} · ${result.style} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
     card.append(canvas, caption);
     grid.append(card);
-
-    done++;
-    requestAnimationFrame(addNext);
   };
-  requestAnimationFrame(addNext);
+
+  // Tracks are generated in the worker, so the page stays responsive while the sheet fills in.
+  const fill = async (): Promise<void> => {
+    const results: TrackResult[] = [];
+    const pending = seeds.map((seed) => genClient().track(seed, config));
+    for (let i = 0; i < count; i++) {
+      const { result } = await pending[i]!;
+      results.push(result);
+      addCard(seeds[i]!, result);
+    }
+    ref('summary').textContent = summariseTracks(results);
+    document.body.dataset.labReady = 'true';
+  };
+  void fill().catch((error: unknown) => {
+    ref('summary').textContent = error instanceof Error ? error.message : String(error);
+  });
 }

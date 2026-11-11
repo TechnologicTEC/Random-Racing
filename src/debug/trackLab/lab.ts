@@ -1,7 +1,8 @@
 import './lab.css';
-import { config, GENERATOR_VERSION, type TrackConfig } from '../../config';
+import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { generateTrack, hashTrack, type Candidate, type TrackResult } from '../../gen';
+import { hashTrack, type Candidate, type TrackResult } from '../../gen';
+import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS } from './draw';
 import { describeScorePart, describeViolation } from './format';
 import { fitView, panBy, zoomAt, type View } from './view';
@@ -112,12 +113,15 @@ export function mountTrackLab(root: HTMLElement): void {
 
   const overrides = readRuleOverrides(new URL(window.location.href).searchParams);
   const cfg: TrackConfig = { ...config.track, ...overrides.values };
+  const gameConfig: GameConfig = { ...config, track: cfg };
   if (overrides.notes.length > 0) {
     const rulesEl = ref('rules');
     rulesEl.hidden = false;
     rulesEl.textContent = `What-if rules from the URL: ${overrides.notes.join(', ')}. Layouts are still built for the normal rules.`;
   }
   let result: TrackResult | null = null;
+  /** The seed last asked for. Its track may still be on its way from the worker. */
+  let wantedSeed = 0;
   let selectedIndex = 0;
   let view: View = fitView(1, 1, cfg.buildableRadius, 24);
   let fitted = true;
@@ -145,11 +149,21 @@ export function mountTrackLab(root: HTMLElement): void {
     render();
   }
 
-  function setSeed(next: number): void {
+  /** Generates the seed's track in the worker and shows it. Resolves once it is on screen. */
+  async function setSeed(next: number): Promise<void> {
     const seed = Math.min(MAX_SEED, Math.max(0, Math.floor(next)));
-    const started = performance.now();
-    result = generateTrack(seed, cfg);
-    const elapsed = performance.now() - started;
+    wantedSeed = seed;
+    let generated;
+    try {
+      generated = await genClient().track(seed, gameConfig);
+    } catch (error) {
+      if (wantedSeed === seed) errorEl.textContent = error instanceof Error ? error.message : String(error);
+      return;
+    }
+    // A newer seed was asked for while this one was generating: drop this answer.
+    if (wantedSeed !== seed) return;
+    result = generated.result;
+    const elapsed = generated.ms;
     selectedIndex = result.winnerIndex;
 
     input.value = String(seed);
@@ -278,7 +292,7 @@ export function mountTrackLab(root: HTMLElement): void {
   function randomSeed(): number {
     return 1 + Math.floor(Math.random() * 99999);
   }
-  const currentSeed = (): number => result?.seed ?? 0;
+  const currentSeed = (): number => wantedSeed;
   const previousSeed = (): number => (currentSeed() === 0 ? MAX_SEED : currentSeed() - 1);
   const nextSeed = (): number => (currentSeed() === MAX_SEED ? 0 : currentSeed() + 1);
 
@@ -289,23 +303,24 @@ export function mountTrackLab(root: HTMLElement): void {
       errorEl.textContent = `Type a whole number from 0 to ${MAX_SEED}, or a code like v${GENERATOR_VERSION}-48213.`;
       return;
     }
-    setSeed(parsed.seed);
-    if (parsed.version !== null && parsed.version !== GENERATOR_VERSION) {
-      errorEl.textContent = `That code is from generator v${parsed.version}. Showing the seed with v${GENERATOR_VERSION}; the track may differ.`;
-    }
+    void setSeed(parsed.seed).then(() => {
+      if (parsed.version !== null && parsed.version !== GENERATOR_VERSION) {
+        errorEl.textContent = `That code is from generator v${parsed.version}. Showing the seed with v${GENERATOR_VERSION}; the track may differ.`;
+      }
+    });
   });
-  ref('prev').addEventListener('click', () => setSeed(previousSeed()));
-  ref('next').addEventListener('click', () => setSeed(nextSeed()));
-  ref('random').addEventListener('click', () => setSeed(randomSeed()));
+  ref('prev').addEventListener('click', () => void setSeed(previousSeed()));
+  ref('next').addEventListener('click', () => void setSeed(nextSeed()));
+  ref('random').addEventListener('click', () => void setSeed(randomSeed()));
   ghostsBox.addEventListener('change', render);
 
   window.addEventListener('keydown', (event) => {
     // Typing in the seed box must not trigger shortcuts; other controls should not block them.
     if (event.target === input || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.toLowerCase();
-    if (key === 'arrowleft') setSeed(previousSeed());
-    else if (key === 'arrowright') setSeed(nextSeed());
-    else if (key === 'n') setSeed(randomSeed());
+    if (key === 'arrowleft') void setSeed(previousSeed());
+    else if (key === 'arrowright') void setSeed(nextSeed());
+    else if (key === 'n') void setSeed(randomSeed());
     else if (key === 'r') {
       ghostsBox.checked = !ghostsBox.checked;
       render();
@@ -351,11 +366,12 @@ export function mountTrackLab(root: HTMLElement): void {
 
   const fromUrl = parseSeedInput(new URL(window.location.href).searchParams.get('seed') ?? '');
   resize();
-  setSeed(fromUrl ? fromUrl.seed : randomSeed());
-  // ?candidate=7 opens that candidate instead of the winner, for linking to a rejected layout.
-  const wanted = Number(new URL(window.location.href).searchParams.get('candidate'));
-  if (result && Number.isInteger(wanted) && wanted >= 1 && wanted <= (result as TrackResult).candidates.length) {
-    select(wanted - 1);
-  }
-  document.body.dataset.labReady = 'true';
+  void setSeed(fromUrl ? fromUrl.seed : randomSeed()).then(() => {
+    // ?candidate=7 opens that candidate instead of the winner, for linking to a rejected layout.
+    const wanted = Number(new URL(window.location.href).searchParams.get('candidate'));
+    if (result && Number.isInteger(wanted) && wanted >= 1 && wanted <= result.candidates.length) {
+      select(wanted - 1);
+    }
+    document.body.dataset.labReady = 'true';
+  });
 }

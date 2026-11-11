@@ -2,7 +2,8 @@ import { config } from './config';
 import { parseSeedInput } from './core/seedCode';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
-import { generateTrack, hashTrack } from './gen';
+import { hashTrack } from './gen';
+import { genClient } from './worker/client';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app element');
@@ -31,7 +32,9 @@ if (listed.length > 0) {
 // every browser generates exactly the same track for a seed.
 declare global {
   interface Window {
-    seedCircuit: { hashFor(seed: number): string };
+    seedCircuit: { hashFor(seed: number): Promise<string> };
   }
 }
-window.seedCircuit = { hashFor: (seed) => hashTrack(generateTrack(seed, config.track)) };
+window.seedCircuit = {
+  hashFor: async (seed) => hashTrack((await genClient().track(seed, config)).result),
+};
