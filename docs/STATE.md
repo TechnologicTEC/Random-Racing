@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 1, Track lab ([issue #1](https://github.com/TechnologicTEC/Random-Racing/issues/1))
 - **Branch:** `milestone-1-track-lab` (one pull request per milestone, merged after sign-off)
-- **Last finished step:** 9 (variety pass: new layout builder)
-- **Next step:** 10 (contact sheet summary, screenshots of 20 seeds, cross-browser determinism), then 11 (wrap-up and pull request)
+- **Last finished step:** 11 (wrap-up). All Milestone 1 steps are done
+- **Next step:** Tane tries the lab and signs off; then merge the pull request, close issue #1 and plan Milestone 2 in plan mode
 
 ## Milestone 1 steps
 
@@ -23,8 +23,8 @@ Updated at the end of every work session. A new session should read this first, 
 | 7 | Scoring | Done |
 | 8 | Pipeline of 30 candidates, names, candidates panel, contact sheet. Mid-point check with Tane | Done |
 | 9 | Variety pass: layout builder rewritten after Tane's feedback | Done |
-| 10 | Contact sheet summary, Playwright screenshots of 20 seeds, cross-browser determinism | To do |
-| 11 | Wrap-up: 20 fresh seeds, docs, pull request | To do |
+| 10 | Contact sheet summary, Playwright screenshots of 20 seeds, cross-browser determinism | Done |
+| 11 | Wrap-up: 20 fresh seeds, docs, pull request | Done, waiting for sign-off |
 
 ## Working agreements
 
@@ -80,7 +80,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **Winner scores cluster between 85 and 100.** The winner is the best of 30, so this is partly expected, but the scorer could discriminate more.
 - The "rejected layouts" overlay is normally empty because candidates are valid by construction. What-if rules in the URL (`?minRadius=30`, `?gapWidths=4`) show which layouts a stricter rule would reject.
 - The lab sidebar is taller than a 720-pixel-high window, so the candidates panel needs a scroll.
-- Cross-browser determinism: generation avoids browser-dependent maths by design (see Decisions). Step 10 still adds a test that Chromium, Firefox and Node agree on track hashes.
+- Cross-browser determinism is tested (`e2e/determinism.spec.ts`): Chromium, Firefox and Node give identical fingerprints for 20 seeds. Edge is Chromium-based and is not tested separately.
 
 ## Session log
 
@@ -89,3 +89,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-11:** Steps 5 to 8 done: validation, section analysis, scoring, the 30-candidate pipeline with fallback, track names, track hashing, viewer rebuilt around the pipeline, contact sheet. Stopped for the mid-point check.
 - **2026-11-12:** Tane's feedback: technical level is right; hairpins on most tracks, but they were being rejected as too tight and not counted; tracks should fold back on themselves (reference: the Interlagos and Sepang layouts), and may be round, stretched or folded.
 - **2026-11-12:** Step 9 done. Layout builder rewritten (skeleton, folds, jogs, bows, exact corner rounding, three styles, both directions). Fixed a false "crosses itself" verdict on exact diagonal straights. Scoring tightened. Over seeds 1 to 200: every candidate valid, no fallbacks, laps from 1.4 to 2.3 km, 7 to 14 real corners, half the tracks clockwise. 252 unit tests and 24 Playwright tests pass.
+- **2026-11-12:** Steps 10 and 11 done. Contact sheet summary line and `?seeds=` list; cross-browser determinism test passes in Chromium and Firefox; screenshot spec now asserts every seed has a valid winner with no fallback. Verified 20 fresh random seeds (73242, 54536, 43950, 92010, 66907, 29980, 96072, 57351, 6492, 69211, 8509, 27227, 90169, 30860, 73750, 51073, 16182, 18418, 26275, 28919): all valid, no fallback, 9 folded / 3 stretched / 8 round, laps 1674 to 2333 m, scores 88 to 97. Also reviewed contact sheets for seeds 1 to 40, 5000 to 5019 and 73000 to 73019. README and CLAUDE.md commands updated; pull request opened.

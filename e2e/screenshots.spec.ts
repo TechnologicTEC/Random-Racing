@@ -24,10 +24,22 @@ test.describe('screenshots', () => {
     });
   }
 
+  test('contact sheet of the chosen seeds', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1120 });
+    await page.goto(`/?seeds=${seeds.join(',')}`);
+    await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 20_000 });
+    await page.screenshot({ path: 'test-results/screens/sheet-chosen.png', fullPage: true });
+  });
+
   for (const seed of seeds) {
     test(`seed ${seed}`, async ({ page }) => {
       await page.goto(`/?seed=${seed}${process.env.CANDIDATE ? `&candidate=${process.env.CANDIDATE}` : ''}`);
       await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+      // Every seed must end up with a valid winner that did not need the fallback oval.
+      if (!process.env.CANDIDATE) {
+        await expect(page.getByTestId('verdict')).toHaveAttribute('data-valid', 'true');
+        await expect(page.getByTestId('candidate-tally')).not.toContainText('plain oval');
+      }
       await page.screenshot({ path: `test-results/screens/seed-${String(seed).padStart(5, '0')}.png` });
     });
   }

@@ -1,4 +1,5 @@
 import { config } from './config';
+import { parseSeedInput } from './core/seedCode';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
 import { generateTrack, hashTrack } from './gen';
@@ -10,9 +11,18 @@ if (!app) throw new Error('Missing #app element');
 // lives here and the lab becomes a debug overlay.
 const params = new URL(window.location.href).searchParams;
 const sheet = Number(params.get('sheet'));
-if (Number.isInteger(sheet) && sheet > 0) {
-  const from = Number(params.get('from') ?? '1');
-  mountContactSheet(app, Number.isInteger(from) && from >= 0 ? from : 1, Math.min(sheet, 100));
+const listed = (params.get('seeds') ?? '')
+  .split(',')
+  .map((text) => parseSeedInput(text)?.seed)
+  .filter((seed): seed is number => seed !== undefined)
+  .slice(0, 100);
+if (listed.length > 0) {
+  mountContactSheet(app, listed, null);
+} else if (Number.isInteger(sheet) && sheet > 0) {
+  const fromParam = Number(params.get('from') ?? '1');
+  const from = Number.isInteger(fromParam) && fromParam >= 0 ? fromParam : 1;
+  const count = Math.min(sheet, 100);
+  mountContactSheet(app, Array.from({ length: count }, (_, i) => from + i), { from, count });
 } else {
   mountTrackLab(app);
 }

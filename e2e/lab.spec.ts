@@ -133,3 +133,12 @@ test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) 
   await cards.nth(2).click();
   await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '3');
 });
+
+test('contact sheet accepts a chosen list of seeds', async ({ page }) => {
+  await openLab(page, '?seeds=5,99,31337');
+  const cards = page.getByTestId('sheet-card');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(1)).toContainText(/^99 /);
+  await expect(page.getByTestId('sheet-summary')).toContainText('3 tracks');
+  await expect(page.getByRole('button', { name: /Next/ })).toHaveCount(0);
+});

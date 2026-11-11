@@ -9,10 +9,13 @@ import { fitView } from './view';
 const THUMB = 232;
 
 /**
- * A grid of winning tracks for a run of seeds, for judging variety at a
- * glance. Opened with ?sheet=20 (and optionally &from=1).
+ * A grid of winning tracks, for judging variety at a glance.
+ * Opened with ?sheet=20 (optionally &from=1) for a run of seeds, or with
+ * ?sheet=1&seeds=5,99,31337 for a chosen list.
  */
-export function mountContactSheet(root: HTMLElement, from: number, count: number): void {
+export function mountContactSheet(root: HTMLElement, seeds: readonly number[], run: { from: number; count: number } | null): void {
+  const count = seeds.length;
+  const from = run?.from ?? 0;
   const cfg = config.track;
   root.innerHTML = `
     <div class="sheet">
@@ -22,7 +25,7 @@ export function mountContactSheet(root: HTMLElement, from: number, count: number
           <p class="lab-sub" data-ref="range"></p>
           <p class="lab-sub" data-ref="summary" data-testid="sheet-summary"></p>
         </div>
-        <nav class="lab-row sheet-nav">
+        <nav class="lab-row sheet-nav" data-ref="nav">
           <button type="button" data-ref="prev">Previous ${count}</button>
           <button type="button" data-ref="next">Next ${count}</button>
           <button type="button" data-ref="random">Random start</button>
@@ -41,7 +44,9 @@ export function mountContactSheet(root: HTMLElement, from: number, count: number
   ref('prev').addEventListener('click', () => go(from - count));
   ref('next').addEventListener('click', () => go(from + count));
   ref('random').addEventListener('click', () => go(1 + Math.floor(Math.random() * 99000)));
-  ref('range').textContent = `Seeds ${from} to ${from + count - 1}, generator v${GENERATOR_VERSION}. Click a track to open it in the lab.`;
+  const which = run ? `Seeds ${from} to ${from + count - 1}` : `${count} chosen seeds`;
+  ref('range').textContent = `${which}, generator v${GENERATOR_VERSION}. Click a track to open it in the lab.`;
+  if (!run) ref('nav').remove();
 
   const dpr = window.devicePixelRatio || 1;
   const view = fitView(THUMB, THUMB, cfg.buildableRadius, 6);
@@ -55,7 +60,7 @@ export function mountContactSheet(root: HTMLElement, from: number, count: number
       document.body.dataset.labReady = 'true';
       return;
     }
-    const seed = from + done;
+    const seed = seeds[done]!;
     const result = generateTrack(seed, cfg);
     results.push(result);
     const winner = result.candidates[result.winnerIndex]!;
