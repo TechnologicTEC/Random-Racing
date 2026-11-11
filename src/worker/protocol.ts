@@ -4,17 +4,19 @@
  */
 
 import type { GameConfig } from '../config';
-import type { TrackResult } from '../gen';
+import type { TrackResult, WorldResult } from '../gen';
 
 /** A request to generate something for a seed. The config travels with it: generation never reads config itself. */
 export interface GenRequest {
   /** Chosen by the sender; the answer carries the same number. */
   id: number;
-  scope: 'track';
+  /** 'track' for the layout alone (quick), 'world' for the track and its island. */
+  scope: 'track' | 'world';
   seed: number;
   config: GameConfig;
 }
 
 export type GenResponse =
   | { id: number; type: 'done'; scope: 'track'; result: TrackResult; /** Time spent generating, in milliseconds. */ ms: number }
+  | { id: number; type: 'done'; scope: 'world'; result: WorldResult; ms: number }
   | { id: number; type: 'error'; message: string };

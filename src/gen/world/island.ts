@@ -104,8 +104,10 @@ export function buildIsland(
       // Headlands are extra land of their own, wherever their noise runs high.
       // They fade out with distance from the road so they stay on the tile.
       const reach = smoothstep(coast.maxMargin * 0.5, coast.maxMargin, edge);
+      // Further out still they sink away completely, leaving the open sea deep.
+      const sink = coast.seaDepth * smoothstep(coast.maxMargin, coast.maxMargin * 1.5, edge);
       const headland = Math.min(
-        coast.headlandHeight * (headlandNoise.at(x, z) - coast.headlandLevel - reach),
+        coast.headlandHeight * (headlandNoise.at(x, z) - coast.headlandLevel - reach) - sink,
         (toBorder - coast.border) * coast.shelfSlope,
       );
       const cap = Math.max(coastHeight(inland, smoothedSteepness[c]!, coast), headland);

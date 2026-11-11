@@ -1,10 +1,11 @@
 import './lab.css';
-import { config, GENERATOR_VERSION } from '../../config';
+import { config, GENERATOR_VERSION, type GameConfig } from '../../config';
 import { MAX_SEED } from '../../core/seedCode';
-import type { TrackResult } from '../../gen';
+import type { HeightField, TrackResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawThumbnail } from './draw';
 import { summariseTracks } from './format';
+import { terrainPicture } from './terrainImage';
 import { fitView } from './view';
 
 const THUMB = 232;
@@ -51,7 +52,10 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
 
   const dpr = window.devicePixelRatio || 1;
   const view = fitView(THUMB, THUMB, cfg.buildableRadius, 6);
-  const addCard = (seed: number, result: TrackResult): void => {
+  // Thumbnails are small, so their islands are built on a coarse grid: 16 times fewer heights, and as many times quicker.
+  const sheetConfig: GameConfig = { ...config, world: { ...config.world, tile: { ...config.world.tile, cell: 8 } } };
+
+  const addCard = (seed: number, result: TrackResult, natural: HeightField): void => {
     const winner = result.candidates[result.winnerIndex]!;
 
     const card = document.createElement('a');
@@ -64,7 +68,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawThumbnail(ctx, view, winner, cfg);
+      drawThumbnail(ctx, view, winner, cfg, terrainPicture(natural));
     }
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';
@@ -77,11 +81,11 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
   // Tracks are generated in the worker, so the page stays responsive while the sheet fills in.
   const fill = async (): Promise<void> => {
     const results: TrackResult[] = [];
-    const pending = seeds.map((seed) => genClient().track(seed, config));
+    const pending = seeds.map((seed) => genClient().world(seed, sheetConfig));
     for (let i = 0; i < count; i++) {
       const { result } = await pending[i]!;
-      results.push(result);
-      addCard(seeds[i]!, result);
+      results.push(result.track);
+      addCard(seeds[i]!, result.track, result.natural);
     }
     ref('summary').textContent = summariseTracks(results);
     document.body.dataset.labReady = 'true';

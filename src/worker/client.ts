@@ -1,5 +1,5 @@
 import type { GameConfig } from '../config';
-import type { TrackResult } from '../gen';
+import type { TrackResult, WorldResult } from '../gen';
 import type { GenRequest, GenResponse } from './protocol';
 
 /** The few parts of a Worker the client uses, so tests can supply a stand-in. */
@@ -20,12 +20,14 @@ export interface Generated<T> {
 export interface GenClient {
   /** Generates the track for a seed in the worker. */
   track(seed: number, config: GameConfig): Promise<Generated<TrackResult>>;
+  /** Generates the track and the island around it in the worker. */
+  world(seed: number, config: GameConfig): Promise<Generated<WorldResult>>;
   /** Stops the worker. Requests still waiting are rejected. */
   dispose(): void;
 }
 
 interface Waiting {
-  resolve(value: Generated<TrackResult>): void;
+  resolve(value: Generated<TrackResult | WorldResult>): void;
   reject(reason: Error): void;
 }
 
@@ -57,14 +59,17 @@ export function createGenClient(startWorker: () => WorkerLike = startGenWorker):
     return worker;
   };
 
+  const ask = <T extends TrackResult | WorldResult>(scope: GenRequest['scope'], seed: number, config: GameConfig): Promise<Generated<T>> =>
+    new Promise((resolve, reject) => {
+      const id = nextId++;
+      // The worker answers a request with the kind of result its scope asked for.
+      waiting.set(id, { resolve: resolve as Waiting['resolve'], reject });
+      ensureWorker().postMessage({ id, scope, seed, config });
+    });
+
   return {
-    track(seed, config) {
-      return new Promise((resolve, reject) => {
-        const id = nextId++;
-        waiting.set(id, { resolve, reject });
-        ensureWorker().postMessage({ id, scope: 'track', seed, config });
-      });
-    },
+    track: (seed, config) => ask<TrackResult>('track', seed, config),
+    world: (seed, config) => ask<WorldResult>('world', seed, config),
     dispose() {
       worker?.terminate();
       worker = null;

@@ -11,6 +11,19 @@ export interface LabScene {
   isWinner: boolean;
   /** Other candidates drawn faintly underneath (the rejected ones, when that option is on). */
   ghosts: readonly Candidate[];
+  /** The island to draw under the track, if any. */
+  terrain?: TerrainPicture | null;
+}
+
+/** A top-down picture of the island and where it sits in the world. */
+export interface TerrainPicture {
+  /** One pixel per height sample. */
+  image: CanvasImageSource;
+  /** World position of the picture's top left pixel centre, and the distance between pixel centres, in metres. */
+  origin: number;
+  cell: number;
+  /** Pixels along each side. */
+  size: number;
 }
 
 /** Colours shared by the map and the sidebar legend. */
@@ -47,6 +60,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, view.width, view.height);
 
+  if (scene?.terrain) drawTerrain(ctx, view, scene.terrain);
   drawGrid(ctx, view);
   drawBounds(ctx, view, cfg.buildableRadius);
   if (scene) {
@@ -65,13 +79,30 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
  * Draws one track small, with no labels, for the contact sheet. The view
  * should already be sized to the thumbnail.
  */
-export function drawThumbnail(ctx: CanvasRenderingContext2D, view: View, candidate: Candidate, cfg: TrackConfig): void {
+export function drawThumbnail(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  candidate: Candidate,
+  cfg: TrackConfig,
+  terrain: TerrainPicture | null = null,
+): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, view.width, view.height);
+  if (terrain) drawTerrain(ctx, view, terrain);
   drawBounds(ctx, view, cfg.buildableRadius);
   drawRoad(ctx, view, candidate.line, cfg.roadWidth);
   drawSectionLines(ctx, view, candidate.line, candidate.sections, 2);
   drawStart(ctx, view, candidate.line, cfg.roadWidth);
+}
+
+/** Stretches the island picture over the part of the map it covers. */
+function drawTerrain(ctx: CanvasRenderingContext2D, view: View, terrain: TerrainPicture): void {
+  // Each pixel is centred on its sample, so the picture reaches half a cell beyond the first and last samples.
+  const first = terrain.origin - terrain.cell / 2;
+  const topLeft = worldToScreen(view, first, first);
+  const side = terrain.size * terrain.cell * view.scale;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(terrain.image, topLeft.sx, topLeft.sy, side, side);
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {

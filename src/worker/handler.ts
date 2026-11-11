@@ -1,4 +1,4 @@
-import { generateTrack } from '../gen';
+import { generateTrack, generateWorld } from '../gen';
 import type { GenRequest, GenResponse } from './protocol';
 
 /**
@@ -15,9 +15,13 @@ export function handleRequest(
 ): void {
   try {
     const started = now();
-    const result = generateTrack(request.seed, request.config);
-    const ms = now() - started;
-    post({ id: request.id, type: 'done', scope: 'track', result, ms }, collectBuffers(result));
+    if (request.scope === 'world') {
+      const result = generateWorld(request.seed, request.config);
+      post({ id: request.id, type: 'done', scope: 'world', result, ms: now() - started }, collectBuffers(result));
+    } else {
+      const result = generateTrack(request.seed, request.config);
+      post({ id: request.id, type: 'done', scope: 'track', result, ms: now() - started }, collectBuffers(result));
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     post({ id: request.id, type: 'error', message }, []);

@@ -132,6 +132,16 @@ describe('buildIsland on generated tracks', () => {
     }
   });
 
+  it('leaves the open sea deep: no shallows far from the island', () => {
+    for (const { island, seed } of worlds) {
+      // Past the widest margin, the sea bed has shelved all the way down by this distance.
+      const far = coast.maxMargin + coast.wobble + 2 * coast.smoothing + coast.seaDepth / coast.shelfSlope + 10;
+      eachCell(island, (height, edge) => {
+        if (edge > far) expect(height, `seed ${seed}`).toBeLessThan(-coast.seaDepth + 0.01);
+      });
+    }
+  });
+
   it('has both land and sea in sensible shares', () => {
     for (const { island, seed } of worlds) {
       let land = 0;

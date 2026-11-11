@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { config } from '../src/config';
-import { generateTrack, hashTrack } from '../src/gen';
+import { generateTrack, generateWorld, hashTrack, hashWorld } from '../src/gen';
 
 /**
  * Pillar 5, "same seed, same everything": the track a seed produces must be
@@ -18,6 +18,17 @@ test('this browser generates exactly the same tracks as Node', async ({ page, br
   const actual = await page.evaluate((seeds) => Promise.all(seeds.map((seed) => window.seedCircuit.hashFor(seed))), SEEDS);
 
   expect(actual, `track fingerprints in ${browserName}`).toEqual(expected);
+});
+
+test('this browser generates exactly the same islands as Node', async ({ page, browserName }) => {
+  const seeds = [1, 42, 48213, 4294967295];
+  const expected = seeds.map((seed) => hashWorld(generateWorld(seed, config)));
+
+  await page.goto('/?seed=1');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+  const actual = await page.evaluate((list) => Promise.all(list.map((seed) => window.seedCircuit.worldHashFor(seed))), seeds);
+
+  expect(actual, `world fingerprints in ${browserName}`).toEqual(expected);
 });
 
 test('generation runs in a Web Worker, not on the page', async ({ page }) => {

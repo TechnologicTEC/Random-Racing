@@ -3,9 +3,10 @@ import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '..
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
 import { hashTrack, measureProfile, type Candidate, type TrackResult } from '../../gen';
 import { genClient } from '../../worker/client';
-import { drawLab, SECTION_COLORS } from './draw';
+import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
 import { describeProfile, describeScorePart, describeViolation } from './format';
+import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
 const TEMPLATE = `
@@ -66,9 +67,13 @@ const TEMPLATE = `
           <input type="checkbox" data-ref="ghosts" data-testid="rejected-toggle" />
           Show rejected layouts on the map
         </label>
+        <label class="lab-check">
+          <input type="checkbox" data-ref="island" data-testid="island-toggle" checked />
+          Show the island under the winning track
+        </label>
       </section>
 
-      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts.</p>
+      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts, I shows or hides the island.</p>
     </aside>
     <main class="lab-stage">
       <canvas data-ref="canvas" data-testid="track-canvas"></canvas>
@@ -117,6 +122,7 @@ export function mountTrackLab(root: HTMLElement): void {
   const canvas = ref<HTMLCanvasElement>('canvas');
   const input = ref<HTMLInputElement>('input');
   const ghostsBox = ref<HTMLInputElement>('ghosts');
+  const islandBox = ref<HTMLInputElement>('island');
   const errorEl = ref('error');
   const factsEl = ref('facts');
   const verdictEl = ref('verdict');
@@ -136,6 +142,8 @@ export function mountTrackLab(root: HTMLElement): void {
     rulesEl.textContent = `What-if rules from the URL: ${overrides.notes.join(', ')}. Layouts are still built for the normal rules.`;
   }
   let result: TrackResult | null = null;
+  /** The island built around the winner. Other candidates have no island. */
+  let island: TerrainPicture | null = null;
   /** The seed last asked for. Its track may still be on its way from the worker. */
   let wantedSeed = 0;
   let selectedIndex = 0;
@@ -152,7 +160,9 @@ export function mountTrackLab(root: HTMLElement): void {
     const ghosts = ghostsBox.checked
       ? result.candidates.filter((c) => c.violations.length > 0 && c.index !== selectedIndex)
       : [];
-    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner: selectedIndex === result.winnerIndex, ghosts }, cfg);
+    const isWinner = selectedIndex === result.winnerIndex;
+    const terrain = isWinner && islandBox.checked ? island : null;
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain }, cfg);
   }
 
   function resize(): void {
@@ -171,14 +181,15 @@ export function mountTrackLab(root: HTMLElement): void {
     wantedSeed = seed;
     let generated;
     try {
-      generated = await genClient().track(seed, gameConfig);
+      generated = await genClient().world(seed, gameConfig);
     } catch (error) {
       if (wantedSeed === seed) errorEl.textContent = error instanceof Error ? error.message : String(error);
       return;
     }
     // A newer seed was asked for while this one was generating: drop this answer.
     if (wantedSeed !== seed) return;
-    result = generated.result;
+    result = generated.result.track;
+    island = terrainPicture(generated.result.natural);
     const elapsed = generated.ms;
     selectedIndex = result.winnerIndex;
 
@@ -355,6 +366,7 @@ export function mountTrackLab(root: HTMLElement): void {
   ref('next').addEventListener('click', () => void setSeed(nextSeed()));
   ref('random').addEventListener('click', () => void setSeed(randomSeed()));
   ghostsBox.addEventListener('change', render);
+  islandBox.addEventListener('change', render);
 
   window.addEventListener('keydown', (event) => {
     // Typing in the seed box must not trigger shortcuts; other controls should not block them.
@@ -365,6 +377,9 @@ export function mountTrackLab(root: HTMLElement): void {
     else if (key === 'n') void setSeed(randomSeed());
     else if (key === 'r') {
       ghostsBox.checked = !ghostsBox.checked;
+      render();
+    } else if (key === 'i') {
+      islandBox.checked = !islandBox.checked;
       render();
     } else return;
     event.preventDefault();

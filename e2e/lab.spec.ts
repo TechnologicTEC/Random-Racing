@@ -103,6 +103,33 @@ test('shows the road height along the lap as a chart with its facts', async ({ p
   expect(drawn).toBeGreaterThan(200);
 });
 
+/** Counts map pixels that look like sea (clearly blue) and like land (clearly green). */
+async function seaAndLand(page: Page): Promise<{ sea: number; land: number }> {
+  return page.getByTestId('track-canvas').evaluate((canvas: HTMLCanvasElement) => {
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let sea = 0;
+    let land = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 2]! > data[i]! + 40 && data[i + 2]! > 90) sea++;
+      else if (data[i + 1]! > data[i + 2]! + 25 && data[i + 1]! > 90) land++;
+    }
+    return { sea, land };
+  });
+}
+
+test('draws the island under the winning track, and hides it on request', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const shown = await seaAndLand(page);
+  expect(shown.sea).toBeGreaterThan(20_000);
+  expect(shown.land).toBeGreaterThan(10_000);
+
+  await page.getByTestId('island-toggle').uncheck();
+  const hidden = await seaAndLand(page);
+  // What is left is the track's own colouring (sweepers are marked in blue).
+  expect(hidden.sea).toBeLessThan(shown.sea / 10);
+  expect(hidden.land).toBeLessThan(shown.land / 4);
+});
+
 test('lists all 30 candidates with exactly one winner', async ({ page }) => {
   await openLab(page, '?seed=48213');
   await expect(page.getByTestId('candidate-chip')).toHaveCount(30);

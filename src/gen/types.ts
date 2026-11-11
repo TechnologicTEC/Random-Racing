@@ -175,7 +175,16 @@ export interface Candidate {
   score: ScoreBreakdown | null;
 }
 
-/** Everything generation decided for one seed. */
+/** The whole world for one seed: the track and the island around it. */
+export interface WorldResult {
+  seed: number;
+  generatorVersion: number;
+  track: TrackResult;
+  /** The island's natural ground and sea bed, before the road is cut into it. */
+  natural: HeightField;
+}
+
+/** Everything track generation decided for one seed. */
 export interface TrackResult {
   seed: number;
   generatorVersion: number;

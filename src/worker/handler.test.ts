@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
-import { generateTrack, hashTrack } from '../gen';
+import { generateTrack, generateWorld, hashTrack, hashWorld } from '../gen';
 import { collectBuffers, handleRequest } from './handler';
 import type { GenResponse } from './protocol';
 
@@ -50,6 +50,19 @@ describe('handleRequest', () => {
     expect(posted[0]!.response.id).toBe(9);
     expect(posted[0]!.response.type).toBe('error');
     expect(posted[0]!.transfer).toEqual([]);
+  });
+});
+
+describe('handleRequest for a whole world', () => {
+  const coarse = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 8 } } };
+
+  it('answers a world request with the track and its island', () => {
+    const { response, transfer } = run({ id: 3, scope: 'world', seed: 42, config: coarse })[0]!;
+    if (response.type !== 'done' || response.scope !== 'world') throw new Error('expected a finished world');
+    expect(response.id).toBe(3);
+    expect(hashWorld(response.result)).toBe(hashWorld(generateWorld(42, coarse)));
+    expect(transfer).toContain(response.result.natural.height.buffer);
+    expect(new Set(transfer).size).toBe(transfer.length);
   });
 });
 

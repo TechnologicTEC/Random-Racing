@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
-import { generateTrack, hashTrack } from '../gen';
+import { generateTrack, generateWorld, hashTrack, hashWorld } from '../gen';
 import { createGenClient, type WorkerLike } from './client';
 import { handleRequest } from './handler';
 import type { GenRequest, GenResponse } from './protocol';
@@ -40,6 +40,16 @@ describe('createGenClient', () => {
     worker.flush();
     const { result } = await pending;
     expect(hashTrack(result)).toBe(hashTrack(generateTrack(48213, config)));
+  });
+
+  it('resolves a world request with the track and its island', async () => {
+    const coarse = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 8 } } };
+    const worker = fakeWorker();
+    const client = createGenClient(() => worker);
+    const pending = client.world(42, coarse);
+    worker.flush();
+    const { result } = await pending;
+    expect(hashWorld(result)).toBe(hashWorld(generateWorld(42, coarse)));
   });
 
   it('matches each answer to its own request, even when answers come back out of order', async () => {

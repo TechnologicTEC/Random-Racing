@@ -4,6 +4,9 @@ export default defineConfig({
   testDir: 'e2e',
   outputDir: 'test-results',
   fullyParallel: true,
+  // Each page now generates whole islands, which keeps a processor core busy. More browsers than this at once and the slow ones time out.
+  workers: 4,
+  timeout: 60_000,
   reporter: [['list']],
   use: {
     baseURL: 'http://127.0.0.1:5173',
