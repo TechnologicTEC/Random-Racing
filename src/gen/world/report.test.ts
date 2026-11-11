@@ -18,7 +18,7 @@ function reportFor(line: CenterLine, extent: number, heightAt: (x: number, z: nu
   const near = nearestRoad(line, natural);
   const height = Float64Array.from({ length: line.count }, (_, i) => roadHeight(i));
   const fitted = fitRoad({ natural, near, line, height, cross: null }, config);
-  const input = { natural, ground: fitted.ground, corridor: fitted.corridor, near, line, height, cross: null };
+  const input = { natural, earthworks: fitted.ground, ground: fitted.ground, corridor: fitted.corridor, near, line, height, cross: null };
   return { input, report: fitReport(input, config) };
 }
 
@@ -48,6 +48,23 @@ describe('fitReport', () => {
     // The steepest part of a bank is out on the bank, not on the road.
     const fromCentre = Math.sqrt(tall.steepestBank.x * tall.steepestBank.x + tall.steepestBank.z * tall.steepestBank.z);
     expect(Math.abs(fromCentre - 100)).toBeGreaterThan(HALF + config.road.verge - 2);
+  });
+
+  it('judges banks on the earthworks alone, so a sea cliff carved afterwards is not counted as a bank', () => {
+    const { input } = reportFor(circle, 400, () => 10, () => 11);
+    const gentle = fitReport(input, config).steepestBank.value;
+    // Carve a sheer drop into the finished ground 12 m outside the road, as the coast would.
+    const carved = { ...input.ground, height: Float32Array.from(input.ground.height) };
+    for (let iz = 0; iz < carved.size; iz++) {
+      for (let ix = 0; ix < carved.size; ix++) {
+        const x = worldX(carved, ix);
+        const z = worldZ(carved, iz);
+        if (Math.sqrt(x * x + z * z) > 100 + HALF + 12) carved.height[iz * carved.size + ix] = -3;
+      }
+    }
+    const report = fitReport({ ...input, ground: carved }, config);
+    expect(report.steepestBank.value).toBe(gentle);
+    expect(report.nearestWater.value).toBeLessThan(16);
   });
 
   it('finds the water nearest the road', () => {

@@ -5,17 +5,21 @@ import { worldZ } from './heightfield';
 export interface NearestRoad {
   /** Index of the nearest centre-line sample. */
   index: Int32Array;
-  /** Distance to that sample, in metres. */
+  /** Distance to the centre line, in metres. */
   distance: Float32Array;
 }
 
+/** The pieces of line this many samples either side of the first answer are measured to refine it. */
+const REFINE = 4;
+
 /**
- * Finds the nearest centre-line sample for every cell of the grid.
+ * Finds the nearest point of the centre line for every cell of the grid.
  *
  * Checking every cell against every sample would be far too slow, so the
  * answer spreads outwards instead: cells the track passes through know their
  * sample, and two sweeps over the grid let every other cell take the best
- * answer from its neighbours. The result is within a fraction of a cell of exact.
+ * answer from its neighbours. A last pass measures to the line itself, so the
+ * distances are exact to within a few centimetres.
  */
 export function nearestRoad(line: CenterLine, field: HeightField): NearestRoad {
   const { size, cell, origin } = field;
@@ -73,8 +77,38 @@ export function nearestRoad(line: CenterLine, field: HeightField): NearestRoad {
     for (let ix = 1; ix < size; ix++) learn(ix, iz, ix - 1, iz);
   }
 
+  // The sweeps find a sample that is nearest or very nearly so. Measuring to
+  // the pieces of line around it gives the distance to the line itself, and
+  // settles on the truly nearest sample.
+  const n = line.count;
   const distance = new Float32Array(size * size);
-  for (let c = 0; c < distance.length; c++) distance[c] = Math.sqrt(squared[c]!);
+  for (let iz = 0; iz < size; iz++) {
+    const z = origin + iz * cell;
+    for (let ix = 0; ix < size; ix++) {
+      const x = origin + ix * cell;
+      const c = iz * size + ix;
+      const found = index[c]!;
+      let best = Infinity;
+      let bestSample = found;
+      for (let k = -REFINE; k < REFINE; k++) {
+        const i = (found + k + n) % n;
+        const j = (i + 1) % n;
+        const abx = line.x[j]! - line.x[i]!;
+        const abz = line.z[j]! - line.z[i]!;
+        const along = ((x - line.x[i]!) * abx + (z - line.z[i]!) * abz) / (abx * abx + abz * abz);
+        const t = along < 0 ? 0 : along > 1 ? 1 : along;
+        const dx = x - (line.x[i]! + abx * t);
+        const dz = z - (line.z[i]! + abz * t);
+        const d = dx * dx + dz * dz;
+        if (d < best) {
+          best = d;
+          bestSample = t < 0.5 ? i : j;
+        }
+      }
+      index[c] = bestSample;
+      distance[c] = Math.sqrt(best);
+    }
+  }
   return { index, distance };
 }
 

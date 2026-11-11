@@ -84,10 +84,35 @@ describe('the road sits cleanly in the island on real seeds', () => {
     for (const world of worlds) expect(world.report.steepestBank.value, `seed ${world.seed}`).toBeLessThan(0.9);
   });
 
-  it('keeps the sea off the road, but within sight of it', () => {
+  it('keeps the surf at least 10 m from the road, and brings it that close somewhere', () => {
     for (const world of worlds) {
-      expect(world.report.nearestWater.value, `seed ${world.seed}`).toBeGreaterThan(config.world.coast.beach);
-      expect(world.report.nearestWater.value, `seed ${world.seed}`).toBeLessThan(90);
+      // A metre either way allows for measuring on a 2 m grid.
+      expect(world.report.nearestWater.value, `seed ${world.seed}`).toBeGreaterThan(config.world.coast.minMargin - 1);
+      expect(world.report.nearestWater.value, `seed ${world.seed}`).toBeLessThan(config.world.coast.minMargin + 3);
+    }
+  });
+
+  it('carves the coast after the road is built, without disturbing the road', () => {
+    for (const world of worlds) {
+      const winner = world.track.candidates[world.track.winnerIndex]!;
+      const { size, cell, origin } = world.ground;
+      for (let i = 0; i < winner.line.count; i += 3) {
+        const c = Math.round((winner.line.z[i]! - origin) / cell) * size + Math.round((winner.line.x[i]! - origin) / cell);
+        const below = winner.profile.height[i]! - world.ground.height[c]!;
+        expect(below, `seed ${world.seed} sample ${i}`).toBeGreaterThan(0.1);
+        expect(below, `seed ${world.seed} sample ${i}`).toBeLessThan(0.4);
+      }
+    }
+  });
+
+  it('never lets an embankment spill into the sea: the finished ground is never above the coast limit out on the banks', () => {
+    for (const world of worlds) {
+      // Beyond the strip kept clear beside the road, the natural coast and the finished coast must be the same water.
+      let moved = 0;
+      for (let c = 0; c < world.ground.height.length; c++) {
+        if (world.natural.height[c]! <= -0.5 && world.ground.height[c]! > 0) moved++;
+      }
+      expect(moved, `seed ${world.seed}`).toBe(0);
     }
   });
 

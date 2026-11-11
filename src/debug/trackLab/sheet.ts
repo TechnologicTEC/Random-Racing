@@ -68,7 +68,8 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawThumbnail(ctx, view, winner, cfg, terrainPicture(ground));
+      // Four pixels per sample of the coarse grid, so coastlines are smooth even at this size.
+      drawThumbnail(ctx, view, winner, cfg, terrainPicture(ground, null, 4));
     }
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';

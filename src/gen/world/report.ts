@@ -5,7 +5,11 @@ import { sampleField, worldX, worldZ } from './heightfield';
 import type { NearestRoad } from './nearest';
 
 export interface ReportInput {
+  /** The island before the road was built. */
   natural: HeightField;
+  /** The ground with the road cut and filled into it, before the coast was carved. Banks are judged on this. */
+  earthworks: HeightField;
+  /** The finished ground. */
   ground: HeightField;
   corridor: Uint8Array;
   near: NearestRoad;
@@ -27,7 +31,7 @@ const MAX_GAP = 0.5;
  * the ground anywhere shows through the road or falls away beneath it.
  */
 export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
-  const { natural, ground, corridor, near, line, height, cross } = input;
+  const { natural, earthworks, ground, corridor, near, line, height, cross } = input;
   const { size, cell } = ground;
   const halfRoad = cfg.track.roadWidth / 2;
   const reach = halfRoad + cfg.road.verge + cfg.road.blendMax;
@@ -71,7 +75,9 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
         Object.assign(nearestWater, { x: worldX(ground, ix), z: worldZ(ground, iz), value: distance - halfRoad, sample: near.index[c]! });
       }
       if (distance > reach || corridor[c] === 1) continue;
-      const slope = Math.max(Math.abs(ground.height[c + 1]! - here), Math.abs(ground.height[c + size]! - here)) / cell;
+      // Banks are the road's own earthworks. A cliff the coast carved later is not a bank.
+      const built = earthworks.height[c]!;
+      const slope = Math.max(Math.abs(earthworks.height[c + 1]! - built), Math.abs(earthworks.height[c + size]! - built)) / cell;
       if (slope > steepestBank.value) {
         Object.assign(steepestBank, { x: worldX(ground, ix), z: worldZ(ground, iz), value: slope, sample: near.index[c]! });
       }

@@ -1,7 +1,7 @@
 import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { hashTrack, measureProfile, type Candidate, type FitReport, type TrackResult } from '../../gen';
+import { hashTrack, measureProfile, type Candidate, type FitReport, type TrackResult, type WorldResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
@@ -91,6 +91,9 @@ const TEMPLATE = `
   </div>
 `;
 
+/** Pixels drawn per height sample of the island, along each side. */
+const ISLAND_DETAIL = 2;
+
 const CORNER_LABELS = {
   hairpin: 'Hairpins',
   sweeper: 'Sweepers',
@@ -153,9 +156,20 @@ export function mountTrackLab(root: HTMLElement): void {
     rulesEl.textContent = `What-if rules from the URL: ${overrides.notes.join(', ')}. Layouts are still built for the normal rules.`;
   }
   let result: TrackResult | null = null;
-  /** The island built around the winner, plain and with cut and fill tinted. Other candidates have no island. */
+  /**
+   * Pictures of the island built around the winner, plain and with cut and
+   * fill tinted. Each is made the first time it is needed. Other candidates
+   * have no island.
+   */
+  let world: WorldResult | null = null;
   let island: TerrainPicture | null = null;
   let islandTinted: TerrainPicture | null = null;
+  const islandPicture = (tinted: boolean): TerrainPicture | null => {
+    if (!world) return null;
+    // Two pixels per height sample, so the waterline is drawn as a smooth curve.
+    if (tinted) return (islandTinted ??= terrainPicture(world.ground, world.natural, ISLAND_DETAIL));
+    return (island ??= terrainPicture(world.ground, null, ISLAND_DETAIL));
+  };
   /** The seed last asked for. Its track may still be on its way from the worker. */
   let wantedSeed = 0;
   let selectedIndex = 0;
@@ -173,7 +187,7 @@ export function mountTrackLab(root: HTMLElement): void {
       ? result.candidates.filter((c) => c.violations.length > 0 && c.index !== selectedIndex)
       : [];
     const isWinner = selectedIndex === result.winnerIndex;
-    const terrain = isWinner && islandBox.checked ? (tintBox.checked ? islandTinted : island) : null;
+    const terrain = isWinner && islandBox.checked ? islandPicture(tintBox.checked) : null;
     drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain }, cfg);
   }
 
@@ -201,8 +215,9 @@ export function mountTrackLab(root: HTMLElement): void {
     // A newer seed was asked for while this one was generating: drop this answer.
     if (wantedSeed !== seed) return;
     result = generated.result.track;
-    island = terrainPicture(generated.result.ground);
-    islandTinted = terrainPicture(generated.result.ground, generated.result.natural);
+    world = generated.result;
+    island = null;
+    islandTinted = null;
     renderFit(generated.result.report);
     const elapsed = generated.ms;
     selectedIndex = result.winnerIndex;

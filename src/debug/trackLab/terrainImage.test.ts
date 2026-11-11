@@ -58,6 +58,42 @@ describe('terrainPixels', () => {
     for (let k = 0; k < 4; k++) expect(tinted[same * 4 + k]).toBe(plain[same * 4 + k]);
   });
 
+  it('can draw several pixels per sample, for a finer picture', () => {
+    const field = createField(40, 4);
+    field.height.fill(5);
+    const side = (field.size - 1) * 3 + 1;
+    expect(terrainPixels(field, null, 3)).toHaveLength(side * side * 4);
+  });
+
+  it('draws a smooth waterline in a finer picture, not one stepped in blocks the size of a sample', () => {
+    // A straight shore running at a slant across the grid: land where x > 0.37 z.
+    const field = createField(160, 4);
+    for (let iz = 0; iz < field.size; iz++) {
+      for (let ix = 0; ix < field.size; ix++) {
+        const x = field.origin + ix * field.cell;
+        const z = field.origin + iz * field.cell;
+        field.height[iz * field.size + ix] = (x - 0.37 * z) * 0.5;
+      }
+    }
+    const detail = 4;
+    const side = (field.size - 1) * detail + 1;
+    const pixels = terrainPixels(field, null, detail);
+    // For each row of the picture, the first pixel that is land (sand is redder than it is blue).
+    const shore: number[] = [];
+    for (let row = 0; row < side; row++) {
+      let first = -1;
+      for (let col = 0; col < side && first < 0; col++) {
+        const p = (row * side + col) * 4;
+        if (pixels[p]! > pixels[p + 2]!) first = col;
+      }
+      shore.push(first);
+    }
+    let biggestStep = 0;
+    for (let row = 1; row < side; row++) biggestStep = Math.max(biggestStep, Math.abs(shore[row]! - shore[row - 1]!));
+    // The shore moves 0.37 pixels per row, so a smooth line never jumps more than one pixel between rows.
+    expect(biggestStep).toBe(1);
+  });
+
   it('shades slopes so hills can be read: ground rising towards the light is brighter than ground falling away', () => {
     const field = createField(40, 4);
     const { size } = field;

@@ -36,6 +36,30 @@ describe('nearestRoad', () => {
     expect(Math.abs(line.z[i]!)).toBeLessThan(2.5);
   });
 
+  it('measures to the line itself, not just to its sample points: exact to a few centimetres everywhere', () => {
+    const line = stadiumLine(300, 20);
+    const near = nearestRoad(line, field);
+    /** The true distance to the centre line, found the slow way over every piece of it. */
+    const exact = (x: number, z: number): number => {
+      let best = Infinity;
+      for (let i = 0; i < line.count; i++) {
+        const j = (i + 1) % line.count;
+        const abx = line.x[j]! - line.x[i]!, abz = line.z[j]! - line.z[i]!;
+        const t = Math.max(0, Math.min(1, ((x - line.x[i]!) * abx + (z - line.z[i]!) * abz) / (abx * abx + abz * abz)));
+        const dx = x - (line.x[i]! + abx * t), dz = z - (line.z[i]! + abz * t);
+        best = Math.min(best, Math.sqrt(dx * dx + dz * dz));
+      }
+      return best;
+    };
+    let worst = 0;
+    for (let iz = 0; iz < field.size; iz += 5) {
+      for (let ix = 0; ix < field.size; ix += 5) {
+        worst = Math.max(worst, Math.abs(near.distance[iz * field.size + ix]! - exact(worldX(field, ix), worldZ(field, iz))));
+      }
+    }
+    expect(worst).toBeLessThan(0.05);
+  });
+
   it('agrees with a slow exact search to within half a cell, everywhere', () => {
     const line = stadiumLine(300, 20);
     const near = nearestRoad(line, field);

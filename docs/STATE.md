@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** Milestone 2 step 6 (the road is cut into the island; cover maps; fit report). Part A (data, no Three.js) is complete
-- **Next step:** check-in 1: Tane looks at the islands in the lab and on contact sheets. Then step 7: add Three.js (`three@0.187.0`, `@types/three@0.187.0`, both approved) and the first 3D view
+- **Last finished step:** check-in 1, with Tane's island feedback applied (coast 15 to 35 m from the road, bays, headlands, cliffs, one peak). Part A (data, no Three.js) is complete
+- **Next step:** step 7: add Three.js (`three@0.187.0`, `@types/three@0.187.0`, both approved) and the first 3D view
 
 ## Milestone 2 steps
 
@@ -22,7 +22,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 4 | Elevation score at 12% weight | Done |
 | 5 | Island: height grid, coast shaped by the track, natural ground; island map in the lab | Done |
 | 6 | Cut and fill, cover maps, fit report, `generateWorld`, world fingerprint | Done |
-| | **Check-in 1 with Tane:** 2D contact sheets of islands for 20 seeds | Waiting for Tane |
+| | **Check-in 1 with Tane:** 2D contact sheets of islands for 20 seeds | Done: Tane's island feedback applied (see decisions) |
 | 7 | Add Three.js; `/?view=3d` with terrain chunks and an orbit camera; Playwright WebGL screenshots proven | To do |
 | 8 | Banking, road frames, asphalt ribbon | To do |
 | 9 | Kerbs | To do |
@@ -46,10 +46,11 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
   1. *Relief* from the seed alone: rolling hills, lowlands at 3 m, hills to 36 m, 99% of the ground gentler than 15% (`gen/world/relief.ts`).
   2. *Road heights* for each candidate (`gen/road/profile.ts`): sample the relief along the line, limit the gradient to 8%, then average over 33 samples so no crest or dip is tighter than 200 m radius. Always at least 2 m above the sea. Measured on 3,000 layouts: never more than 5.3 m above or below the ground (limits 6 m and 8 m), so no bridges or tunnels are needed before Milestone 6.
   3. *Elevation score* from that profile, so the winner is partly chosen for how it uses the hills.
-  4. *Coast* for the winner (`gen/world/island.ts`): inside the loop is land. Outside, the land runs on for a margin past the road edge: 8 m untouched, then room to fall from road height at a slope of 15% to 50% (varies along the coast), then a 22 m beach. So a low road has water about 45 to 55 m from its edge and a high one up to 170 m. Headlands are separate lobes of land from their own noise pattern, and sink away beyond 170 m.
-  5. *Scenery*: rounded ridged peaks (up to 45 m above the rolling ground) fade in from 40 m to 150 m from the road; small bumps fade in over the first 30 m.
-  6. *Fit* (`gen/world/fit.ts`): ground follows the road and a 2.5 m verge, sunk 0.25 m, then blends back to natural ground over 10 to 25 m (wide enough to average a 40% slope). It already takes a per-sample tilt, ready for banking in step 8.
-  7. *Cover* (`gen/world/cover.ts`): sand, grass, rock and a variation map, one byte per cell each. No grass on the road or verges.
+  4. *Inland ground* for the winner (`gen/world/island.ts`): the relief, small bumps that fade in over the first 30 m from the road, and one peak. The peak stands where the infield is furthest from the road, with a summit 40 to 70 m above the sea (taller where there is more room) and a round foot that ends at least 60 m from the road edge. Infields with nowhere 96 m from the road get no peak.
+  5. *Coast*: a limit on how high the ground may be, worked out from distance to the road. The waterline follows the road edge at a margin that is usually 15 to 35 m, comes in to 10 m at one or two bays (put beside low road) and goes out to 40 to 60 m at one or two headlands. Never under 10 m. Going inland from the waterline: a beach 5 to 25 m wide (none on cliff stretches, about a third of the coast), then a climb to road height by 5 m from the road edge. Beside a high road the climb is a cliff, up to 250% steep; the water moves out far enough to keep it at that.
+  6. *Fit* (`gen/world/fit.ts`): the road is fitted into the inland ground: ground follows the road and a 2.5 m verge, sunk 0.25 m, then blends back over 10 to 25 m (wide enough to average a 40% slope). It already takes a per-sample tilt, ready for banking in step 8.
+  7. *Carve* (`carveCoast`): the coast limit is applied after the fit, so an embankment can never spill into the sea. The road and verges are never touched.
+  8. *Cover* (`gen/world/cover.ts`): sand, grass, rock and a variation map, one byte per cell each. No grass on the road or verges.
 - **Folded sections 40 m apart:** heights come from a smooth map of the ground, so close sections start similar; the solver couples sections closer than about 55 m and limits their height difference to what a 45% bank can cover; the fit builds one surface between both road edges, never two overlapping blends (each nearby section pulls the ground towards its own height, with a pull that becomes total at its verge).
 - Every seed gets a **fit report** (`gen/world/report.ts`: deepest cutting, tallest embankment, steepest bank, closest sections, nearest sea, points where ground shows through the road, points where the road hangs). Each entry has a map position, so the screenshot cameras can aim at the worst spots. Tests assert on it, and the lab shows it under "Road fit".
 
@@ -128,6 +129,15 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-12 | Playwright runs at most 4 browsers at once, with a 60 s test timeout | Each page now generates whole islands; with 11 at once Firefox timed out |
 | 2026-11-12 | Contact sheet islands use an 8 m grid (the lab and the game use 2 m) | Sixteen times quicker, and no different at thumbnail size |
 | 2026-11-12 | The ground under the road is good to the grid: exact under the road itself, and up to about 5 cm low on the outer half metre of the verge | The verge (2.5 m) is only just wider than a grid cell (2 m), so the last cell before the bank is already sloping away |
+| 2026-11-12 | **Tane's island feedback (check-in 1):** sea 15 to 35 m from the road in most places with a few spots at 10 m and never closer; beach 5 to 25 m; some cliff-like drops; 1 to 2 headlands reaching 30 to 60 m; 1 to 2 bays; one interior peak 40 to 70 m tall at least 60 m from the track; 15 to 25 m of height near the road; smooth coastline edge | Replaces the first island design, where the coast distance grew with road height (45 to 170 m) |
+| 2026-11-12 | The coast no longer depends on road height; a high road beside the sea gets a cliff instead of a long slope | Needed to bring the sea within 15 to 35 m everywhere |
+| 2026-11-12 | The road is fitted into the inland ground first; the coast is carved afterwards | With the sea this close, embankments were spilling into it and sea cliffs were being counted as road banks |
+| 2026-11-12 | Headlands reach 40 to 60 m (the top of Tane's 30 to 60), so they stand out from the usual 15 to 35 m margin | A 30 m headland would not be visible against a 35 m coast |
+| 2026-11-12 | Bays and headlands act along a line straight out to sea from a point on the road, and the wobble is switched off inside them | Measured from the road centre in all directions they had faded by the time they reached the shore |
+| 2026-11-12 | The peak's sides may be up to 160% steep; the summit height comes first | With a gentler limit, small infields gave peaks under Tane's 40 m |
+| 2026-11-12 | The sea bed shelves at one slope everywhere (18%) | Varying it with noise made dark blotches in the sea |
+| 2026-11-12 | The distance-to-road map now measures to the centre line itself (exact to under 5 cm), not to its sample points | Errors of up to 1 m were being magnified by 250% cliffs into ragged edges |
+| 2026-11-12 | The lab draws the island at two pixels per height sample (four on contact sheets), blending heights before colouring | One flat-coloured pixel per sample made the waterline stair-stepped |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
 ## Notes for later milestones
@@ -140,8 +150,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 
 ## Known issues and risks
 
-- **Islands follow the track outline quite evenly**, with a beach of the same width nearly all the way round. Headlands and peaks break it up, but it is the main thing for Tane to judge at check-in 1. Easy levers: vary the beach (rocky shores where the coast is steep), bigger headlands, bays.
-- **Scenery peaks can be steep** (up to about 200% on seed 1). They are well away from the road; judge them in 3D at step 7.
+- **Not every island gets a peak.** Narrow tracks have no infield point far enough from the road (4 of 24 seeds surveyed: 2, 1234, 77777, 43950). Tane asked for one interior peak at least 60 m from the track; those two wishes cannot both be met there.
+- **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
+- Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
+- The peak and the sea cliffs are steep on a 2 m grid. Judge how they look in 3D at step 7.
 - A whole world (track, island, fit, cover, report) takes 430 to 640 ms in Node and about the same in a Chromium worker. Budget is 3 s.
 - For two test files (`cover.test.ts`, `report.test.ts`) the tests were written first but only run once the code existed, so they were never seen failing for a reason other than the missing module.
 - **The start line can sit on a steep slope** (seed 42 starts on an 8% descent). The solver does not yet know where the start is. Worth flattening the start area before Milestone 4 puts a grid there.
@@ -169,3 +181,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-11 (Milestone 2):** Step 4 done. Elevation is scored (12%; the other four parts 22% each). Over seeds 1 to 200: 45 winners changed, 197 still have a hairpin, winner height range 15 to 25 m for most (median 20.5 m, lowest 5.6 m, highest 29.6 m), scores 85 to 99. The Milestone 1 test "7 to 14 real corners" failed for seed 151 until the corner-count penalty was raised. 319 unit tests and 53 Playwright tests pass.
 - **2026-11-12 (Milestone 2):** Step 5 done. `gen/world/heightfield.ts`, `nearest.ts` (nearest road point and inside-the-loop maps), `island.ts`, `gen/generate.ts` (`generateWorld`, `hashWorld`). The worker answers `world` requests. The lab draws the island under the winning track (I toggles it) and contact sheets show islands. Chromium, Firefox and Node build identical islands. Found and fixed on the way: a crease at the map origin, cliffs where the coast margin jumped, 200% slopes from headlands, shoals far out to sea. 364 unit tests and 41 Playwright tests pass.
 - **2026-11-12 (Milestone 2):** Step 6 done; Part A complete. `gen/world/fit.ts`, `cover.ts`, `report.ts`; `WorldResult` now has `natural`, `ground`, `cover` and `report`. The lab draws the fitted ground with cuttings tinted red and embankments blue, and has a "Road fit" panel; the screenshot test fails any seed whose fit is not clean. Over 24 seeds: nothing through the road, nothing hanging, deepest cutting 5.1 m, tallest embankment 4.6 m, steepest bank 58%, sea 44 to 63 m from the road edge. 404 unit tests and 59 Playwright tests pass. Stopped for check-in 1.
+- **2026-11-12 (Milestone 2):** Check-in 1. Tane's feedback: vary the coastline (beach 5 to 25 m, cliffs, 1 to 2 headlands, 1 to 2 bays), one interior peak 40 to 70 m, sea 15 to 35 m from the road with a few spots at 10 m, smooth coastline. Rebuilt `island.ts` around those numbers (`shoreShape`, `coastProfile`, `carveCoast`, `chooseFeatures`, `placePeak`), changed the order to fit-then-carve, made the distance map exact, and made the lab picture fine-grained. Over 24 seeds: sea 15 to 35 m from the road on 63% to 84% of each coast (median 76%), nearest water 10.0 m on 23 seeds, headlands reach 43 to 62 m, peaks 40 to 64 m on 20 seeds, fit still clean (deepest cutting 5.1 m, tallest embankment 4.6 m, steepest bank 64%), a whole world in about 450 ms. 432 unit tests and 59 Playwright tests pass.

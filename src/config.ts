@@ -288,65 +288,79 @@ export interface TileConfig {
   cell: number;
 }
 
-/** Where the land ends. The coast follows the track: close where the road is low, further out where it is high. */
+/**
+ * Where the land ends. The coast follows the track at a distance that varies
+ * along it: usually `margin`, pulled in at a bay, pushed out at a headland.
+ * Distances are in metres from the road edge unless said otherwise.
+ */
 export interface CoastConfig {
-  /** The slope down to the sea starts this far from the road edge, in metres. Nearer than this the ground is left alone. */
-  minShore: number;
-  /** Width of the beach, from the waterline to where the land starts to rise, in metres. */
-  beach: number;
-  /** Height of the top of the beach above the sea, in metres. */
-  beachTop: number;
-  /** How steeply the land falls from road height to the beach: gentlest and steepest, as fractions. */
-  slope: Range;
-  /** How quickly that steepness changes along the coast: metres per unit of noise. */
-  slopeScale: number;
-  /**
-   * Headlands are extra land beyond the track's own margin, wherever their
-   * noise pattern rises above `headlandLevel` (-1 to 1; higher means fewer).
-   */
-  headlandLevel: number;
-  /** How high headlands can stand: metres per unit of noise above the level. Also sets how steep their shores are. */
-  headlandHeight: number;
-  /** Size of headlands and the bays between them: metres per unit of noise. */
-  headlandScale: number;
-  /** The coast wanders outwards by up to this much, in metres. It never wanders towards the road. */
+  /** The ground this close to the road edge is never touched by the coast. Any drop to the sea starts beyond it. */
+  clear: number;
+  /** The waterline never comes closer to the road edge than this. */
+  minMargin: number;
+  /** The usual distance from the road edge to the waterline: nearest and furthest. */
+  margin: Range;
+  /** How quickly that distance changes along the coast: metres per unit of noise. */
+  marginScale: number;
+  /** How many headlands an island has: fewest and most. */
+  headlands: Range;
+  /** How far a headland reaches from the road edge at its tip. */
+  headlandReach: Range;
+  /** How far along the coast a headland spreads either side of its tip. */
+  headlandWidth: Range;
+  /** How many bays an island has: fewest and most. A bay brings the water in to `minMargin`. */
+  bays: Range;
+  /** How far along the coast a bay spreads either side of its middle. */
+  bayWidth: Range;
+  /** Bays are put beside road lower than this height above the sea where there is any, since a high road needs room to drop. */
+  bayRoadHeight: number;
+  /** Headlands and bays are kept at least this far from each other. */
+  featureSpacing: number;
+  /** Width of the beach, from the waterline to where the land starts to rise: narrowest and widest. */
+  beach: Range;
+  /** How quickly the beach width changes along the coast: metres per unit of noise. */
+  beachScale: number;
+  /** The beach climbs this many metres per metre of width. */
+  beachRise: number;
+  /** Stretches of coast where this noise (-1 to 1) is above the level have no beach: the land drops straight into the sea. Higher means fewer. */
+  cliffLevel: number;
+  cliffScale: number;
+  /** The steepest the land may drop to the sea, as a fraction (2.5 is 250%). A high road pushes the water out until this holds. */
+  cliffSlope: number;
+  /** The coast wanders in and out by up to this much. */
   wobble: number;
   wobbleScale: number;
-  /** The coastline is smoothed over this distance, in metres. */
+  /** The coastline is smoothed over this distance. */
   smoothing: number;
   /**
    * Away from the road, "the height of the road near here" is averaged over
-   * this distance, in metres, so the coast does not jump where two sections of
-   * different height are equally near.
+   * this distance, so the coast does not jump where two sections of different
+   * height are equally near.
    */
   heightSmoothing: number;
-  /** The coast is never more than this far from the road, in metres. */
-  maxMargin: number;
-  /** How steeply the sea bed falls away from the shore, as a fraction. */
+  /** How steeply the sea bed falls away from the shore, as a fraction. The same everywhere, so the sea darkens evenly. */
   shelfSlope: number;
-  /** Depth of the open sea, in metres. */
+  /** Depth of the open sea. */
   seaDepth: number;
-  /** Open sea kept between the land and the tile edge, in metres. */
+  /** Open sea kept between the land and the tile edge. */
   border: number;
 }
 
-/** Ground that is not for driving on: tall peaks and small bumps, kept away from the road. */
+/** Ground that is not for driving on: small bumps everywhere, and one peak in the middle of the island. */
 export interface SceneryConfig {
-  /** Peaks start this far from the road edge, in metres... */
-  clearance: number;
-  /** ...and reach full height this much further out. */
-  fade: number;
-  /** Tallest a peak rises above the rolling ground, in metres. */
-  peakHeight: number;
-  /** Size of the peaks: metres per unit of noise. */
-  peakScale: number;
-  /** Size of the regions that have peaks at all: metres per unit of noise. */
-  regionScale: number;
   /** Small bumps: height either side of the rolling ground, and size, in metres. */
   bumpHeight: number;
   bumpScale: number;
   /** Bumps fade in over this distance from the road edge, in metres. */
   bumpFade: number;
+  /** Height of the summit of the island's one peak above the sea, in metres: lowest and highest. */
+  peakSummit: Range;
+  /** No part of the peak comes closer to the road edge than this, in metres. */
+  peakClearance: number;
+  /** The peak's foot is a circle of this radius, in metres: smallest worth building, and largest. */
+  peakRadius: Range;
+  /** Steepest the peak's sides may be, as a fraction (1.6 is about 58 degrees). A peak with very little room is built lower to keep to it. */
+  peakSlope: number;
 }
 
 /** What covers the ground: sand, grass or bare rock. Heights in metres above the sea, slopes as fractions. */
@@ -504,32 +518,39 @@ export const config: GameConfig = {
     },
     tile: { extent: 1400, cell: 2 },
     coast: {
-      minShore: 8,
-      beach: 22,
-      beachTop: 1.2,
-      slope: [0.15, 0.5],
-      slopeScale: 400,
-      headlandLevel: 0.15,
-      headlandHeight: 26,
-      headlandScale: 350,
-      wobble: 14,
-      wobbleScale: 120,
-      smoothing: 12,
-      heightSmoothing: 40,
-      maxMargin: 170,
-      shelfSlope: 0.12,
+      clear: 5,
+      minMargin: 10,
+      margin: [15, 35],
+      marginScale: 260,
+      headlands: [1, 2],
+      headlandReach: [40, 60],
+      headlandWidth: [60, 100],
+      bays: [1, 2],
+      bayWidth: [50, 80],
+      bayRoadHeight: 12,
+      featureSpacing: 220,
+      beach: [5, 25],
+      beachScale: 180,
+      beachRise: 0.07,
+      cliffLevel: 0.25,
+      cliffScale: 300,
+      cliffSlope: 2.5,
+      wobble: 3,
+      wobbleScale: 60,
+      smoothing: 6,
+      heightSmoothing: 30,
+      shelfSlope: 0.18,
       seaDepth: 22,
       border: 30,
     },
     scenery: {
-      clearance: 40,
-      fade: 110,
-      peakHeight: 45,
-      peakScale: 480,
-      regionScale: 600,
       bumpHeight: 1.5,
       bumpScale: 45,
       bumpFade: 30,
+      peakSummit: [40, 70],
+      peakClearance: 60,
+      peakRadius: [30, 110],
+      peakSlope: 1.6,
     },
     cover: {
       sandTop: [1.0, 2.6],
