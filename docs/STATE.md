@@ -4,10 +4,10 @@ Updated at the end of every work session. A new session should read this first, 
 
 ## Where we are
 
-- **Current milestone:** 1, Track lab ([issue #1](https://github.com/TechnologicTEC/Random-Racing/issues/1))
-- **Branch:** `milestone-1-track-lab` (one pull request per milestone, merged after sign-off)
-- **Last finished step:** 11 (wrap-up). All Milestone 1 steps are done
-- **Next step:** Tane tries the lab and signs off; then merge the pull request, close issue #1 and plan Milestone 2 in plan mode
+- **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), not started. Milestone 1 (Track lab) is merged and signed off (PR #7)
+- **Branch:** `main`. Start each milestone on its own branch (for example `milestone-2-world`); one pull request per milestone, merged after sign-off
+- **Last finished step:** Milestone 1 complete
+- **Next step:** plan Milestone 2 in plan mode and wait for approval before writing code. Re-check Three.js version (0.187.0 was latest on 2026-11-11) and ask before adding dependencies
 
 ## Milestone 1 steps
 
@@ -24,7 +24,7 @@ Updated at the end of every work session. A new session should read this first, 
 | 8 | Pipeline of 30 candidates, names, candidates panel, contact sheet. Mid-point check with Tane | Done |
 | 9 | Variety pass: layout builder rewritten after Tane's feedback | Done |
 | 10 | Contact sheet summary, Playwright screenshots of 20 seeds, cross-browser determinism | Done |
-| 11 | Wrap-up: 20 fresh seeds, docs, pull request | Done, waiting for sign-off |
+| 11 | Wrap-up: 20 fresh seeds, docs, pull request | Done |
 
 ## Working agreements
 
@@ -90,3 +90,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12:** Tane's feedback: technical level is right; hairpins on most tracks, but they were being rejected as too tight and not counted; tracks should fold back on themselves (reference: the Interlagos and Sepang layouts), and may be round, stretched or folded.
 - **2026-11-12:** Step 9 done. Layout builder rewritten (skeleton, folds, jogs, bows, exact corner rounding, three styles, both directions). Fixed a false "crosses itself" verdict on exact diagonal straights. Scoring tightened. Over seeds 1 to 200: every candidate valid, no fallbacks, laps from 1.4 to 2.3 km, 7 to 14 real corners, half the tracks clockwise. 252 unit tests and 24 Playwright tests pass.
 - **2026-11-12:** Steps 10 and 11 done. Contact sheet summary line and `?seeds=` list; cross-browser determinism test passes in Chromium and Firefox; screenshot spec now asserts every seed has a valid winner with no fallback. Verified 20 fresh random seeds (73242, 54536, 43950, 92010, 66907, 29980, 96072, 57351, 6492, 69211, 8509, 27227, 90169, 30860, 73750, 51073, 16182, 18418, 26275, 28919): all valid, no fallback, 9 folded / 3 stretched / 8 round, laps 1674 to 2333 m, scores 88 to 97. Also reviewed contact sheets for seeds 1 to 40, 5000 to 5019 and 73000 to 73019. README and CLAUDE.md commands updated; pull request opened.
+- **2026-11-12:** Tane signed off Milestone 1. PR #7 merged with a merge commit, issue #1 closed. Next: Milestone 2 planning in a fresh session.
