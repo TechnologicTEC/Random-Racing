@@ -1,0 +1,59 @@
+/**
+ * The colours of the world. Everything here is in ordinary screen colour
+ * (sRGB), each channel from 0 to 1; `toLinear` converts for Three.js, which
+ * does its lighting sums in linear light.
+ */
+
+export type Rgb = [number, number, number];
+
+export const TERRAIN = {
+  /** Grass runs between these two with the variation map: lush to dry. */
+  grassLush: [0.21, 0.42, 0.14] as Rgb,
+  grassDry: [0.4, 0.48, 0.2] as Rgb,
+  /** Bare ground where nothing grows: road verges and fresh banks. */
+  earth: [0.46, 0.38, 0.27] as Rgb,
+  sand: [0.87, 0.8, 0.6] as Rgb,
+  /** Sand just under the water, and the sea bed further down. */
+  sandWet: [0.66, 0.6, 0.45] as Rgb,
+  seaBed: [0.36, 0.42, 0.4] as Rgb,
+  /** Rock runs between these two with the variation map. */
+  rockLight: [0.52, 0.49, 0.46] as Rgb,
+  rockDark: [0.38, 0.36, 0.35] as Rgb,
+};
+
+/** A simple flat sea, until the water shader arrives. */
+export const SEA: Rgb = [0.1, 0.42, 0.56];
+export const SKY: Rgb = [0.62, 0.78, 0.9];
+
+const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
+const ramp = (from: number, to: number, value: number): number => {
+  const t = clamp01((value - from) / (to - from));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * The colour of a point on the ground, from its height and what covers it.
+ *
+ * @param height metres above the sea (negative under water)
+ * @param grass, sand, rock how much of each covers the point, 0 to 1
+ * @param variation 0 for lush ground, 1 for dry
+ */
+export function terrainColour(height: number, grass: number, sand: number, rock: number, variation: number): Rgb {
+  let colour = mix(TERRAIN.earth, mix(TERRAIN.grassLush, TERRAIN.grassDry, variation), clamp01(grass));
+
+  let sandColour = TERRAIN.sand;
+  if (height < 0) {
+    // Under water the sand darkens with depth.
+    sandColour = mix(TERRAIN.sand, TERRAIN.sandWet, ramp(0, 3, -height));
+    sandColour = mix(sandColour, TERRAIN.seaBed, ramp(3, 14, -height));
+  }
+  colour = mix(colour, sandColour, clamp01(sand));
+  colour = mix(colour, mix(TERRAIN.rockLight, TERRAIN.rockDark, variation), clamp01(rock));
+  return colour;
+}
+
+/** Converts one channel of a screen colour to linear light. */
+export function toLinear(channel: number): number {
+  return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+}

@@ -1,5 +1,6 @@
 import { config } from './config';
 import { parseSeedInput } from './core/seedCode';
+import type { ViewHandle } from './app/worldPage';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
 import { hashTrack, hashWorld } from './gen';
@@ -17,7 +18,13 @@ const listed = (params.get('seeds') ?? '')
   .map((text) => parseSeedInput(text)?.seed)
   .filter((seed): seed is number => seed !== undefined)
   .slice(0, 100);
-if (listed.length > 0) {
+if (params.get('view') === '3d') {
+  // The 3D world. It becomes the default page later in Milestone 2. Loaded
+  // only when asked for, so the lab does not have to download Three.js.
+  void import('./app/worldPage').then(({ mountWorldPage }) => {
+    window.seedCircuit.view = mountWorldPage(app);
+  });
+} else if (listed.length > 0) {
   mountContactSheet(app, listed, null);
 } else if (Number.isInteger(sheet) && sheet > 0) {
   const fromParam = Number(params.get('from') ?? '1');
@@ -32,7 +39,12 @@ if (listed.length > 0) {
 // every browser generates exactly the same track for a seed.
 declare global {
   interface Window {
-    seedCircuit: { hashFor(seed: number): Promise<string>; worldHashFor(seed: number): Promise<string> };
+    seedCircuit: {
+      hashFor(seed: number): Promise<string>;
+      worldHashFor(seed: number): Promise<string>;
+      /** The 3D view, when that is the page being shown. */
+      view?: ViewHandle;
+    };
   }
 }
 window.seedCircuit = {

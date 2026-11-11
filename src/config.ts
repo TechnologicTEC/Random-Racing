@@ -385,10 +385,45 @@ export interface WorldConfig {
   cover: CoverConfig;
 }
 
+/** How the world is drawn. None of this changes the world itself. */
+export interface RenderConfig {
+  /** The ground is drawn in square pieces this many cells across, so pieces out of view can be skipped. */
+  chunkCells: number;
+  /** Pieces of sea bed entirely deeper than this are not drawn, in metres (a negative number). */
+  skipSeaBedBelow: number;
+  /** Camera field of view, top to bottom, in degrees. */
+  fieldOfView: number;
+  /** Distance at which haze starts, and at which it hides everything, in metres. */
+  fogNear: number;
+  fogFar: number;
+  /** Width of the sea surface, in metres. */
+  seaSize: number;
+  /** Height of the flat floor drawn under the open sea, in metres (a negative number, below the deepest sea bed). */
+  seaFloorDepth: number;
+  /** Sharp screens are drawn at no more than this many pixels per CSS pixel. */
+  maxPixelRatio: number;
+}
+
+/** Cameras. Angles in radians, distances in metres. */
+export interface CameraConfig {
+  /** The camera that circles the island. */
+  orbit: {
+    /** Where it starts: compass angle, tilt up from the horizon, and distance (replaced once an island is framed). */
+    start: { angle: number; tilt: number; distance: number };
+    /** Closest and furthest it can zoom. */
+    nearest: number;
+    furthest: number;
+    /** When framing an island, the distance is this many times the longer side of the track. */
+    fit: number;
+  };
+}
+
 export interface GameConfig {
   track: TrackConfig;
   road: RoadConfig;
   world: WorldConfig;
+  render: RenderConfig;
+  camera: CameraConfig;
 }
 
 /** The parts of the config that generation needs. */
@@ -558,6 +593,24 @@ export const config: GameConfig = {
       rockSlope: [0.55, 0.85],
       roadsideFade: 3,
       variationScale: 55,
+    },
+  },
+  render: {
+    chunkCells: 64,
+    skipSeaBedBelow: -15,
+    fieldOfView: 50,
+    fogNear: 900,
+    fogFar: 4200,
+    seaSize: 9000,
+    seaFloorDepth: -23,
+    maxPixelRatio: 2,
+  },
+  camera: {
+    orbit: {
+      start: { angle: 0.6, tilt: 0.75, distance: 900 },
+      nearest: 30,
+      furthest: 2400,
+      fit: 1.25,
     },
   },
 };

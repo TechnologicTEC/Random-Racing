@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** check-in 1, with Tane's island feedback applied (coast 15 to 35 m from the road, bays, headlands, cliffs, one peak). Part A (data, no Three.js) is complete
-- **Next step:** step 7: add Three.js (`three@0.187.0`, `@types/three@0.187.0`, both approved) and the first 3D view
+- **Last finished step:** Milestone 2 step 7 (Three.js added; first 3D view of the island at `/?view=3d&seed=42`)
+- **Next step:** step 8: banking, road frames and the asphalt ribbon
 
 ## Milestone 2 steps
 
@@ -23,7 +23,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 5 | Island: height grid, coast shaped by the track, natural ground; island map in the lab | Done |
 | 6 | Cut and fill, cover maps, fit report, `generateWorld`, world fingerprint | Done |
 | | **Check-in 1 with Tane:** 2D contact sheets of islands for 20 seeds | Done: Tane's island feedback applied (see decisions) |
-| 7 | Add Three.js; `/?view=3d` with terrain chunks and an orbit camera; Playwright WebGL screenshots proven | To do |
+| 7 | Add Three.js; `/?view=3d` with terrain chunks and an orbit camera; Playwright WebGL screenshots proven | Done |
 | 8 | Banking, road frames, asphalt ribbon | To do |
 | 9 | Kerbs | To do |
 | 10 | Barriers, start line and gate | To do |
@@ -106,7 +106,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-11 | Extra hard rule: track must fit the buildable circle. Start line goes on the longest straight | Not in the brief's list but needed |
 | 2026-11-11 | Pinned Vite 8.3.5, TypeScript 7.0.2, Vitest 5.0.5, Playwright 1.64.1 | Newest releases at least two weeks old |
 | 2026-11-11 | Generation code may only use exact maths (`+ - * /`, `Math.sqrt`, and `core/dmath.ts` for sin/cos); enforced by the architecture test | Browsers may round `Math.sin` etc. differently, which would break "same seed, same track" |
-| 2026-11-11 | Three.js (0.187.0) and Rapier (0.21.0) not installed until M2 and M3; re-check versions then | Not needed for the 2D lab |
+| 2026-11-11 | Three.js (0.187.0) and Rapier (0.21.0) not installed until M2 and M3; re-check versions then. Three.js installed 2026-11-12 (still the newest) | Not needed for the 2D lab |
 | 2026-11-12 | **Layouts are built from a folded corner skeleton, not a ring of noisy points** | Tane's mid-point feedback: tracks should fold back on themselves like real circuits, not imitate a circle; hairpins were being rejected as too tight |
 | 2026-11-12 | **The centre line is exact straights and arcs, not a Catmull-Rom spline** (departs from the brief) | The spline wobbled where a straight met a corner and made corners about 10% tighter than asked. Exact arcs give exact radii and truly straight straights. `spline.ts` is kept for tests and later uses such as camera paths |
 | 2026-11-12 | One style per seed (folded, stretched, round) | Otherwise the scorer picks the same kind of track for every seed |
@@ -138,6 +138,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-12 | The sea bed shelves at one slope everywhere (18%) | Varying it with noise made dark blotches in the sea |
 | 2026-11-12 | The distance-to-road map now measures to the centre line itself (exact to under 5 cm), not to its sample points | Errors of up to 1 m were being magnified by 250% cliffs into ragged edges |
 | 2026-11-12 | The lab draws the island at two pixels per height sample (four on contact sheets), blending heights before colouring | One flat-coloured pixel per sample made the waterline stair-stepped |
+| 2026-11-12 | Only `src/render` may import Three.js, enforced by `architecture.test.ts` for every other source file | Keeps drawing apart from everything else, as the brief asks |
+| 2026-11-12 | Triangle data for the ground is built without Three.js (`render/terrainChunks.ts`, `render/palette.ts`); `worldView.ts` only wraps it | So it can be unit tested, and later built in the worker if the main thread needs the time |
+| 2026-11-12 | The 3D page is loaded on demand (`import('./app/worldPage')`) | The lab then never downloads Three.js (about 500 kB) |
+| 2026-11-12 | Colours are written as ordinary screen colours and converted to linear light for Three.js | Three.js 0.187 does its lighting in linear light; the demo's r128 did not |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
 ## Notes for later milestones
@@ -153,7 +157,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **Not every island gets a peak.** Narrow tracks have no infield point far enough from the road (4 of 24 seeds surveyed: 2, 1234, 77777, 43950). Tane asked for one interior peak at least 60 m from the track; those two wishes cannot both be met there.
 - **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
-- The peak and the sea cliffs are steep on a 2 m grid. Judge how they look in 3D at step 7.
+- In 3D the sea cliffs read well as rock faces. The peak is craggy and a bit lumpy from the ridge texture on its sides; worth a look once lighting and shadows are in.
+- The sea is a flat see-through sheet and the light is plain daylight until step 12.
 - A whole world (track, island, fit, cover, report) takes 430 to 640 ms in Node and about the same in a Chromium worker. Budget is 3 s.
 - For two test files (`cover.test.ts`, `report.test.ts`) the tests were written first but only run once the code existed, so they were never seen failing for a reason other than the missing module.
 - **The start line can sit on a steep slope** (seed 42 starts on an 8% descent). The solver does not yet know where the start is. Worth flattening the start area before Milestone 4 puts a grid there.
@@ -182,3 +187,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12 (Milestone 2):** Step 5 done. `gen/world/heightfield.ts`, `nearest.ts` (nearest road point and inside-the-loop maps), `island.ts`, `gen/generate.ts` (`generateWorld`, `hashWorld`). The worker answers `world` requests. The lab draws the island under the winning track (I toggles it) and contact sheets show islands. Chromium, Firefox and Node build identical islands. Found and fixed on the way: a crease at the map origin, cliffs where the coast margin jumped, 200% slopes from headlands, shoals far out to sea. 364 unit tests and 41 Playwright tests pass.
 - **2026-11-12 (Milestone 2):** Step 6 done; Part A complete. `gen/world/fit.ts`, `cover.ts`, `report.ts`; `WorldResult` now has `natural`, `ground`, `cover` and `report`. The lab draws the fitted ground with cuttings tinted red and embankments blue, and has a "Road fit" panel; the screenshot test fails any seed whose fit is not clean. Over 24 seeds: nothing through the road, nothing hanging, deepest cutting 5.1 m, tallest embankment 4.6 m, steepest bank 58%, sea 44 to 63 m from the road edge. 404 unit tests and 59 Playwright tests pass. Stopped for check-in 1.
 - **2026-11-12 (Milestone 2):** Check-in 1. Tane's feedback: vary the coastline (beach 5 to 25 m, cliffs, 1 to 2 headlands, 1 to 2 bays), one interior peak 40 to 70 m, sea 15 to 35 m from the road with a few spots at 10 m, smooth coastline. Rebuilt `island.ts` around those numbers (`shoreShape`, `coastProfile`, `carveCoast`, `chooseFeatures`, `placePeak`), changed the order to fit-then-carve, made the distance map exact, and made the lab picture fine-grained. Over 24 seeds: sea 15 to 35 m from the road on 63% to 84% of each coast (median 76%), nearest water 10.0 m on 23 seeds, headlands reach 43 to 62 m, peaks 40 to 64 m on 20 seeds, fit still clean (deepest cutting 5.1 m, tallest embankment 4.6 m, steepest bank 64%), a whole world in about 450 ms. 432 unit tests and 59 Playwright tests pass.
+- **2026-11-12 (Milestone 2):** Step 7 done. Installed `three@0.187.0` and `@types/three@0.187.0`. New: `src/render` (`palette.ts`, `terrainChunks.ts`, `worldView.ts`), `src/camera/orbit.ts`, `src/app/worldPage.ts`, `e2e/world.spec.ts`. `/?view=3d&seed=42` builds the world in the worker and shows the island with a camera that circles it (drag to turn, scroll to zoom). Headless Chromium and Firefox both draw WebGL with no special flags, so the Playwright risk from the plan is closed. Screenshots land in `test-results/screens/world-<seed>.png`. 521 unit tests and 56 Playwright tests pass.
