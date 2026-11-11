@@ -1,5 +1,7 @@
+import { config } from './config';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
+import { generateTrack, hashTrack } from './gen';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app element');
@@ -14,3 +16,12 @@ if (Number.isInteger(sheet) && sheet > 0) {
 } else {
   mountTrackLab(app);
 }
+
+// Lets automated checks ask this browser for a track fingerprint, to confirm
+// every browser generates exactly the same track for a seed.
+declare global {
+  interface Window {
+    seedCircuit: { hashFor(seed: number): string };
+  }
+}
+window.seedCircuit = { hashFor: (seed) => hashTrack(generateTrack(seed, config.track)) };

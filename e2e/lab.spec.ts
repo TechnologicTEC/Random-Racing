@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function openLab(page: Page, query: string): Promise<void> {
   await page.goto(`/${query}`);
-  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+  // A contact sheet generates 20 tracks before it is ready, which can take a while on a busy machine.
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 20_000 });
 }
 
 /** Counts canvas pixels that are clearly brighter than the dark background. */
@@ -127,6 +128,8 @@ test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) 
   const cards = page.getByTestId('sheet-card');
   await expect(cards).toHaveCount(20);
   await expect(cards.nth(2)).toContainText(/^3 /);
+  await expect(page.getByTestId('sheet-summary')).toContainText('20 tracks');
+  await expect(page.getByTestId('sheet-summary')).toContainText('with a hairpin');
   await cards.nth(2).click();
   await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '3');
 });

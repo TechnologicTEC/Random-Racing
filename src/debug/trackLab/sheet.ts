@@ -1,8 +1,9 @@
 import './lab.css';
 import { config, GENERATOR_VERSION } from '../../config';
 import { MAX_SEED } from '../../core/seedCode';
-import { generateTrack } from '../../gen';
+import { generateTrack, type TrackResult } from '../../gen';
 import { drawThumbnail } from './draw';
+import { summariseTracks } from './format';
 import { fitView } from './view';
 
 const THUMB = 232;
@@ -19,6 +20,7 @@ export function mountContactSheet(root: HTMLElement, from: number, count: number
         <div>
           <h1 class="lab-title">Seed Circuit contact sheet</h1>
           <p class="lab-sub" data-ref="range"></p>
+          <p class="lab-sub" data-ref="summary" data-testid="sheet-summary"></p>
         </div>
         <nav class="lab-row sheet-nav">
           <button type="button" data-ref="prev">Previous ${count}</button>
@@ -44,15 +46,18 @@ export function mountContactSheet(root: HTMLElement, from: number, count: number
   const dpr = window.devicePixelRatio || 1;
   const view = fitView(THUMB, THUMB, cfg.buildableRadius, 6);
   let done = 0;
+  const results: TrackResult[] = [];
 
   // One track per frame keeps the page responsive while the sheet fills in.
   const addNext = (): void => {
     if (done >= count) {
+      ref('summary').textContent = summariseTracks(results);
       document.body.dataset.labReady = 'true';
       return;
     }
     const seed = from + done;
     const result = generateTrack(seed, cfg);
+    results.push(result);
     const winner = result.candidates[result.winnerIndex]!;
 
     const card = document.createElement('a');

@@ -1,4 +1,4 @@
-import type { ScorePart, Violation } from '../../gen/types';
+import type { ScorePart, TrackResult, Violation } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -54,4 +54,26 @@ export function describeScorePart(part: ScorePart): { label: string; detail: str
     case 'elevation':
       return { label: 'Elevation', detail: 'Not scored yet: needs terrain (Milestone 2)' };
   }
+}
+
+/** One line describing a batch of generated tracks, for judging variety at a glance. */
+export function summariseTracks(results: readonly TrackResult[]): string {
+  if (results.length === 0) return 'No tracks yet';
+  const winners = results.map((result) => result.candidates[result.winnerIndex]!);
+  const laps = winners.map((winner) => Math.round(winner.line.length));
+  const scores = winners.map((winner) => Math.round((winner.score?.total ?? 0) * 100));
+  const styleCount = (style: TrackResult['style']): number => results.filter((result) => result.style === style).length;
+  const hairpins = winners.filter((winner) =>
+    winner.sections.some((section) => section.type === 'corner' && section.kind === 'hairpin'),
+  ).length;
+  const fallbacks = results.filter((result) => result.fallback).length;
+
+  const parts = [
+    `${styleCount('folded')} folded, ${styleCount('stretched')} stretched, ${styleCount('round')} round`,
+    `laps ${Math.min(...laps)} to ${Math.max(...laps)} m`,
+    `scores ${Math.min(...scores)} to ${Math.max(...scores)}`,
+    `${hairpins} of ${results.length} with a hairpin`,
+  ];
+  if (fallbacks > 0) parts.push(`${fallbacks} fell back to a plain oval`);
+  return `${plural(results.length, 'track')}: ${parts.join('; ')}`;
 }

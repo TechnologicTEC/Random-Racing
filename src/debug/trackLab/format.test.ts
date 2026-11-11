@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
-import { describeScorePart, describeViolation } from './format';
+import { config } from '../../config';
+import { generateTrack } from '../../gen';
+import { describeScorePart, describeViolation, summariseTracks } from './format';
 
 describe('describeViolation', () => {
   it('explains each kind of rejection in plain words with the numbers', () => {
@@ -52,5 +54,33 @@ describe('describeScorePart', () => {
       label: 'Elevation',
       detail: 'Not scored yet: needs terrain (Milestone 2)',
     });
+  });
+});
+
+describe('summariseTracks', () => {
+  const results = [1, 2, 3, 4, 5, 6].map((seed) => generateTrack(seed, config.track));
+  const summary = summariseTracks(results);
+
+  it('counts the tracks and the styles', () => {
+    expect(summary).toMatch(/^6 tracks: /);
+    const styles = /(\d+) folded, (\d+) stretched, (\d+) round/.exec(summary)!;
+    expect(Number(styles[1]) + Number(styles[2]) + Number(styles[3])).toBe(6);
+  });
+
+  it('gives the range of lap lengths and scores, and how many have a hairpin', () => {
+    const laps = results.map((r) => Math.round(r.candidates[r.winnerIndex]!.line.length));
+    expect(summary).toContain(`laps ${Math.min(...laps)} to ${Math.max(...laps)} m`);
+    expect(summary).toMatch(/scores \d+ to \d+/);
+    expect(summary).toMatch(/\d of 6 with a hairpin/);
+  });
+
+  it('mentions fallbacks only when there are some', () => {
+    expect(summary).not.toContain('fallback');
+    const forced = generateTrack(1, { ...config.track, minCornerRadius: 5000 });
+    expect(summariseTracks([forced])).toContain('1 fell back to a plain oval');
+  });
+
+  it('copes with an empty list', () => {
+    expect(summariseTracks([])).toBe('No tracks yet');
   });
 });
