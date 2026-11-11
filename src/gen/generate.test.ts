@@ -3,6 +3,7 @@ import { config, type GenConfig } from '../config';
 import { generateWorld, hashWorld } from './generate';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
+import { sampleField } from './world/heightfield';
 
 /** A coarse grid keeps these quick; the island tests cover the full grid. */
 const coarse: GenConfig = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 8 } } };
@@ -32,6 +33,13 @@ describe('generateWorld', () => {
     expect(world.report.nearestWater.value).toBeGreaterThan(0);
   });
 
+  it('contains the road: its banking and its surface as triangles', () => {
+    const winner = world.track.candidates[world.track.winnerIndex]!;
+    expect(world.road.cross).toHaveLength(winner.line.count);
+    expect(Math.max(...world.road.cross.map(Math.abs))).toBeGreaterThan(0.03);
+    expect(world.road.mesh.indices.length / 3).toBeGreaterThan(winner.line.count * 10);
+  });
+
   it('treats the seed as a whole number from 0 to 4,294,967,295, like track generation', () => {
     expect(generateWorld(-1, coarse).seed).toBe(4294967295);
   });
@@ -58,6 +66,16 @@ describe('hashWorld', () => {
     expect(afterGround).not.toBe(before);
     world.cover.grass[4321] = world.cover.grass[4321] === 0 ? 1 : 0;
     expect(hashWorld(world)).not.toBe(afterGround);
+  });
+
+  it('changes if the road changes', () => {
+    const world = generateWorld(7, coarse);
+    const before = hashWorld(world);
+    world.road.mesh.positions[100] = world.road.mesh.positions[100]! + 0.25;
+    const afterMesh = hashWorld(world);
+    expect(afterMesh).not.toBe(before);
+    world.road.cross[10] = world.road.cross[10]! + 0.01;
+    expect(hashWorld(world)).not.toBe(afterMesh);
   });
 });
 
@@ -95,12 +113,11 @@ describe('the road sits cleanly in the island on real seeds', () => {
   it('carves the coast after the road is built, without disturbing the road', () => {
     for (const world of worlds) {
       const winner = world.track.candidates[world.track.winnerIndex]!;
-      const { size, cell, origin } = world.ground;
       for (let i = 0; i < winner.line.count; i += 3) {
-        const c = Math.round((winner.line.z[i]! - origin) / cell) * size + Math.round((winner.line.x[i]! - origin) / cell);
-        const below = winner.profile.height[i]! - world.ground.height[c]!;
-        expect(below, `seed ${world.seed} sample ${i}`).toBeGreaterThan(0.1);
-        expect(below, `seed ${world.seed} sample ${i}`).toBeLessThan(0.4);
+        // On the centre line itself, where banking makes no difference to the height.
+        const below = winner.profile.height[i]! - sampleField(world.ground, winner.line.x[i]!, winner.line.z[i]!, 0);
+        expect(below, `seed ${world.seed} sample ${i}`).toBeGreaterThan(0.2);
+        expect(below, `seed ${world.seed} sample ${i}`).toBeLessThan(0.3);
       }
     }
   });
@@ -113,6 +130,26 @@ describe('the road sits cleanly in the island on real seeds', () => {
         if (world.natural.height[c]! <= -0.5 && world.ground.height[c]! > 0) moved++;
       }
       expect(moved, `seed ${world.seed}`).toBe(0);
+    }
+  });
+
+  it('tilts the ground with the banking: under a banked corner the outside is higher than the inside', () => {
+    for (const world of worlds) {
+      const winner = world.track.candidates[world.track.winnerIndex]!;
+      const { line } = winner;
+      // The most steeply banked point of the lap.
+      let i = 0;
+      for (let k = 0; k < line.count; k++) if (Math.abs(world.road.cross[k]!) > Math.abs(world.road.cross[i]!)) i = k;
+      const tilt = world.road.cross[i]!;
+      expect(Math.abs(tilt), `seed ${world.seed}`).toBeGreaterThan(0.05);
+      const at = (lateral: number): number => {
+        // Right of the direction of travel is (-tz, tx) on the map.
+        const x = line.x[i]! - line.tz[i]! * lateral;
+        const z = line.z[i]! + line.tx[i]! * lateral;
+        return sampleField(world.ground, x, z, 0);
+      };
+      // 4 m either side of the centre the ground differs by 8 m of tilt, as the road does.
+      expect(at(4) - at(-4), `seed ${world.seed}`).toBeCloseTo(8 * tilt, 1);
     }
   });
 

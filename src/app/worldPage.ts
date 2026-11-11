@@ -1,8 +1,10 @@
 import './world.css';
 import { dragOrbit, zoomOrbit, type Orbit } from '../camera/orbit';
+import { lookAtSpot } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
-import type { WorldResult } from '../gen';
+import type { FitReport, WorldResult } from '../gen';
+import { sampleField } from '../gen/world/heightfield';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
 
@@ -11,6 +13,8 @@ export interface ViewHandle {
   stats(): ViewStats;
   pixelCounts(): PixelCounts;
   orbit(): Orbit;
+  /** The fit report of the world being shown, once there is one. */
+  report(): FitReport | null;
 }
 
 const TEMPLATE = `
@@ -44,6 +48,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const view = createWorldView(canvas, config.render);
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
   let dirty = true;
+  let report: FitReport | null = null;
+  // `&look=cut` (or fill, bank, close, water) opens on a close view of that spot of the fit report.
+  const look = new URL(window.location.href).searchParams.get('look') ?? '';
 
   const resize = (): void => {
     view.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), window.devicePixelRatio || 1);
@@ -120,7 +127,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     try {
       const { result, ms } = await genClient().world(seed, config);
       view.load(result);
+      report = result.report;
       frameIsland(result);
+      const spot = lookAtSpot(look, result.report, (x, z) => sampleField(result.ground, x, z, 0));
+      if (spot) orbit = spot;
+      document.body.dataset.worldLook = spot ? look : 'island';
       view.setOrbit(orbit);
       view.render();
       dirty = false;
@@ -141,5 +152,5 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const seed = fromUrl ? fromUrl.seed : 1 + Math.floor(Math.random() * 99999);
   void show(Math.min(MAX_SEED, Math.max(0, seed)));
 
-  return { stats: () => view.stats(), pixelCounts: () => view.pixelCounts(), orbit: () => orbit };
+  return { stats: () => view.stats(), pixelCounts: () => view.pixelCounts(), orbit: () => orbit, report: () => report };
 }

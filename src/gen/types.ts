@@ -176,6 +176,19 @@ export interface Candidate {
 }
 
 /**
+ * Triangles as plain numbers, ready to be drawn or collided with. Each vertex
+ * carries a material number; what that number means is listed where the mesh is built.
+ */
+export interface MeshData {
+  /** x, y, z for each vertex, in metres. */
+  positions: Float32Array;
+  /** Three vertex numbers per triangle. */
+  indices: Uint32Array;
+  /** One material number per vertex. */
+  materials: Uint8Array;
+}
+
+/**
  * What covers the ground, cell for cell with the height grid.
  * Each value runs from 0 (none) to 255 (full).
  */
@@ -225,7 +238,20 @@ export interface WorldResult {
   /** The island with the road cut and filled into it. This is the ground that is drawn and driven on. */
   ground: HeightField;
   cover: Cover;
+  road: Road;
   report: FitReport;
+}
+
+/** The road of the winning track, beyond its centre line and height profile. */
+export interface Road {
+  /**
+   * Banking at each sample of the winner's centre line: metres of height
+   * gained per metre towards the right of the direction of travel. Negative
+   * in a right-hand corner, where the inside edge is the low one.
+   */
+  cross: Float64Array;
+  /** The road surface as triangles. Material numbers are listed in gen/road/ribbon.ts. */
+  mesh: MeshData;
 }
 
 /** Everything track generation decided for one seed. */

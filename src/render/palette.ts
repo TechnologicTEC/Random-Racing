@@ -21,6 +21,14 @@ export const TERRAIN = {
   rockDark: [0.38, 0.36, 0.35] as Rgb,
 };
 
+/** The road and its paint. */
+export const ROAD = {
+  asphalt: [0.26, 0.265, 0.275] as Rgb,
+  line: [0.93, 0.93, 0.9] as Rgb,
+  /** The apron folded down from each edge: packed earth. */
+  shoulder: [0.4, 0.34, 0.26] as Rgb,
+};
+
 /** A simple flat sea, until the water shader arrives. */
 export const SEA: Rgb = [0.1, 0.42, 0.56];
 export const SKY: Rgb = [0.62, 0.78, 0.9];

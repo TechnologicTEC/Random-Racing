@@ -3,6 +3,7 @@ import { orbitEye, type Orbit } from '../camera/orbit';
 import type { RenderConfig } from '../config';
 import type { WorldResult } from '../gen/types';
 import { SEA, SKY, TERRAIN, toLinear, type Rgb } from './palette';
+import { createRoadMaterial, createRoadMesh } from './road';
 import { buildTerrainChunks } from './terrainChunks';
 
 /** What the renderer is drawing, for checks and the performance pass. */
@@ -21,6 +22,8 @@ export interface PixelCounts {
   land: number;
   /** Pixels that are clearly blue. */
   sea: number;
+  /** Pixels that are the dark grey of asphalt. */
+  road: number;
 }
 
 /** The 3D picture of a world. It only draws data it is given; it decides nothing about the world. */
@@ -68,9 +71,15 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   const ground = new THREE.Group();
   scene.add(ground);
 
+  const roadMaterial = createRoadMaterial();
+  const road = new THREE.Group();
+  scene.add(road);
+
   const clearGround = (): void => {
-    for (const child of ground.children) (child as THREE.Mesh).geometry.dispose();
-    ground.clear();
+    for (const group of [ground, road]) {
+      for (const child of group.children) (child as THREE.Mesh).geometry.dispose();
+      group.clear();
+    }
   };
 
   return {
@@ -86,6 +95,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         geometry.computeBoundingSphere();
         ground.add(new THREE.Mesh(geometry, groundMaterial));
       }
+      road.add(createRoadMesh(world.road.mesh, roadMaterial));
     },
 
     setOrbit(orbit) {
@@ -119,19 +129,22 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
       let land = 0;
       let sea = 0;
+      let road = 0;
       for (let p = 0; p < pixels.length; p += 4) {
         const r = pixels[p]!;
         const g = pixels[p + 1]!;
         const b = pixels[p + 2]!;
         if (b > r + 30 && b > g) sea++;
         else if (g > b + 15 || (r > b + 25 && g > b + 10)) land++;
+        else if (Math.abs(r - g) < 14 && Math.abs(g - b) < 18 && r > 40 && r < 130) road++;
       }
-      return { total: width * height, land, sea };
+      return { total: width * height, land, sea, road };
     },
 
     dispose() {
       clearGround();
       groundMaterial.dispose();
+      roadMaterial.dispose();
       seaGeometry.dispose();
       seaMaterial.dispose();
       floorMaterial.dispose();

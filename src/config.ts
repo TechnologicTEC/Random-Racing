@@ -258,6 +258,24 @@ export interface RoadConfig {
   blendMax: number;
   /** The blend is made wide enough that a cutting or embankment averages about this slope, as a fraction. */
   blendSlope: number;
+  /** Width of the white line along each edge of the road, in metres. */
+  edgeLine: number;
+  /** Width of the dashed line down the middle, and the length of each dash and of each gap, in metres. */
+  centreLine: number;
+  centreDash: number;
+  /** A strip folded down from each road edge to hide the gap above the sunken ground: its width and how far its outer edge drops, in metres. */
+  apronWidth: number;
+  apronDrop: number;
+  /** Steepest banking, in degrees (brief: up to about 8 in fast corners). */
+  bankMax: number;
+  /** Corners of this radius or tighter get only `bankSlowShare` of the full bank; corners of `bankFastRadius` or wider get all of it. In metres. */
+  bankSlowRadius: number;
+  bankFastRadius: number;
+  bankSlowShare: number;
+  /** Banking fades away between these radii, in metres: a curve this gentle is nearly a straight. */
+  bankFade: Range;
+  /** The road tilts in and out of a bank over this length, in metres. */
+  bankEase: number;
   /** The road should sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). */
   maxFill: number;
   /** The road should sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). */
@@ -416,6 +434,8 @@ export interface CameraConfig {
     /** When framing an island, the distance is this many times the longer side of the track. */
     fit: number;
   };
+  /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
+  spot: { angle: number; tilt: number; distance: number };
 }
 
 export interface GameConfig {
@@ -539,6 +559,17 @@ export const config: GameConfig = {
     blendMin: 10,
     blendMax: 25,
     blendSlope: 0.4,
+    edgeLine: 0.35,
+    centreLine: 0.25,
+    centreDash: 6,
+    apronWidth: 1.5,
+    apronDrop: 0.6,
+    bankMax: 8,
+    bankSlowRadius: 20,
+    bankFastRadius: 70,
+    bankSlowShare: 0.35,
+    bankFade: [180, 400],
+    bankEase: 30,
     maxFill: 6,
     maxCut: 8,
   },
@@ -612,5 +643,6 @@ export const config: GameConfig = {
       furthest: 2400,
       fit: 1.25,
     },
+    spot: { angle: 0.6, tilt: 0.42, distance: 90 },
   },
 };
