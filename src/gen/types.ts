@@ -30,6 +30,22 @@ export interface CenterLine {
   curvature: Float64Array;
 }
 
+/**
+ * A square grid of heights covering the world tile, which is centred on the
+ * origin. Sample (ix, iz) sits at world position (origin + ix * cell,
+ * origin + iz * cell) and is stored at index iz * size + ix.
+ */
+export interface HeightField {
+  /** Samples along each side. */
+  size: number;
+  /** Metres between neighbouring samples. */
+  cell: number;
+  /** World X (and Z) of the first sample: minus half the tile's width. */
+  origin: number;
+  /** Heights in metres above the sea, row by row. */
+  height: Float32Array;
+}
+
 /** The road's height along a layout, sample for sample with its centre line. */
 export interface RoadProfile {
   /** Height of the road's centre at each sample, in metres above the sea. */
