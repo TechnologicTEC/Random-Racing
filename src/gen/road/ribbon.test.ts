@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { circleLine } from '../../testing/trackFixtures';
+import { circleLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import type { CenterLine, MeshData } from '../types';
 import { buildRoadRibbon, ROAD_MATERIAL } from './ribbon';
 
@@ -10,7 +10,7 @@ const HALF = config.track.roadWidth / 2;
 const line = circleLine(100);
 const height = Float64Array.from({ length: line.count }, (_, i) => 12 + 2 * Math.sin((i / line.count) * 2 * Math.PI));
 const cross = new Float64Array(line.count).fill(-0.1);
-const mesh = buildRoadRibbon(line, height, cross, config);
+const mesh = buildRoadRibbon(line, height, cross, uniformWidth(line, config.track.roadWidth), config);
 
 /** For a vertex: the nearest centre-line sample, and how far to the right of the line the vertex is. */
 function locate(centre: CenterLine, x: number, z: number): { sample: number; lateral: number } {
@@ -118,11 +118,63 @@ describe('buildRoadRibbon', () => {
   });
 
   it('stays level from side to side when there is no banking', () => {
-    const level = buildRoadRibbon(line, height, null, config);
+    const level = buildRoadRibbon(line, height, null, uniformWidth(line, config.track.roadWidth), config);
     for (const vertex of vertices(level)) {
       if (vertex.material === ROAD_MATERIAL.shoulder) continue;
       const { sample } = locate(line, vertex.x, vertex.z);
       expect(vertex.y).toBeCloseTo(height[sample]!, 2);
+    }
+  });
+});
+
+describe('buildRoadRibbon on a road whose width changes', () => {
+  // 12 m at the start of the lap, 22 m half way round.
+  const width = swellingWidth(line, 12, 22);
+  const wide = buildRoadRibbon(line, height, cross, width, config);
+  const located = vertices(wide).map((vertex) => ({ ...vertex, ...locate(line, vertex.x, vertex.z) }));
+
+  it('reaches exactly to the road edge at every sample, on both sides', () => {
+    const right = new Float64Array(line.count);
+    const left = new Float64Array(line.count);
+    for (const vertex of located) {
+      if (vertex.material === ROAD_MATERIAL.shoulder) continue;
+      right[vertex.sample] = Math.max(right[vertex.sample]!, vertex.lateral);
+      left[vertex.sample] = Math.max(left[vertex.sample]!, -vertex.lateral);
+    }
+    for (let i = 0; i < line.count; i++) {
+      expect(right[i]!).toBeCloseTo(width[i]! / 2, 2);
+      expect(left[i]!).toBeCloseTo(width[i]! / 2, 2);
+    }
+    expect(Math.max(...right)).toBeCloseTo(11, 2);
+    expect(Math.min(...right)).toBeCloseTo(6, 2);
+  });
+
+  it('keeps the white edge lines at the true edges, and the dashes in the middle', () => {
+    let edgePaint = 0;
+    for (const vertex of located) {
+      if (vertex.material !== ROAD_MATERIAL.line) continue;
+      const half = width[vertex.sample]! / 2;
+      const fromEdge = half - Math.abs(vertex.lateral);
+      const inMiddle = Math.abs(vertex.lateral) <= road.centreLine / 2 + 0.01;
+      expect(inMiddle || (fromEdge > -0.01 && fromEdge < road.edgeLine + 0.01)).toBe(true);
+      if (!inMiddle) edgePaint++;
+    }
+    expect(edgePaint).toBeGreaterThan(line.count * 4);
+  });
+
+  it('hangs the aprons from the true edges', () => {
+    for (const vertex of located) {
+      if (vertex.material !== ROAD_MATERIAL.shoulder) continue;
+      const beyond = Math.abs(vertex.lateral) - width[vertex.sample]! / 2;
+      expect(beyond).toBeGreaterThan(-0.01);
+      expect(beyond).toBeLessThan(road.apronWidth + 0.01);
+    }
+  });
+
+  it('tilts the wider road with the banking right out to its edges', () => {
+    for (const vertex of located) {
+      if (vertex.material === ROAD_MATERIAL.shoulder) continue;
+      expect(vertex.y).toBeCloseTo(height[vertex.sample]! + vertex.lateral * cross[vertex.sample]!, 2);
     }
   });
 });

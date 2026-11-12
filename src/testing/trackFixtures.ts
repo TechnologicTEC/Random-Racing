@@ -104,3 +104,13 @@ export function figureEightLine(): CenterLine {
     2,
   );
 }
+
+/** The same road width at every sample of a line. */
+export function uniformWidth(line: CenterLine, width: number): Float64Array {
+  return new Float64Array(line.count).fill(width);
+}
+
+/** A road width that swells smoothly from `narrow` at the start of the lap to `wide` half way round and back. */
+export function swellingWidth(line: CenterLine, narrow: number, wide: number): Float64Array {
+  return Float64Array.from({ length: line.count }, (_, i) => narrow + ((wide - narrow) * (1 - Math.cos((i / line.count) * 2 * Math.PI))) / 2);
+}

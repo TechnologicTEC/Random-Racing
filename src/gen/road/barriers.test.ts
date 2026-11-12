@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { roundedSquareLine } from '../../testing/trackFixtures';
+import { roundedSquareLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import { analyseSections } from '../track/analysis';
 import type { CenterLine, MeshData } from '../types';
 import { buildBarriers } from './barriers';
@@ -56,7 +56,7 @@ function triangles(mesh: MeshData) {
 }
 
 describe('buildBarriers', () => {
-  const mesh = buildBarriers(line, height, cross, sections, config);
+  const mesh = buildBarriers(line, height, cross, uniformWidth(line, config.track.roadWidth), sections, config);
   const count = mesh.positions.length / 3;
 
   it('runs a wall along both edges of the whole lap', () => {
@@ -140,7 +140,7 @@ describe('buildBarriers', () => {
 });
 
 describe('buildStartGate', () => {
-  const mesh = buildStartGate(line, height, cross, config);
+  const mesh = buildStartGate(line, height, cross, uniformWidth(line, config.track.roadWidth), config);
   const faces = triangles(mesh);
   const surfaceAt = (sample: number, lateral: number): number => height[sample]! + lateral * cross[sample]!;
 
@@ -204,5 +204,38 @@ describe('buildStartGate', () => {
     // And some point up, some down: both must be there for a closed box.
     expect(gate.some((face) => face.ny > 0.9)).toBe(true);
     expect(gate.some((face) => face.ny < -0.9)).toBe(true);
+  });
+});
+
+describe('barriers and the start gate on a road whose width changes', () => {
+  // 22 m at the start line, 12 m half way round.
+  const width = swellingWidth(line, 22, 12);
+
+  it('keeps both walls the same distance outside the true edge all the way round', () => {
+    const mesh = buildBarriers(line, height, cross, width, sections, config);
+    let furthest = 0;
+    let nearest = Infinity;
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const { sample, lateral } = locate(line, mesh.positions[v * 3]!, mesh.positions[v * 3 + 2]!);
+      const beyond = Math.abs(lateral) - width[sample]! / 2;
+      expect(beyond).toBeGreaterThan(road.barrierOffset - 0.05);
+      expect(beyond).toBeLessThan(road.barrierOffset + road.barrierWidth + 0.05);
+      furthest = Math.max(furthest, Math.abs(lateral));
+      nearest = Math.min(nearest, Math.abs(lateral));
+    }
+    expect(furthest).toBeCloseTo(11 + road.barrierOffset + road.barrierWidth, 1);
+    expect(nearest).toBeCloseTo(6 + road.barrierOffset, 1);
+  });
+
+  it('paints the chequered line right across the wider road, and stands the gate posts outside its barriers', () => {
+    const faces = triangles(buildStartGate(line, height, cross, width, config));
+    const paint = faces.filter((face) => face.material === ROAD_MATERIAL.line || face.material === ROAD_MATERIAL.startDark);
+    const reach = Math.max(...paint.map((face) => Math.abs(locate(line, face.x, face.z).lateral)));
+    expect(reach).toBeGreaterThan(11 - road.startSquare);
+    expect(reach).toBeLessThan(11);
+    for (const face of faces) {
+      if (face.material !== ROAD_MATERIAL.gate) continue;
+      expect(Math.abs(locate(line, face.x, face.z).lateral)).toBeGreaterThan(11 + road.barrierOffset + road.barrierWidth);
+    }
   });
 });

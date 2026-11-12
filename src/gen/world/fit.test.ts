@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { circleLine, stadiumLine } from '../../testing/trackFixtures';
+import { circleLine, stadiumLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import type { CenterLine, HeightField } from '../types';
 import { fitRoad } from './fit';
 import { createField, sampleField, worldX, worldZ } from './heightfield';
@@ -20,9 +20,15 @@ function ground(extent: number, heightAt: (x: number, z: number) => number): Hei
   return field;
 }
 
-function fit(line: CenterLine, natural: HeightField, heightAt: (i: number) => number, cross: Float64Array | null = null) {
+function fit(
+  line: CenterLine,
+  natural: HeightField,
+  heightAt: (i: number) => number,
+  cross: Float64Array | null = null,
+  width: Float64Array = uniformWidth(line, config.track.roadWidth),
+) {
   const height = Float64Array.from({ length: line.count }, (_, i) => heightAt(i));
-  return fitRoad({ natural, near: nearestRoad(line, natural), line, height, cross }, config);
+  return fitRoad({ natural, near: nearestRoad(line, natural), line, height, cross, width }, config);
 }
 
 /** Steepest slope between neighbouring cells of a grid, optionally only where `where` allows. */
@@ -196,5 +202,53 @@ describe('fitRoad between two sections side by side', () => {
 
   it('keeps that bank gentle enough to stand', () => {
     expect(steepest(fitted, (x, z) => Math.abs(x) < 100 && Math.abs(z) < 12)).toBeLessThan(0.75);
+  });
+});
+
+describe('fitRoad under a wider road', () => {
+  const line = circleLine(100);
+  const natural = ground(400, () => 10);
+  const WIDE = 20;
+  const { ground: fitted, corridor } = fit(line, natural, () => 14, null, uniformWidth(line, WIDE));
+  const outside = (distance: number): number => sampleField(fitted, 100 + distance, 0, 0);
+  const marked = (x: number, z: number): number => corridor[Math.round((z + 200) / 2) * natural.size + Math.round((x + 200) / 2)]!;
+  const strip = WIDE / 2 + road.verge;
+
+  it('holds the ground at road height right across the wider road and its verges', () => {
+    expect(strip).toBeGreaterThan(CORRIDOR + 2);
+    for (const d of [-strip + 1, -WIDE / 2, 0, WIDE / 2, strip - 1]) expect(outside(d)).toBeCloseTo(14 - road.sink, 4);
+  });
+
+  it('starts the embankment at the wider verge, not where a narrow road would end', () => {
+    expect(outside(strip + road.blendMin - 3)).toBeGreaterThan(10.1);
+    expect(outside(strip + road.blendMax)).toBeCloseTo(10, 3);
+  });
+
+  it('marks the cells of the wider road and its verges', () => {
+    expect(marked(100 + strip - 1, 0)).toBe(1);
+    expect(marked(100 - strip + 1, 0)).toBe(1);
+    expect(marked(100 + strip + 2, 0)).toBe(0);
+  });
+});
+
+describe('fitRoad under a road whose width changes along the lap', () => {
+  const line = circleLine(100);
+  const natural = ground(400, () => 10);
+  // 12 m wide at the start of the lap, 22 m half way round.
+  const width = swellingWidth(line, 12, 22);
+  const { ground: fitted } = fit(line, natural, () => 14, null, width);
+
+  it('follows the true edge at every sample: road height out to the verge, a bank beyond it', () => {
+    for (let i = 0; i < line.count; i += 5) {
+      const strip = width[i]! / 2 + road.verge;
+      const at = (lateral: number): number =>
+        // Right of the direction of travel is (-tz, tx) on the map.
+        sampleField(fitted, line.x[i]! - line.tz[i]! * lateral, line.z[i]! + line.tx[i]! * lateral, 0);
+      for (const side of [1, -1]) {
+        // Two metres inside the verge's outer edge allows for the 2 m grid.
+        expect(at(side * (strip - 2)), `sample ${i}`).toBeCloseTo(14 - road.sink, 2);
+        expect(at(side * (strip + 8)), `sample ${i}`).toBeLessThan(14 - road.sink - 0.5);
+      }
+    }
   });
 });

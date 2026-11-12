@@ -280,6 +280,8 @@ export interface Road {
    * in a right-hand corner, where the inside edge is the low one.
    */
   cross: Float64Array;
+  /** Width of the road at each sample of the winner's centre line, in metres. Constant on some seeds, wider in places on others. */
+  width: Float64Array;
   /** The road surface as triangles. Material numbers are listed in gen/road/ribbon.ts. */
   mesh: MeshData;
   /** The kerbs: where they are, and their triangles. */

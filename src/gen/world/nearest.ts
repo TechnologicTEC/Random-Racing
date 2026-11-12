@@ -113,6 +113,18 @@ export function nearestRoad(line: CenterLine, field: HeightField): NearestRoad {
 }
 
 /**
+ * For every cell, the distance to the edge of the road at its nearest sample,
+ * in metres: negative on the road itself.
+ *
+ * @param width road width at each sample of the centre line
+ */
+export function edgeDistance(near: NearestRoad, width: Float64Array): Float32Array {
+  const edge = new Float32Array(near.distance.length);
+  for (let c = 0; c < edge.length; c++) edge[c] = near.distance[c]! - width[near.index[c]!]! / 2;
+  return edge;
+}
+
+/**
  * Marks the cells the track encloses: 1 inside the loop, 0 outside.
  * Each row of the grid is cut by the centre line; the cells between the first
  * and second crossing are inside, between the third and fourth, and so on.

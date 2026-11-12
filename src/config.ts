@@ -17,7 +17,10 @@ export interface TrackConfig {
   maxRounds: number;
   /** The start line sits this far along the longest straight (0 = its start, 1 = its end). */
   startLineFraction: number;
-  /** Road width in metres (brief: 12 to 14). */
+  /**
+   * Road width in metres (brief: 12 to 14). Layouts are built and judged at this
+   * width. On some seeds the finished road is wider in places: see `road.width`.
+   */
   roadWidth: number;
   /** Shortest and longest allowed lap, in metres. */
   lapLengthMin: number;
@@ -241,6 +244,8 @@ export interface RoadConfig {
   crestMinRadius: number;
   /** The road stays at least this far above the sea, in metres. */
   minHeight: number;
+  /** Where the road is wider than its usual width, on seeds whose width varies. */
+  width: WidthConfig;
   /** Flat strip kept beside each road edge, in metres. Kerbs and barriers sit on it. */
   verge: number;
   /**
@@ -304,6 +309,27 @@ export interface RoadConfig {
   maxFill: number;
   /** The road should sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). */
   maxCut: number;
+}
+
+/**
+ * How the road widens on seeds whose width varies. Only straights are widened:
+ * the start straight always, other long straights and the straight after a
+ * hairpin sometimes. Distances and widths in metres.
+ */
+export interface WidthConfig {
+  /** A widened stretch is between this wide and this wide. */
+  min: number;
+  max: number;
+  /** The width changes over this length, and is back to the usual width before the straight ends. */
+  ease: number;
+  /** A straight at least this long may be widened. */
+  straightMin: number;
+  /** The straight after a hairpin may be widened if it is at least this long. */
+  hairpinExitMin: number;
+  /** Chance that such a straight is widened. The start straight always is. */
+  chance: number;
+  /** The road is never widened where a separate part of the lap passes within this distance, centre to centre. */
+  clearance: number;
 }
 
 /** The ground the track is laid over. It depends only on the seed, never on the track. */
@@ -535,7 +561,7 @@ export const config: GameConfig = {
     candidatesPerRound: 30,
     maxRounds: 5,
     startLineFraction: 0.4,
-    roadWidth: 13,
+    roadWidth: 12,
     lapLengthMin: 1400,
     lapLengthMax: 2400,
     minCornerRadius: 15,
@@ -635,6 +661,7 @@ export const config: GameConfig = {
     maxGradient: { flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 },
     crestMinRadius: 200,
     minHeight: 2,
+    width: { min: 16, max: 22, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearance: 70 },
     verge: 2.5,
     coupleDistance: 55,
     coupleMinArc: 110,

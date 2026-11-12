@@ -18,6 +18,8 @@ export interface ReportInput {
   height: Float64Array;
   /** Tilt of the road at each sample (see FitInput), or null for a level road. */
   cross: Float64Array | null;
+  /** Width of the road at each sample, in metres. */
+  width: Float64Array;
 }
 
 /** The ground must be at least this far below the road surface, in metres, or it counts as showing through. */
@@ -31,11 +33,12 @@ const MAX_GAP = 0.5;
  * the ground anywhere shows through the road or falls away beneath it.
  */
 export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
-  const { natural, earthworks, ground, corridor, near, line, height, cross } = input;
+  const { natural, earthworks, ground, corridor, near, line, height, cross, width } = input;
   const { size, cell } = ground;
-  const halfRoad = cfg.track.roadWidth / 2;
-  const reach = halfRoad + cfg.road.verge + cfg.road.blendMax;
   const n = line.count;
+  let widest = 0;
+  for (let i = 0; i < n; i++) widest = Math.max(widest, width[i]!);
+  const reach = widest / 2 + cfg.road.verge + cfg.road.blendMax;
 
   const spot = (): FitSpot => ({ x: line.x[0]!, z: line.z[0]!, value: 0, sample: 0 });
   const deepestCut = spot();
@@ -49,7 +52,7 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
   const offsets = [-1, -0.5, 0, 0.5, 1];
   for (let i = 0; i < n; i++) {
     for (const fraction of offsets) {
-      const lateral = fraction * halfRoad;
+      const lateral = (fraction * width[i]!) / 2;
       // Right of the direction of travel is (-tz, tx) on the map.
       const x = line.x[i]! - line.tz[i]! * lateral;
       const z = line.z[i]! + line.tx[i]! * lateral;
@@ -71,8 +74,10 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
       const c = iz * size + ix;
       const distance = near.distance[c]!;
       const here = ground.height[c]!;
-      if (here <= 0 && distance - halfRoad < nearestWater.value) {
-        Object.assign(nearestWater, { x: worldX(ground, ix), z: worldZ(ground, iz), value: distance - halfRoad, sample: near.index[c]! });
+      // Measured from the edge of the road as it is at the nearest sample.
+      const fromEdge = distance - width[near.index[c]!]! / 2;
+      if (here <= 0 && fromEdge < nearestWater.value) {
+        Object.assign(nearestWater, { x: worldX(ground, ix), z: worldZ(ground, iz), value: fromEdge, sample: near.index[c]! });
       }
       if (distance > reach || corridor[c] === 1) continue;
       // Banks are the road's own earthworks. A cliff the coast carved later is not a bank.

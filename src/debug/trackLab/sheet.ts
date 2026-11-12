@@ -1,7 +1,7 @@
 import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig } from '../../config';
 import { MAX_SEED } from '../../core/seedCode';
-import type { HeightField, TrackResult } from '../../gen';
+import type { TrackResult, WorldResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawThumbnail } from './draw';
 import { shortCharacter, summariseTracks } from './format';
@@ -55,7 +55,8 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
   // Thumbnails are small, so their islands are built on a coarse grid: 16 times fewer heights, and as many times quicker.
   const sheetConfig: GameConfig = { ...config, world: { ...config.world, tile: { ...config.world.tile, cell: 8 } } };
 
-  const addCard = (seed: number, result: TrackResult, ground: HeightField): void => {
+  const addCard = (seed: number, world: WorldResult): void => {
+    const result = world.track;
     const winner = result.candidates[result.winnerIndex]!;
 
     const card = document.createElement('a');
@@ -69,7 +70,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Four pixels per sample of the coarse grid, so coastlines are smooth even at this size.
-      drawThumbnail(ctx, view, winner, cfg, terrainPicture(ground, null, 4));
+      drawThumbnail(ctx, view, winner, cfg, terrainPicture(world.ground, null, 4), world.road.width);
     }
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';
@@ -86,7 +87,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     for (let i = 0; i < count; i++) {
       const { result } = await pending[i]!;
       results.push(result.track);
-      addCard(seeds[i]!, result.track, result.ground);
+      addCard(seeds[i]!, result);
     }
     ref('summary').textContent = summariseTracks(results);
     document.body.dataset.labReady = 'true';

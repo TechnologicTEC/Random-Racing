@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeCharacter, describeFit, describeProfile, describeScorePart, describeViolation, shortCharacter, summariseTracks } from './format';
+import { describeCharacter, describeFit, describeWidth, describeProfile, describeScorePart, describeViolation, shortCharacter, summariseTracks } from './format';
 
 describe('describeCharacter', () => {
   it('lists the traits of a seed in plain words', () => {
@@ -22,6 +22,17 @@ describe('describeCharacter', () => {
       'Coast',
       'Coastal: mostly beside the sea',
     ]);
+  });
+});
+
+describe('describeWidth', () => {
+  it('gives one width for a road that never changes', () => {
+    expect(describeWidth(new Float64Array([12, 12, 12]))).toBe('12 m all the way round');
+  });
+
+  it('gives the narrowest and widest for a road that does, and how much of the lap is wider', () => {
+    // Four samples, two of them clearly wider than the narrowest.
+    expect(describeWidth(new Float64Array([12, 12, 17.4, 21.6]))).toBe('12 to 22 m (wider on 50% of the lap)');
   });
 });
 

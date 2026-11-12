@@ -97,7 +97,10 @@ describe('hashWorld', () => {
     const afterBarriers = hashWorld(world);
     expect(afterBarriers).not.toBe(afterKerbs);
     world.road.gate.positions[7] = world.road.gate.positions[7]! + 0.25;
-    expect(hashWorld(world)).not.toBe(afterBarriers);
+    const afterGate = hashWorld(world);
+    expect(afterGate).not.toBe(afterBarriers);
+    world.road.width[10] = world.road.width[10]! + 0.5;
+    expect(hashWorld(world)).not.toBe(afterGate);
   });
 });
 

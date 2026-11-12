@@ -13,6 +13,8 @@ export interface LabScene {
   ghosts: readonly Candidate[];
   /** The island to draw under the track, if any. */
   terrain?: TerrainPicture | null;
+  /** The road's width at each sample of the selected candidate, when it has been worked out (the winner only). */
+  width?: Float64Array | null;
 }
 
 /** A top-down picture of the island and where it sits in the world. */
@@ -66,10 +68,10 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
   if (scene) {
     drawGhosts(ctx, view, scene.ghosts);
     const { line, sections, controlPoints, violations } = scene.selected;
-    drawRoad(ctx, view, line, cfg.roadWidth);
+    drawRoad(ctx, view, line, scene.width ?? cfg.roadWidth);
     drawSections(ctx, view, line, sections);
     drawControlPoints(ctx, view, controlPoints);
-    if (scene.isWinner) drawStart(ctx, view, line, cfg.roadWidth);
+    if (scene.isWinner) drawStart(ctx, view, line, scene.width ? scene.width[0]! : cfg.roadWidth);
     drawViolations(ctx, view, violations);
   }
   drawScaleBar(ctx, view);
@@ -85,14 +87,15 @@ export function drawThumbnail(
   candidate: Candidate,
   cfg: TrackConfig,
   terrain: TerrainPicture | null = null,
+  width: Float64Array | null = null,
 ): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, view.width, view.height);
   if (terrain) drawTerrain(ctx, view, terrain);
   drawBounds(ctx, view, cfg.buildableRadius);
-  drawRoad(ctx, view, candidate.line, cfg.roadWidth);
+  drawRoad(ctx, view, candidate.line, width ?? cfg.roadWidth);
   drawSectionLines(ctx, view, candidate.line, candidate.sections, 2);
-  drawStart(ctx, view, candidate.line, cfg.roadWidth);
+  drawStart(ctx, view, candidate.line, width ? width[0]! : cfg.roadWidth);
 }
 
 /** Stretches the island picture over the part of the map it covers. */
@@ -163,9 +166,43 @@ function drawGhosts(ctx: CanvasRenderingContext2D, view: View, ghosts: readonly 
   ctx.globalAlpha = 1;
 }
 
-function drawRoad(ctx: CanvasRenderingContext2D, view: View, line: CenterLine, roadWidth: number): void {
+/**
+ * Draws the road as a dark-edged grey band.
+ *
+ * @param roadWidth one width for the whole lap, or the width at each sample
+ */
+function drawRoad(ctx: CanvasRenderingContext2D, view: View, line: CenterLine, roadWidth: number | Float64Array): void {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+
+  if (typeof roadWidth !== 'number') {
+    // A band between the two edges of the road: both edge loops in one path, filled where they do not overlap.
+    const band = (extra: number): void => {
+      ctx.beginPath();
+      for (const side of [1, -1]) {
+        for (let i = 0; i < line.count; i++) {
+          const offset = side * (roadWidth[i]! / 2 + extra);
+          // Right of the direction of travel is (-tz, tx) on the map.
+          const { sx, sy } = worldToScreen(view, line.x[i]! - line.tz[i]! * offset, line.z[i]! + line.tx[i]! * offset);
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+      }
+    };
+    band(1 + 1 / view.scale);
+    ctx.fillStyle = COLORS.roadEdge;
+    ctx.fill('evenodd');
+    band(0);
+    ctx.fillStyle = COLORS.road;
+    ctx.fill('evenodd');
+    // At thumbnail size the band can be thinner than a pixel, so a hairline keeps it visible.
+    tracePath(ctx, view, line);
+    ctx.strokeStyle = COLORS.road;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    return;
+  }
 
   tracePath(ctx, view, line);
   ctx.strokeStyle = COLORS.roadEdge;

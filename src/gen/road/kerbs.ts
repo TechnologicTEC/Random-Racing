@@ -38,33 +38,41 @@ export function findKerbs(line: CenterLine, sections: readonly Section[], cfg: R
  * with the road where they meet and rising towards the outside, in red and
  * white blocks. Each kerb fades up from nothing at its ends, and has a skirt
  * down its outer side so it never floats above the ground.
+ *
+ * @param width road width at each sample, in metres: the kerbs follow the true edge
  */
 export function buildKerbs(
   line: CenterLine,
   height: Float64Array,
   cross: Float64Array | null,
+  width: Float64Array,
   kerbs: readonly KerbSpan[],
   cfg: GenConfig,
 ): MeshData {
   const road = cfg.road;
-  const half = cfg.track.roadWidth / 2;
   const n = line.count;
   const blockSamples = Math.max(1, Math.round(road.kerbStripe / line.spacing));
   const taperSamples = Math.max(1, Math.round(TAPER / line.spacing));
 
-  /** A point beside the road: `lateral` metres right of the centre line, `above` metres over the road's tilted plane. */
-  const point = (i: number, lateral: number, above: number): Point => ({
-    // Right of the direction of travel is (-tz, tx) on the map.
-    x: line.x[i]! - line.tz[i]! * lateral,
-    y: height[i]! + (cross ? cross[i]! * lateral : 0) + above,
-    z: line.z[i]! + line.tx[i]! * lateral,
-  });
+  /**
+   * A point beside the road at a sample: `beyond` metres outside the road edge
+   * on the given side, `above` metres over the road's tilted plane.
+   */
+  const point = (i: number, side: 1 | -1, beyond: number, above: number): Point => {
+    const lateral = side * (width[i]! / 2 + beyond);
+    return {
+      // Right of the direction of travel is (-tz, tx) on the map.
+      x: line.x[i]! - line.tz[i]! * lateral,
+      y: height[i]! + (cross ? cross[i]! * lateral : 0) + above,
+      z: line.z[i]! + line.tx[i]! * lateral,
+    };
+  };
 
   const builder = new MeshBuilder();
   for (const kerb of kerbs) {
-    const inner = kerb.side * half;
-    const outer = kerb.side * (half + road.kerbWidth);
-    const foot = kerb.side * (half + road.kerbWidth + SKIRT_LEAN);
+    const { side } = kerb;
+    const outer = road.kerbWidth;
+    const foot = road.kerbWidth + SKIRT_LEAN;
     /** Height of the kerb's outer edge at its k-th sample: nothing at either end, full height in between. */
     const rise = (k: number): number => road.kerbHeight * smoothstep(0, taperSamples, Math.min(k, kerb.sampleCount - 1 - k));
 
@@ -72,12 +80,12 @@ export function buildKerbs(
       const i = (kerb.startIndex + k) % n;
       const next = (kerb.startIndex + k + 1) % n;
       const material = Math.floor(k / blockSamples) % 2 === 0 ? ROAD_MATERIAL.kerbRed : ROAD_MATERIAL.kerbWhite;
-      const innerHere = point(i, inner, 0);
-      const innerNext = point(next, inner, 0);
-      const outerHere = point(i, outer, rise(k));
-      const outerNext = point(next, outer, rise(k + 1));
-      const footHere = point(i, foot, -road.apronDrop);
-      const footNext = point(next, foot, -road.apronDrop);
+      const innerHere = point(i, side, 0, 0);
+      const innerNext = point(next, side, 0, 0);
+      const outerHere = point(i, side, outer, rise(k));
+      const outerNext = point(next, side, outer, rise(k + 1));
+      const footHere = point(i, side, foot, -road.apronDrop);
+      const footNext = point(next, side, foot, -road.apronDrop);
       // Quads are given left edge first, so they face upwards whichever side of the road the kerb is on.
       if (kerb.side > 0) {
         builder.quad(innerHere, outerHere, innerNext, outerNext, material);

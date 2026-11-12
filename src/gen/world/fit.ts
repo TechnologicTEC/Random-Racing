@@ -17,6 +17,8 @@ export interface FitInput {
    * metre towards the right of the direction of travel. Null for a level road.
    */
   cross: Float64Array | null;
+  /** Width of the road at each sample, in metres. */
+  width: Float64Array;
 }
 
 export interface FitResult {
@@ -41,12 +43,14 @@ const MAX_SECTIONS = 3;
  * other, never two blends laid over each other.
  */
 export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
-  const { natural, near, line, height, cross } = input;
+  const { natural, near, line, height, cross, width } = input;
   const road = cfg.road;
   const { size } = natural;
   const n = line.count;
-  const corridorHalf = cfg.track.roadWidth / 2 + road.verge;
-  const reach = corridorHalf + road.blendMax;
+  let widest = 0;
+  for (let i = 0; i < n; i++) widest = Math.max(widest, width[i]!);
+  // The furthest from the centre line that any cutting or embankment can reach.
+  const reach = widest / 2 + road.verge + road.blendMax;
 
   const ground: HeightField = { ...natural, height: Float32Array.from(natural.height) };
   const corridor = new Uint8Array(size * size);
@@ -62,6 +66,8 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
   const sectionSample = new Int32Array(MAX_SECTIONS);
   const sectionDistance = new Float64Array(MAX_SECTIONS);
   const sectionHeight = new Float64Array(MAX_SECTIONS);
+  /** Half the width of the strip that follows the road there: half the road plus a verge. */
+  const sectionCorridor = new Float64Array(MAX_SECTIONS);
 
   for (let iz = 0; iz < size; iz++) {
     const z = worldZ(natural, iz);
@@ -88,7 +94,8 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
             const px = x - (ax + abx * t);
             const pz = z - (az + abz * t);
             const distance = Math.sqrt(px * px + pz * pz);
-            if (distance > reach) continue;
+            const corridorHalf = (width[i]! + (width[j]! - width[i]!) * t) / 2 + road.verge;
+            if (distance > corridorHalf + road.blendMax) continue;
 
             // Which section of the lap does this belong to? One we have already met, or a new one.
             let slot = -1;
@@ -117,6 +124,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
             const tilt = cross ? cross[i]! + (cross[j]! - cross[i]!) * t : 0;
             sectionSample[slot] = i;
             sectionDistance[slot] = distance;
+            sectionCorridor[slot] = corridorHalf;
             sectionHeight[slot] = centre + lateral * tilt - road.sink;
           }
         }
@@ -126,7 +134,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       // On the road or a verge: the ground is the road surface, sunk a little.
       let onRoad = -1;
       for (let s = 0; s < sections; s++) {
-        if (sectionDistance[s]! <= corridorHalf && (onRoad < 0 || sectionDistance[s]! < sectionDistance[onRoad]!)) onRoad = s;
+        if (sectionDistance[s]! <= sectionCorridor[s]! && (onRoad < 0 || sectionDistance[s]! < sectionDistance[onRoad]!)) onRoad = s;
       }
       if (onRoad >= 0) {
         ground.height[c] = sectionHeight[onRoad]!;
@@ -143,7 +151,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       for (let s = 0; s < sections; s++) {
         const target = sectionHeight[s]!;
         const blend = clamp(Math.abs(wild - target) / road.blendSlope, road.blendMin, road.blendMax);
-        const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - corridorHalf);
+        const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - sectionCorridor[s]!);
         if (pull <= 0) continue;
         untouched *= 1 - pull;
         // The weight grows without limit towards the verge, so there the ground meets the road exactly.

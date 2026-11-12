@@ -14,17 +14,21 @@ const FOOTING = 0.6;
  * Builds the barriers as triangles: a low wall on the verge along both edges
  * of the whole lap. It is plain, except on the outside of real corners, where
  * it is painted in red and white blocks so the edge of the corner stands out.
+ *
+ * @param width road width at each sample, in metres
  */
 export function buildBarriers(
   line: CenterLine,
   height: Float64Array,
   cross: Float64Array | null,
+  width: Float64Array,
   sections: readonly Section[],
   cfg: GenConfig,
 ): MeshData {
   const road = cfg.road;
   const n = line.count;
-  const inner = cfg.track.roadWidth / 2 + road.barrierOffset;
+  // Measured outwards from the road edge, so the walls follow a road that changes width.
+  const inner = road.barrierOffset;
   const outer = inner + road.barrierWidth;
 
   // For each sample: which side is the outside of the corner it is in (1 right, -1 left), or 0 on straights and kinks.
@@ -34,13 +38,19 @@ export function buildBarriers(
     for (let k = 0; k < section.sampleCount; k++) outside[(section.startIndex + k) % n] = section.direction === 'right' ? -1 : 1;
   }
 
-  /** A point beside the road: `lateral` metres right of the centre line, `above` metres over the road's tilted plane. */
-  const point = (i: number, lateral: number, above: number): Point => ({
-    // Right of the direction of travel is (-tz, tx) on the map.
-    x: line.x[i]! - line.tz[i]! * lateral,
-    y: height[i]! + (cross ? cross[i]! * lateral : 0) + above,
-    z: line.z[i]! + line.tx[i]! * lateral,
-  });
+  /**
+   * A point beside the road at a sample: `beyond` metres outside the road edge
+   * on the given side (1 right, -1 left), `above` metres over the road's tilted plane.
+   */
+  const point = (i: number, side: number, beyond: number, above: number): Point => {
+    const lateral = side * (width[i]! / 2 + beyond);
+    return {
+      // Right of the direction of travel is (-tz, tx) on the map.
+      x: line.x[i]! - line.tz[i]! * lateral,
+      y: height[i]! + (cross ? cross[i]! * lateral : 0) + above,
+      z: line.z[i]! + line.tx[i]! * lateral,
+    };
+  };
 
   const foot = -road.sink - FOOTING;
   const blockSamples = Math.max(1, Math.round(road.barrierBlock / line.spacing));
@@ -56,14 +66,14 @@ export function buildBarriers(
           ? ROAD_MATERIAL.barrierRed
           : ROAD_MATERIAL.barrierWhite;
 
-      const nearFootHere = point(i, side * inner, foot);
-      const nearFootNext = point(next, side * inner, foot);
-      const nearTopHere = point(i, side * inner, road.barrierHeight);
-      const nearTopNext = point(next, side * inner, road.barrierHeight);
-      const farTopHere = point(i, side * outer, road.barrierHeight);
-      const farTopNext = point(next, side * outer, road.barrierHeight);
-      const farFootHere = point(i, side * outer, foot);
-      const farFootNext = point(next, side * outer, foot);
+      const nearFootHere = point(i, side, inner, foot);
+      const nearFootNext = point(next, side, inner, foot);
+      const nearTopHere = point(i, side, inner, road.barrierHeight);
+      const nearTopNext = point(next, side, inner, road.barrierHeight);
+      const farTopHere = point(i, side, outer, road.barrierHeight);
+      const farTopNext = point(next, side, outer, road.barrierHeight);
+      const farFootHere = point(i, side, outer, foot);
+      const farFootNext = point(next, side, outer, foot);
 
       // A face points towards whoever sees its first three corners turn clockwise, so
       // the order of each pair decides which way it faces. It differs between the two sides of the road.

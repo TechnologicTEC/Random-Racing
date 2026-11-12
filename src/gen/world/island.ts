@@ -5,7 +5,7 @@ import { clamp01, lerp, smoothstep } from '../../core/scalar';
 import type { Vec2 } from '../../core/vec2';
 import type { CenterLine, Character, HeightField, RoadProfile } from '../types';
 import { createField, worldX, worldZ } from './heightfield';
-import { insideLoop, nearestRoad, type NearestRoad } from './nearest';
+import { edgeDistance, insideLoop, nearestRoad, type NearestRoad } from './nearest';
 import { createRelief, type Relief } from './relief';
 
 /** The one peak of an island. */
@@ -33,6 +33,8 @@ export interface Island {
   cap: Float32Array;
   /** Nearest point of the track for every cell. */
   near: NearestRoad;
+  /** Distance from every cell to the edge of the road, in metres: negative on the road. */
+  edge: Float32Array;
   /** 1 for cells the track encloses, 0 for the rest. */
   inside: Uint8Array;
   peak: Peak | null;
@@ -66,6 +68,7 @@ const HEADROOM = 0.5;
  * room for a beach; where it is high the land drops to the water as a cliff.
  * One peak stands in the infield where it is furthest from the road.
  *
+ * @param width road width at each sample of the line, in metres
  * @param character the kind of island this seed makes
  * @param relief the ground the road was planned on; made from the seed and its relief unless given
  */
@@ -73,16 +76,19 @@ export function buildIsland(
   seed: number,
   line: CenterLine,
   profile: RoadProfile,
+  width: Float64Array,
   cfg: GenConfig,
   character: Character,
   relief: Relief = createRelief(seed, cfg.world.relief, character.relief, cfg.track.buildableRadius),
 ): Island {
   const { tile, coast, scenery } = cfg.world;
-  const halfRoad = cfg.track.roadWidth / 2;
   const inland = createField(tile.extent, tile.cell);
   const { size } = inland;
   const near = nearestRoad(line, inland);
+  const edge = edgeDistance(near, width);
   const inside = insideLoop(line, inland);
+  let widest = 0;
+  for (let i = 0; i < line.count; i++) widest = Math.max(widest, width[i]!);
 
   const rng = createRng(seed, 'world').fork('island');
   const marginNoise = shiftedNoise(rng.fork('margin'), coast.marginScale);
@@ -92,8 +98,8 @@ export function buildIsland(
   const bumpNoise = shiftedNoise(rng.fork('bumps'), scenery.bumpScale);
   const peakNoise = shiftedNoise(rng.fork('peak-texture'), 60);
 
-  const features = chooseFeatures(rng.fork('features'), line, profile, inland, near, inside, cfg);
-  const peak = placePeak(rng.fork('peak'), inland, near, inside, relief, cfg);
+  const features = chooseFeatures(rng.fork('features'), line, profile, width, inland, near, inside, cfg);
+  const peak = placePeak(rng.fork('peak'), inland, edge, inside, relief, cfg);
 
   // The height of the road near each cell, smoothed so it changes gradually
   // where the nearest part of the track switches from one section to another.
@@ -117,12 +123,12 @@ export function buildIsland(
       let margin = lerp(coast.margin[0], coast.margin[1], smoothstep(-0.6, 0.6, marginNoise.at(x, z)));
       let shaped = 0;
       for (const headland of features.headlands) {
-        const pull = featurePull(headland, x, z, halfRoad);
+        const pull = featurePull(headland, x, z);
         if (pull > 0) margin = lerp(margin, Math.max(margin, headland.reach), pull);
         shaped = Math.max(shaped, pull);
       }
       for (const bay of features.bays) {
-        const pull = featurePull(bay, x, z, halfRoad);
+        const pull = featurePull(bay, x, z);
         if (pull > 0) margin = lerp(margin, coast.minMargin, pull);
         shaped = Math.max(shaped, pull);
       }
@@ -135,7 +141,7 @@ export function buildIsland(
 
       const shape = shoreShape(margin, beachWanted, roadHeights[c]! + HEADROOM, coast);
       // Inside the loop, distance from the road counts as further inland.
-      outward[c] = inside[c] === 1 ? -near.distance[c]! : near.distance[c]! - halfRoad;
+      outward[c] = inside[c] === 1 ? -near.distance[c]! : edge[c]!;
       shore[c] = shape.margin - outward[c]!;
       room[c] = shape.margin - coast.clear;
       beach[c] = shape.beach;
@@ -147,7 +153,7 @@ export function buildIsland(
   // Pass 2: the coast's limit on every cell, and the inland ground wherever it could matter.
   const cap = new Float32Array(size * size);
   const half = tile.extent / 2;
-  const fitReach = halfRoad + cfg.road.verge + cfg.road.blendMax + 2 * tile.cell;
+  const fitReach = widest / 2 + cfg.road.verge + cfg.road.blendMax + 2 * tile.cell;
   for (let iz = 0; iz < size; iz++) {
     const z = worldZ(inland, iz);
     for (let ix = 0; ix < size; ix++) {
@@ -176,18 +182,19 @@ export function buildIsland(
           ground += (peak.summit - peak.base) * (bell + texture);
         }
       }
-      const bumps = smoothstep(0, scenery.bumpFade, Math.max(0, near.distance[c]! - halfRoad)) * (1 - bell);
+      const bumps = smoothstep(0, scenery.bumpFade, Math.max(0, edge[c]!)) * (1 - bell);
       if (bumps > 0) ground += scenery.bumpHeight * bumps * fbm(bumpNoise.noise, bumpNoise.u(x), bumpNoise.v(z), 2);
       inland.height[c] = ground;
     }
   }
 
-  const natural: HeightField = { ...inland, height: carveCoast(inland.height, { cap, near }, cfg) };
+  const natural: HeightField = { ...inland, height: carveCoast(inland.height, { cap, edge }, cfg) };
   return {
     inland,
     natural,
     cap,
     near,
+    edge,
     inside,
     peak: peak && { x: peak.x, z: peak.z, radius: peak.radius, summit: peak.summit },
     headlands: features.headlands.map(({ x, z }) => ({ x, z })),
@@ -200,13 +207,13 @@ export function buildIsland(
  * is lower than the ground, the ground comes down to it. The road and its
  * verges are never touched, so this is safe to run after the road is fitted.
  */
-export function carveCoast(heights: Float32Array, island: Pick<Island, 'cap' | 'near'>, cfg: GenConfig): Float32Array {
-  const verge = cfg.track.roadWidth / 2 + cfg.road.verge;
-  const clear = cfg.track.roadWidth / 2 + cfg.world.coast.clear;
+export function carveCoast(heights: Float32Array, island: Pick<Island, 'cap' | 'edge'>, cfg: GenConfig): Float32Array {
+  const { verge } = cfg.road;
+  const { clear } = cfg.world.coast;
   const out = new Float32Array(heights.length);
   for (let c = 0; c < heights.length; c++) {
     const here = heights[c]!;
-    const strength = smoothstep(verge, clear, island.near.distance[c]!);
+    const strength = smoothstep(verge, clear, island.edge[c]!);
     out[c] = strength > 0 ? here + (lowerTo(here, island.cap[c]!) - here) * strength : here;
   }
   return out;
@@ -257,6 +264,8 @@ interface Feature extends Vec2 {
   /** The direction straight out to sea from the road at its middle. */
   outX: number;
   outZ: number;
+  /** Half the width of the road there, in metres. */
+  halfRoad: number;
   /** How far along the coast it spreads either side of its middle, in metres. */
   width: number;
   /** For a headland: how far its tip reaches from the road edge, in metres. */
@@ -271,13 +280,13 @@ function chooseFeatures(
   rng: Rng,
   line: CenterLine,
   profile: RoadProfile,
+  width: Float64Array,
   field: HeightField,
   near: NearestRoad,
   inside: Uint8Array,
   cfg: GenConfig,
 ): { headlands: Feature[]; bays: Feature[] } {
   const coast = cfg.world.coast;
-  const halfRoad = cfg.track.roadWidth / 2;
   const last = field.size - 1;
   const cellAt = (x: number, z: number): number => {
     const ix = Math.round((x - field.origin) / field.cell);
@@ -294,7 +303,7 @@ function chooseFeatures(
       // Right of the direction of travel is (-tz, tx) on the map.
       const nx = -line.tz[i]! * side;
       const nz = line.tx[i]! * side;
-      const close = cellAt(line.x[i]! + nx * (halfRoad + 12), line.z[i]! + nz * (halfRoad + 12));
+      const close = cellAt(line.x[i]! + nx * (width[i]! / 2 + 12), line.z[i]! + nz * (width[i]! / 2 + 12));
       const far = cellAt(line.x[i]! + nx * lookOut, line.z[i]! + nz * lookOut);
       if (close < 0 || far < 0 || inside[close] === 1 || inside[far] === 1) continue;
       if (near.distance[far]! < lookOut - 15) continue;
@@ -305,7 +314,7 @@ function chooseFeatures(
   }
 
   const chosen: Feature[] = [];
-  const pick = (candidates: readonly number[], width: number, reach: number): Feature | null => {
+  const pick = (candidates: readonly number[], spread: number, reach: number): Feature | null => {
     for (let attempt = 0; attempt < 40 && candidates.length > 0; attempt++) {
       const i = candidates[rng.int(0, candidates.length - 1)]!;
       const feature: Feature = {
@@ -313,7 +322,8 @@ function chooseFeatures(
         z: line.z[i]!,
         outX: -line.tz[i]! * seaSide[i]!,
         outZ: line.tx[i]! * seaSide[i]!,
-        width,
+        halfRoad: width[i]! / 2,
+        width: spread,
         reach,
       };
       if (chosen.every((other) => distance(other.x - feature.x, other.z - feature.z) >= coast.featureSpacing)) {
@@ -327,9 +337,9 @@ function chooseFeatures(
   const headlands: Feature[] = [];
   const headlandCount = rng.int(coast.headlands[0], coast.headlands[1]);
   for (let k = 0; k < headlandCount; k++) {
-    const width = rng.range(coast.headlandWidth[0], coast.headlandWidth[1]);
+    const spread = rng.range(coast.headlandWidth[0], coast.headlandWidth[1]);
     const reach = rng.range(coast.headlandReach[0], coast.headlandReach[1]);
-    const feature = pick(seaward, width, reach);
+    const feature = pick(seaward, spread, reach);
     if (feature) headlands.push(feature);
   }
 
@@ -338,8 +348,8 @@ function chooseFeatures(
   const bays: Feature[] = [];
   const bayCount = rng.int(coast.bays[0], coast.bays[1]);
   for (let k = 0; k < bayCount; k++) {
-    const width = rng.range(coast.bayWidth[0], coast.bayWidth[1]);
-    const feature = pick(lowRoad, width, 0) ?? pick(seaward, width, 0);
+    const spread = rng.range(coast.bayWidth[0], coast.bayWidth[1]);
+    const feature = pick(lowRoad, spread, 0) ?? pick(seaward, spread, 0);
     if (feature) bays.push(feature);
   }
   return { headlands, bays };
@@ -353,24 +363,25 @@ function chooseFeatures(
 function placePeak(
   rng: Rng,
   field: HeightField,
-  near: NearestRoad,
+  edge: Float32Array,
   inside: Uint8Array,
   relief: Relief,
   cfg: GenConfig,
 ): (Peak & { base: number }) | null {
   const scenery = cfg.world.scenery;
 
-  let furthest = -1;
+  // The infield cell furthest from the edge of the road.
+  let furthest = -Infinity;
   let best = -1;
   for (let c = 0; c < inside.length; c++) {
-    if (inside[c] === 1 && near.distance[c]! > furthest) {
-      furthest = near.distance[c]!;
+    if (inside[c] === 1 && edge[c]! > furthest) {
+      furthest = edge[c]!;
       best = c;
     }
   }
   if (best < 0) return null;
 
-  const radius = Math.min(scenery.peakRadius[1], furthest - cfg.track.roadWidth / 2 - scenery.peakClearance);
+  const radius = Math.min(scenery.peakRadius[1], furthest - scenery.peakClearance);
   if (radius < scenery.peakRadius[0]) return null;
 
   const x = worldX(field, best % field.size);
@@ -431,11 +442,11 @@ function lowerTo(height: number, limit: number): number {
  * running straight out to sea from its middle, fading to nothing `width`
  * metres either side of that line, and not at all behind the road.
  */
-function featurePull(feature: Feature, x: number, z: number, halfRoad: number): number {
+function featurePull(feature: Feature, x: number, z: number): number {
   const dx = x - feature.x;
   const dz = z - feature.z;
   const out = dx * feature.outX + dz * feature.outZ;
-  if (out < -halfRoad) return 0;
+  if (out < -feature.halfRoad) return 0;
   const aside = Math.abs(dx * feature.outZ - dz * feature.outX);
   return 1 - smoothstep(feature.width * 0.35, feature.width, aside);
 }

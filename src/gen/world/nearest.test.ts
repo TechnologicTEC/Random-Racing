@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { circleLine, stadiumLine } from '../../testing/trackFixtures';
+import { circleLine, stadiumLine, swellingWidth } from '../../testing/trackFixtures';
 import type { CenterLine } from '../types';
 import { createField, worldX, worldZ } from './heightfield';
-import { insideLoop, nearestRoad } from './nearest';
+import { edgeDistance, insideLoop, nearestRoad } from './nearest';
+
+describe('edgeDistance', () => {
+  it('measures every cell from the road edge at its nearest sample: negative on the road', () => {
+    const line = circleLine(100);
+    const field = createField(400, 4);
+    const near = nearestRoad(line, field);
+    // 12 m wide at the start of the lap, 22 m half way round.
+    const width = swellingWidth(line, 12, 22);
+    const edge = edgeDistance(near, width);
+    expect(edge).toHaveLength(field.size * field.size);
+    let onRoad = 0;
+    for (let c = 0; c < edge.length; c++) {
+      expect(edge[c]!).toBeCloseTo(near.distance[c]! - width[near.index[c]!]! / 2, 4);
+      if (edge[c]! < 0) onRoad++;
+    }
+    // A cell on the centre line is half a road width inside the edge.
+    const centre = Math.round(200 / 4) * field.size + Math.round(300 / 4);
+    expect(near.distance[centre]!).toBeLessThan(0.1);
+    expect(edge[centre]!).toBeLessThan(-5.9);
+    expect(onRoad).toBeGreaterThan(400);
+  });
+});
 
 /** The true nearest sample, found the slow way. */
 function bruteNearest(line: CenterLine, x: number, z: number): number {

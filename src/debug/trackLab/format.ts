@@ -77,6 +77,25 @@ export function describeCharacter(character: Character): Array<[label: string, v
   ];
 }
 
+/**
+ * The road's width in plain words: one figure when it never changes, otherwise
+ * the narrowest and widest and how much of the lap is wider than the narrowest.
+ *
+ * @param width road width at each sample of the lap, in metres
+ */
+export function describeWidth(width: ArrayLike<number>): string {
+  let narrowest = Infinity;
+  let widest = -Infinity;
+  for (let i = 0; i < width.length; i++) {
+    narrowest = Math.min(narrowest, width[i]!);
+    widest = Math.max(widest, width[i]!);
+  }
+  if (widest - narrowest < 0.5) return `${Math.round(narrowest)} m all the way round`;
+  let wider = 0;
+  for (let i = 0; i < width.length; i++) if (width[i]! > narrowest + 0.5) wider++;
+  return `${Math.round(narrowest)} to ${Math.round(widest)} m (wider on ${Math.round((100 * wider) / width.length)}% of the lap)`;
+}
+
 /** The kind of island in a few words, for a contact sheet caption. */
 export function shortCharacter(character: Character): string {
   const words: string[] = [character.relief, character.coast];

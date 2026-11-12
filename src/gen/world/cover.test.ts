@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { circleLine } from '../../testing/trackFixtures';
+import { circleLine, uniformWidth } from '../../testing/trackFixtures';
 import type { HeightField } from '../types';
 import { buildCover } from './cover';
 import { fitRoad } from './fit';
 import { createField, worldX, worldZ } from './heightfield';
-import { nearestRoad } from './nearest';
+import { edgeDistance, nearestRoad } from './nearest';
 
 const line = circleLine(100);
 
 /** A cover map for a 100 m circle of road at ground level on land shaped by a formula. */
-function coverFor(heightAt: (x: number, z: number) => number, seed = 5) {
+function coverFor(heightAt: (x: number, z: number) => number, seed = 5, roadWidth = config.track.roadWidth) {
   const natural = createField(400, 2);
   for (let iz = 0; iz < natural.size; iz++) {
     for (let ix = 0; ix < natural.size; ix++) natural.height[iz * natural.size + ix] = heightAt(worldX(natural, ix), worldZ(natural, iz));
   }
   const near = nearestRoad(line, natural);
   const height = Float64Array.from({ length: line.count }, (_, i) => heightAt(line.x[i]!, line.z[i]!));
-  const { ground, corridor } = fitRoad({ natural, near, line, height, cross: null }, config);
-  return { ground, corridor, near, cover: buildCover(seed, ground, corridor, near, config) };
+  const width = uniformWidth(line, roadWidth);
+  const { ground, corridor } = fitRoad({ natural, near, line, height, cross: null, width }, config);
+  return { ground, corridor, near, cover: buildCover(seed, ground, corridor, edgeDistance(near, width), config) };
 }
 
 const at = (field: HeightField, x: number, z: number): number => Math.round((z - field.origin) / field.cell) * field.size + Math.round((x - field.origin) / field.cell);
@@ -55,6 +56,18 @@ describe('buildCover', () => {
     const { ground, cover } = coverFor(() => 8);
     const verge = config.track.roadWidth / 2 + config.road.verge;
     expect(cover.grass[at(ground, 100 + verge + 6, 0)]).toBeGreaterThan(230);
+  });
+
+  it('keeps the grass off a wider road and its verges, and brings it back beyond them', () => {
+    const { ground, cover } = coverFor(() => 8, 5, 20);
+    const strip = 20 / 2 + config.road.verge;
+    for (const d of [0, 7, 9.5, strip - 1]) {
+      expect(cover.grass[at(ground, 100 + d, 0)], `${d} m out`).toBe(0);
+      expect(cover.grass[at(ground, 100 - d, 0)], `${d} m in`).toBe(0);
+    }
+    // Just past the verge the grass is still thin; a few metres on it is back.
+    expect(cover.grass[at(ground, 100 + strip + 1, 0)]).toBeLessThan(200);
+    expect(cover.grass[at(ground, 100 + strip + 6, 0)]).toBeGreaterThan(230);
   });
 
   it('covers the beach and the sea bed with sand, not grass', () => {

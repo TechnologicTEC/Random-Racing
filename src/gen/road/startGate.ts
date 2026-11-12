@@ -13,10 +13,19 @@ const POST_GAP = 0.3;
  * Builds the start: a chequered line painted across the road at sample 0,
  * which is where the lap begins, and a gate over it with a post outside each
  * barrier and a beam between them.
+ *
+ * @param width road width at each sample, in metres
  */
-export function buildStartGate(line: CenterLine, height: Float64Array, cross: Float64Array | null, cfg: GenConfig): MeshData {
+export function buildStartGate(
+  line: CenterLine,
+  height: Float64Array,
+  cross: Float64Array | null,
+  width: Float64Array,
+  cfg: GenConfig,
+): MeshData {
   const road = cfg.road;
-  const half = cfg.track.roadWidth / 2;
+  // The road is as wide here as it is at the start line.
+  const half = width[0]! / 2;
   const tilt = cross ? cross[0]! : 0;
   // The start is on a straight, so one flat frame serves for everything here.
   const slope = (height[1]! - height[0]!) / line.spacing;

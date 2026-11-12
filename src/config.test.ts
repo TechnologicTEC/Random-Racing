@@ -11,9 +11,15 @@ describe('config', () => {
     expect(config.track.lapLengthMax).toBe(2400);
   });
 
-  it('keeps the road width inside the brief range (12 to 14 m)', () => {
-    expect(config.track.roadWidth).toBeGreaterThanOrEqual(12);
-    expect(config.track.roadWidth).toBeLessThanOrEqual(14);
+  it('makes the road 12 m wide, widening to at most 22 m in places', () => {
+    expect(config.track.roadWidth).toBe(12);
+    expect(config.road.width.max).toBe(22);
+    expect(config.road.width.min).toBeGreaterThan(config.track.roadWidth);
+    expect(config.road.width.min).toBeLessThan(config.road.width.max);
+  });
+
+  it('keeps widened road clear of other sections: further apart than sections that share a bank', () => {
+    expect(config.road.width.clearance).toBeGreaterThan(config.road.coupleDistance);
   });
 
   it('generates about 30 candidates per seed', () => {

@@ -5,7 +5,7 @@ import { hashTrack, measureProfile, type Candidate, type FitReport, type TrackRe
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
-import { describeCharacter, describeFit, describeProfile, describeScorePart, describeViolation } from './format';
+import { describeCharacter, describeFit, describeProfile, describeScorePart, describeViolation, describeWidth } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -188,7 +188,9 @@ export function mountTrackLab(root: HTMLElement): void {
       : [];
     const isWinner = selectedIndex === result.winnerIndex;
     const terrain = isWinner && islandBox.checked ? islandPicture(tintBox.checked) : null;
-    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain }, cfg);
+    // Only the winner has had its width worked out; other candidates are drawn at the usual width.
+    const width = isWinner && world ? world.road.width : null;
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width }, cfg);
   }
 
   function resize(): void {
@@ -285,7 +287,10 @@ export function mountTrackLab(root: HTMLElement): void {
     factsEl.innerHTML = '';
     addFact('Share code', formatSeedCode(result.seed, result.generatorVersion));
     addFact('Style', result.style[0]!.toUpperCase() + result.style.slice(1));
-    for (const [label, value] of describeCharacter(result.character)) addFact(label, value);
+    for (const [label, value] of describeCharacter(result.character)) {
+      // For the road's width, say what the winning road actually does.
+      addFact(label, label === 'Road width' && world ? describeWidth(world.road.width) : value);
+    }
     addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);

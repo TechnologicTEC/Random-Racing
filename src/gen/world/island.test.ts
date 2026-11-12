@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config, type GenConfig } from '../../config';
 import { withCharacter } from '../../testing/characters';
-import { circleLine, stadiumLine } from '../../testing/trackFixtures';
+import { circleLine, stadiumLine, uniformWidth } from '../../testing/trackFixtures';
 import { solveProfile } from '../road/profile';
 import { generateTrack } from '../track/pipeline';
 import type { CenterLine, Character, RoadProfile } from '../types';
@@ -15,16 +15,20 @@ const scenery = config.world.scenery;
 /** The kind of island these tests were written for. Other kinds are covered as the rework reaches them. */
 const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 1, width: 'constant' };
 /** Real seeds, all on rolling ground. */
-const rolling = withCharacter(config, { relief: 'rolling' });
+const rolling = withCharacter(config, { relief: 'rolling', width: 'constant' });
 
 /** A coarser grid keeps hand-made cases quick; real seeds below use the full grid. */
 const coarse: GenConfig = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 4 } } };
 
 /** An island for a road on dead flat ground of the given height. */
-function flatIsland(groundHeight: number, line: CenterLine = circleLine(200)): { island: Island; line: CenterLine; profile: RoadProfile } {
+function flatIsland(
+  groundHeight: number,
+  line: CenterLine = circleLine(200),
+  roadWidth = config.track.roadWidth,
+): { island: Island; line: CenterLine; profile: RoadProfile } {
   const relief = (): number => groundHeight;
   const profile = solveProfile(line, relief, config.road, config.track.roadWidth, config.road.maxGradient.rolling);
-  return { island: buildIsland(7, line, profile, coarse, PLAIN, relief), line, profile };
+  return { island: buildIsland(7, line, profile, uniformWidth(line, roadWidth), coarse, PLAIN, relief), line, profile };
 }
 
 /** Calls back for every cell with its height and its distance from the road edge (negative on the road). */
@@ -33,7 +37,7 @@ function eachCell(island: Island, visit: (height: number, edge: number, inside: 
   for (let iz = 0; iz < size; iz++) {
     for (let ix = 0; ix < size; ix++) {
       const c = iz * size + ix;
-      visit(island.natural.height[c]!, island.near.distance[c]! - HALF_ROAD, island.inside[c] === 1, ix, iz);
+      visit(island.natural.height[c]!, island.edge[c]!, island.inside[c] === 1, ix, iz);
     }
   }
 }
@@ -275,9 +279,8 @@ describe('carveCoast', () => {
   });
 
   it('never touches the road or its verges', () => {
-    const verge = HALF_ROAD + config.road.verge;
     for (let c = 0; c < island.natural.height.length; c++) {
-      if (island.near.distance[c]! <= verge) expect(island.natural.height[c]).toBe(island.inland.height[c]);
+      if (island.edge[c]! <= config.road.verge) expect(island.natural.height[c]).toBe(island.inland.height[c]);
     }
   });
 
@@ -288,12 +291,43 @@ describe('carveCoast', () => {
   });
 });
 
+describe('an island around a wider road', () => {
+  const WIDE = 22;
+  const { island } = flatIsland(12, circleLine(200), WIDE);
+
+  it('knows how far every cell is from the true road edge', () => {
+    for (let c = 0; c < island.edge.length; c += 5) {
+      expect(island.edge[c]!).toBeCloseTo(island.near.distance[c]! - WIDE / 2, 4);
+    }
+  });
+
+  it('keeps the sea at least 10 m from the true edge, not from where a narrow road would end', () => {
+    let nearestSea = Infinity;
+    eachCell(island, (height, edge) => {
+      if (height <= 0) nearestSea = Math.min(nearestSea, edge);
+    });
+    expect(nearestSea).toBeGreaterThanOrEqual(coast.minMargin - 1);
+    // And it is still the usual coast: somewhere the sea is within the usual margin of the wider road.
+    expect(nearestSea).toBeLessThan(coast.margin[1] + coast.wobble);
+  });
+
+  it('never lets the coast touch the wider road or its verges', () => {
+    let checked = 0;
+    for (let c = 0; c < island.natural.height.length; c++) {
+      if (island.edge[c]! > config.road.verge) continue;
+      expect(island.natural.height[c]).toBe(island.inland.height[c]);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(1000);
+  });
+});
+
 describe('buildIsland on generated tracks', () => {
   const seeds = [1, 7, 42, 99, 2024, 48213];
   const worlds = seeds.map((seed) => {
     const track = generateTrack(seed, rolling);
     const winner = track.candidates[track.winnerIndex]!;
-    const island = buildIsland(seed, winner.line, winner.profile, rolling, track.character);
+    const island = buildIsland(seed, winner.line, winner.profile, uniformWidth(winner.line, config.track.roadWidth), rolling, track.character);
     return { seed, winner, island, sea: seaDistances(island, winner.line) };
   });
 
@@ -409,7 +443,7 @@ describe('buildIsland on generated tracks', () => {
 
   it('builds exactly the same island for the same seed, and a different one for another', () => {
     const { winner, island } = worlds[0]!;
-    const again = buildIsland(1, winner.line, winner.profile, rolling, PLAIN);
+    const again = buildIsland(1, winner.line, winner.profile, uniformWidth(winner.line, config.track.roadWidth), rolling, PLAIN);
     expect(again.natural.height).toEqual(island.natural.height);
     expect(again.peak).toEqual(island.peak);
     expect(worlds[1]!.island.natural.height).not.toEqual(island.natural.height);

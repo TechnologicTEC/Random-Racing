@@ -5,6 +5,7 @@ import { buildBarriers } from './road/barriers';
 import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
 import { buildStartGate } from './road/startGate';
+import { solveWidth } from './road/width';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
 import type { WorldResult } from './types';
@@ -22,15 +23,17 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const track = generateTrack(seed, config);
   const winner = track.candidates[track.winnerIndex]!;
   const { line, profile } = winner;
-  const island = buildIsland(track.seed, line, profile, config, track.character);
+  // Chosen only now that the winner is known, so the width never changes which layout wins.
+  const width = solveWidth(track.seed, line, winner.sections, track.character.width, config);
+  const island = buildIsland(track.seed, line, profile, width, config, track.character);
 
   // The road is fitted into the inland ground first and the coast is carved
   // afterwards, so an embankment can never spill out into the sea.
   const cross = solveBanking(line, config.road);
-  const road = { near: island.near, line, height: profile.height, cross };
+  const road = { near: island.near, line, height: profile.height, cross, width };
   const fitted = fitRoad({ ...road, natural: island.inland }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
-  const cover = buildCover(track.seed, ground, fitted.corridor, island.near, config);
+  const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
   const report = fitReport(
     { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor },
@@ -46,10 +49,11 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     cover,
     road: {
       cross,
-      mesh: buildRoadRibbon(line, profile.height, cross, config),
-      kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, kerbSpans, config) },
-      barriers: buildBarriers(line, profile.height, cross, winner.sections, config),
-      gate: buildStartGate(line, profile.height, cross, config),
+      width,
+      mesh: buildRoadRibbon(line, profile.height, cross, width, config),
+      kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, width, kerbSpans, config) },
+      barriers: buildBarriers(line, profile.height, cross, width, winner.sections, config),
+      gate: buildStartGate(line, profile.height, cross, width, config),
     },
     report,
   };
@@ -67,7 +71,7 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers(world.natural.height);
   hasher.numbers(world.ground.height);
   hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.variation);
-  hasher.numbers(world.road.cross);
+  hasher.numbers(world.road.cross).numbers(world.road.width);
   for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate]) {
     hasher.numbers(mesh.positions).numbers(mesh.indices).numbers(mesh.materials);
   }

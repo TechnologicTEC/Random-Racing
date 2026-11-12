@@ -4,23 +4,24 @@ import { createRng } from '../../core/rng';
 import { clamp01, smoothstep } from '../../core/scalar';
 import type { Cover, HeightField } from '../types';
 import { worldX, worldZ } from './heightfield';
-import type { NearestRoad } from './nearest';
 
 /**
  * Decides what covers every cell of the island: sand on the beach and sea
  * bed, rock where the ground is steep or high, grass everywhere else. Grass
  * never grows on the road or its verges.
+ *
+ * @param edge distance from every cell to the edge of the road, in metres (see edgeDistance)
  */
 export function buildCover(
   seed: number,
   ground: HeightField,
   corridor: Uint8Array,
-  near: NearestRoad,
+  edge: Float32Array,
   cfg: GenConfig,
 ): Cover {
   const rules = cfg.world.cover;
   const { size, cell, height } = ground;
-  const verge = cfg.track.roadWidth / 2 + cfg.road.verge;
+  const { verge } = cfg.road;
 
   const rng = createRng(seed, 'world').fork('cover');
   const noise = createNoise(rng);
@@ -63,7 +64,7 @@ export function buildCover(
             );
       let grass = 0;
       if (corridor[c] !== 1 && here > 0) {
-        const roadside = smoothstep(verge, verge + rules.roadsideFade, near.distance[c]!);
+        const roadside = smoothstep(verge, verge + rules.roadsideFade, edge[c]!);
         grass = (1 - sand) * (1 - rock) * roadside;
       }
 

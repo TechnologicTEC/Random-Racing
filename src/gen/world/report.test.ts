@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { circleLine, stadiumLine } from '../../testing/trackFixtures';
+import { circleLine, stadiumLine, uniformWidth } from '../../testing/trackFixtures';
 import type { CenterLine } from '../types';
 import { fitRoad } from './fit';
 import { createField, worldX, worldZ } from './heightfield';
@@ -10,15 +10,22 @@ import { fitReport } from './report';
 const HALF = config.track.roadWidth / 2;
 
 /** Fits a road at a fixed height onto land shaped by a formula and reports on the result. */
-function reportFor(line: CenterLine, extent: number, heightAt: (x: number, z: number) => number, roadHeight: (i: number) => number) {
+function reportFor(
+  line: CenterLine,
+  extent: number,
+  heightAt: (x: number, z: number) => number,
+  roadHeight: (i: number) => number,
+  roadWidth = config.track.roadWidth,
+) {
   const natural = createField(extent, 2);
   for (let iz = 0; iz < natural.size; iz++) {
     for (let ix = 0; ix < natural.size; ix++) natural.height[iz * natural.size + ix] = heightAt(worldX(natural, ix), worldZ(natural, iz));
   }
   const near = nearestRoad(line, natural);
   const height = Float64Array.from({ length: line.count }, (_, i) => roadHeight(i));
-  const fitted = fitRoad({ natural, near, line, height, cross: null }, config);
-  const input = { natural, earthworks: fitted.ground, ground: fitted.ground, corridor: fitted.corridor, near, line, height, cross: null };
+  const width = uniformWidth(line, roadWidth);
+  const fitted = fitRoad({ natural, near, line, height, cross: null, width }, config);
+  const input = { natural, earthworks: fitted.ground, ground: fitted.ground, corridor: fitted.corridor, near, line, height, cross: null, width };
   return { input, report: fitReport(input, config) };
 }
 
@@ -73,6 +80,29 @@ describe('fitReport', () => {
     expect(report.nearestWater.value).toBeGreaterThan(50 - HALF - 3);
     expect(report.nearestWater.value).toBeLessThan(50 - HALF + 3);
     expect(report.nearestWater.x).toBeGreaterThan(145);
+  });
+
+  it('measures the water from the true edge of a wider road', () => {
+    const { report } = reportFor(circle, 400, (x) => (x > 150 ? -5 : 10), () => 10, 20);
+    expect(report.nearestWater.value).toBeGreaterThan(50 - 10 - 3);
+    expect(report.nearestWater.value).toBeLessThan(50 - 10 + 3);
+  });
+
+  it('measures cut and fill right across a wider road', () => {
+    // Ground at 20 m, but 23 m beyond x = 108. A 12 m road (edge at 106) never reaches the higher ground; a 20 m road (edge at 110) does.
+    const step = (x: number): number => (x > 108 ? 23 : 20);
+    expect(reportFor(circle, 400, step, () => 15, 12).report.deepestCut.value).toBeLessThan(6.5);
+    expect(reportFor(circle, 400, step, () => 15, 20).report.deepestCut.value).toBeGreaterThan(7);
+  });
+
+  it('checks the whole width of a wider road for ground showing through', () => {
+    const { input } = reportFor(circle, 400, () => 10, () => 10, 20);
+    expect(fitReport(input, config).groundThroughRoad).toBe(0);
+    // Push up a few cells 9 m out from the centre line: on a 20 m road, off a 12 m one.
+    const size = input.ground.size;
+    const cell = Math.round((0 + 200) / 2) * size + Math.round((109 + 200) / 2);
+    for (const c of [cell, cell + 1, cell + size, cell + size + 1]) input.ground.height[c] = 10.4;
+    expect(fitReport(input, config).groundThroughRoad).toBeGreaterThan(0);
   });
 
   it('reports how close separate sections of the lap come', () => {

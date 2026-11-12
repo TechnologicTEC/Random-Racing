@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { circleLine, pathLine, roundedSquareLine, type PathStep } from '../../testing/trackFixtures';
+import { circleLine, pathLine, roundedSquareLine, swellingWidth, uniformWidth, type PathStep } from '../../testing/trackFixtures';
 import { analyseSections } from '../track/analysis';
 import { generateTrack } from '../track/pipeline';
 import type { CenterLine } from '../types';
@@ -85,7 +85,7 @@ describe('buildKerbs', () => {
   const height = Float64Array.from({ length: square.count }, () => 10);
   const cross = new Float64Array(square.count).fill(-0.08);
   const kerbs = findKerbs(square, squareSections, road);
-  const mesh = buildKerbs(square, height, cross, kerbs, config);
+  const mesh = buildKerbs(square, height, cross, uniformWidth(square, config.track.roadWidth), kerbs, config);
   const vertex = (v: number) => ({ x: mesh.positions[v * 3]!, y: mesh.positions[v * 3 + 1]!, z: mesh.positions[v * 3 + 2]!, material: mesh.materials[v]! });
   const count = mesh.positions.length / 3;
 
@@ -128,7 +128,7 @@ describe('buildKerbs', () => {
 
   it('alternates red and white blocks along its length', () => {
     // Walk the top faces of the first kerb in order: the material must change from block to block.
-    const first = buildKerbs(square, height, cross, kerbs.slice(0, 1), config);
+    const first = buildKerbs(square, height, cross, uniformWidth(square, config.track.roadWidth), kerbs.slice(0, 1), config);
     const sequence: number[] = [];
     for (let t = 0; t < first.indices.length; t += 6) {
       const material = first.materials[first.indices[t]!]!;
@@ -138,7 +138,7 @@ describe('buildKerbs', () => {
   });
 
   it('ramps up from nothing at each end, so there is no step to hit', () => {
-    const first = buildKerbs(square, height, cross, kerbs.slice(0, 1), config);
+    const first = buildKerbs(square, height, cross, uniformWidth(square, config.track.roadWidth), kerbs.slice(0, 1), config);
     const start = kerbs[0]!.startIndex;
     // The outer edge of the kerb at its very first sample is level with the road.
     let endHeight = Infinity;
@@ -167,10 +167,42 @@ describe('buildKerbs', () => {
   it('builds kerbs on the left for left-hand corners', () => {
     const left = leftSquare();
     const leftKerbs = findKerbs(left, analyseSections(left, config.track), road);
-    const leftMesh = buildKerbs(left, new Float64Array(left.count).fill(10), null, leftKerbs, config);
+    const leftMesh = buildKerbs(left, new Float64Array(left.count).fill(10), null, uniformWidth(left, config.track.roadWidth), leftKerbs, config);
     for (let v = 0; v < leftMesh.positions.length / 3; v++) {
       const { lateral } = lateralOf(left, leftMesh.positions[v * 3]!, leftMesh.positions[v * 3 + 2]!);
       expect(lateral).toBeLessThan(-HALF + 0.05);
     }
+  });
+});
+
+describe('buildKerbs on a road whose width changes', () => {
+  const height = Float64Array.from({ length: square.count }, () => 10);
+  const cross = new Float64Array(square.count).fill(-0.08);
+  const kerbs = findKerbs(square, squareSections, road);
+  // 12 m at the start of the lap, 20 m half way round: every corner has a different width.
+  const width = swellingWidth(square, 12, 20);
+  const mesh = buildKerbs(square, height, cross, width, kerbs, config);
+
+  it('keeps every kerb at the true edge of the road', () => {
+    let widest = 0;
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const { sample, lateral } = lateralOf(square, mesh.positions[v * 3]!, mesh.positions[v * 3 + 2]!);
+      const beyond = lateral - width[sample]! / 2;
+      expect(beyond).toBeGreaterThan(-0.05);
+      expect(beyond).toBeLessThan(road.kerbWidth + 0.5);
+      widest = Math.max(widest, lateral);
+    }
+    expect(widest).toBeGreaterThan(9);
+  });
+
+  it('is still flush with the road where they meet', () => {
+    let checked = 0;
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const { sample, lateral } = lateralOf(square, mesh.positions[v * 3]!, mesh.positions[v * 3 + 2]!);
+      if (Math.abs(lateral - width[sample]! / 2) > 0.02) continue;
+      expect(Math.abs(mesh.positions[v * 3 + 1]! - (height[sample]! + lateral * cross[sample]!))).toBeLessThan(0.02);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(100);
   });
 });

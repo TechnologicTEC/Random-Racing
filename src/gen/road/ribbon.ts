@@ -23,10 +23,20 @@ export const ROAD_MATERIAL = {
   gateBeam: 10,
 } as const;
 
-/** One lengthwise strip of the road's cross-section. Offsets are metres to the right of the centre line. */
+/**
+ * One side of a strip: `edge` picks the left road edge (-1), the centre line
+ * (0) or the right road edge (1), and `offset` is metres to the right of that.
+ * Measuring from the edges lets the same strips fit a road of any width.
+ */
+interface Side {
+  edge: -1 | 0 | 1;
+  offset: number;
+}
+
+/** One lengthwise strip of the road's cross-section. */
 interface Strip {
-  from: number;
-  to: number;
+  from: Side;
+  to: Side;
   /** How far each side of the strip sits below the road surface, in metres. */
   dropFrom: number;
   dropTo: number;
@@ -42,24 +52,35 @@ interface Strip {
  *
  * @param height height of the road centre at each sample, in metres
  * @param cross tilt at each sample: metres of height gained per metre to the right. Null for a level road
+ * @param width road width at each sample, in metres
  */
-export function buildRoadRibbon(line: CenterLine, height: Float64Array, cross: Float64Array | null, cfg: GenConfig): MeshData {
+export function buildRoadRibbon(
+  line: CenterLine,
+  height: Float64Array,
+  cross: Float64Array | null,
+  width: Float64Array,
+  cfg: GenConfig,
+): MeshData {
   const road = cfg.road;
-  const half = cfg.track.roadWidth / 2;
   const centre = road.centreLine / 2;
+  const left = (offset: number): Side => ({ edge: -1, offset });
+  const middle = (offset: number): Side => ({ edge: 0, offset });
+  const right = (offset: number): Side => ({ edge: 1, offset });
   const strips: Strip[] = [
-    { from: -half - road.apronWidth, to: -half, dropFrom: road.apronDrop, dropTo: 0, material: ROAD_MATERIAL.shoulder, dashed: false },
-    { from: -half, to: -half + road.edgeLine, dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.line, dashed: false },
-    { from: -half + road.edgeLine, to: -centre, dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.asphalt, dashed: false },
-    { from: -centre, to: centre, dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.line, dashed: true },
-    { from: centre, to: half - road.edgeLine, dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.asphalt, dashed: false },
-    { from: half - road.edgeLine, to: half, dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.line, dashed: false },
-    { from: half, to: half + road.apronWidth, dropFrom: 0, dropTo: road.apronDrop, material: ROAD_MATERIAL.shoulder, dashed: false },
+    { from: left(-road.apronWidth), to: left(0), dropFrom: road.apronDrop, dropTo: 0, material: ROAD_MATERIAL.shoulder, dashed: false },
+    { from: left(0), to: left(road.edgeLine), dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.line, dashed: false },
+    { from: left(road.edgeLine), to: middle(-centre), dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.asphalt, dashed: false },
+    { from: middle(-centre), to: middle(centre), dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.line, dashed: true },
+    { from: middle(centre), to: right(-road.edgeLine), dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.asphalt, dashed: false },
+    { from: right(-road.edgeLine), to: right(0), dropFrom: 0, dropTo: 0, material: ROAD_MATERIAL.line, dashed: false },
+    { from: right(0), to: right(road.apronWidth), dropFrom: 0, dropTo: road.apronDrop, material: ROAD_MATERIAL.shoulder, dashed: false },
   ];
 
   const n = line.count;
   /** A point of the cross-section at a sample. The surface tilts only across the road itself; the aprons hang from its edges. */
-  const point = (i: number, lateral: number, drop: number): Point => {
+  const point = (i: number, side: Side, drop: number): Point => {
+    const half = width[i]! / 2;
+    const lateral = side.edge * half + side.offset;
     const onRoad = Math.max(-half, Math.min(half, lateral));
     return {
       // Right of the direction of travel is (-tz, tx) on the map.
