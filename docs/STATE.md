@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** Milestone 2 step 11 (the camera flies the lap; pause, circle and new-island controls)
-- **Next step:** check-in 2: Tane flies a few seeds at `/?view=3d`. Then step 12: water and sky
+- **Last finished step:** check-in 2, and step R0 of the rework (plan agreed with Tane and recorded below). Steps 0 to 11 are built and pushed
+- **Next step:** **rework step R1** (baseline measurements), then R2 to R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -28,7 +28,8 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 9 | Kerbs | Done |
 | 10 | Barriers, start line and gate | Done |
 | 11 | Fly-along camera and HUD | Done |
-| | **Check-in 2 with Tane:** fly a few seeds | Waiting for Tane |
+| | **Check-in 2 with Tane:** fly a few seeds | Done: islands too basic. See "Milestone 2 rework" |
+| R1–R8 | **Rework** (table below), then check-in 3 | To do |
 | 12 | Water and sky; time of day from the seed | To do |
 | 13 | Trees, rocks and clouds | To do |
 | 14 | Grass | To do |
@@ -36,7 +37,65 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
+## Milestone 2 rework (agreed at check-in 2, 2026-11-12)
+
+**Tane's feedback after flying the islands:** they are too basic. Too flat; the mountains are too small and there should be more of them; some tracks should climb a mountain or descend one while others stay flat; the track should only sometimes run beside the sea, and the land can extend well past it; the road should be wider in some parts; and not every trait should apply to every track, so that coastal, tall, flat, edge-hugging and folded tracks combine differently.
+
+**Tane's choices:** mountains 200 to 250 m, on a bigger island; up to 15% gradient on mountain tracks; road 12 m widening to 22 m.
+
+**This replaces parts of the check-in 1 feedback.** Sea 15 to 35 m from the road now applies only to coastal stretches (still never under 10 m). Height near the road depends on the seed's relief. The single 40 to 70 m peak becomes 0 to 4 mountains. Beaches, cliffs, bays and headlands stay, on coastal stretches.
+
+### Rework design
+
+1. **Each seed gets a character** (`src/gen/character.ts`, new, from the `world` stream). Independent traits, weights in `src/config.ts`, shown in the lab:
+
+   | Trait | Values (starting weights) |
+   | --- | --- |
+   | Layout style (exists) | folded 50%, stretched 25%, round 25% |
+   | Relief | flat 20%, rolling 35%, hilly 25%, mountain 20% |
+   | Coast | inland 25% (road never by the sea), touches 45% (one or two coastal stretches), coastal 30% (most of the outside by the sea) |
+   | Mountains | 0 to 4; flat seeds 0 or 1; mountain seeds at least 1 |
+   | Road width | constant 35%, varied 65% |
+
+2. **Relief and climbs.** `relief.ts` stays seed-only, built from the relief trait. Lap height range aimed for, and road gradient limit: flat under 8 m (8%); rolling 15 to 30 m (8%); hilly 30 to 60 m (8%); mountain 60 to 120 m (15%). Mountain relief adds a broad ramp across the buildable area (the lower flank of a mountain, no steeper than about 18%) so a 15% road follows it with ordinary cut and fill. `solveProfile` takes the gradient limit from the character. The elevation score's targets come from the relief trait, so flat seeds are not marked down. Cut and fill limits stay 6 m and 8 m.
+3. **Variable road width** (`src/gen/road/width.ts`, new): one width per sample of the winner's line. 12 m base, up to 22 m on the start straight, long straights and hairpin exits, eased over about 40 m. Not widened beside a close section. Chosen after the winner is picked (own stream), so it does not change which layout wins. Everything that used the fixed `cfg.track.roadWidth` takes the per-sample width: `fit.ts`, `report.ts`, `ribbon.ts`, `kerbs.ts`, `barriers.ts`, `startGate.ts`, `island.ts`, `cover.ts`, `profile.ts`, and the lab's road drawing. The validator keeps judging layouts at the base width.
+4. **Bigger island.** Tile 2700 m (was 1400 m), 3 m cells (was 2 m), about 812,000 heights; verge 4 m (was 2.5 m), which also removes the verge dip. A **hinterland** is added in `island.ts`: a separate, gently shaped landmass from its own noise. Land = infield + the strip beside the road + hinterland + every mountain's foot. Where the hinterland covers the road the land runs on 80 to 600 m past it; where the road sticks out of it, the coast is the existing near coast. The coast trait sets how much of the road it covers. Build it as its own landform with bounded slopes, never as a multiplier on the margin (that mistake made 200% slopes before). `shoreShape`, `coastProfile` and `carveCoast` are reused unchanged.
+5. **Mountains and hills.** `placePeak` becomes `placeMountains`: 0 to 4, main one 200 to 250 m, others 80 to 200 m, sides up to about 110% (the main one is about 700 m across). In a large infield or on the hinterland outside the loop, which grows to hold them; nothing within 60 m of the road. On mountain-relief seeds the main one sits at the top of the ramp. Foothills (5 to 25 m, about 150 m across) on land away from the road. Snow above about 180 m.
+6. **3D follow-ups.** Far ground at quarter detail (pulled forward from step 15); fog, camera far distance and orbit limits scaled up.
+
+**About the folds:** the layouts have not changed since Milestone 1. They look stuck to the edge because the sea follows the road everywhere and fills every fold; the hinterland should fix that. R1 measures fold counts to confirm, in case the elevation score did reduce them.
+
+### Rework steps
+
+Tests first, watched failing. Run the unit and browser suites so that a failure stops the commit (do not pipe test output through a filter in the same command chain as `git commit`).
+
+| # | Step | Ends with | Status |
+| --- | --- | --- | --- |
+| R0 | Record the plan and decisions here | Pushed | Done |
+| R1 | Baselines: fold and hairpin counts for seeds 1 to 200 now and with the Milestone 1 scorer; world build time at the new tile size in Node, Chromium and Firefox | Numbers here; a decision on style weights, and on the grid if Firefox is over 3 s | To do |
+| R2 | Seed character: `gen/character.ts`, config weights, on `TrackResult`, shown in the lab | Tests: same seed same character; each value at about its weight over 2000 seeds | To do |
+| R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | To do |
+| R4 | Variable road width through generation, meshes, fit, report and lab | Tests: 12 to 22 m, eased, not widened beside close sections, ground follows the wider road, kerbs and barriers at the true edge | To do |
+| R5 | Bigger tile, 3 m cells, 4 m verge | Existing fit tests pass at the new grid; build time measured | To do |
+| R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | To do |
+| R7 | Mountains (0 to 4, main 200 to 250 m), foothills, snow | Tests: heights in range, 60 m clear of the road, slopes within limit, mountain seeds have the main one above the ramp | To do |
+| R8 | 3D: far-ground detail levels, fog and camera limits | Triangle count recorded; fly, orbit and close-up screenshots on 20 seeds | To do |
+| | **Check-in 3:** Tane looks at contact sheets and flies a few seeds | Feedback | |
+
+After check-in 3, resume steps 12 to 17 in the table above.
+
+### Rework risks
+
+- **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
+- **Mountain tracks.** A 15% road on an 18% flank must stay within the cut and fill limits beside folded sections. If R3's tests fail, mountain seeds avoid the folded style.
+- **Proportion.** A 250 m mountain beside a 12 m road is very large. Tane judges it at check-in 3; the heights are config values.
+- **Width touches many modules.** The existing real-seed fit tests are the safety net.
+
+The full plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-9c3b-read-claude-md-playful-sutton.md`.
+
 ## Milestone 2 design
+
+*Steps 0 to 11 as built. Where the rework above differs (coast distance, the single peak, fixed road width, tile and grid size, 8% gradient everywhere), the rework wins.*
 
 One rule: **generation says what the world is, as plain numbers; rendering only draws those numbers.**
 
@@ -76,6 +135,9 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
 - Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
 - Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
+- Never let a failing test run be followed by a commit in the same command. On 2026-11-12 a Firefox failure was committed past because the test output was piped through a filter, which hid the exit code.
+- Throwaway measurements go in a temporary `src/explore.tmp.test.ts` (deleted before committing). One-off screenshots: copy a script into `test-results/` (ignored by git) so it can import Playwright, with `npm run dev` running.
+- On this machine, bash heredocs fail when their text has an odd number of apostrophes. Write multi-line scripts and test files with the Write tool, then run them.
 - Windows and PowerShell: use `python -I` scripts in the scratchpad for multi-line file edits; avoid bash heredocs containing backticks or `${}`.
 - **No Claude attribution** on commits, pull requests or issues.
 - Milestone 1 pace: short report after each step; one mid-point check (done) and a sign-off at the end.
@@ -151,6 +213,12 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-12 | The flying camera follows the centre line averaged over 16 m, 4 m above the road, looking 30 m ahead, at 28 m/s | Averaging makes it sweep through corners; 4 m clears the barriers and passes under the gate's 6 m beam |
 | 2026-11-12 | The 3D page opens flying; `cam=orbit` opens circling, `still=1` opens paused, `lap=0.5` opens half way round | Flying is what the milestone asks for; the options make screenshots repeatable |
 | 2026-11-12 | The page draws a frame only when something changed | A paused or circling camera then uses no power |
+| 2026-11-12 | **Check-in 2: rework the islands** (see "Milestone 2 rework"). Mountains 200 to 250 m, 0 to 4 per island; island up to about 2.5 km across; land extends past the track except on coastal stretches | Tane: islands too flat and basic, mountains too small, track stuck to the coast |
+| 2026-11-12 | Up to 15% gradient on mountain-relief tracks; 8% on all others (departs from the brief's 8%) | Tane's choice, so some laps really climb. Milestone 3 must tune the car on both |
+| 2026-11-12 | Road width 12 m, widening to 22 m in places on some tracks (departs from the brief's 12 to 14 m) | Tane's choice |
+| 2026-11-12 | Each seed gets a character of independent traits (relief, coast, mountains, width, plus the existing layout style) | Tane: not every criterion should apply to every track |
+| 2026-11-12 | Tile 2700 m with 3 m cells and a 4 m verge (was 1400 m, 2 m, 2.5 m) | Room for mountains about 700 m across; keeps the height count near 800,000; a verge wider than a cell removes the verge dip |
+| 2026-11-12 | The rework starts in a fresh session | This session was at about 670,000 tokens; STATE.md carries the handover |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
 ## Notes for later milestones
@@ -205,3 +273,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12 (Milestone 2):** Step 9 done. `gen/road/kerbs.ts` (`findKerbs`, `buildKerbs`); `WorldResult.road.kerbs` holds the spans and the mesh. Close views now also take `&look=hairpin` (tightest corner), `&look=start` and `&at=x,z` (any map position). Checked by eye on seeds 42 and 100, including the tightest U-turns.
 - **2026-11-12 (Milestone 2):** Step 10 done. `gen/road/barriers.ts` and `startGate.ts`; `WorldResult.road` now also has `barriers` and `gate`. Every part of the road is one of eleven materials listed in `gen/road/ribbon.ts`, coloured in `render/palette.ts`. A new real-seed test checks every barrier is footed in the ground. 585 unit tests pass.
 - **2026-11-12 (Milestone 2):** Step 11 done. `camera/flyAlong.ts` plans the flight (it climbs early over anything that would come within 2.5 m). `app/worldPage.ts` now opens flying, with Play/Pause (Space), Circle the island / Fly the lap (C), New island (N) and speed (up and down arrows); it starts paused for anyone whose system asks for reduced motion. The screenshot test takes four flying views per seed (`$env:LAPS` chooses where). Stopped for check-in 2.
+- **2026-11-12 (Milestone 2):** Check-in 2. Tane flew the islands in 3D and asked for a rework: hillier ground, mountains of 200 to 250 m and more of them, tracks that sometimes climb (up to 15%), land that extends past the track with the road only sometimes by the sea, road width varying from 12 to 22 m, and traits that combine differently per seed. Planned in plan mode and approved (rework steps R1 to R8, then check-in 3, then steps 12 to 17). Step R0 done: the plan is recorded in "Milestone 2 rework" above. No code changed since step 11. Session ended here; the rework starts in a fresh session at R1.
