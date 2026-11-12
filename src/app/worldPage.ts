@@ -1,5 +1,6 @@
 import './world.css';
-import { dragOrbit, zoomOrbit, type Orbit } from '../camera/orbit';
+import { createFlyPath, type FlyPath } from '../camera/flyAlong';
+import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
 import { lookAtPoint, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
@@ -8,11 +9,16 @@ import { sampleField } from '../gen/world/heightfield';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
 
+/** Which camera is in use: flying the lap, or circling a point. */
+export type CameraMode = 'fly' | 'orbit';
+
 /** What the page offers to automated checks. */
 export interface ViewHandle {
   stats(): ViewStats;
   pixelCounts(): PixelCounts;
   orbit(): Orbit;
+  /** The flying camera: how far round the lap it is, and whether it is moving. */
+  camera(): { mode: CameraMode; distance: number; lapLength: number; playing: boolean; speed: number };
   /** The fit report of the world being shown, once there is one. */
   report(): FitReport | null;
 }
@@ -23,7 +29,12 @@ const TEMPLATE = `
     <div class="world-card world-title">
       <h1 data-ref="name" data-testid="world-name">Seed Circuit</h1>
       <p data-ref="code" data-testid="world-code"></p>
-      <p class="world-hint">Drag to turn, scroll to zoom.</p>
+      <p class="world-hint" data-ref="hint"></p>
+    </div>
+    <div class="world-card world-controls">
+      <button type="button" data-ref="play" data-testid="world-play"></button>
+      <button type="button" data-ref="toggle" data-testid="world-camera-toggle"></button>
+      <button type="button" class="primary" data-ref="new" data-testid="world-new">New island</button>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
@@ -31,9 +42,18 @@ const TEMPLATE = `
   </div>
 `;
 
+const HINTS: Record<CameraMode, string> = {
+  fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one.',
+  orbit: 'Drag to turn, scroll to zoom. C flies the lap, N makes a new island.',
+};
+
 /**
- * The 3D view of a seed's world: builds it in the worker, then shows it with a
- * camera that circles the island.
+ * The 3D view of a seed's world: builds it in the worker, then flies a camera
+ * round the lap. The camera can be switched to one that circles the island.
+ *
+ * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
+ * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
+ * close, water, hairpin, start) or `at=x,z` for a close view of one place.
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -44,15 +64,40 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   };
   const canvas = ref<HTMLCanvasElement>('canvas');
   const loading = ref('loading');
+  const params = new URL(window.location.href).searchParams;
+  const look = params.get('look') ?? '';
+  const at = params.get('at') ?? '';
+  const startLap = Number(params.get('lap') ?? '0');
+  const fly = config.camera.fly;
 
   const view = createWorldView(canvas, config.render);
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
-  let dirty = true;
+  let mode: CameraMode = params.get('cam') === 'orbit' ? 'orbit' : 'fly';
+  let flight: FlyPath | null = null;
+  let distance = 0;
+  let speed = fly.speed;
+  // Anyone who has asked their system for less motion starts paused, as does a still picture.
+  let playing = params.get('still') !== '1' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let report: FitReport | null = null;
-  // `&look=cut` (or fill, bank, close, water, hairpin, start) opens on a close view of that spot;
-  // `&at=122,-250` opens on a close view of that map position.
-  const look = new URL(window.location.href).searchParams.get('look') ?? '';
-  const at = new URL(window.location.href).searchParams.get('at') ?? '';
+  let dirty = true;
+
+  const renderControls = (): void => {
+    ref('play').textContent = playing ? 'Pause' : 'Play';
+    ref('play').hidden = mode !== 'fly';
+    ref('toggle').textContent = mode === 'fly' ? 'Circle the island' : 'Fly the lap';
+    ref('hint').textContent = HINTS[mode];
+    document.body.dataset.worldCamera = mode;
+  };
+
+  const setMode = (next: CameraMode): void => {
+    mode = next;
+    dirty = true;
+    renderControls();
+  };
+  const setPlaying = (next: boolean): void => {
+    playing = next;
+    renderControls();
+  };
 
   const resize = (): void => {
     view.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), window.devicePixelRatio || 1);
@@ -61,10 +106,27 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   new ResizeObserver(resize).observe(canvas);
   resize();
 
-  // Only draw when something has changed: the picture is still unless the camera moves.
-  const frame = (): void => {
+  const aimCamera = (): void => {
+    if (mode === 'fly' && flight) {
+      const pose = flight.poseAt(distance);
+      view.setCamera(pose.eye, pose.look);
+    } else {
+      view.setCamera(orbitEye(orbit), { x: orbit.targetX, y: orbit.targetY, z: orbit.targetZ });
+    }
+  };
+
+  // Draw only when something has changed: a paused or circling camera costs nothing while it is left alone.
+  let last = performance.now();
+  const frame = (now: number): void => {
+    // A long gap (a hidden tab, say) must not fling the camera down the road.
+    const seconds = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (mode === 'fly' && playing && flight) {
+      distance = (distance + speed * seconds) % flight.length;
+      dirty = true;
+    }
     if (dirty) {
-      view.setOrbit(orbit);
+      aimCamera();
       view.render();
       dirty = false;
     }
@@ -78,7 +140,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
   });
   canvas.addEventListener('pointermove', (event) => {
-    if (!dragging || dragging.id !== event.pointerId) return;
+    if (!dragging || dragging.id !== event.pointerId || mode !== 'orbit') return;
     orbit = dragOrbit(orbit, event.clientX - dragging.x, event.clientY - dragging.y);
     dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
     dirty = true;
@@ -91,6 +153,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   canvas.addEventListener(
     'wheel',
     (event) => {
+      if (mode !== 'orbit') return;
       event.preventDefault();
       orbit = zoomOrbit(orbit, event.deltaY, config.camera.orbit.nearest, config.camera.orbit.furthest);
       dirty = true;
@@ -98,7 +161,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     { passive: false },
   );
 
-  /** Points the camera at the middle of the track, far enough back to see the whole island. */
+  /** Points the circling camera at the middle of the track, far enough back to see the whole island. */
   const frameIsland = (world: WorldResult): void => {
     const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, height = 0;
@@ -112,34 +175,50 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const span = Math.max(maxX - minX, maxZ - minZ);
     orbit = {
       ...orbit,
+      ...config.camera.orbit.start,
       targetX: (minX + maxX) / 2,
       targetY: height,
       targetZ: (minZ + maxZ) / 2,
       distance: Math.min(config.camera.orbit.furthest, span * config.camera.orbit.fit),
     };
-    dirty = true;
   };
 
-  const show = async (seed: number): Promise<void> => {
+  /** The seed last asked for. Its world may still be on its way from the worker. */
+  let wantedSeed = -1;
+  const show = async (seed: number, opening: boolean): Promise<void> => {
+    wantedSeed = seed;
     loading.hidden = false;
+    ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
     const url = new URL(window.location.href);
     url.searchParams.set('seed', String(seed));
     window.history.replaceState(null, '', url);
     try {
       const { result, ms } = await genClient().world(seed, config);
+      // A newer island was asked for while this one was being raised: drop this one.
+      if (wantedSeed !== seed) return;
       view.load(result);
       report = result.report;
-      frameIsland(result);
+
       const winner = result.track.candidates[result.track.winnerIndex]!;
       const groundAt = (x: number, z: number): number => sampleField(result.ground, x, z, 0);
-      const point = lookAtPoint(at, groundAt);
-      const spot = point ?? lookAtSpot(look, result.report, groundAt) ?? lookAtTrack(look, winner.line, winner.sections, groundAt);
-      if (spot) orbit = spot;
+      flight = createFlyPath(winner.line, winner.profile.height, groundAt, fly);
+      frameIsland(result);
+
+      // Only the page's first island honours the address's choice of place; a new island starts from its start line.
+      const point = opening ? lookAtPoint(at, groundAt) : null;
+      const spot = point ?? (opening ? (lookAtSpot(look, result.report, groundAt) ?? lookAtTrack(look, winner.line, winner.sections, groundAt)) : null);
+      if (spot) {
+        orbit = spot;
+        mode = 'orbit';
+      }
+      distance = opening && Number.isFinite(startLap) ? (((startLap % 1) + 1) % 1) * flight.length : 0;
       document.body.dataset.worldLook = point ? 'point' : spot ? look : 'island';
-      view.setOrbit(orbit);
+
+      aimCamera();
       view.render();
       dirty = false;
+      renderControls();
       ref('name').textContent = result.track.name;
       ref('code').textContent = `Seed ${result.seed} · ${formatSeedCode(result.seed, result.generatorVersion)}`;
       document.title = `${result.track.name} · Seed Circuit`;
@@ -148,14 +227,39 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       loading.hidden = true;
       document.body.dataset.worldReady = 'true';
     } catch (error) {
-      ref('loadingText').textContent = error instanceof Error ? error.message : String(error);
+      if (wantedSeed === seed) ref('loadingText').textContent = error instanceof Error ? error.message : String(error);
     }
   };
 
-  const fromUrl = parseSeedInput(new URL(window.location.href).searchParams.get('seed') ?? '');
   // Picking a random seed is app code, not generation, so Math.random is fine here.
-  const seed = fromUrl ? fromUrl.seed : 1 + Math.floor(Math.random() * 99999);
-  void show(Math.min(MAX_SEED, Math.max(0, seed)));
+  const randomSeed = (): number => 1 + Math.floor(Math.random() * 99999);
 
-  return { stats: () => view.stats(), pixelCounts: () => view.pixelCounts(), orbit: () => orbit, report: () => report };
+  ref('play').addEventListener('click', () => setPlaying(!playing));
+  ref('toggle').addEventListener('click', () => setMode(mode === 'fly' ? 'orbit' : 'fly'));
+  ref('new').addEventListener('click', () => void show(randomSeed(), false));
+  window.addEventListener('keydown', (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === ' ' && mode === 'fly') setPlaying(!playing);
+    else if (key === 'c') setMode(mode === 'fly' ? 'orbit' : 'fly');
+    else if (key === 'n') void show(randomSeed(), false);
+    else if (key === 'arrowup') speed = Math.min(fly.speedRange[1], speed * 1.25);
+    else if (key === 'arrowdown') speed = Math.max(fly.speedRange[0], speed / 1.25);
+    else return;
+    event.preventDefault();
+    // A button that still has focus would otherwise act on the same key press.
+    if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
+  });
+
+  renderControls();
+  const fromUrl = parseSeedInput(params.get('seed') ?? '');
+  void show(Math.min(MAX_SEED, Math.max(0, fromUrl ? fromUrl.seed : randomSeed())), true);
+
+  return {
+    stats: () => view.stats(),
+    pixelCounts: () => view.pixelCounts(),
+    orbit: () => orbit,
+    camera: () => ({ mode, distance, lapLength: flight?.length ?? 0, playing, speed }),
+    report: () => report,
+  };
 }

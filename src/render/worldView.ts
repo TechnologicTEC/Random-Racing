@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { orbitEye, type Orbit } from '../camera/orbit';
+import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { WorldResult } from '../gen/types';
 import { SEA, SKY, TERRAIN, toLinear, type Rgb } from './palette';
@@ -32,7 +32,8 @@ export interface PixelCounts {
 export interface WorldView {
   /** Replaces whatever is shown with this world. */
   load(world: WorldResult): void;
-  setOrbit(orbit: Orbit): void;
+  /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
+  setCamera(eye: Point3, look: Point3): void;
   resize(width: number, height: number, pixelRatio: number): void;
   render(): void;
   stats(): ViewStats;
@@ -103,10 +104,9 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       road.add(createRoadMesh(world.road.gate, roadMaterial));
     },
 
-    setOrbit(orbit) {
-      const eye = orbitEye(orbit);
+    setCamera(eye, look) {
       camera.position.set(eye.x, eye.y, eye.z);
-      camera.lookAt(orbit.targetX, orbit.targetY, orbit.targetZ);
+      camera.lookAt(look.x, look.y, look.z);
     },
 
     resize(width, height, pixelRatio) {

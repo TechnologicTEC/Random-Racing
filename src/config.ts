@@ -457,6 +457,23 @@ export interface CameraConfig {
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
+  /** The camera that flies the lap. */
+  fly: FlyConfig;
+}
+
+export interface FlyConfig {
+  /** How fast it flies, in metres per second, and the slowest and fastest it can be set to. */
+  speed: number;
+  speedRange: Range;
+  /** Height above the road, in metres. Must be well under the start gate's beam. */
+  height: number;
+  /** It looks at a point this far ahead along the road, in metres, this far above the road. */
+  lookAhead: number;
+  lookHeight: number;
+  /** Its path is the centre line averaged over this length, in metres, so it sweeps through corners instead of jerking. */
+  smoothing: number;
+  /** It never comes closer to the ground than this, in metres. */
+  clearance: number;
 }
 
 export interface GameConfig {
@@ -678,5 +695,6 @@ export const config: GameConfig = {
       fit: 1.25,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
+    fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },
   },
 };

@@ -75,3 +75,38 @@ body,
 .world-loading[hidden] {
   display: none;
 }
+
+.world-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.world-controls button {
+  font: inherit;
+  font-weight: 600;
+  color: #1a7d77;
+  background: transparent;
+  border: 1.5px solid #1a7d77;
+  border-radius: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.world-controls button.primary {
+  background: #1a7d77;
+  color: #ffffff;
+}
+
+.world-controls button:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}
+
+.world-controls button[hidden] {
+  display: none;
+}
