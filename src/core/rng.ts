@@ -48,6 +48,22 @@ function rngFromKey(key: string): Rng {
   };
 }
 
+/** Picks an index with probability proportional to its weight, or -1 if every weight is zero. */
+export function pickWeighted(rng: Rng, weights: readonly number[]): number {
+  let total = 0;
+  for (const weight of weights) total += weight;
+  if (total <= 0) return -1;
+  let roll = rng.next() * total;
+  let last = -1;
+  for (let i = 0; i < weights.length; i++) {
+    if (weights[i]! <= 0) continue;
+    last = i;
+    roll -= weights[i]!;
+    if (roll < 0) return i;
+  }
+  return last;
+}
+
 /** xmur3: turns a string into a sequence of well-mixed 32-bit words. */
 function stringHasher(text: string): () => number {
   let h = 1779033703 ^ text.length;

@@ -151,6 +151,27 @@ export interface ScoreBreakdown {
 /** The overall character of a track. Each seed has one. */
 export type LayoutStyle = 'folded' | 'stretched' | 'round';
 
+/** How much the ground rises and falls where the track runs. Mountain seeds may climb more steeply than the others. */
+export type ReliefKind = 'flat' | 'rolling' | 'hilly' | 'mountain';
+
+/** How much of the track runs beside the sea: none of it, a stretch or two, or most of its outside. */
+export type CoastKind = 'inland' | 'touches' | 'coastal';
+
+/** Whether the road keeps one width all the way round or widens in places. */
+export type WidthKind = 'constant' | 'varied';
+
+/**
+ * What kind of island a seed makes. The traits are drawn independently of
+ * each other and of the layout style, so they combine differently from seed to seed.
+ */
+export interface Character {
+  relief: ReliefKind;
+  coast: CoastKind;
+  /** How many mountains the island has, 0 to 4. */
+  mountains: number;
+  width: WidthKind;
+}
+
 /** One corner of a layout skeleton, with the radius it is rounded to. */
 export interface Corner extends Vec2 {
   /** Radius in metres. 0 means the track passes straight through this point. */
@@ -274,8 +295,10 @@ export interface TrackResult {
   seed: number;
   generatorVersion: number;
   name: string;
-  /** The character chosen for this seed. */
+  /** The layout style chosen for this seed. */
   style: LayoutStyle;
+  /** The kind of island chosen for this seed. */
+  character: Character;
   /** Every candidate that was tried, in order. */
   candidates: Candidate[];
   /** The chosen candidate. Its lap starts at the start/finish line. */

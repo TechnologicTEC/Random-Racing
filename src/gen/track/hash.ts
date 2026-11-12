@@ -10,6 +10,8 @@ export function hashTrack(result: TrackResult): string {
   const hasher = createHasher();
   hasher.numbers([result.seed, result.generatorVersion, result.winnerIndex, result.fallback ? 1 : 0]);
   hasher.text(result.name).text(result.style);
+  const { character } = result;
+  hasher.text(character.relief).text(character.coast).text(character.width).numbers([character.mountains]);
   for (const candidate of result.candidates) {
     hasher.numbers(candidate.line.x).numbers(candidate.line.z).numbers(candidate.line.curvature);
     hasher.numbers(candidate.profile.height);

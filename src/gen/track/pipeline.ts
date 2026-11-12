@@ -1,6 +1,7 @@
 import type { GenConfig, RoadConfig, TrackConfig } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createRng } from '../../core/rng';
+import { pickCharacter } from '../character';
 import { measureProfile, solveProfile } from '../road/profile';
 import type { Candidate, CenterLine, Corner, StraightSection, TrackResult } from '../types';
 import { createRelief, type Relief } from '../world/relief';
@@ -23,6 +24,8 @@ export function generateTrack(seed: number, config: GenConfig): TrackResult {
   const cfg = config.track;
   const normalisedSeed = seed >>> 0;
   const rng = createRng(normalisedSeed, 'track');
+  // What kind of island this is. It comes from the seed alone, like the style.
+  const character = pickCharacter(normalisedSeed, config.world.character);
   // The hills come from the seed alone, so every candidate is laid over the same ground.
   const terrain: Terrain = { relief: createRelief(normalisedSeed, config.world.relief), road: config.road };
   // One style per seed, so different seeds give different kinds of track.
@@ -58,6 +61,7 @@ export function generateTrack(seed: number, config: GenConfig): TrackResult {
     generatorVersion: GENERATOR_VERSION,
     name: generateTrackName(createRng(normalisedSeed, 'name')),
     style,
+    character,
     candidates,
     winnerIndex,
     fallback,

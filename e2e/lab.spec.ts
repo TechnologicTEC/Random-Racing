@@ -89,6 +89,15 @@ test('shows a valid winner with a score and its breakdown', async ({ page }) => 
   await expect(page.getByTestId('score-bars')).toContainText('of climbing');
 });
 
+test('shows the character of the seed: relief, coast, mountains and road width', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const facts = page.getByTestId('facts');
+  await expect(facts).toContainText('Relief');
+  await expect(facts).toContainText('Coast');
+  await expect(facts).toContainText('Mountains');
+  await expect(facts).toContainText('Road width');
+});
+
 test('shows the road height along the lap as a chart with its facts', async ({ page }) => {
   await openLab(page, '?seed=48213');
   await expect(page.getByTestId('elevation-facts')).toContainText('Height range');
@@ -179,6 +188,9 @@ test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) 
   const cards = page.getByTestId('sheet-card');
   await expect(cards).toHaveCount(20);
   await expect(cards.nth(2)).toContainText(/^3 /);
+  // Each card says what kind of island it is.
+  await expect(cards.nth(2)).toContainText(/flat|rolling|hilly|mountain/);
+  await expect(cards.nth(2)).toContainText(/inland|touches|coastal/);
   await expect(page.getByTestId('sheet-summary')).toContainText('20 tracks');
   await expect(page.getByTestId('sheet-summary')).toContainText('with a hairpin');
   await cards.nth(2).click();

@@ -4,7 +4,7 @@ import { MAX_SEED } from '../../core/seedCode';
 import type { HeightField, TrackResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawThumbnail } from './draw';
-import { summariseTracks } from './format';
+import { shortCharacter, summariseTracks } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView } from './view';
 
@@ -74,7 +74,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';
     const score = winner.score ? Math.round(winner.score.total * 100) : 0;
-    caption.textContent = `${seed} · ${result.name} · ${result.style} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
+    caption.textContent = `${seed} · ${result.name} · ${result.style} · ${shortCharacter(result.character)} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
     card.append(canvas, caption);
     grid.append(card);
   };

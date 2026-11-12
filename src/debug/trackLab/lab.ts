@@ -5,7 +5,7 @@ import { hashTrack, measureProfile, type Candidate, type FitReport, type TrackRe
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
-import { describeFit, describeProfile, describeScorePart, describeViolation } from './format';
+import { describeCharacter, describeFit, describeProfile, describeScorePart, describeViolation } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -285,6 +285,7 @@ export function mountTrackLab(root: HTMLElement): void {
     factsEl.innerHTML = '';
     addFact('Share code', formatSeedCode(result.seed, result.generatorVersion));
     addFact('Style', result.style[0]!.toUpperCase() + result.style.slice(1));
+    for (const [label, value] of describeCharacter(result.character)) addFact(label, value);
     addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);

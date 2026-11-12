@@ -1,4 +1,4 @@
-import type { FitReport, ProfileStats, ScorePart, TrackResult, Violation } from '../../gen/types';
+import type { Character, FitReport, ProfileStats, ScorePart, TrackResult, Violation } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -59,6 +59,32 @@ export function describeScorePart(part: ScorePart): { label: string; detail: str
   }
 }
 
+const COAST_WORDS: Record<Character['coast'], string> = {
+  inland: 'Inland: never beside the sea',
+  touches: 'Touches the sea in places',
+  coastal: 'Coastal: mostly beside the sea',
+};
+
+const capital = (word: string): string => word[0]!.toUpperCase() + word.slice(1);
+
+/** The kind of island a seed makes, as label and value pairs for the lab's track panel. */
+export function describeCharacter(character: Character): Array<[label: string, value: string]> {
+  return [
+    ['Relief', capital(character.relief)],
+    ['Coast', COAST_WORDS[character.coast]],
+    ['Mountains', character.mountains === 0 ? 'None' : String(character.mountains)],
+    ['Road width', capital(character.width)],
+  ];
+}
+
+/** The kind of island in a few words, for a contact sheet caption. */
+export function shortCharacter(character: Character): string {
+  const words: string[] = [character.relief, character.coast];
+  if (character.mountains > 0) words.push(plural(character.mountains, 'mountain'));
+  if (character.width === 'varied') words.push('varied width');
+  return words.join(' · ');
+}
+
 /** The road height facts as label and value pairs, for the lab's elevation panel. */
 export function describeProfile(stats: ProfileStats): Array<[label: string, value: string]> {
   const percent = (fraction: number): string => `${Math.round(fraction * 100)}%`;
@@ -113,8 +139,13 @@ export function summariseTracks(results: readonly TrackResult[]): string {
   ).length;
   const fallbacks = results.filter((result) => result.fallback).length;
 
+  const reliefCount = (relief: Character['relief']): number => results.filter((result) => result.character.relief === relief).length;
+  const coastCount = (coast: Character['coast']): number => results.filter((result) => result.character.coast === coast).length;
+
   const parts = [
     `${styleCount('folded')} folded, ${styleCount('stretched')} stretched, ${styleCount('round')} round`,
+    `${reliefCount('flat')} flat, ${reliefCount('rolling')} rolling, ${reliefCount('hilly')} hilly, ${reliefCount('mountain')} mountain`,
+    `${coastCount('inland')} inland, ${coastCount('touches')} touching the sea, ${coastCount('coastal')} coastal`,
     `laps ${Math.min(...laps)} to ${Math.max(...laps)} m`,
     `scores ${Math.min(...scores)} to ${Math.max(...scores)}`,
     `${hairpins} of ${results.length} with a hairpin`,

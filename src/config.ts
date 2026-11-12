@@ -6,7 +6,7 @@
  * an argument, which keeps generation pure and easy to test.
  */
 
-import type { LayoutStyle } from './gen/types';
+import type { CoastKind, LayoutStyle, ReliefKind, WidthKind } from './gen/types';
 
 export { GENERATOR_VERSION } from './gen/version';
 
@@ -416,7 +416,20 @@ export interface CoverConfig {
   variationScale: number;
 }
 
+/**
+ * How often seeds get each kind of island. The traits are drawn separately,
+ * so any relief can go with any coast. Weights are relative to each other.
+ */
+export interface CharacterConfig {
+  relief: Record<ReliefKind, number>;
+  coast: Record<CoastKind, number>;
+  width: Record<WidthKind, number>;
+  /** How many mountains an island gets, fewest and most, by its relief. */
+  mountains: Record<ReliefKind, Range>;
+}
+
 export interface WorldConfig {
+  character: CharacterConfig;
   relief: ReliefConfig;
   tile: TileConfig;
   coast: CoastConfig;
@@ -625,6 +638,12 @@ export const config: GameConfig = {
     maxCut: 8,
   },
   world: {
+    character: {
+      relief: { flat: 0.2, rolling: 0.35, hilly: 0.25, mountain: 0.2 },
+      coast: { inland: 0.25, touches: 0.45, coastal: 0.3 },
+      width: { constant: 0.35, varied: 0.65 },
+      mountains: { flat: [0, 1], rolling: [0, 4], hilly: [0, 4], mountain: [1, 4] },
+    },
     relief: {
       lowland: 3,
       hillHeight: 33,

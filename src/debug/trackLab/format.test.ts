@@ -2,7 +2,40 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeFit, describeProfile, describeScorePart, describeViolation, summariseTracks } from './format';
+import { describeCharacter, describeFit, describeProfile, describeScorePart, describeViolation, shortCharacter, summariseTracks } from './format';
+
+describe('describeCharacter', () => {
+  it('lists the traits of a seed in plain words', () => {
+    expect(describeCharacter({ relief: 'mountain', coast: 'touches', mountains: 3, width: 'varied' })).toEqual([
+      ['Relief', 'Mountain'],
+      ['Coast', 'Touches the sea in places'],
+      ['Mountains', '3'],
+      ['Road width', 'Varied'],
+    ]);
+    expect(describeCharacter({ relief: 'flat', coast: 'inland', mountains: 0, width: 'constant' })).toEqual([
+      ['Relief', 'Flat'],
+      ['Coast', 'Inland: never beside the sea'],
+      ['Mountains', 'None'],
+      ['Road width', 'Constant'],
+    ]);
+    expect(describeCharacter({ relief: 'hilly', coast: 'coastal', mountains: 1, width: 'constant' })[1]).toEqual([
+      'Coast',
+      'Coastal: mostly beside the sea',
+    ]);
+  });
+});
+
+describe('shortCharacter', () => {
+  it('fits the traits into a few words for a contact sheet caption', () => {
+    expect(shortCharacter({ relief: 'mountain', coast: 'touches', mountains: 3, width: 'varied' })).toBe(
+      'mountain · touches · 3 mountains · varied width',
+    );
+    expect(shortCharacter({ relief: 'flat', coast: 'inland', mountains: 1, width: 'constant' })).toBe(
+      'flat · inland · 1 mountain',
+    );
+    expect(shortCharacter({ relief: 'rolling', coast: 'coastal', mountains: 0, width: 'constant' })).toBe('rolling · coastal');
+  });
+});
 
 describe('describeViolation', () => {
   it('explains each kind of rejection in plain words with the numbers', () => {
@@ -132,6 +165,13 @@ describe('summariseTracks', () => {
     expect(summary).toContain(`laps ${Math.min(...laps)} to ${Math.max(...laps)} m`);
     expect(summary).toMatch(/scores \d+ to \d+/);
     expect(summary).toMatch(/\d of 6 with a hairpin/);
+  });
+
+  it('counts the reliefs and the coasts', () => {
+    const reliefs = /(\d+) flat, (\d+) rolling, (\d+) hilly, (\d+) mountain/.exec(summary)!;
+    expect(Number(reliefs[1]) + Number(reliefs[2]) + Number(reliefs[3]) + Number(reliefs[4])).toBe(6);
+    const coasts = /(\d+) inland, (\d+) touching the sea, (\d+) coastal/.exec(summary)!;
+    expect(Number(coasts[1]) + Number(coasts[2]) + Number(coasts[3])).toBe(6);
   });
 
   it('mentions fallbacks only when there are some', () => {
