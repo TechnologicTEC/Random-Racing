@@ -6,12 +6,14 @@ import { measureProfile, solveProfile } from './profile';
 
 const road = config.road;
 const WIDTH = config.track.roadWidth;
+/** The usual gradient limit. Mountain ground allows more. */
+const GRADIENT = road.maxGradient.rolling;
 const TINY = 1e-9;
 
 describe('solveProfile on hand-made ground', () => {
   it('keeps the road at ground level on flat ground', () => {
     const line = circleLine(150);
-    const profile = solveProfile(line, () => 12, road, WIDTH);
+    const profile = solveProfile(line, () => 12, road, WIDTH, GRADIENT);
     expect(profile.height).toHaveLength(line.count);
     for (const height of profile.height) expect(height).toBeCloseTo(12, 9);
     for (const ground of profile.ground) expect(ground).toBe(12);
@@ -19,7 +21,7 @@ describe('solveProfile on hand-made ground', () => {
 
   it('follows gentle ground closely, with almost no cut or fill', () => {
     const line = circleLine(150);
-    const profile = solveProfile(line, (x) => 10 + x * 0.02, road, WIDTH);
+    const profile = solveProfile(line, (x) => 10 + x * 0.02, road, WIDTH, GRADIENT);
     const stats = measureProfile(line, profile, road, WIDTH);
     expect(stats.maxCut).toBeLessThan(0.3);
     expect(stats.maxFill).toBeLessThan(0.3);
@@ -28,23 +30,34 @@ describe('solveProfile on hand-made ground', () => {
 
   it('lifts the road clear of the sea where the ground is too low', () => {
     const line = circleLine(150);
-    const profile = solveProfile(line, () => 0.5, road, WIDTH);
+    const profile = solveProfile(line, () => 0.5, road, WIDTH, GRADIENT);
     for (const height of profile.height) expect(height).toBeGreaterThanOrEqual(road.minHeight - TINY);
   });
 
   it('never climbs or drops more steeply than the gradient limit, even over a 30% hillside', () => {
     const line = circleLine(150);
-    const profile = solveProfile(line, (x) => 50 + x * 0.3, road, WIDTH);
+    const profile = solveProfile(line, (x) => 50 + x * 0.3, road, WIDTH, GRADIENT);
     const stats = measureProfile(line, profile, road, WIDTH);
-    expect(stats.maxGradient).toBeLessThanOrEqual(road.maxGradient + TINY);
+    expect(stats.maxGradient).toBeLessThanOrEqual(GRADIENT + TINY);
     // The limit is used, not avoided by flattening everything.
-    expect(stats.maxGradient).toBeGreaterThan(road.maxGradient * 0.9);
+    expect(stats.maxGradient).toBeGreaterThan(GRADIENT * 0.9);
+  });
+
+  it('climbs more steeply when it is given a higher limit, and still rounds its crests', () => {
+    const line = circleLine(150);
+    const steep = road.maxGradient.mountain;
+    const profile = solveProfile(line, (x) => 50 + x * 0.3, road, WIDTH, steep);
+    const stats = measureProfile(line, profile, road, WIDTH);
+    expect(steep).toBeGreaterThan(GRADIENT);
+    expect(stats.maxGradient).toBeLessThanOrEqual(steep + TINY);
+    expect(stats.maxGradient).toBeGreaterThan(steep * 0.9);
+    expect(stats.tightestCrestRadius).toBeGreaterThanOrEqual(road.crestMinRadius - 1e-6);
   });
 
   it('rounds a sharp ridge so no crest or dip is tighter than the minimum radius', () => {
     const line = circleLine(200);
     // A roof-shaped ridge along the Z axis: a sharp crest where the track crosses x = 0.
-    const profile = solveProfile(line, (x) => 30 - Math.abs(x) * 0.07, road, WIDTH);
+    const profile = solveProfile(line, (x) => 30 - Math.abs(x) * 0.07, road, WIDTH, GRADIENT);
     const stats = measureProfile(line, profile, road, WIDTH);
     expect(stats.tightestCrestRadius).toBeGreaterThanOrEqual(road.crestMinRadius - 1e-6);
   });
@@ -52,10 +65,10 @@ describe('solveProfile on hand-made ground', () => {
   it('treats the lap as a loop: the join between last and first sample obeys the limits too', () => {
     const line = circleLine(150);
     // A cliff exactly where the lap starts and ends.
-    const profile = solveProfile(line, (x, z) => (x > 0 && z < 0 ? 30 : 8), road, WIDTH);
+    const profile = solveProfile(line, (x, z) => (x > 0 && z < 0 ? 30 : 8), road, WIDTH, GRADIENT);
     const last = profile.height[line.count - 1]!;
     const first = profile.height[0]!;
-    expect(Math.abs(first - last) / line.spacing).toBeLessThanOrEqual(road.maxGradient + TINY);
+    expect(Math.abs(first - last) / line.spacing).toBeLessThanOrEqual(GRADIENT + TINY);
   });
 });
 
@@ -67,18 +80,18 @@ describe('solveProfile with two sections side by side', () => {
 
   it('would leave a bank far too steep if the sections were not tied together', () => {
     const untied: RoadConfig = { ...road, coupleDistance: 0 };
-    const stats = measureProfile(line, solveProfile(line, ground, untied, WIDTH), road, WIDTH);
+    const stats = measureProfile(line, solveProfile(line, ground, untied, WIDTH, GRADIENT), road, WIDTH);
     expect(stats.steepestBank).toBeGreaterThan(road.maxBankSlope + 0.15);
   });
 
   it('ties them together so the bank between them stays within the limit', () => {
-    const stats = measureProfile(line, solveProfile(line, ground, road, WIDTH), road, WIDTH);
+    const stats = measureProfile(line, solveProfile(line, ground, road, WIDTH, GRADIENT), road, WIDTH);
     expect(stats.steepestBank).toBeLessThanOrEqual(road.maxBankSlope + 0.02);
   });
 
   it('still obeys the gradient and crest limits after tying', () => {
-    const stats = measureProfile(line, solveProfile(line, ground, road, WIDTH), road, WIDTH);
-    expect(stats.maxGradient).toBeLessThanOrEqual(road.maxGradient + TINY);
+    const stats = measureProfile(line, solveProfile(line, ground, road, WIDTH, GRADIENT), road, WIDTH);
+    expect(stats.maxGradient).toBeLessThanOrEqual(GRADIENT + TINY);
     expect(stats.tightestCrestRadius).toBeGreaterThanOrEqual(road.crestMinRadius - 1e-6);
   });
 });
@@ -106,14 +119,8 @@ describe('measureProfile', () => {
 });
 
 describe('road heights on generated tracks', () => {
-  // Every candidate of 40 seeds: 1200 real layouts over real hills.
-  const results = Array.from({ length: 40 }, (_, i) => generateTrack(i + 1, config));
-  const all = results.flatMap((result) =>
-    result.candidates.map((candidate) => ({
-      seed: result.seed,
-      stats: measureProfile(candidate.line, candidate.profile, road, WIDTH),
-    })),
-  );
+  // The limits themselves are checked for each kind of relief in climb.<kind>.test.ts.
+  const results = Array.from({ length: 5 }, (_, i) => generateTrack(i + 1, config));
 
   it('gives every candidate a profile', () => {
     for (const result of results) {
@@ -121,29 +128,6 @@ describe('road heights on generated tracks', () => {
         expect(candidate.profile.height).toHaveLength(candidate.line.count);
         expect(candidate.profile.ground).toHaveLength(candidate.line.count);
       }
-    }
-  });
-
-  it('keeps every gradient within the limit', () => {
-    for (const { stats } of all) expect(stats.maxGradient).toBeLessThanOrEqual(road.maxGradient + TINY);
-  });
-
-  it('keeps every crest and dip gentler than the minimum radius', () => {
-    for (const { stats } of all) expect(stats.tightestCrestRadius).toBeGreaterThanOrEqual(road.crestMinRadius - 1e-6);
-  });
-
-  it('keeps the road above the sea', () => {
-    for (const { stats } of all) expect(stats.min).toBeGreaterThanOrEqual(road.minHeight - TINY);
-  });
-
-  it('keeps the bank between close sections within the limit', () => {
-    for (const { stats } of all) expect(stats.steepestBank).toBeLessThanOrEqual(road.maxBankSlope + 0.02);
-  });
-
-  it('never needs a bridge or a tunnel: cut and fill stay within the limits', () => {
-    for (const { stats } of all) {
-      expect(stats.maxFill).toBeLessThanOrEqual(road.maxFill);
-      expect(stats.maxCut).toBeLessThanOrEqual(road.maxCut);
     }
   });
 });

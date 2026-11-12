@@ -14,12 +14,14 @@ const TIE_TOLERANCE = 0.05;
  * sections so far apart in height that the bank between them would be too steep.
  *
  * @param ground height of the natural ground at a point, in metres above the sea
+ * @param maxGradient steepest climb or descent allowed, as a fraction (it depends on the seed's relief)
  */
 export function solveProfile(
   line: CenterLine,
   ground: (x: number, z: number) => number,
   cfg: RoadConfig,
   roadWidth: number,
+  maxGradient: number,
 ): RoadProfile {
   const n = line.count;
   const groundAt = new Float64Array(n);
@@ -27,11 +29,11 @@ export function solveProfile(
 
   // What the road aims for. It starts as the ground itself and is only changed to tie sections together.
   const target = groundAt.map((height) => Math.max(height, cfg.minHeight));
-  const maxStep = cfg.maxGradient * line.spacing;
+  const maxStep = maxGradient * line.spacing;
 
   // Averaging over this many samples spreads any change of slope over enough
   // road that the crest (or dip) it makes is no tighter than the minimum radius.
-  let window = Math.ceil((2 * cfg.maxGradient * cfg.crestMinRadius) / line.spacing);
+  let window = Math.ceil((2 * maxGradient * cfg.crestMinRadius) / line.spacing);
   if (window % 2 === 0) window++;
 
   const neighbours = findNeighbours(line, cfg, roadWidth);

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { config, type GenConfig } from '../../config';
+import { withCharacter } from '../../testing/characters';
 import { circleLine, stadiumLine } from '../../testing/trackFixtures';
 import { solveProfile } from '../road/profile';
 import { generateTrack } from '../track/pipeline';
-import type { CenterLine, RoadProfile } from '../types';
+import type { CenterLine, Character, RoadProfile } from '../types';
 import { sampleField, sampleGrid } from './heightfield';
 import { buildIsland, carveCoast, coastProfile, shoreShape, type Island } from './island';
 
@@ -11,14 +12,19 @@ const HALF_ROAD = config.track.roadWidth / 2;
 const coast = config.world.coast;
 const scenery = config.world.scenery;
 
+/** The kind of island these tests were written for. Other kinds are covered as the rework reaches them. */
+const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 1, width: 'constant' };
+/** Real seeds, all on rolling ground. */
+const rolling = withCharacter(config, { relief: 'rolling' });
+
 /** A coarser grid keeps hand-made cases quick; real seeds below use the full grid. */
 const coarse: GenConfig = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 4 } } };
 
 /** An island for a road on dead flat ground of the given height. */
 function flatIsland(groundHeight: number, line: CenterLine = circleLine(200)): { island: Island; line: CenterLine; profile: RoadProfile } {
   const relief = (): number => groundHeight;
-  const profile = solveProfile(line, relief, config.road, config.track.roadWidth);
-  return { island: buildIsland(7, line, profile, coarse, relief), line, profile };
+  const profile = solveProfile(line, relief, config.road, config.track.roadWidth, config.road.maxGradient.rolling);
+  return { island: buildIsland(7, line, profile, coarse, PLAIN, relief), line, profile };
 }
 
 /** Calls back for every cell with its height and its distance from the road edge (negative on the road). */
@@ -285,9 +291,9 @@ describe('carveCoast', () => {
 describe('buildIsland on generated tracks', () => {
   const seeds = [1, 7, 42, 99, 2024, 48213];
   const worlds = seeds.map((seed) => {
-    const track = generateTrack(seed, config);
+    const track = generateTrack(seed, rolling);
     const winner = track.candidates[track.winnerIndex]!;
-    const island = buildIsland(seed, winner.line, winner.profile, config);
+    const island = buildIsland(seed, winner.line, winner.profile, rolling, track.character);
     return { seed, winner, island, sea: seaDistances(island, winner.line) };
   });
 
@@ -403,7 +409,7 @@ describe('buildIsland on generated tracks', () => {
 
   it('builds exactly the same island for the same seed, and a different one for another', () => {
     const { winner, island } = worlds[0]!;
-    const again = buildIsland(1, winner.line, winner.profile, config);
+    const again = buildIsland(1, winner.line, winner.profile, rolling, PLAIN);
     expect(again.natural.height).toEqual(island.natural.height);
     expect(again.peak).toEqual(island.peak);
     expect(worlds[1]!.island.natural.height).not.toEqual(island.natural.height);

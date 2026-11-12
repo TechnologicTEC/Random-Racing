@@ -13,13 +13,16 @@ const LAND: Array<[height: number, colour: Rgb]> = [
   [0, [214, 198, 150]],
   [1.4, [214, 198, 150]],
   [2.4, [96, 140, 74]],
-  [12, [122, 152, 80]],
-  [24, [150, 146, 96]],
-  [38, [142, 134, 120]],
-  [58, [204, 204, 210]],
+  [15, [118, 152, 80]],
+  [45, [140, 156, 90]],
+  // A mountain seed's road climbs to about 120 m, so grass runs on to there.
+  [105, [146, 150, 100]],
+  [150, [142, 136, 124]],
+  [185, [190, 190, 196]],
+  [225, [240, 240, 244]],
 ];
 
-/** The map colour for a height: blues under water, sand on the beach, greens then greys going up. */
+/** The map colour for a height: blues under water, sand on the beach, greens going up, then grey rock and snow at mountain heights. */
 export function heightColour(height: number): Rgb {
   const stops = height < 0 ? SEA : LAND;
   if (height <= stops[0]![0]) return [...stops[0]![1]];

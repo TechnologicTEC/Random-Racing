@@ -22,7 +22,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const track = generateTrack(seed, config);
   const winner = track.candidates[track.winnerIndex]!;
   const { line, profile } = winner;
-  const island = buildIsland(track.seed, line, profile, config);
+  const island = buildIsland(track.seed, line, profile, config, track.character);
 
   // The road is fitted into the inland ground first and the coast is carved
   // afterwards, so an embankment can never spill out into the sea.

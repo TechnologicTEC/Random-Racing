@@ -151,7 +151,8 @@ test('shows the whole island when the spot asked for is not one it knows', async
 test.describe('3D screenshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Screenshots are taken in Chromium only');
 
-  const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [7, 42, 100, 2024, 48213];
+  // Between them these cover every kind of relief: 1 is a mountain seed, 7 and 42 hilly, 2024 rolling, 100 and 48213 flat.
+  const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [1, 7, 42, 100, 2024, 48213];
 
   /** Which close views to take as well as the overview. Override with LOOKS, for example: $env:LOOKS = "cut,water" */
   const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start'];

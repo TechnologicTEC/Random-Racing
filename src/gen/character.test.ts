@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config, type CharacterConfig } from '../config';
+import { withCharacter } from '../testing/characters';
 import { pickCharacter } from './character';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
@@ -104,6 +105,16 @@ describe('the character of a generated track', () => {
 
   it('is recorded on the track result', () => {
     expect(result.character).toEqual(pickCharacter(48213, cfg));
+  });
+
+  it('decides the ground the track is laid over: a mountain seed climbs far more than a flat one', () => {
+    const rangeOf = (relief: 'flat' | 'mountain'): number => {
+      const track = generateTrack(48213, withCharacter(config, { relief }));
+      const { height } = track.candidates[track.winnerIndex]!.profile;
+      return Math.max(...height) - Math.min(...height);
+    };
+    expect(rangeOf('flat')).toBeLessThan(8);
+    expect(rangeOf('mountain')).toBeGreaterThan(40);
   });
 
   it('is part of the track fingerprint', () => {

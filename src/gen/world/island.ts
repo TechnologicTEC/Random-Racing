@@ -3,7 +3,7 @@ import { createNoise, fbm, softRidged, type Noise2 } from '../../core/noise';
 import { createRng, type Rng } from '../../core/rng';
 import { clamp01, lerp, smoothstep } from '../../core/scalar';
 import type { Vec2 } from '../../core/vec2';
-import type { CenterLine, HeightField, RoadProfile } from '../types';
+import type { CenterLine, Character, HeightField, RoadProfile } from '../types';
 import { createField, worldX, worldZ } from './heightfield';
 import { insideLoop, nearestRoad, type NearestRoad } from './nearest';
 import { createRelief, type Relief } from './relief';
@@ -66,14 +66,16 @@ const HEADROOM = 0.5;
  * room for a beach; where it is high the land drops to the water as a cliff.
  * One peak stands in the infield where it is furthest from the road.
  *
- * @param relief the rolling ground the road was planned on; made from the seed unless given
+ * @param character the kind of island this seed makes
+ * @param relief the ground the road was planned on; made from the seed and its relief unless given
  */
 export function buildIsland(
   seed: number,
   line: CenterLine,
   profile: RoadProfile,
   cfg: GenConfig,
-  relief: Relief = createRelief(seed, cfg.world.relief),
+  character: Character,
+  relief: Relief = createRelief(seed, cfg.world.relief, character.relief, cfg.track.buildableRadius),
 ): Island {
   const { tile, coast, scenery } = cfg.world;
   const halfRoad = cfg.track.roadWidth / 2;

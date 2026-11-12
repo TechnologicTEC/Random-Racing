@@ -1,13 +1,20 @@
 import type { ScoreConfig, TrackConfig } from '../../config';
-import type { CornerSection, ProfileStats, ScoreBreakdown, ScorePart, Section, StraightSection } from '../types';
+import type { CornerSection, ProfileStats, ReliefKind, ScoreBreakdown, ScorePart, Section, StraightSection } from '../types';
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 /**
  * Rates how much fun a valid layout should be, from its straights, its corners
  * and how much it climbs. Each part scores 0 to 1; the total is their weighted average.
+ *
+ * @param relief the seed's kind of relief, which sets how much climbing is asked for
  */
-export function scoreLayout(sections: readonly Section[], cfg: TrackConfig, elevation: ProfileStats): ScoreBreakdown {
+export function scoreLayout(
+  sections: readonly Section[],
+  cfg: TrackConfig,
+  elevation: ProfileStats,
+  relief: ReliefKind,
+): ScoreBreakdown {
   const rules = cfg.score;
   const straights = sections.filter((s): s is StraightSection => s.type === 'straight');
   const corners = sections.filter((s): s is CornerSection => s.type === 'corner');
@@ -17,7 +24,7 @@ export function scoreLayout(sections: readonly Section[], cfg: TrackConfig, elev
     scoreCornerMix(corners, rules),
     scoreDrift(corners, rules),
     scoreFlow(sections, corners, rules),
-    scoreElevation(elevation, rules),
+    scoreElevation(elevation, rules, relief),
   ];
 
   let weighted = 0;
@@ -90,10 +97,14 @@ function scoreDrift(corners: readonly CornerSection[], rules: ScoreConfig): Scor
   };
 }
 
-/** Rewards a lap that goes up and down: mostly for its height range, partly for its total climbing. */
-function scoreElevation(elevation: ProfileStats, rules: ScoreConfig): ScorePart {
-  const range = clamp01(elevation.range / rules.elevationRange);
-  const climb = clamp01(elevation.climb / rules.elevationClimb);
+/**
+ * Rewards a lap that goes up and down: mostly for its height range, partly for
+ * its total climbing. How much is asked for depends on the seed's relief.
+ */
+function scoreElevation(elevation: ProfileStats, rules: ScoreConfig, relief: ReliefKind): ScorePart {
+  const target = rules.elevation[relief];
+  const range = clamp01(elevation.range / target.range);
+  const climb = clamp01(elevation.climb / target.climb);
   return {
     key: 'elevation',
     score: 0.6 * range + 0.4 * climb,

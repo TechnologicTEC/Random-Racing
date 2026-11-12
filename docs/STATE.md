@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** rework step R2 (each seed has a character, shown in the lab; it does not change the island yet). Steps 0 to 11 are built and pushed
-- **Next step:** **rework step R3** (relief and gradient by character), then R4 to R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
+- **Last finished step:** rework step R3 (the ground and the road's gradient limit now depend on the seed's relief: flat, rolling, hilly or mountain). Steps 0 to 11 are built and pushed
+- **Next step:** **rework step R4** (variable road width), then R5 to R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -74,7 +74,7 @@ Tests first, watched failing. Run the unit and browser suites so that a failure 
 | R0 | Record the plan and decisions here | Pushed | Done |
 | R1 | Baselines: fold and hairpin counts for seeds 1 to 200 now and with the Milestone 1 scorer; world build time at the new tile size in Node, Chromium and Firefox | Numbers here; a decision on style weights, and on the grid if Firefox is over 3 s | Done: style weights and grid stay as planned |
 | R2 | Seed character: `gen/character.ts`, config weights, on `TrackResult`, shown in the lab | Tests: same seed same character; each value at about its weight over 2000 seeds | Done |
-| R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | To do |
+| R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | Done: the plan worked as written; mountain seeds keep every layout style |
 | R4 | Variable road width through generation, meshes, fit, report and lab | Tests: 12 to 22 m, eased, not widened beside close sections, ground follows the wider road, kerbs and barriers at the true edge | To do |
 | R5 | Bigger tile, 3 m cells, 4 m verge | Existing fit tests pass at the new grid; build time measured | To do |
 | R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | To do |
@@ -111,6 +111,17 @@ By style now: folded 1.17 folds and 1.85 hairpins; stretched 1.16 and 1.35; roun
 | 2700 m tile at 2 m cells, for comparison | 1268 | not measured | not measured |
 
 Handing the result from the worker to the page adds 1 to 4 ms. **Decision:** Firefox is far under the 3 s budget, so the grid stays as planned (2700 m, 3 m cells). Mountains and the hinterland's own noise will add to this; R5, R6 and R7 measure again.
+
+**R3 results (2026-11-13): winners of seeds 1 to 200, every seed forced to one relief.**
+
+| Relief | Ground | Lap height range, lowest to highest (median) | Inside its band | Steepest road | Deepest cut, tallest fill | Winner scores |
+| --- | --- | --- | --- | --- | --- | --- |
+| Flat | hills 7 m | 1.2 to 6.3 m (4.2) | 100% under 8 m | 4% | 0.1 m, 0.1 m | 89 to 100 |
+| Rolling | hills 33 m, as before | 5.6 to 29.6 m (20.5) | 91% in 15 to 30 m | 8% | 4.7 m, 4.7 m | 85 to 99 |
+| Hilly | 8% flank, hills 14 m | 23.9 to 59.5 m (41.2) | 95% in 30 to 60 m | 8% | 4.6 m, 4.6 m | 84 to 97 |
+| Mountain | 15% flank, hills 12 m | 47.1 to 106.8 m (75.8) | 90% in 60 to 120 m | 15% | 3.5 m, 3.5 m | 84 to 96 |
+
+Over all 30 candidates of 40 seeds per relief, cut and fill also stay inside 6 m and 8 m, and the bank between close sections stays under 45%. On 30 whole worlds with their own characters the fit is clean: nothing through the road, nothing hanging, deepest cutting 3.2 m, tallest embankment 3.7 m, steepest bank 65%.
 
 ### Rework risks
 
@@ -249,6 +260,13 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-12 | The rework starts in a fresh session | This session was at about 670,000 tokens; STATE.md carries the handover |
 | 2026-11-12 | The character is drawn from the `world` stream, one sub-stream per trait (`world/character/relief` and so on). The layout style stays where it was, on the `track` stream | Traits stay independent, changing one trait's weights never reshuffles another, and no layout changed when the character was added |
 | 2026-11-12 | The number of mountains is an even draw within the relief's range (flat 0 to 1, rolling and hilly 0 to 4, mountain 1 to 4), set in `world.character.mountains` | The plan only fixed the ranges. Tane judges how many is right at check-in 3 |
+| 2026-11-13 | **Hilly and mountain seeds get a highland to one side of the track, and the track sits on its flank** (`gen/world/relief.ts`, `placeHighland`). The flank is a cone around the highland's flat top: 8% for hilly, 15% for mountain, never steeper than the road may climb, so a road can run straight up it. It starts to rise 300 m on the low side of the centre, so big tracks also reach flat ground | This is the plan's "broad ramp". Measured in a spike first: an 18% flank (the plan's upper figure) pushed 15% of candidates to within 1 m of the cut and fill limits, and a 15% flank none |
+| 2026-11-13 | Hills are lower on hilly and mountain seeds (14 m and 12 m, against 33 m on rolling ones) | The flank already uses the road's whole gradient; taller hills on top of it broke the cut and fill limits |
+| 2026-11-13 | The highland's flat top is 200 m in radius and starts 60 m beyond the buildable area. `placeHighland` reports where it is | R7 stands the main mountain on it, so the track visibly climbs the mountain's flank |
+| 2026-11-13 | Elevation score targets by relief (range, climb): flat 3 m and 5 m, rolling 24 m and 40 m (as before), hilly 55 m and 85 m, mountain 110 m and 160 m | Flat seeds are not marked down for being flat; hilly and mountain seeds favour the layouts that use the climb |
+| 2026-11-13 | `road.maxGradient` is one value per relief; `solveProfile` is told the limit, `scoreLayout` the relief | The plan: 8% everywhere except 15% on mountain seeds |
+| 2026-11-13 | Bare rock by height now starts at 130 m (was 34 m); the lab's map colours keep grass up to about 105 m, with rock and snow above 150 m | A mountain seed's road climbs to about 120 m, and the whole hillside was being drawn as rock |
+| 2026-11-13 | The island tests on real seeds are pinned to rolling ground for now (`testing/characters.ts`, `withCharacter`) | They describe the island as it was before the rework. R6 and R7 rewrite them trait by trait |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -262,7 +280,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 
 ## Known issues and risks
 
-- **The verge dips at its outer edge on steep banks** (up to about 0.4 m at the barrier on seed 7), because the 2.5 m verge is only just wider than a 2 m grid cell. The road itself is unaffected and the barrier footing hides it. A wider verge or a finer grid near the road would remove it.
+- **The verge dips at its outer edge on steep banks** (up to about 0.45 m at the barrier), because the 2.5 m verge is only just wider than a 2 m grid cell. The road itself is unaffected and the barrier footing hides it. Hillsides are steeper since R3, so the barrier test now asks for a quarter of the footing in the ground, not a third. R5 widens the verge to 4 m; put the test back to a third then, and if the dip is still there, hold the road's height one cell beyond the verge in `fit.ts`.
+- **Hilly and mountain islands look like a tilted table with sea cliffs** until R6 (land beyond the road) and R7 (mountains). The road itself sits cleanly.
+- **About one mountain lap in ten has under 60 m of height** (lowest 47 m over 200 seeds), mostly folded layouts that happen to lie across the slope. Raising the elevation weight for mountain seeds would lift it.
 
 - **Firefox builds worlds about 1.6 times more slowly than Chromium** (measured in R1: about 0.6 s against 0.37 s per world in the worker; 0.85 s at the new tile size). Both are well inside the 3-second budget. Playwright waits up to 15 s for a new seed to appear, which covers a busy machine.
 
@@ -307,3 +327,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12 (Milestone 2):** Check-in 2. Tane flew the islands in 3D and asked for a rework: hillier ground, mountains of 200 to 250 m and more of them, tracks that sometimes climb (up to 15%), land that extends past the track with the road only sometimes by the sea, road width varying from 12 to 22 m, and traits that combine differently per seed. Planned in plan mode and approved (rework steps R1 to R8, then check-in 3, then steps 12 to 17). Step R0 done: the plan is recorded in "Milestone 2 rework" above. No code changed since step 11. Session ended here; the rework starts in a fresh session at R1.
 - **2026-11-12 (Milestone 2 rework):** Step R1 done, measurements only (no code changed). Folds did not drop when elevation joined the score (1.12 per winner now, 1.07 with the Milestone 1 scorer, seeds 1 to 200), so style weights stay. The new 2700 m tile at 3 m cells builds in about 0.58 s in Node, 0.49 s in Chromium and 0.85 s in Firefox, so the grid stays as planned. Numbers are in "Rework measurements".
 - **2026-11-12 (Milestone 2 rework):** Step R2 done. `gen/character.ts` (`pickCharacter`) and `world.character` weights in the config; `TrackResult.character` (relief, coast, mountains, width) is part of the track fingerprint. The lab's Track panel lists it, each contact sheet caption names it, and the sheet summary counts reliefs and coasts. `pickWeighted` moved to `core/rng.ts`. Over seeds 1 to 2000 every value lands within 4 points of its weight. Nothing reads the character yet, so islands and layouts are unchanged. 628 unit tests and 139 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R3 done. `createRelief` builds the ground for the seed's relief; hilly and mountain seeds have a highland (`placeHighland`) whose flank the track climbs. The gradient limit (8%, or 15% on mountain seeds) and the elevation score's targets come from the relief. New tests: `gen/road/climb.<relief>.test.ts` generate 200 seeds of each relief and check gradient, crests, cut and fill, banks and the lap's height range (shared checks in `testing/reliefChecks.ts`). Measured in a throwaway spike before the tests were written. Winners changed on every seed that is not rolling. The 3D screenshot set now includes seed 1 (a mountain seed). Results are in "Rework measurements".

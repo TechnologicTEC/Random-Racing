@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { stadiumLine } from '../../testing/trackFixtures';
-import type { CornerKind, CornerSection, ProfileStats, ScoreKey, Section, StraightSection } from '../types';
+import type { CornerKind, CornerSection, ProfileStats, ReliefKind, ScoreKey, Section, StraightSection } from '../types';
 import { analyseSections } from './analysis';
 import { scoreLayout } from './score';
 
@@ -27,7 +27,7 @@ const heights = (range = 0, climb = 0, maxGradient = 0): ProfileStats => ({
   min: 5, max: 5 + range, range, climb, maxGradient, tightestCrestRadius: Infinity, maxFill: 0, maxCut: 0, steepestBank: 0,
 });
 const part = (sections: Section[], key: ScoreKey, elevation = heights()) =>
-  scoreLayout(sections, cfg, elevation).parts.find((p) => p.key === key)!;
+  scoreLayout(sections, cfg, elevation, 'rolling').parts.find((p) => p.key === key)!;
 
 /** Eight well-shaped corners, left and right, joined by 100 m straights. */
 function balancedLap(): Section[] {
@@ -175,7 +175,34 @@ describe('flow score', () => {
 
 describe('elevation score', () => {
   const rules = cfg.score;
+  const target = rules.elevation.rolling;
   const elevation = (range: number, climb: number) => part(balancedLap(), 'elevation', heights(range, climb, 0.06));
+  const elevationOn = (relief: ReliefKind, range: number, climb: number): number =>
+    scoreLayout(balancedLap(), cfg, heights(range, climb, 0.06), relief).parts.find((p) => p.key === 'elevation')!.score;
+
+  it('asks for more height the hillier the ground: flat, rolling, hilly, mountain', () => {
+    const { flat, rolling, hilly, mountain } = rules.elevation;
+    expect(flat.range).toBeLessThan(rolling.range);
+    expect(rolling.range).toBeLessThan(hilly.range);
+    expect(hilly.range).toBeLessThan(mountain.range);
+    expect(flat.climb).toBeLessThan(rolling.climb);
+    expect(rolling.climb).toBeLessThan(hilly.climb);
+    expect(hilly.climb).toBeLessThan(mountain.climb);
+  });
+
+  it('does not mark a flat seed down for being flat', () => {
+    // A lap with 4 m of height is all a flat island can offer, and gets full marks there.
+    expect(elevationOn('flat', 4, 6)).toBe(1);
+    expect(elevationOn('rolling', 4, 6)).toBeLessThan(0.3);
+  });
+
+  it('wants a real climb on a mountain seed', () => {
+    // A lap that would be ideal on rolling ground only uses part of a mountain.
+    expect(elevationOn('rolling', 24, 40)).toBe(1);
+    expect(elevationOn('mountain', 24, 40)).toBeLessThan(0.4);
+    const peak = rules.elevation.mountain;
+    expect(elevationOn('mountain', peak.range, peak.climb)).toBe(1);
+  });
 
   it('is no longer pending and carries its share of the total', () => {
     expect(elevation(10, 20).pending).toBe(false);
@@ -188,8 +215,8 @@ describe('elevation score', () => {
   });
 
   it('is full marks when the lap has the height range and the climbing asked for', () => {
-    expect(elevation(rules.elevationRange, rules.elevationClimb).score).toBe(1);
-    expect(elevation(rules.elevationRange * 2, rules.elevationClimb * 2).score).toBe(1);
+    expect(elevation(target.range, target.climb).score).toBe(1);
+    expect(elevation(target.range * 2, target.climb * 2).score).toBe(1);
   });
 
   it('grows with the height range and with the climbing', () => {
@@ -198,8 +225,8 @@ describe('elevation score', () => {
   });
 
   it('counts the height range for 60% and the climbing for 40%', () => {
-    expect(elevation(rules.elevationRange, 0).score).toBeCloseTo(0.6, 12);
-    expect(elevation(0, rules.elevationClimb).score).toBeCloseTo(0.4, 12);
+    expect(elevation(target.range, 0).score).toBeCloseTo(0.6, 12);
+    expect(elevation(0, target.climb).score).toBeCloseTo(0.4, 12);
   });
 
   it('reports the numbers behind the score', () => {
@@ -209,20 +236,20 @@ describe('elevation score', () => {
 
 describe('total score', () => {
   it('is the weighted average of all five parts', () => {
-    const result = scoreLayout(balancedLap(), cfg, heights(12, 20));
+    const result = scoreLayout(balancedLap(), cfg, heights(12, 20), 'rolling');
     expect(result.parts.map((p) => p.key)).toEqual(['straights', 'cornerMix', 'drift', 'flow', 'elevation']);
     const expected = result.parts.reduce((sum, p) => sum + p.score * p.weight, 0) / result.parts.reduce((sum, p) => sum + p.weight, 0);
     expect(result.total).toBeCloseTo(expected, 12);
   });
 
   it('rates the same lap higher when it has hills', () => {
-    expect(scoreLayout(balancedLap(), cfg, heights(20, 35)).total).toBeGreaterThan(scoreLayout(balancedLap(), cfg, heights()).total);
+    expect(scoreLayout(balancedLap(), cfg, heights(20, 35), 'rolling').total).toBeGreaterThan(scoreLayout(balancedLap(), cfg, heights(), 'rolling').total);
   });
 
   it('keeps every part and the total between 0 and 1', () => {
     const laps = [balancedLap(), [corner('right', 360, 100)], analyseSections(stadiumLine(400, 60), cfg)];
     for (const lap of laps) {
-      const result = scoreLayout(lap, cfg, heights(40, 90));
+      const result = scoreLayout(lap, cfg, heights(40, 90), 'rolling');
       for (const p of [...result.parts, { score: result.total }]) {
         expect(p.score).toBeGreaterThanOrEqual(0);
         expect(p.score).toBeLessThanOrEqual(1);
@@ -231,7 +258,7 @@ describe('total score', () => {
   });
 
   it('gives the same score for the same input', () => {
-    expect(scoreLayout(balancedLap(), cfg, heights(9, 14))).toEqual(scoreLayout(balancedLap(), cfg, heights(9, 14)));
+    expect(scoreLayout(balancedLap(), cfg, heights(9, 14), 'rolling')).toEqual(scoreLayout(balancedLap(), cfg, heights(9, 14), 'rolling'));
   });
 
   it('rates a varied lap above a plain oval', () => {
@@ -243,6 +270,6 @@ describe('total score', () => {
       corner('right', 110, 50), straight(60), corner('right', 90, 40),
     ];
     const oval = analyseSections(stadiumLine(400, 60), cfg);
-    expect(scoreLayout(varied, cfg, heights()).total).toBeGreaterThan(scoreLayout(oval, cfg, heights()).total + 0.3);
+    expect(scoreLayout(varied, cfg, heights(), 'rolling').total).toBeGreaterThan(scoreLayout(oval, cfg, heights(), 'rolling').total + 0.3);
   });
 });

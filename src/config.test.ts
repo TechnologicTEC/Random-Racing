@@ -27,7 +27,15 @@ describe('config', () => {
     expect(total).toBeCloseTo(1, 12);
   });
 
-  it('keeps road gradients at the brief limit of about 8%', () => {
-    expect(config.road.maxGradient).toBe(0.08);
+  it('keeps road gradients at the brief limit of about 8%, except on mountain seeds, which may climb at 15%', () => {
+    expect(config.road.maxGradient).toEqual({ flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 });
+  });
+
+  it('aims each kind of relief at its own lap height range', () => {
+    const kinds = config.world.relief.kinds;
+    expect(kinds.flat.lapRange).toEqual([0, 8]);
+    expect(kinds.rolling.lapRange).toEqual([15, 30]);
+    expect(kinds.hilly.lapRange).toEqual([30, 60]);
+    expect(kinds.mountain.lapRange).toEqual([60, 120]);
   });
 });

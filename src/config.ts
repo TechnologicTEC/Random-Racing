@@ -47,10 +47,13 @@ export interface TrackConfig {
 export interface ScoreConfig {
   /** How much each part counts towards the total. */
   weights: { straights: number; cornerMix: number; drift: number; flow: number; elevation: number };
-  /** Elevation: a lap with this many metres between its lowest and highest point earns full marks for range. */
-  elevationRange: number;
-  /** Elevation: a lap that climbs this many metres in total earns full marks for climbing. */
-  elevationClimb: number;
+  /**
+   * Elevation, by the seed's relief: a lap with `range` metres between its
+   * lowest and highest point earns full marks for range, and one that climbs
+   * `climb` metres in total earns full marks for climbing. Flat seeds ask for
+   * very little, so they are not marked down for being flat.
+   */
+  elevation: Record<ReliefKind, { range: number; climb: number }>;
   /** A straight this long earns full marks, in metres (brief: 150). */
   longStraight: number;
   /** How many long straights a lap should have (brief: at least two). */
@@ -232,8 +235,8 @@ export interface StyleConfig {
 
 /** How the road is laid over the ground: its heights, and how it ties in with the land beside it. */
 export interface RoadConfig {
-  /** Steepest climb or descent allowed, as a fraction (brief: about 8%, so 0.08). */
-  maxGradient: number;
+  /** Steepest climb or descent allowed, as a fraction, by the seed's relief (brief: about 8%, so 0.08; mountain seeds may climb harder). */
+  maxGradient: Record<ReliefKind, number>;
   /** Hill tops and dips are rounded to at least this radius, in metres, so the car is never launched. */
   crestMinRadius: number;
   /** The road stays at least this far above the sea, in metres. */
@@ -303,20 +306,47 @@ export interface RoadConfig {
   maxCut: number;
 }
 
-/** The rolling ground the track is laid over. It depends only on the seed, never on the track. */
+/** The ground the track is laid over. It depends only on the seed, never on the track. */
 export interface ReliefConfig {
   /** Height of the lowest ground, in metres above the sea. */
   lowland: number;
-  /** Hills rise this far above the lowland, in metres. */
-  hillHeight: number;
   /** Size of the main hills: metres per unit of noise. Bigger means broader, gentler hills. */
   scale: number;
   /** Size of the smaller rises layered on top, in metres per unit of noise. */
   fineScale: number;
-  /** Share of the height that comes from the smaller rises (0 to 1). */
+  /** Share of the hills' height that comes from the smaller rises (0 to 1). */
   fineShare: number;
-  /** Nearly all of the ground is gentler than this, as a fraction. Checked by a test, not enforced in code. */
+  /** What each kind of relief is made of. */
+  kinds: Record<ReliefKind, ReliefKindConfig>;
+  highland: HighlandConfig;
+}
+
+export interface ReliefKindConfig {
+  /** Hills rise this far above the lowland, in metres. */
+  hillHeight: number;
+  /**
+   * Hilly and mountain seeds have a highland to one side of the track, and the
+   * track sits on its flank. This is the flank's slope as a fraction; 0 for no
+   * highland. It must not be steeper than the road may climb, so that a road
+   * can run straight up it.
+   */
+  flankSlope: number;
+  /** The height between a lap's lowest and highest point that this relief aims for, in metres. Checked by tests, not enforced in code. */
+  lapRange: Range;
+  /** Nearly all of the ground the track can use is gentler than this, as a fraction. Checked by a test, not enforced in code. */
   maxSlope: number;
+}
+
+/** The shape of the highland that hilly and mountain seeds have. Distances in metres. */
+export interface HighlandConfig {
+  /** The flank starts to rise this far from the centre of the buildable area, on its low side. Bigger tracks reach the flat ground below it. */
+  foot: number;
+  /** The flank runs on this far past the edge of the buildable area before it levels off. */
+  margin: number;
+  /** Radius of the flat top beyond that. A mountain may stand on it. */
+  plateau: number;
+  /** The flank eases in at its foot and out at its top over this distance. */
+  ease: number;
 }
 
 /** The square of world that is generated. */
@@ -580,8 +610,12 @@ export const config: GameConfig = {
     },
     score: {
       weights: { straights: 0.22, cornerMix: 0.22, drift: 0.22, flow: 0.22, elevation: 0.12 },
-      elevationRange: 24,
-      elevationClimb: 40,
+      elevation: {
+        flat: { range: 3, climb: 5 },
+        rolling: { range: 24, climb: 40 },
+        hilly: { range: 55, climb: 85 },
+        mountain: { range: 110, climb: 160 },
+      },
       longStraight: 150,
       targetLongStraights: 2,
       driftMinRadius: 20,
@@ -598,7 +632,7 @@ export const config: GameConfig = {
     },
   },
   road: {
-    maxGradient: 0.08,
+    maxGradient: { flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 },
     crestMinRadius: 200,
     minHeight: 2,
     verge: 2.5,
@@ -646,11 +680,16 @@ export const config: GameConfig = {
     },
     relief: {
       lowland: 3,
-      hillHeight: 33,
       scale: 800,
       fineScale: 320,
       fineShare: 0.15,
-      maxSlope: 0.15,
+      kinds: {
+        flat: { hillHeight: 7, flankSlope: 0, lapRange: [0, 8], maxSlope: 0.04 },
+        rolling: { hillHeight: 33, flankSlope: 0, lapRange: [15, 30], maxSlope: 0.15 },
+        hilly: { hillHeight: 14, flankSlope: 0.08, lapRange: [30, 60], maxSlope: 0.14 },
+        mountain: { hillHeight: 12, flankSlope: 0.15, lapRange: [60, 120], maxSlope: 0.2 },
+      },
+      highland: { foot: 300, margin: 60, plateau: 200, ease: 120 },
     },
     tile: { extent: 1400, cell: 2 },
     coast: {
@@ -690,7 +729,7 @@ export const config: GameConfig = {
     },
     cover: {
       sandTop: [1.0, 2.6],
-      rockHeight: [34, 46],
+      rockHeight: [130, 160],
       rockSlope: [0.55, 0.85],
       roadsideFade: 3,
       variationScale: 55,

@@ -24,6 +24,19 @@ describe('heightColour', () => {
     expect(heightColour(55)).not.toEqual(heightColour(5));
   });
 
+  it('keeps hillsides a track can climb green, and saves grey rock and white snow for mountain heights', () => {
+    // A mountain seed's road reaches about 120 m: still grass.
+    for (const height of [30, 60, 100]) {
+      const [r, g, b] = heightColour(height);
+      expect(g, `${height} m`).toBeGreaterThan(b + 25);
+      expect(g, `${height} m`).toBeGreaterThanOrEqual(r);
+    }
+    const rock = heightColour(160);
+    expect(Math.abs(rock[0] - rock[2])).toBeLessThan(40);
+    const snow = heightColour(230);
+    expect(Math.min(...snow)).toBeGreaterThan(220);
+  });
+
   it('changes gradually with height on land', () => {
     const a = heightColour(10);
     const b = heightColour(10.5);
