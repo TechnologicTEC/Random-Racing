@@ -22,6 +22,23 @@ describe('config', () => {
     expect(config.road.width.clearance).toBeGreaterThan(config.road.coupleDistance);
   });
 
+  it('generates a 2700 m tile on a 3 m grid: room for mountains, at about 800,000 heights', () => {
+    const { extent, cell } = config.world.tile;
+    expect(extent).toBe(2700);
+    expect(cell).toBe(3);
+    const side = extent / cell + 1;
+    expect(side * side).toBeGreaterThan(750_000);
+    expect(side * side).toBeLessThan(850_000);
+  });
+
+  it('keeps the verge wider than a grid cell, and wide enough for the barrier', () => {
+    expect(config.road.verge).toBe(4);
+    expect(config.road.verge).toBeGreaterThan(config.world.tile.cell);
+    expect(config.road.barrierOffset + config.road.barrierWidth).toBeLessThan(config.road.verge);
+    // The coast starts beyond the verge.
+    expect(config.world.coast.clear).toBeGreaterThan(config.road.verge);
+  });
+
   it('generates about 30 candidates per seed', () => {
     expect(config.track.candidatesPerRound).toBe(30);
   });

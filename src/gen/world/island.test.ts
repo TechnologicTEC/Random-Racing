@@ -332,8 +332,8 @@ describe('buildIsland on generated tracks', () => {
   });
 
   it('uses the tile size and cell size from the config', () => {
-    expect(worlds[0]!.island.natural.size).toBe(701);
-    expect(worlds[0]!.island.natural.cell).toBe(2);
+    expect(worlds[0]!.island.natural.size).toBe(901);
+    expect(worlds[0]!.island.natural.cell).toBe(3);
   });
 
   it('keeps the natural ground under the road close to the ground the road was planned on', () => {

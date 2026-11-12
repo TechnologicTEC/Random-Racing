@@ -145,6 +145,18 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       // On a bank: each nearby section pulls the ground towards its own height,
       // strongly beside its verge and not at all by the end of its blend.
       const wild = natural.height[c]!;
+      // A cell a hair beyond a verge gets a pull that rounds to exactly 1, and its weight
+      // would be infinite. It is on the verge's edge, so it simply takes that section's height.
+      let atEdge = -1;
+      for (let s = 0; s < sections; s++) {
+        const blend = clamp(Math.abs(wild - sectionHeight[s]!) / road.blendSlope, road.blendMin, road.blendMax);
+        const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - sectionCorridor[s]!);
+        if (pull >= 1 && (atEdge < 0 || sectionDistance[s]! < sectionDistance[atEdge]!)) atEdge = s;
+      }
+      if (atEdge >= 0) {
+        ground.height[c] = sectionHeight[atEdge]!;
+        continue;
+      }
       let untouched = 1;
       let weighted = 0;
       let weights = 0;

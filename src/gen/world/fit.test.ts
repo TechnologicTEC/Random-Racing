@@ -77,7 +77,8 @@ describe('fitRoad on flat ground', () => {
     const { corridor } = fit(line, natural, () => 10);
     const at = (x: number, z: number): number => corridor[Math.round((z + 200) / 2) * natural.size + Math.round((x + 200) / 2)]!;
     expect(at(100, 0)).toBe(1);
-    expect(at(100 + CORRIDOR - 1, 0)).toBe(1);
+    // Two metres inside the verge's outer edge: a whole grid cell, so the point never rounds onto the edge.
+    expect(at(100 + CORRIDOR - 2, 0)).toBe(1);
     expect(at(100 + CORRIDOR + 2, 0)).toBe(0);
     expect(at(0, 0)).toBe(0);
   });
@@ -200,6 +201,12 @@ describe('fitRoad between two sections side by side', () => {
     }
   });
 
+  it('gives every cell a real height, even one exactly at the outer edge of a verge', () => {
+    let bad = 0;
+    for (const height of fitted.height) if (!Number.isFinite(height)) bad++;
+    expect(bad).toBe(0);
+  });
+
   it('keeps that bank gentle enough to stand', () => {
     expect(steepest(fitted, (x, z) => Math.abs(x) < 100 && Math.abs(z) < 12)).toBeLessThan(0.75);
   });
@@ -225,8 +232,8 @@ describe('fitRoad under a wider road', () => {
   });
 
   it('marks the cells of the wider road and its verges', () => {
-    expect(marked(100 + strip - 1, 0)).toBe(1);
-    expect(marked(100 - strip + 1, 0)).toBe(1);
+    expect(marked(100 + strip - 2, 0)).toBe(1);
+    expect(marked(100 - strip + 2, 0)).toBe(1);
     expect(marked(100 + strip + 2, 0)).toBe(0);
   });
 });

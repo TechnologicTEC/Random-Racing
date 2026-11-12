@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** rework step R4 (the road is 12 m wide and widens to as much as 22 m on some straights of varied-width seeds). Steps 0 to 11 are built and pushed
-- **Next step:** **rework step R5** (bigger tile, 3 m cells, 4 m verge), then R6 to R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
+- **Last finished step:** rework step R5 (2700 m tile, 3 m cells, 4 m verge). Steps 0 to 11 are built and pushed
+- **Next step:** **rework step R6** (hinterland and coast trait), then R7 and R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -76,7 +76,7 @@ Tests first, watched failing. Run the unit and browser suites so that a failure 
 | R2 | Seed character: `gen/character.ts`, config weights, on `TrackResult`, shown in the lab | Tests: same seed same character; each value at about its weight over 2000 seeds | Done |
 | R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | Done: the plan worked as written; mountain seeds keep every layout style |
 | R4 | Variable road width through generation, meshes, fit, report and lab | Tests: 12 to 22 m, eased, not widened beside close sections, ground follows the wider road, kerbs and barriers at the true edge | Done |
-| R5 | Bigger tile, 3 m cells, 4 m verge | Existing fit tests pass at the new grid; build time measured | To do |
+| R5 | Bigger tile, 3 m cells, 4 m verge | Existing fit tests pass at the new grid; build time measured | Done |
 | R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | To do |
 | R7 | Mountains (0 to 4, main 200 to 250 m), foothills, snow | Tests: heights in range, 60 m clear of the road, slopes within limit, mountain seeds have the main one above the ramp | To do |
 | R8 | 3D: far-ground detail levels, fog and camera limits | Triangle count recorded; fly, orbit and close-up screenshots on 20 seeds | To do |
@@ -129,6 +129,12 @@ Over all 30 candidates of 40 seeds per relief, cut and fill also stay inside 6 m
 - Wide stretches per seed: 1.75 on average. Widest point: median 20.2 m, largest 22.0 m.
 - Share of the lap wider than 12 m: median 19% (one seed in ten under 8%, one in ten over 37%, most 55%). By style: folded 16%, stretched 23%, round 21%.
 - On 24 whole worlds with their own characters (15 of them varied) the fit is still clean: nothing through the road, nothing hanging, deepest cutting 3.2 m, tallest embankment 3.6 m, steepest bank 66%.
+
+**R5 results (2026-11-13): 2700 m tile, 3 m cells (901 by 901, 812,000 heights), 4 m verge.**
+
+- World build time, 8 seeds: Node 611 to 705 ms (median 661), Chromium worker 551 to 621 ms (median 598), Firefox worker 822 to 891 ms (median 858). Budget 3 s.
+- Barrier footing (0.6 m nominal) on 10 hilly and mountain seeds: at least 0.40 m in the ground on 9 of them; 0.29 m at worst on seed 1. The verge dip is smaller (about 0.3 m, was about 0.45 m) but not gone.
+- Fit still clean on those 10 seeds: deepest cutting 3.2 m, tallest embankment 3.6 m, steepest bank 63%.
 
 ### Rework risks
 
@@ -278,9 +284,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | **Only straights are widened** (`gen/road/width.ts`, rules in `road.width`): the start straight always; other straights of 150 m or more, and a straight of 100 m or more after a hairpin, with a 60% chance each. Each widened straight gets one width between 16 and 22 m | The plan's "start straight, long straights and hairpin exits". Corners keep the usual width, so kerbs, banking and corner radii are unchanged |
 | 2026-11-13 | Each change of width takes about 40 m and is finished 20 m before the straight ends | The plan: eased like banking, by averaging twice. An edge moves sideways at 25% at most |
 | 2026-11-13 | No widening where a separate part of the lap passes within 70 m, centre to centre (`road.width.clearance`) | The plan: the bank between close sections keeps its room. 70 m is beyond the 55 m at which sections share a bank, so the road-height solver can go on using the usual width |
-| 2026-11-13 | If none of a varied seed's straights is picked, the one with the most room is widened | Otherwise about one varied seed in eight would have looked constant |
+| 2026-11-13 | If none of a varied seed's straights is picked, the one with the most room is widened | Otherwise a varied seed whose start straight has no room, and whose other straights all lose the draw, would look constant |
 | 2026-11-13 | The width comes from the `track` stream's `width` fork, one sub-stream per straight, and is worked out in `generateWorld` after the winner is known. It is `WorldResult.road.width` and part of the world fingerprint | The plan: it must never change which layout wins |
 | 2026-11-13 | The island keeps a map of each cell's distance to the road edge (`Island.edge`, from `edgeDistance`). The coast, the cover, the bumps and the peak all measure from it | One place knows the true edge; before, every module subtracted half of one fixed width |
+| 2026-11-13 | A cell exactly at the outer edge of a verge takes that section's road height (`fit.ts`) | Found by R5's grid: its blend weight came out as infinity over infinity, and 143 cells of a test fixture became NaN. A test now checks every fitted height is a real number |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -294,7 +301,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 
 ## Known issues and risks
 
-- **The verge dips at its outer edge on steep banks** (up to about 0.45 m at the barrier), because the 2.5 m verge is only just wider than a 2 m grid cell. The road itself is unaffected and the barrier footing hides it. Hillsides are steeper since R3, so the barrier test now asks for a quarter of the footing in the ground, not a third. R5 widens the verge to 4 m; put the test back to a third then, and if the dip is still there, hold the road's height one cell beyond the verge in `fit.ts`.
+- **The verge still dips a little at its outer edge on steep banks** (about 0.3 m at worst, seed 1; was about 0.45 m before R5's 4 m verge). The road is unaffected and the barrier footing hides it; the barrier test asks for a third of the footing in the ground and passes. Holding the road's height one cell beyond the verge in `fit.ts` would remove the rest.
+- **Sea cliffs have a coarser saw-tooth edge on the 3 m grid** (visible in close views, for example seed 1 `look=bank`). R6 reworks the coast; check it again there.
 - **Hilly and mountain islands look like a tilted table with sea cliffs** until R6 (land beyond the road) and R7 (mountains). The road itself sits cleanly.
 - **About one mountain lap in ten has under 60 m of height** (lowest 47 m over 200 seeds), mostly folded layouts that happen to lie across the slope. Raising the elevation weight for mountain seeds would lift it.
 
@@ -343,3 +351,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12 (Milestone 2 rework):** Step R2 done. `gen/character.ts` (`pickCharacter`) and `world.character` weights in the config; `TrackResult.character` (relief, coast, mountains, width) is part of the track fingerprint. The lab's Track panel lists it, each contact sheet caption names it, and the sheet summary counts reliefs and coasts. `pickWeighted` moved to `core/rng.ts`. Over seeds 1 to 2000 every value lands within 4 points of its weight. Nothing reads the character yet, so islands and layouts are unchanged. 628 unit tests and 139 Playwright tests pass.
 - **2026-11-13 (Milestone 2 rework):** Step R3 done. `createRelief` builds the ground for the seed's relief; hilly and mountain seeds have a highland (`placeHighland`) whose flank the track climbs. The gradient limit (8%, or 15% on mountain seeds) and the elevation score's targets come from the relief. New tests: `gen/road/climb.<relief>.test.ts` generate 200 seeds of each relief and check gradient, crests, cut and fill, banks and the lap's height range (shared checks in `testing/reliefChecks.ts`). Measured in a throwaway spike before the tests were written. Winners changed on every seed that is not rolling. The 3D screenshot set now includes seed 1 (a mountain seed). Results are in "Rework measurements".
 - **2026-11-13 (Milestone 2 rework):** Step R4 done. `gen/road/width.ts` (`solveWidth`) gives the winner a width per sample; `WorldResult.road.width`. The ribbon, kerbs, barriers, start gate, ground fit, fit report, cover and island all take it (`buildIsland` and the mesh builders have a `width` argument; `fitRoad` and `fitReport` take it in their input; `buildCover` and `carveCoast` take the island's `edge` map). The lab draws the true width and says how much of the lap is wider; the contact sheet draws it too. `profile.ts` did not need to change, because the road is never widened beside a close section. 726 unit tests and 150 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R5 done (switched from Fable 5.2 to Opus 5.5 part way through, when Tane's Fable usage ran out). Tile 2700 m, 3 m cells, verge 4 m. Fixed a NaN in `fitRoad` at cells exactly on a verge's outer edge. Build time and footing depth are in "Rework measurements". 729 unit tests and 150 Playwright tests pass.

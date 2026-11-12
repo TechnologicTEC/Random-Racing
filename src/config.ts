@@ -662,7 +662,7 @@ export const config: GameConfig = {
     crestMinRadius: 200,
     minHeight: 2,
     width: { min: 16, max: 22, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearance: 70 },
-    verge: 2.5,
+    verge: 4,
     coupleDistance: 55,
     coupleMinArc: 110,
     maxBankSlope: 0.45,
@@ -718,7 +718,7 @@ export const config: GameConfig = {
       },
       highland: { foot: 300, margin: 60, plateau: 200, ease: 120 },
     },
-    tile: { extent: 1400, cell: 2 },
+    tile: { extent: 2700, cell: 3 },
     coast: {
       clear: 5,
       minMargin: 10,
