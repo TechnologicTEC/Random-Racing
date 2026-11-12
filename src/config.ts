@@ -275,6 +275,18 @@ export interface RoadConfig {
   kerbLead: number;
   /** ...but is never longer than this; on a long corner it is centred on the middle. */
   kerbMaxLength: number;
+  /** Barriers: distance from the road edge to the wall's inner face, the wall's thickness and its height, in metres. */
+  barrierOffset: number;
+  barrierWidth: number;
+  barrierHeight: number;
+  /** On the outside of corners the barrier is painted in red and white blocks this long, in metres. */
+  barrierBlock: number;
+  /** The start line is chequered in squares this size, in metres, two rows deep. */
+  startSquare: number;
+  /** The gate over the start: clear height under its beam, the beam's depth, and the thickness of its posts, in metres. */
+  gateClearance: number;
+  gateBeam: number;
+  gatePost: number;
   /** Steepest banking, in degrees (brief: up to about 8 in fast corners). */
   bankMax: number;
   /** Corners of this radius or tighter get only `bankSlowShare` of the full bank; corners of `bankFastRadius` or wider get all of it. In metres. */
@@ -578,6 +590,14 @@ export const config: GameConfig = {
     kerbStripe: 2,
     kerbLead: 4,
     kerbMaxLength: 70,
+    barrierOffset: 1.8,
+    barrierWidth: 0.3,
+    barrierHeight: 0.8,
+    barrierBlock: 4,
+    startSquare: 1,
+    gateClearance: 6,
+    gateBeam: 1.2,
+    gatePost: 0.6,
     bankMax: 8,
     bankSlowRadius: 20,
     bankFastRadius: 70,

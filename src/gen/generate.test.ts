@@ -47,6 +47,12 @@ describe('generateWorld', () => {
     expect(world.road.kerbs.mesh.indices.length).toBeGreaterThan(0);
   });
 
+  it('contains barriers along the whole lap and a gate at the start', () => {
+    const winner = world.track.candidates[world.track.winnerIndex]!;
+    expect(world.road.barriers.indices.length / 3).toBe(winner.line.count * 12);
+    expect(world.road.gate.indices.length).toBeGreaterThan(0);
+  });
+
   it('treats the seed as a whole number from 0 to 4,294,967,295, like track generation', () => {
     expect(generateWorld(-1, coarse).seed).toBe(4294967295);
   });
@@ -85,7 +91,13 @@ describe('hashWorld', () => {
     const afterCross = hashWorld(world);
     expect(afterCross).not.toBe(afterMesh);
     world.road.kerbs.mesh.positions[7] = world.road.kerbs.mesh.positions[7]! + 0.25;
-    expect(hashWorld(world)).not.toBe(afterCross);
+    const afterKerbs = hashWorld(world);
+    expect(afterKerbs).not.toBe(afterCross);
+    world.road.barriers.positions[7] = world.road.barriers.positions[7]! + 0.25;
+    const afterBarriers = hashWorld(world);
+    expect(afterBarriers).not.toBe(afterKerbs);
+    world.road.gate.positions[7] = world.road.gate.positions[7]! + 0.25;
+    expect(hashWorld(world)).not.toBe(afterBarriers);
   });
 });
 
@@ -160,6 +172,31 @@ describe('the road sits cleanly in the island on real seeds', () => {
       };
       // 4 m either side of the centre the ground differs by 8 m of tilt, as the road does.
       expect(at(4) - at(-4), `seed ${world.seed}`).toBeCloseTo(8 * tilt, 1);
+    }
+  });
+
+  it('stands every barrier on ground that follows the road: its foot is buried, its top well clear', () => {
+    for (const world of worlds) {
+      const { positions } = world.road.barriers;
+      let buried = 0;
+      let clear = 0;
+      for (let v = 0; v < positions.length; v += 3 * 7) {
+        const above = positions[v + 1]! - sampleField(world.ground, positions[v]!, positions[v + 2]!, 0);
+        // Every vertex is either at the foot (a little under the ground) or at the top (most of a metre over it).
+        if (above < 0) {
+          // The footing is 0.6 m; at least a third of it must still be in the ground everywhere.
+          expect(above, `seed ${world.seed}`).toBeLessThan(-0.2);
+          expect(above, `seed ${world.seed}`).toBeGreaterThan(-0.9);
+          buried++;
+        } else {
+          expect(above, `seed ${world.seed}`).toBeGreaterThan(0.7);
+          // At the top of a steep bank the ground on the wall's outer side has already begun to fall away.
+          expect(above, `seed ${world.seed}`).toBeLessThan(1.7);
+          clear++;
+        }
+      }
+      expect(buried).toBeGreaterThan(100);
+      expect(clear).toBeGreaterThan(100);
     }
   });
 

@@ -12,6 +12,15 @@ export const ROAD_MATERIAL = {
   /** The red and the white blocks of a kerb. */
   kerbRed: 3,
   kerbWhite: 4,
+  /** The wall along each edge: plain, and the red and white blocks on the outside of corners. */
+  barrier: 5,
+  barrierRed: 6,
+  barrierWhite: 7,
+  /** The dark squares of the chequered start line (the light ones are `line`). */
+  startDark: 8,
+  /** The posts of the start gate, and the beam across it. */
+  gate: 9,
+  gateBeam: 10,
 } as const;
 
 /** One lengthwise strip of the road's cross-section. Offsets are metres to the right of the centre line. */

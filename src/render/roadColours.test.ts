@@ -35,6 +35,12 @@ describe('roadColours', () => {
     expect(Math.min(...kerb.slice(3, 6))).toBeGreaterThan(0.7);
   });
 
+  it('has a colour for every material generation uses', () => {
+    const all = roadColours(Uint8Array.from(Object.values(ROAD_MATERIAL)));
+    const pink = [...roadColours(Uint8Array.from([250]))];
+    for (let v = 0; v < all.length; v += 3) expect([...all.slice(v, v + 3)]).not.toEqual(pink);
+  });
+
   it('paints an unknown material bright pink, so a mistake is easy to spot', () => {
     const [r, g, b] = [...roadColours(Uint8Array.from([250]))] as [number, number, number];
     expect(r).toBeGreaterThan(0.8);

@@ -10,6 +10,12 @@ const BY_MATERIAL = new Map<number, Rgb>([
   [ROAD_MATERIAL.shoulder, ROAD.shoulder],
   [ROAD_MATERIAL.kerbRed, ROAD.kerbRed],
   [ROAD_MATERIAL.kerbWhite, ROAD.kerbWhite],
+  [ROAD_MATERIAL.barrier, ROAD.barrier],
+  [ROAD_MATERIAL.barrierRed, ROAD.barrierRed],
+  [ROAD_MATERIAL.barrierWhite, ROAD.barrierWhite],
+  [ROAD_MATERIAL.startDark, ROAD.startDark],
+  [ROAD_MATERIAL.gate, ROAD.gate],
+  [ROAD_MATERIAL.gateBeam, ROAD.gateBeam],
 ]);
 
 /**

@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** Milestone 2 step 9 (red and white kerbs on the inside of every real corner)
-- **Next step:** step 10: barriers along both edges, the start line and a gate
+- **Last finished step:** Milestone 2 step 10 (barriers on both edges, chequered start line and gate)
+- **Next step:** step 11: the fly-along camera and a small HUD; then check-in 2 with Tane
 
 ## Milestone 2 steps
 
@@ -26,7 +26,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 7 | Add Three.js; `/?view=3d` with terrain chunks and an orbit camera; Playwright WebGL screenshots proven | Done |
 | 8 | Banking and the asphalt ribbon; close-up cameras on the fit report's worst spots | Done |
 | 9 | Kerbs | Done |
-| 10 | Barriers, start line and gate | To do |
+| 10 | Barriers, start line and gate | Done |
 | 11 | Fly-along camera and HUD | To do |
 | | **Check-in 2 with Tane:** fly a few seeds | |
 | 12 | Water and sky; time of day from the seed | To do |
@@ -146,6 +146,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-12 | The road mesh gives every flat-coloured strip its own vertices, and each vertex a material number | Colours stay crisp (paint does not smear into asphalt), and Milestone 3 can tell surfaces apart |
 | 2026-11-12 | No separate "road frames" module yet | The ribbon only needs the centre line, the height and the tilt. Frames can come with the fly-along camera if it needs them |
 | 2026-11-12 | Kerbs run the whole corner plus 4 m each end, at most 70 m (centred on a longer corner); 1 m wide, 9 cm high at the outer edge, tapering to nothing over 4 m at each end | The brief asks for "kerbs on the apexes". Low and tapered so the car can ride them in Milestone 3 |
+| 2026-11-12 | Barriers stand 1.8 m outside the road edge (clear of the 1 m kerbs, inside the 2.5 m verge), 0.8 m high, with a footing 0.6 m into the ground | At the outer edge of the verge the ground already dips on a steep bank; a shallow footing left a 2 cm gap on seed 1 |
+| 2026-11-12 | Barriers are red and white on the outside of real corners and plain elsewhere | Shows a driver where the corner goes, and breaks up a long grey wall |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
 ## Notes for later milestones
@@ -157,6 +159,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **M2:** corner entries have no easing (the curvature steps from zero to 1/radius). Banking handles this by averaging its tilt over 30 m (done in step 8); kerbs should allow for it too.
 
 ## Known issues and risks
+
+- **The verge dips at its outer edge on steep banks** (up to about 0.4 m at the barrier on seed 7), because the 2.5 m verge is only just wider than a 2 m grid cell. The road itself is unaffected and the barrier footing hides it. A wider verge or a finer grid near the road would remove it.
 
 - **Firefox builds worlds much more slowly than Chromium** under the dev server (a lab test that steps through three seeds takes about 10 s there). Measure it properly in step 15 against the 3-second budget. Playwright now waits up to 15 s for a new seed to appear.
 
@@ -196,3 +200,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12 (Milestone 2):** Step 7 done. Installed `three@0.187.0` and `@types/three@0.187.0`. New: `src/render` (`palette.ts`, `terrainChunks.ts`, `worldView.ts`), `src/camera/orbit.ts`, `src/app/worldPage.ts`, `e2e/world.spec.ts`. `/?view=3d&seed=42` builds the world in the worker and shows the island with a camera that circles it (drag to turn, scroll to zoom). Headless Chromium and Firefox both draw WebGL with no special flags, so the Playwright risk from the plan is closed. Screenshots land in `test-results/screens/world-<seed>.png`. 521 unit tests and 56 Playwright tests pass.
 - **2026-11-12 (Milestone 2):** Step 8 done. `gen/road/banking.ts`, `ribbon.ts`, `meshBuilder.ts`; `WorldResult.road` holds the banking and the surface mesh; the fit and its report now use the banking. `render/road.ts` and `roadColours.ts` draw it. `camera/spots.ts` gives close views: `/?view=3d&seed=42&look=cut` (or `fill`, `bank`, `close`, `water`), and the screenshot test takes them for every seed (`$env:LOOKS` chooses which). With banking on, the six test seeds still have nothing through the road and nothing hanging.
 - **2026-11-12 (Milestone 2):** Step 9 done. `gen/road/kerbs.ts` (`findKerbs`, `buildKerbs`); `WorldResult.road.kerbs` holds the spans and the mesh. Close views now also take `&look=hairpin` (tightest corner), `&look=start` and `&at=x,z` (any map position). Checked by eye on seeds 42 and 100, including the tightest U-turns.
+- **2026-11-12 (Milestone 2):** Step 10 done. `gen/road/barriers.ts` and `startGate.ts`; `WorldResult.road` now also has `barriers` and `gate`. Every part of the road is one of eleven materials listed in `gen/road/ribbon.ts`, coloured in `render/palette.ts`. A new real-seed test checks every barrier is footed in the ground. 585 unit tests pass.

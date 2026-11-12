@@ -99,6 +99,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       }
       road.add(createRoadMesh(world.road.mesh, roadMaterial));
       road.add(createRoadMesh(world.road.kerbs.mesh, roadMaterial));
+      road.add(createRoadMesh(world.road.barriers, roadMaterial));
+      road.add(createRoadMesh(world.road.gate, roadMaterial));
     },
 
     setOrbit(orbit) {

@@ -263,6 +263,10 @@ export interface Road {
   mesh: MeshData;
   /** The kerbs: where they are, and their triangles. */
   kerbs: { spans: KerbSpan[]; mesh: MeshData };
+  /** The low walls along both edges of the lap. */
+  barriers: MeshData;
+  /** The chequered start line and the gate over it, at sample 0 of the winner's centre line. */
+  gate: MeshData;
 }
 
 /** Everything track generation decided for one seed. */

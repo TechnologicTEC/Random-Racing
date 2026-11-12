@@ -29,6 +29,15 @@ export const ROAD = {
   shoulder: [0.4, 0.34, 0.26] as Rgb,
   kerbRed: [0.8, 0.13, 0.11] as Rgb,
   kerbWhite: [0.94, 0.94, 0.92] as Rgb,
+  /** The barrier wall: plain concrete, and its red and white blocks on the outside of corners. */
+  barrier: [0.74, 0.74, 0.71] as Rgb,
+  barrierRed: [0.78, 0.15, 0.13] as Rgb,
+  barrierWhite: [0.93, 0.93, 0.91] as Rgb,
+  /** The dark squares of the start line. */
+  startDark: [0.07, 0.07, 0.08] as Rgb,
+  /** The start gate: dark posts and a pale beam. */
+  gate: [0.16, 0.17, 0.2] as Rgb,
+  gateBeam: [0.9, 0.9, 0.88] as Rgb,
 };
 
 /** A simple flat sea, until the water shader arrives. */

@@ -1,8 +1,10 @@
 import type { GenConfig } from '../config';
 import { createHasher } from '../core/hash';
 import { solveBanking } from './road/banking';
+import { buildBarriers } from './road/barriers';
 import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
+import { buildStartGate } from './road/startGate';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
 import type { WorldResult } from './types';
@@ -46,6 +48,8 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
       cross,
       mesh: buildRoadRibbon(line, profile.height, cross, config),
       kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, kerbSpans, config) },
+      barriers: buildBarriers(line, profile.height, cross, winner.sections, config),
+      gate: buildStartGate(line, profile.height, cross, config),
     },
     report,
   };
@@ -64,7 +68,7 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers(world.ground.height);
   hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.variation);
   hasher.numbers(world.road.cross);
-  for (const mesh of [world.road.mesh, world.road.kerbs.mesh]) {
+  for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate]) {
     hasher.numbers(mesh.positions).numbers(mesh.indices).numbers(mesh.materials);
   }
   for (const kerb of world.road.kerbs.spans) hasher.numbers([kerb.startIndex, kerb.sampleCount, kerb.side]);
