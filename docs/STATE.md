@@ -158,6 +158,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 
 ## Known issues and risks
 
+- **Firefox builds worlds much more slowly than Chromium** under the dev server (a lab test that steps through three seeds takes about 10 s there). Measure it properly in step 15 against the 3-second budget. Playwright now waits up to 15 s for a new seed to appear.
+
 - **Not every island gets a peak.** Narrow tracks have no infield point far enough from the road (4 of 24 seeds surveyed: 2, 1234, 77777, 43950). Tane asked for one interior peak at least 60 m from the track; those two wishes cannot both be met there.
 - **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.

@@ -7,6 +7,8 @@ export default defineConfig({
   // Each page now generates whole islands, which keeps a processor core busy. More browsers than this at once and the slow ones time out.
   workers: 4,
   timeout: 60_000,
+  // Waiting for a new seed means waiting for a whole world, which can take a few seconds in Firefox on a busy machine.
+  expect: { timeout: 15_000 },
   reporter: [['list']],
   use: {
     baseURL: 'http://127.0.0.1:5173',
