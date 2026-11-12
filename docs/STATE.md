@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** check-in 2, and step R0 of the rework (plan agreed with Tane and recorded below). Steps 0 to 11 are built and pushed
-- **Next step:** **rework step R1** (baseline measurements), then R2 to R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
+- **Last finished step:** rework step R1 (baseline measurements; see "Rework measurements"). Steps 0 to 11 are built and pushed
+- **Next step:** **rework step R2** (seed character), then R3 to R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -72,7 +72,7 @@ Tests first, watched failing. Run the unit and browser suites so that a failure 
 | # | Step | Ends with | Status |
 | --- | --- | --- | --- |
 | R0 | Record the plan and decisions here | Pushed | Done |
-| R1 | Baselines: fold and hairpin counts for seeds 1 to 200 now and with the Milestone 1 scorer; world build time at the new tile size in Node, Chromium and Firefox | Numbers here; a decision on style weights, and on the grid if Firefox is over 3 s | To do |
+| R1 | Baselines: fold and hairpin counts for seeds 1 to 200 now and with the Milestone 1 scorer; world build time at the new tile size in Node, Chromium and Firefox | Numbers here; a decision on style weights, and on the grid if Firefox is over 3 s | Done: style weights and grid stay as planned |
 | R2 | Seed character: `gen/character.ts`, config weights, on `TrackResult`, shown in the lab | Tests: same seed same character; each value at about its weight over 2000 seeds | To do |
 | R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | To do |
 | R4 | Variable road width through generation, meshes, fit, report and lab | Tests: 12 to 22 m, eased, not widened beside close sections, ground follows the wider road, kerbs and barriers at the true edge | To do |
@@ -83,6 +83,34 @@ Tests first, watched failing. Run the unit and browser suites so that a failure 
 | | **Check-in 3:** Tane looks at contact sheets and flies a few seeds | Feedback | |
 
 After check-in 3, resume steps 12 to 17 in the table above.
+
+### Rework measurements
+
+**R1 baselines (2026-11-12), before any rework code.**
+
+*Folds and hairpins, winners of seeds 1 to 200.* A fold is counted as a pocket at least 100 m deep in the track's outline (its convex hull).
+
+| | Now (elevation 12%) | Milestone 1 scorer |
+| --- | --- | --- |
+| Folds per track | 1.12 (none 14%, one 63%, two 23%, three or more 2%) | 1.07 (none 17%, one 61%, two 21%, three or more 2%) |
+| Hairpins per track | 1.60 (none 2%, one 58%, two or more 41%) | 1.60 (same shares) |
+| Lap length over outline length | 1.19 | 1.18 |
+| Share of the lap with another section within 80 m | 12% | 12% |
+
+By style now: folded 1.17 folds and 1.85 hairpins; stretched 1.16 and 1.35; round 0.96 and 1.30. 45 of 200 winners differ between the two scorers.
+
+**Decision:** the elevation score did not reduce folds, so the style weights stay at 50 / 25 / 25. The tracks look stuck to the edge because the sea fills every fold; the hinterland (R6) is the fix.
+
+*World build time, 8 seeds, median (range), in milliseconds.*
+
+| | Node | Chromium worker | Firefox worker |
+| --- | --- | --- | --- |
+| Now: 1400 m tile, 2 m cells | 435 (403 to 491) | 372 (353 to 402) | 603 (561 to 743) |
+| New: 2700 m tile, 3 m cells, 4 m verge | 575 (554 to 644) | 489 (480 to 535) | 845 (816 to 903) |
+| New tile with land out to 500 m from the road (stands in for the hinterland; 24% of the tile is land) | 608 (592 to 678) | 551 (514 to 560) | 881 (844 to 901) |
+| 2700 m tile at 2 m cells, for comparison | 1268 | not measured | not measured |
+
+Handing the result from the worker to the page adds 1 to 4 ms. **Decision:** Firefox is far under the 3 s budget, so the grid stays as planned (2700 m, 3 m cells). Mountains and the hinterland's own noise will add to this; R5, R6 and R7 measure again.
 
 ### Rework risks
 
@@ -233,7 +261,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 
 - **The verge dips at its outer edge on steep banks** (up to about 0.4 m at the barrier on seed 7), because the 2.5 m verge is only just wider than a 2 m grid cell. The road itself is unaffected and the barrier footing hides it. A wider verge or a finer grid near the road would remove it.
 
-- **Firefox builds worlds much more slowly than Chromium** under the dev server (a lab test that steps through three seeds takes about 10 s there). Measure it properly in step 15 against the 3-second budget. Playwright now waits up to 15 s for a new seed to appear.
+- **Firefox builds worlds about 1.6 times more slowly than Chromium** (measured in R1: about 0.6 s against 0.37 s per world in the worker; 0.85 s at the new tile size). Both are well inside the 3-second budget. Playwright waits up to 15 s for a new seed to appear, which covers a busy machine.
 
 - **Not every island gets a peak.** Narrow tracks have no infield point far enough from the road (4 of 24 seeds surveyed: 2, 1234, 77777, 43950). Tane asked for one interior peak at least 60 m from the track; those two wishes cannot both be met there.
 - **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
@@ -274,3 +302,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-12 (Milestone 2):** Step 10 done. `gen/road/barriers.ts` and `startGate.ts`; `WorldResult.road` now also has `barriers` and `gate`. Every part of the road is one of eleven materials listed in `gen/road/ribbon.ts`, coloured in `render/palette.ts`. A new real-seed test checks every barrier is footed in the ground. 585 unit tests pass.
 - **2026-11-12 (Milestone 2):** Step 11 done. `camera/flyAlong.ts` plans the flight (it climbs early over anything that would come within 2.5 m). `app/worldPage.ts` now opens flying, with Play/Pause (Space), Circle the island / Fly the lap (C), New island (N) and speed (up and down arrows); it starts paused for anyone whose system asks for reduced motion. The screenshot test takes four flying views per seed (`$env:LAPS` chooses where). Stopped for check-in 2.
 - **2026-11-12 (Milestone 2):** Check-in 2. Tane flew the islands in 3D and asked for a rework: hillier ground, mountains of 200 to 250 m and more of them, tracks that sometimes climb (up to 15%), land that extends past the track with the road only sometimes by the sea, road width varying from 12 to 22 m, and traits that combine differently per seed. Planned in plan mode and approved (rework steps R1 to R8, then check-in 3, then steps 12 to 17). Step R0 done: the plan is recorded in "Milestone 2 rework" above. No code changed since step 11. Session ended here; the rework starts in a fresh session at R1.
+- **2026-11-12 (Milestone 2 rework):** Step R1 done, measurements only (no code changed). Folds did not drop when elevation joined the score (1.12 per winner now, 1.07 with the Milestone 1 scorer, seeds 1 to 200), so style weights stay. The new 2700 m tile at 3 m cells builds in about 0.58 s in Node, 0.49 s in Chromium and 0.85 s in Firefox, so the grid stays as planned. Numbers are in "Rework measurements".
