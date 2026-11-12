@@ -85,6 +85,13 @@ test('opens on a close view of a spot from the fit report when asked', async ({ 
   expect(seen.road / seen.total).toBeGreaterThan(0.03);
 });
 
+test('shows red and white kerbs on the inside of the tightest corner', async ({ page }) => {
+  await openWorld(page, 'seed=42&look=hairpin');
+  await expect(page.locator('body')).toHaveAttribute('data-world-look', 'hairpin');
+  const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+  expect(seen.kerb).toBeGreaterThan(150);
+});
+
 test('shows the whole island when the spot asked for is not one it knows', async ({ page }) => {
   await openWorld(page, 'seed=42&look=nonsense');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'island');
@@ -96,7 +103,7 @@ test.describe('3D screenshots', () => {
   const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [7, 42, 100, 2024, 48213];
 
   /** Which close views to take as well as the overview. Override with LOOKS, for example: $env:LOOKS = "cut,water" */
-  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water'];
+  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin'];
 
   for (const seed of seeds) {
     const name = String(seed).padStart(5, '0');

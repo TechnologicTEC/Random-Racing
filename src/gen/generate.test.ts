@@ -40,6 +40,13 @@ describe('generateWorld', () => {
     expect(world.road.mesh.indices.length / 3).toBeGreaterThan(winner.line.count * 10);
   });
 
+  it('contains a kerb for every real corner, as spans and as triangles', () => {
+    const winner = world.track.candidates[world.track.winnerIndex]!;
+    const realCorners = winner.sections.filter((s) => s.type === 'corner' && s.kind !== 'kink').length;
+    expect(world.road.kerbs.spans).toHaveLength(realCorners);
+    expect(world.road.kerbs.mesh.indices.length).toBeGreaterThan(0);
+  });
+
   it('treats the seed as a whole number from 0 to 4,294,967,295, like track generation', () => {
     expect(generateWorld(-1, coarse).seed).toBe(4294967295);
   });
@@ -75,7 +82,10 @@ describe('hashWorld', () => {
     const afterMesh = hashWorld(world);
     expect(afterMesh).not.toBe(before);
     world.road.cross[10] = world.road.cross[10]! + 0.01;
-    expect(hashWorld(world)).not.toBe(afterMesh);
+    const afterCross = hashWorld(world);
+    expect(afterCross).not.toBe(afterMesh);
+    world.road.kerbs.mesh.positions[7] = world.road.kerbs.mesh.positions[7]! + 0.25;
+    expect(hashWorld(world)).not.toBe(afterCross);
   });
 });
 

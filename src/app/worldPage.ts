@@ -1,6 +1,6 @@
 import './world.css';
 import { dragOrbit, zoomOrbit, type Orbit } from '../camera/orbit';
-import { lookAtSpot } from '../camera/spots';
+import { lookAtPoint, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
 import type { FitReport, WorldResult } from '../gen';
@@ -49,8 +49,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
   let dirty = true;
   let report: FitReport | null = null;
-  // `&look=cut` (or fill, bank, close, water) opens on a close view of that spot of the fit report.
+  // `&look=cut` (or fill, bank, close, water, hairpin, start) opens on a close view of that spot;
+  // `&at=122,-250` opens on a close view of that map position.
   const look = new URL(window.location.href).searchParams.get('look') ?? '';
+  const at = new URL(window.location.href).searchParams.get('at') ?? '';
 
   const resize = (): void => {
     view.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), window.devicePixelRatio || 1);
@@ -129,9 +131,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       view.load(result);
       report = result.report;
       frameIsland(result);
-      const spot = lookAtSpot(look, result.report, (x, z) => sampleField(result.ground, x, z, 0));
+      const winner = result.track.candidates[result.track.winnerIndex]!;
+      const groundAt = (x: number, z: number): number => sampleField(result.ground, x, z, 0);
+      const point = lookAtPoint(at, groundAt);
+      const spot = point ?? lookAtSpot(look, result.report, groundAt) ?? lookAtTrack(look, winner.line, winner.sections, groundAt);
       if (spot) orbit = spot;
-      document.body.dataset.worldLook = spot ? look : 'island';
+      document.body.dataset.worldLook = point ? 'point' : spot ? look : 'island';
       view.setOrbit(orbit);
       view.render();
       dirty = false;

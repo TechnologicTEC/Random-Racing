@@ -8,6 +8,8 @@ const BY_MATERIAL = new Map<number, Rgb>([
   [ROAD_MATERIAL.asphalt, ROAD.asphalt],
   [ROAD_MATERIAL.line, ROAD.line],
   [ROAD_MATERIAL.shoulder, ROAD.shoulder],
+  [ROAD_MATERIAL.kerbRed, ROAD.kerbRed],
+  [ROAD_MATERIAL.kerbWhite, ROAD.kerbWhite],
 ]);
 
 /**

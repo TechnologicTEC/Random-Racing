@@ -9,6 +9,9 @@ export const ROAD_MATERIAL = {
   line: 1,
   /** The apron folded down from each edge of the road. */
   shoulder: 2,
+  /** The red and the white blocks of a kerb. */
+  kerbRed: 3,
+  kerbWhite: 4,
 } as const;
 
 /** One lengthwise strip of the road's cross-section. Offsets are metres to the right of the centre line. */

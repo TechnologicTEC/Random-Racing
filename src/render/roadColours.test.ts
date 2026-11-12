@@ -26,6 +26,15 @@ describe('roadColours', () => {
     expect(at(3)).toEqual(at(0));
   });
 
+  it('makes kerbs red and white', () => {
+    const kerb = roadColours(Uint8Array.from([ROAD_MATERIAL.kerbRed, ROAD_MATERIAL.kerbWhite]));
+    const [rr, rg, rb] = [...kerb.slice(0, 3)] as [number, number, number];
+    expect(rr).toBeGreaterThan(0.5);
+    expect(rg).toBeLessThan(0.1);
+    expect(rb).toBeLessThan(0.1);
+    expect(Math.min(...kerb.slice(3, 6))).toBeGreaterThan(0.7);
+  });
+
   it('paints an unknown material bright pink, so a mistake is easy to spot', () => {
     const [r, g, b] = [...roadColours(Uint8Array.from([250]))] as [number, number, number];
     expect(r).toBeGreaterThan(0.8);

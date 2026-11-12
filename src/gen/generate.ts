@@ -1,6 +1,7 @@
 import type { GenConfig } from '../config';
 import { createHasher } from '../core/hash';
 import { solveBanking } from './road/banking';
+import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
@@ -28,6 +29,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const fitted = fitRoad({ ...road, natural: island.inland }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
   const cover = buildCover(track.seed, ground, fitted.corridor, island.near, config);
+  const kerbSpans = findKerbs(line, winner.sections, config.road);
   const report = fitReport(
     { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor },
     config,
@@ -40,7 +42,11 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     natural: island.natural,
     ground,
     cover,
-    road: { cross, mesh: buildRoadRibbon(line, profile.height, cross, config) },
+    road: {
+      cross,
+      mesh: buildRoadRibbon(line, profile.height, cross, config),
+      kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, kerbSpans, config) },
+    },
     report,
   };
 }
@@ -58,7 +64,10 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers(world.ground.height);
   hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.variation);
   hasher.numbers(world.road.cross);
-  hasher.numbers(world.road.mesh.positions).numbers(world.road.mesh.indices).numbers(world.road.mesh.materials);
+  for (const mesh of [world.road.mesh, world.road.kerbs.mesh]) {
+    hasher.numbers(mesh.positions).numbers(mesh.indices).numbers(mesh.materials);
+  }
+  for (const kerb of world.road.kerbs.spans) hasher.numbers([kerb.startIndex, kerb.sampleCount, kerb.side]);
   const { report } = world;
   for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {
     if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);

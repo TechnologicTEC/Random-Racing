@@ -27,6 +27,8 @@ export const ROAD = {
   line: [0.93, 0.93, 0.9] as Rgb,
   /** The apron folded down from each edge: packed earth. */
   shoulder: [0.4, 0.34, 0.26] as Rgb,
+  kerbRed: [0.8, 0.13, 0.11] as Rgb,
+  kerbWhite: [0.94, 0.94, 0.92] as Rgb,
 };
 
 /** A simple flat sea, until the water shader arrives. */

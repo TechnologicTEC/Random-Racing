@@ -266,6 +266,15 @@ export interface RoadConfig {
   /** A strip folded down from each road edge to hide the gap above the sunken ground: its width and how far its outer edge drops, in metres. */
   apronWidth: number;
   apronDrop: number;
+  /** Kerbs: width, and height of the outer edge above the road, in metres. The inner edge is flush with the road. */
+  kerbWidth: number;
+  kerbHeight: number;
+  /** Length of each red or white block of a kerb, in metres. */
+  kerbStripe: number;
+  /** A kerb starts this far before its corner and runs this far past it, in metres... */
+  kerbLead: number;
+  /** ...but is never longer than this; on a long corner it is centred on the middle. */
+  kerbMaxLength: number;
   /** Steepest banking, in degrees (brief: up to about 8 in fast corners). */
   bankMax: number;
   /** Corners of this radius or tighter get only `bankSlowShare` of the full bank; corners of `bankFastRadius` or wider get all of it. In metres. */
@@ -564,6 +573,11 @@ export const config: GameConfig = {
     centreDash: 6,
     apronWidth: 1.5,
     apronDrop: 0.6,
+    kerbWidth: 1,
+    kerbHeight: 0.09,
+    kerbStripe: 2,
+    kerbLead: 4,
+    kerbMaxLength: 70,
     bankMax: 8,
     bankSlowRadius: 20,
     bankFastRadius: 70,

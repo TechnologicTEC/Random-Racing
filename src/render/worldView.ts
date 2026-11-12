@@ -24,6 +24,8 @@ export interface PixelCounts {
   sea: number;
   /** Pixels that are the dark grey of asphalt. */
   road: number;
+  /** Pixels that are the red of a kerb. */
+  kerb: number;
 }
 
 /** The 3D picture of a world. It only draws data it is given; it decides nothing about the world. */
@@ -96,6 +98,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         ground.add(new THREE.Mesh(geometry, groundMaterial));
       }
       road.add(createRoadMesh(world.road.mesh, roadMaterial));
+      road.add(createRoadMesh(world.road.kerbs.mesh, roadMaterial));
     },
 
     setOrbit(orbit) {
@@ -130,15 +133,17 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       let land = 0;
       let sea = 0;
       let road = 0;
+      let kerb = 0;
       for (let p = 0; p < pixels.length; p += 4) {
         const r = pixels[p]!;
         const g = pixels[p + 1]!;
         const b = pixels[p + 2]!;
-        if (b > r + 30 && b > g) sea++;
+        if (r > 140 && g < 90 && b < 90) kerb++;
+        else if (b > r + 30 && b > g) sea++;
         else if (g > b + 15 || (r > b + 25 && g > b + 10)) land++;
         else if (Math.abs(r - g) < 14 && Math.abs(g - b) < 18 && r > 40 && r < 130) road++;
       }
-      return { total: width * height, land, sea, road };
+      return { total: width * height, land, sea, road, kerb };
     },
 
     dispose() {

@@ -242,6 +242,15 @@ export interface WorldResult {
   report: FitReport;
 }
 
+/** A kerb: a run of samples along one edge of the road. */
+export interface KerbSpan {
+  /** First sample of the kerb; it may wrap past the end of the lap. */
+  startIndex: number;
+  sampleCount: number;
+  /** Which edge it is on: 1 for the right of the direction of travel, -1 for the left. */
+  side: 1 | -1;
+}
+
 /** The road of the winning track, beyond its centre line and height profile. */
 export interface Road {
   /**
@@ -252,6 +261,8 @@ export interface Road {
   cross: Float64Array;
   /** The road surface as triangles. Material numbers are listed in gen/road/ribbon.ts. */
   mesh: MeshData;
+  /** The kerbs: where they are, and their triangles. */
+  kerbs: { spans: KerbSpan[]; mesh: MeshData };
 }
 
 /** Everything track generation decided for one seed. */

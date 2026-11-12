@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { FitReport } from '../gen/types';
-import { lookAtSpot, SPOT_NAMES } from './spots';
+import { config } from '../config';
+import { analyseSections } from '../gen/track/analysis';
+import { stadiumLine } from '../testing/trackFixtures';
+import { lookAtPoint, lookAtSpot, lookAtTrack, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
 
 const spot = (x: number, z: number, sample = 0) => ({ x, z, value: 1, sample });
 const report: FitReport = {
@@ -44,5 +47,48 @@ describe('lookAtSpot', () => {
   it('has nothing to look at when no sections are close, or the name is unknown', () => {
     expect(lookAtSpot('close', { ...report, closestSections: null }, heightAt)).toBeNull();
     expect(lookAtSpot('nonsense', report, heightAt)).toBeNull();
+  });
+});
+
+describe('lookAtPoint', () => {
+  it('aims a close camera at a map position written as "x,z"', () => {
+    const orbit = lookAtPoint('122,-250', heightAt)!;
+    expect(orbit.targetX).toBe(122);
+    expect(orbit.targetZ).toBe(-250);
+    expect(orbit.targetY).toBe(12);
+  });
+
+  it('ignores anything that is not two numbers', () => {
+    expect(lookAtPoint('', heightAt)).toBeNull();
+    expect(lookAtPoint('12', heightAt)).toBeNull();
+    expect(lookAtPoint('a,b', heightAt)).toBeNull();
+  });
+});
+
+describe('lookAtTrack', () => {
+  // Two 400 m straights joined by 20 m hairpins. The lap starts at the beginning of the first straight.
+  const line = stadiumLine(400, 20);
+  const sections = analyseSections(line, config.track);
+
+  it('knows the places on the track by name', () => {
+    expect(TRACK_SPOT_NAMES).toEqual(['hairpin', 'start']);
+  });
+
+  it('aims at the middle of the tightest corner', () => {
+    const orbit = lookAtTrack('hairpin', line, sections, heightAt)!;
+    // Both hairpins are the same; the first is centred on x = 200, bulging out to x = 220.
+    expect(Math.abs(orbit.targetX)).toBeGreaterThan(205);
+    expect(Math.abs(orbit.targetZ)).toBeLessThan(6);
+    expect(orbit.distance).toBeLessThan(150);
+  });
+
+  it('aims at the start line', () => {
+    const orbit = lookAtTrack('start', line, sections, heightAt)!;
+    expect(orbit.targetX).toBeCloseTo(line.x[0]!, 6);
+    expect(orbit.targetZ).toBeCloseTo(line.z[0]!, 6);
+  });
+
+  it('has nothing to look at for a name it does not know', () => {
+    expect(lookAtTrack('cut', line, sections, heightAt)).toBeNull();
   });
 });
