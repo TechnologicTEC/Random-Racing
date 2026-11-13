@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** rework step R8 (far ground at quarter detail, fog and camera limits for the bigger island). The whole rework, R1 to R8, is built and pushed
-- **Next step:** **check-in 3**: Tane looks at contact sheets and flies a few seeds. Then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
+- **Next step:** check-in 3 is done (feedback below, under "Check-in 3 feedback"). **Plan the response in plan mode, in a fresh session**, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -80,9 +80,25 @@ Tests first, watched failing. Run the unit and browser suites so that a failure 
 | R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | Done |
 | R7 | Mountains (0 to 4, main 200 to 250 m), foothills, snow | Tests: heights in range, 60 m clear of the road, slopes within limit, mountain seeds have the main one above the ramp | Done |
 | R8 | 3D: far-ground detail levels, fog and camera limits | Triangle count recorded; fly, orbit and close-up screenshots on 20 seeds | Done |
-| | **Check-in 3:** Tane looks at contact sheets and flies a few seeds | Feedback | |
+| | **Check-in 3:** Tane looks at contact sheets and flies a few seeds | Feedback | Done: see "Check-in 3 feedback" |
 
 After check-in 3, resume steps 12 to 17 in the table above.
+
+### Check-in 3 feedback (2026-11-13)
+
+Tane looked at the contact sheets and flew seeds (screenshots: a single cone-shaped mountain behind a track; seeds 19 and 20 with round mountain islands beside the track). Feedback, in Tane's words where possible:
+
+1. **Tracks should include the mountains.** Right now the mountains are only background. Some tracks should go up the mountains and right around them.
+2. **More elevation on some tracks.** Some of the mountain-relief tracks do not go very high. Some should drive up a mountain and back down.
+3. **Mountains look too basic.** They are cones that only vary in height, copies of each other. They should vary in shape: for example rolling hills that dip up and down and mould the terrain (reference: a photo of soft, rounded green hills folding into each other), or sharp pointed peaks joined together into a range (reference: a photo of jagged Dolomite-style spires connected by ridges).
+
+**Not yet decided; for the planning session.** The track is built first and the land shaped around it. Layouts only know the seed's relief (`createRelief`), and mountains are placed afterwards, at least 60 m from the road. Points to settle in the plan:
+
+- To route a track over or around a mountain, the mountain has to exist before the layouts are scored. It could become part of the relief, which is seed-only and already holds the highland. Candidates could then also be scored on how they use it.
+- A road limited to 15% with cut and fill of at most 6 m and 8 m cannot go straight up 110% sides. It needs gentler mountain flanks where the road goes, or switchbacks, or layouts that wrap round the mountain along its contours. The layout builder knows nothing about terrain today.
+- Shapes: rolling hill country (overlapping soft swells, perhaps from noise rather than separate bells) and ridged ranges (several sharp peaks joined by ridges, from ridged noise along a spine), chosen per seed like the other traits.
+- These would also answer the check-in 3 issues already noted under "Known issues": round dome-islands off the coast, and coastal ramps slicing hills into bands.
+- Elevation targets: the mountain relief band (60 to 120 m per lap) and its score target may need raising, within the cut and fill limits.
 
 ### Rework measurements
 
@@ -402,3 +418,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2 rework):** Step R6 done. `world.hinterland` config; `shapeHinterland` and `fillCutOffSea` in `island.ts`; `Island.seaside`. New `hinterland.test.ts` (8 seeds of each coast trait). Contact sheets frame whole islands. Three things found by measuring and fixed on the way: long 40 to 80 m strips (fixed by cutting the pattern instead of lowering it), 400% slopes where the pattern fades out beside high roads (fixed by a gentler pattern and a slower climb), and sea cliffs pulling the barrier's ground down (fixed by the 7 m clear strip). Results are in "Rework measurements". 755 unit tests and 152 Playwright tests pass.
 - **2026-11-13 (Milestone 2 rework):** Step R7 done. `placeMountains` replaces `placePeak`; `Island.mountains`; foothills; `Cover.snow` and its colour. New `mountains.test.ts` (16 seeds: mountain-relief, and rolling with three mountains). Found and fixed by measuring: mountain sides of 250% to 450% (ridges too small), a 2 m mountain on a plateau, 500% slopes at the edge of a mountain's skirt (no sea-bed shelf), creases where the nearest road changes (the hinterland's coast now climbs to the land's height), and a step 670 m from the road (the land height has to be used everywhere). Two new known issues for check-in 3: coastal ramps slicing hills into bands, and very round mountains. 768 unit tests and 152 Playwright tests pass.
 - **2026-11-13 (Milestone 2 rework):** Step R8 done. `buildTerrainChunks` takes the road and draws far chunks at quarter detail with stitched edges; fog, sea and orbit range scaled; the budget test moved to its own projects that run last. Triangle counts are in "Rework measurements". 774 unit tests and 307 Playwright tests pass (with screenshots of seeds 1 to 20). **The rework is complete; stopped for check-in 3.**
+- **2026-11-13 (Milestone 2):** Check-in 3 with Tane. Feedback recorded under "Check-in 3 feedback": tracks should go up and round mountains, some laps should climb more, and mountains should vary in shape (rolling hills, ridged ranges of sharp peaks). The session was at about 770,000 tokens, so the response will be planned in plan mode in a fresh session.
