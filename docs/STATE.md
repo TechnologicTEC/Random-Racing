@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** C0, the response to check-in 3 is planned and approved (see "Check-in 3 response" below). The rework R1 to R8 is built and pushed
-- **Next step:** C1, the spike (measurements only). Then C2 to C6, check-in 4, then the original steps 12 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** C1, the spike (measurements only; see "Rework measurements", C1). Tane chose half climbing, half circling mountain seeds. The rework R1 to R8 is built and pushed
+- **Next step:** C2, the landform trait (and the climb or circle choice for mountain seeds). Then C3 to C6, check-in 4, then the original steps 12 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -110,6 +110,8 @@ Tane looked at the contact sheets and flew seeds (screenshots: a single cone-sha
 - **Every mountain-relief seed** (20% of seeds) climbs onto its main mountain and goes round it. Hilly seeds keep climbing the lower slopes of a mountain beyond the track, in the new shapes.
 - **Three shapes, one per seed:** ridged range about 40%, rolling hill country about 35%, lone peak about 25%. The lone peak is reshaped too: an uneven foot, spurs and a steep top instead of a cone.
 
+**Tane's choice after the C1 spike:** a lap can climb high or go right round a mountain, not both (going round follows the contour, so it stays at one height). So mountain seeds are split **half climbing, half circling**, a new per-seed choice. Climbing seeds have the summit at the edge of the track area and rise about 100 to 145 m onto its shoulder; circling seeds have the summit 200 m from the centre and go round it, rising about 60 to 90 m. Mountain seeds get a 600 m track area (500 m for the others). The numbers are under "Rework measurements", C1. Where they differ from the design below, C1 wins.
+
 #### Design
 
 1. **Landform trait.** `Character.landform`: `range`, `hills` or `peak`, from its own stream (`world/character/landform`), so no other trait changes. The mountain count (0 to 4) stays; every mountain on an island has the seed's shape.
@@ -132,7 +134,7 @@ Tests first, watched failing. Unit and browser suites must pass before each comm
 | # | Step | Ends with | Status |
 | --- | --- | --- | --- |
 | C0 | Record the plan and Tane's choices here | Pushed | Done |
-| C1 | **Spike** (throwaway): a simple concave massif in the relief of 200 mountain seeds, laps of 1.6 to 3 km, 1, 4 and 8 turns, earthworks rule. Measure lap range, how many winners go round the summit or within 150 m of its steep top, rejects per seed, fallbacks, cut and fill, whether 3 km fits in 500 m, time per seed | Numbers here; decisions on summit distance, flank profile, turns, buildable radius, lap minimum, score numbers. **If the median range is under 110 m, report to Tane before going on** | To do |
+| C1 | **Spike** (throwaway): a simple concave massif in the relief of 200 mountain seeds, laps of 1.6 to 3 km, 1, 4 and 8 turns, earthworks rule. Measure lap range, how many winners go round the summit or within 150 m of its steep top, rejects per seed, fallbacks, cut and fill, whether 3 km fits in 500 m, time per seed | Numbers here; decisions on summit distance, flank profile, turns, buildable radius, lap minimum, score numbers. **If the median range is under 110 m, report to Tane before going on** | Done: reported; Tane chose half climbing, half circling |
 | C2 | Landform trait: `character.ts`, config weights, lab and contact sheets | Tests: same seed same landform; each shape at about its weight over 2000 seeds; other traits unchanged on seeds 1 to 2000 | To do |
 | C3 | `landforms.ts`: range, hills, peak | Tests per shape: heights in range; steepest slope within limit; peak foot not a circle (radius varies at least 25%); range has 3 to 6 summits with saddles at least 55% of the lower neighbour; hill country at least 5 swells, below the snow line, slopes at most about 60%; no copies | To do |
 | C4 | Massif in the relief, longer mountain laps, turns, earthworks rule, score changes | Mountain climb tests: new lap range band, 15%, crests, cut and fill and banks on every valid candidate, no fallback on 200 seeds, most winners round the summit or near its top, laps at most 3 km. Other reliefs still pass at 2.4 km. Build time measured | To do |
@@ -224,6 +226,52 @@ Over all 30 candidates of 40 seeds per relief, cut and fill also stay inside 6 m
 - Ground triangles loaded, 8 seeds: 58% to 74% of full detail with far ground at quarter detail (seed 12: 786k down to 455k). Seed 2024, whose land is all within 250 m of the road, keeps all 164k.
 - Triangles drawn per frame (Chromium, 1280 by 720): circling view 182k to 407k in 25 to 70 draw calls; flying view 92k to 141k in 13 to 29 draw calls. Seeds 1, 12, 2024 and 48213.
 - Fly, orbit and close-up screenshots of seeds 1 to 20 checked by eye: no seams where the detail levels meet.
+
+**C1 results (2026-11-13): the check-in 3 spike, mountain seeds only.** Throwaway code: the candidate loop rebuilt from `generateLayout`, `solveProfile`, `measureProfile` and `scoreLayout`, with a test mountain added to the seed's relief (no highland), each candidate tried at several turns about the centre, and the earthworks rule (cut 8 m, fill 6 m, bank 45%) rejecting turns. "Sweep" is how many degrees round the summit the lap passes within 300 m of the steep top's foot; "fully round" means the summit is inside the loop.
+
+*First tries, 40 seeds, laps 1.6 to 3 km, 500 m track area, 8 turns unless stated.*
+
+| Test mountain | Median lap range | Laps under 90 m | Fully round | Median sweep | Turns rejected |
+| --- | --- | --- | --- | --- | --- |
+| Today (highland flank, 1 turn, laps to 2.4 km) | 77.3 m | 33 | 0 | 0° | 0% |
+| Broad dome 150 m, 900 m radius, under the whole area, peak on top | 78.6 m | 30 | 19 | 200° | 94% |
+| 15% cone, summit 450 m out, 1 turn | 89.2 m | 23 | 0 | 80° | 10% |
+| Same, 4 turns | 99.5 m | 8 | 0 | 90° | 11% |
+| Same, 8 turns | 105.5 m | 4 | 0 | 90° | 10% |
+| Same, 8 turns, laps to 2.4 km only | 97.4 m | 10 | 0 | 80° | 7% |
+| 15% cone, summit 350 m out | 86.0 m | 25 | 0 | 120° | 45% |
+| 15% cone, summit 250 m out | 69.3 m | 38 | 5 | 150° | 80% |
+| 600 m area, cone summit 550 m out | 112.7 m | 5 | 0 | 70° | 2% |
+| Same, elevation weight 25% | 124.0 m | 1 | 0 | 70° | 2% |
+| 600 m area, weight 25%, cone summit 200 m out | 76.9 m | 36 | 26 | 320° | 78% |
+| Same, summit 120 m out | 67.1 m | 40 | 34 | 350° | 77% |
+
+What it shows: a dome steeper than the road's 15% almost everywhere leaves few layouts that fit. A 15% cone works, with the steep top only at its summit. Climb is limited by how far the track area reaches up the slope, not by lap length (3 km laps add about 8 m). A lap that circles a mountain stays near one height.
+
+*Confirmed on 200 seeds (600 m area, laps 1.6 to 3 km, elevation weight 25%, targets 160 m range and 240 m climb).*
+
+| | Climbing: summit 550 m out, 8 turns | Same, 4 turns | Circling: summit 200 m out, 8 turns |
+| --- | --- | --- | --- |
+| Lap range, lowest / tenth / median / ninetieth / highest | 76.9 / 100.8 / 120.4 / 140.3 / 149.2 m | 72.8 / 98.7 / 118.5 / 137.3 / 149.2 m | 38.8 / 63.7 / 77.1 / 89.9 / 101.8 m |
+| Laps under 90 m | 5 | 11 | 182 |
+| Highest point of the lap (median) | 147 m | 144 m | 108 m |
+| Fully round the summit; 180° or more | 0; 0 | 0; 0 | 152; 170 |
+| Within 150 m of the steep top | 197 | 193 | 200 |
+| Turns rejected for earthworks | 1.5% | 1.4% | 76% |
+| Fallbacks (no valid candidate) | 0 | 0 | 0 |
+| Deepest cut, tallest fill, steepest bank of winners | 7.4 m, 5.9 m, 35% | 7.3 m, 5.9 m, 32% | 7.7 m, 6.0 m, 40% |
+| Laps over 2.4 km; longest | 121; 2970 m | 126; 2970 m | 112; 2970 m |
+| Track generation per seed in Node (median) | 287 ms | 162 ms | 317 ms (today 47 ms) |
+
+**Decisions from C1 (Tane chose the split; the rest follows from the numbers):**
+- Mountain seeds are half climbing, half circling, from a stream of their own.
+- The main mountain stands on a 15% cone that eases in over 120 m at its foot and reaches 600 m past the summit. Its steep top stands on a flat shoulder about 100 m higher. Climbing seeds: summit 550 m from the centre, top's foot 130 m across in radius (summit about 250 m above the sea). Circling seeds: summit 200 m out, foot 110 m (summit about 200 m). C3 and C5 give the top its landform shape.
+- Mountain seeds: 600 m track area, laps 1.6 to 3 km, 8 turns (4 turns loses 2 m of median range and doubles the laps under 90 m), elevation weight 25% (the other four parts 18.75% each), elevation targets 160 m range and 240 m climb.
+- The earthworks rule is needed: without it, three in four turns on circling seeds would break the cut and fill limits.
+- No "goes round the mountain" score: three in four circling winners already go fully round.
+- Test bands for lap range: climbing 90 to 160 m; circling 55 to 100 m.
+- 3 km laps fit (the longest winner is 2.97 km, no layout failed to build), so only mountain seeds get the bigger area, for the climb.
+- Not measured yet: hilly seeds (C4 measures whether turns help them) and whole-world build time in browsers (C4).
 
 ### Rework risks
 
@@ -398,6 +446,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | **Check-in 3 response approved.** Mountain-relief seeds may have laps up to 3 km (departs from the brief's 1.4 to 2.4 km); the gradient stays 15% | Tane's choice: a 15% road on a 2.4 km lap can rise only about 150 m, short of a 200 to 250 m mountain. 3 km allows about 180 m |
 | 2026-11-13 | Every mountain-relief seed climbs onto its main mountain and goes round it; hilly seeds climb the lower slopes of one beyond the track | Tane's choice (check-in 3: tracks should include the mountains) |
 | 2026-11-13 | Mountain shape is a per-seed trait: ridged range about 40%, rolling hill country about 35%, lone peak about 25% | Tane's choice (check-in 3: mountains are copies of one cone) |
+| 2026-11-13 | **Mountain seeds are half climbing, half circling** (C1) | Tane's choice: in the spike a lap either climbed high (median 120 m) or went round the mountain (three in four fully round, median 77 m), never both |
+| 2026-11-13 | Mountain seeds get a 600 m track area (others keep 500 m), 8 candidate turns and 25% weight on elevation | C1: a 500 m area capped the climbing median at 105 m; the wider area and weight lift it to 120 m with 5 of 200 laps under 90 m |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -473,3 +523,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2 rework):** Step R8 done. `buildTerrainChunks` takes the road and draws far chunks at quarter detail with stitched edges; fog, sea and orbit range scaled; the budget test moved to its own projects that run last. Triangle counts are in "Rework measurements". 774 unit tests and 307 Playwright tests pass (with screenshots of seeds 1 to 20). **The rework is complete; stopped for check-in 3.**
 - **2026-11-13 (Milestone 2):** Check-in 3 with Tane. Feedback recorded under "Check-in 3 feedback": tracks should go up and round mountains, some laps should climb more, and mountains should vary in shape (rolling hills, ridged ranges of sharp peaks). The session was at about 770,000 tokens, so the response will be planned in plan mode in a fresh session.
 - **2026-11-13 (Milestone 2):** Check-in 3 response planned in plan mode and approved (steps C0 to C6, then check-in 4). Tane chose 3 km laps on mountain seeds, every mountain seed climbing its mountain, and three shapes (range, hill country, lone peak). Step C0 done: the plan is recorded under "Check-in 3 response". No code changed.
+- **2026-11-13 (Milestone 2):** Step C1 done, measurements only (throwaway spike, deleted). A broad dome rejects almost every layout; a 15% cone with a steep top works. A lap climbs high or circles the mountain, not both, so Tane chose half and half for mountain seeds. Mountain seeds get a 600 m track area, 8 turns and 25% elevation weight. Numbers and decisions are under "Rework measurements", C1. No generator code changed.
