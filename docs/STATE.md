@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 12, water and sky with the time of day from the seed (see "Step 12" below)
-- **Next step:** step 13, trees, rocks and clouds. Then steps 14 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 13, trees, rocks and clouds: planned and approved, steps 13a to 13g (see "Step 13" below). Then steps 14 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -32,7 +32,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | R1–R8 | **Rework** (table below), then check-in 3 | Done |
 | C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
-| 13 | Trees, rocks and clouds | To do |
+| 13 | Trees, rocks and clouds | In progress (13a to 13g, see "Step 13") |
 | 14 | Grass | To do |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | To do |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
@@ -355,6 +355,45 @@ Plan approved in plan mode. Tane's choices: seeds pick a time from 07:00 to 19:3
 
 `waveField` does the sums in TypeScript for the tests (13 of them: uneven gaps between big crests, crests of very different sizes, no repeat down or across the wind, peaked crests, slopes that match heights, travel down the wind); `wavesGlsl` writes the same sums for the shader. Checked by eye on seeds 2, 4, 5, 6, 7, 9, 13, 15, 17, 18, 19 and 20, from above, flying and close to the shore. 896 unit tests and 194 browser tests pass.
 
+## Step 13: trees, rocks and clouds (2026-11-14)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-content-id-d3aa-random-racing-rosy-cocke.md`.
+
+**Why the demo is not copied as it is:** it scatters about 1,160 trees and 15 small clouds over a 420 m island, by trial and error with its own random numbers. Our tile is 2.7 km with 250 m mountains, generation must be pure and exact, and the 3D page already draws 184k to 401k triangles in the circling view.
+
+**Tane's choices:**
+- Tree cover varies by seed: open, wooded or forest.
+- Three kinds of tree: broadleaf, pine, and a new palm by the beach.
+- Trees stand close to the road, in patches: from about 8 m off the road edge, wherever the woods reach it.
+- The seed picks the amount of cloud (clear, fair or cloudy); clouds stay above the highest summit.
+
+**Claude's calls, approved with the plan:**
+- Trees and rocks are scenery only. Barriers line the whole lap, so Milestone 3 needs no collisions with them.
+- No shadows yet (step 15). Trees do not sway.
+- The woods and cloud traits are on the world, not on `Character`, so no track fingerprint changes.
+- Clouds drift down the same wind as the waves and stand still with `still=1`.
+- The lab shows trees and rocks as dots on the single-seed map (key T) and names the woods and the sky. Contact-sheet thumbnails stay as they are.
+
+**Design.** Generation says where everything is, as plain numbers from the `decor` stream; `src/render` only draws them.
+- `gen/world/decor.ts`: the woods trait; trees from one pass over a jittered grid (so trees never overlap and the cost is fixed), kept where there is grass, the ground is not too steep, the road edge is at least 8 m away and a forest pattern is above the level for the seed's woods; palms on and just behind beaches, pines above a height band, broadleaf below, none above the tree line. Rocks from a second grid: boulders on rocky ground, a few on beaches and in the shallows.
+- `gen/world/clouds.ts`: the cloud trait; clouds of 5 to 9 puffs over a square wider than the tile, their bases above the island's highest ground.
+- `WorldResult.decor` and `WorldResult.clouds`, typed arrays only, in the world fingerprint. Settings in `world.decor` and `world.clouds`.
+- Drawing: shapes, instance groups and cloud positions as plain numbers first (`render/treeShapes.ts`, `scatter.ts`, `clouds.ts`, unit tested), then thin Three.js wrappers (`decorView.ts`, `cloudView.ts`). Trees are drawn in groups about 450 m square, each with a near and a far shape. `decor=off` in the address hides trees, rocks and clouds.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 13a | Record the plan and Tane's choices here | Done |
+| 13b | Config, types, `decor.ts`: the woods trait and trees | To do |
+| 13c | Rocks; `clouds.ts`; `WorldResult.decor` and `.clouds`; world fingerprint; worker | To do |
+| 13d | `render/treeShapes.ts`, `scatter.ts`, `clouds.ts` (plain numbers) | To do |
+| 13e | `decorView.ts`, `cloudView.ts`, the 3D page; `decor=off` | To do |
+| 13f | Lab: dots, T key, Track panel lines, title card | To do |
+| 13g | Screenshots of seeds 1 to 20 and a time strip, triangle counts, this file | To do |
+
+**Budgets:** trees, rocks and clouds add at most about 350k triangles and 120 draw calls to the circling view of a forest seed; the decoration takes under about 80 ms to generate in Node.
+
+**Risks:** a close camera (`look=`) can stand behind a tree, since it only checks the ground; clouds count as foam in the pixel counts, so tests that count foam or land open with `decor=off`; the palm is a new shape, judged by eye in 13g.
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -569,6 +608,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-14 | `patch` and `sample` are reserved words in the shader language (WebGL 2); a shader that fails to compile draws nothing and only logs to the console | Cost a confusing screenshot of a sea with no water. The test "builds the island in 3D" fails on any console error |
 | 2026-11-14 | The waves move every frame unless the page is held still (`still=1`) or the system asks for reduced motion; then they stand at `render.water.stillTime`, so screenshots repeat exactly | Tane's choice; replaces "draw only when something changed" for moving pictures |
 | 2026-11-14 | `time=HH:MM` opens the first island at that time, held to 07:00 to 19:30; a new island goes back to its own time. The slider moves in 5-minute steps and keeps its own arrow keys | Tane's choice for the player's pick until Milestone 4's menus |
+| 2026-11-14 | **Step 13, Tane's choices:** tree cover varies by seed (open, wooded, forest); broadleaf, pine and a palm by the beach; trees from about 8 m off the road edge, in patches; the seed picks the amount of cloud, and clouds stay above the highest summit | Asked in plan mode before the plan was written |
+| 2026-11-14 | Trees and rocks are scenery only: nothing collides with them | Barriers line the whole lap, so the car cannot reach them |
+| 2026-11-14 | The woods and cloud traits are on the world (`WorldResult.decor`, `WorldResult.clouds`), from the `decor` stream, not on `Character` | The character is part of the track fingerprint; decoration must not change it |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -664,3 +706,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2):** Check-in 4. Tane looked at the C6 screenshots: looks good, carry on. No changes asked. Next: step 12.
 - **2026-11-14 (Milestone 2):** Step 12 planned in plan mode (Tane chose daylight only, a slider, always-moving waves, a seed's sun bearing) and done in six commits (12a to 12f): the seed's time of day, `render/daylight.ts`, the sky dome, the water shader, the time controls, and screenshots of seeds 1 to 20 plus a time strip. Found on the way: the budget test failed under load once the page drew while worlds were built (fixed by not drawing during builds), and Vitest does not run from Git Bash on this machine. 883 unit tests and 194 browser tests pass. Next: step 13.
 - **2026-11-14 (Milestone 2):** Tane tried step 12: time, sunrise and sunset good; the water looked like a checker pattern, not waves. Step 12g: new waves in `render/waves.ts` (wind-driven trains in groups, bent and peaked crests, dropped when too small to draw), shading from the waves and lighter crests in `render/water.ts`. 896 unit tests and 194 browser tests pass.
+- **2026-11-14 (Milestone 2):** Step 13 planned in plan mode and approved (Tane chose woods that vary by seed, three kinds of tree with a palm by the beach, trees close to the road in patches, and a cloud amount picked by the seed). Step 13a done: the plan is recorded under "Step 13". No code changed.
