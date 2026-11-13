@@ -14,11 +14,14 @@ const scenery = config.world.scenery;
 
 /** The kind of island these tests were written for. Other kinds are covered as the rework reaches them. */
 const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 1, width: 'constant' };
+/** The config with no hinterland, so these tests see only the coast beside the road. The hinterland has its own tests. */
+const nearCoast = (base: GenConfig): GenConfig => ({ ...base, world: { ...base.world, hinterland: { ...base.world.hinterland, reach: [0, 0] } } });
+
 /** Real seeds, all on rolling ground. */
-const rolling = withCharacter(config, { relief: 'rolling', width: 'constant' });
+const rolling = nearCoast(withCharacter(config, { relief: 'rolling', width: 'constant' }));
 
 /** A coarser grid keeps hand-made cases quick; real seeds below use the full grid. */
-const coarse: GenConfig = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 4 } } };
+const coarse: GenConfig = nearCoast({ ...config, world: { ...config.world, tile: { extent: 1400, cell: 4 } } });
 
 /** An island for a road on dead flat ground of the given height. */
 function flatIsland(
@@ -368,8 +371,10 @@ describe('buildIsland on generated tracks', () => {
     for (const { island, sea, seed } of worlds) {
       expect(island.bays.length, `seed ${seed}`).toBeGreaterThanOrEqual(coast.bays[0]);
       expect(island.bays.length, `seed ${seed}`).toBeLessThanOrEqual(coast.bays[1]);
-      // Bays are put beside low road, where the water can come right in to the minimum.
-      expect(Math.min(...sea), `seed ${seed}`).toBeLessThan(coast.minMargin + 2);
+      // Bays are put beside low road (no higher than bayRoadHeight), where the water comes in as far as
+      // the minimum allows, or as far as a cliff no steeper than allowed down from the road allows.
+      const closest = Math.max(coast.minMargin, coast.clear + coast.bayRoadHeight / coast.cliffSlope);
+      expect(Math.min(...sea), `seed ${seed}`).toBeLessThan(closest + 2);
     }
   });
 

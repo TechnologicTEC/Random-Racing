@@ -35,8 +35,9 @@ describe('config', () => {
     expect(config.road.verge).toBe(4);
     expect(config.road.verge).toBeGreaterThan(config.world.tile.cell);
     expect(config.road.barrierOffset + config.road.barrierWidth).toBeLessThan(config.road.verge);
-    // The coast starts beyond the verge.
-    expect(config.world.coast.clear).toBeGreaterThan(config.road.verge);
+    // The coast is carved only beyond the verge and one more grid cell, so ground read between
+    // cells under the barrier is never pulled down by a sea cliff.
+    expect(config.world.coast.clear).toBeGreaterThanOrEqual(config.road.verge + config.world.tile.cell);
   });
 
   it('generates about 30 candidates per seed', () => {

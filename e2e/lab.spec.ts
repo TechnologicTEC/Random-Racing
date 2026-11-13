@@ -197,6 +197,32 @@ test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) 
   await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '3');
 });
 
+test('contact sheet shows each whole island, with open sea all round its edge', async ({ page }) => {
+  await openLab(page, '?sheet=20&from=1');
+  const landAtEdges = await page.locator('[data-testid="sheet-card"] canvas').evaluateAll((canvases: HTMLCanvasElement[]) =>
+    canvases.map((canvas) => {
+      const { data, width, height } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+      let land = 0;
+      const look = (x: number, y: number): void => {
+        const p = (y * width + x) * 4;
+        // Land is green or sandy: red or green clearly above blue.
+        if (Math.max(data[p]!, data[p + 1]!) > data[p + 2]! + 20) land++;
+      };
+      for (let k = 0; k < width; k += 2) {
+        look(k, 1);
+        look(k, height - 2);
+      }
+      for (let k = 0; k < height; k += 2) {
+        look(1, k);
+        look(width - 2, k);
+      }
+      return land;
+    }),
+  );
+  expect(landAtEdges).toHaveLength(20);
+  for (const land of landAtEdges) expect(land).toBe(0);
+});
+
 test('contact sheet accepts a chosen list of seeds', async ({ page }) => {
   await openLab(page, '?seeds=5,99,31337');
   const cards = page.getByTestId('sheet-card');

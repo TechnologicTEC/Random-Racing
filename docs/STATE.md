@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** rework step R5 (2700 m tile, 3 m cells, 4 m verge). Steps 0 to 11 are built and pushed
-- **Next step:** **rework step R6** (hinterland and coast trait), then R7 and R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
+- **Last finished step:** rework step R6 (hinterland and coast trait: land runs on past the track except where the seed's coast trait puts the sea beside it). Steps 0 to 11 are built and pushed
+- **Next step:** **rework step R7** (mountains, foothills, snow), then R8, then check-in 3, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -77,7 +77,7 @@ Tests first, watched failing. Run the unit and browser suites so that a failure 
 | R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | Done: the plan worked as written; mountain seeds keep every layout style |
 | R4 | Variable road width through generation, meshes, fit, report and lab | Tests: 12 to 22 m, eased, not widened beside close sections, ground follows the wider road, kerbs and barriers at the true edge | Done |
 | R5 | Bigger tile, 3 m cells, 4 m verge | Existing fit tests pass at the new grid; build time measured | Done |
-| R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | To do |
+| R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | Done |
 | R7 | Mountains (0 to 4, main 200 to 250 m), foothills, snow | Tests: heights in range, 60 m clear of the road, slopes within limit, mountain seeds have the main one above the ramp | To do |
 | R8 | 3D: far-ground detail levels, fog and camera limits | Triangle count recorded; fly, orbit and close-up screenshots on 20 seeds | To do |
 | | **Check-in 3:** Tane looks at contact sheets and flies a few seeds | Feedback | |
@@ -135,6 +135,17 @@ Over all 30 candidates of 40 seeds per relief, cut and fill also stay inside 6 m
 - World build time, 8 seeds: Node 611 to 705 ms (median 661), Chromium worker 551 to 621 ms (median 598), Firefox worker 822 to 891 ms (median 858). Budget 3 s.
 - Barrier footing (0.6 m nominal) on 10 hilly and mountain seeds: at least 0.40 m in the ground on 9 of them; 0.29 m at worst on seed 1. The verge dip is smaller (about 0.3 m, was about 0.45 m) but not gone.
 - Fit still clean on those 10 seeds: deepest cutting 3.2 m, tallest embankment 3.6 m, steepest bank 63%.
+
+**R6 results (2026-11-13): seeds 1 to 12 of each coast trait, on a 5 m grid.** "Rays" go straight out from every fourth sample on each side of the road that faces outwards.
+
+| Coast | Sea within 35 m of the road (or as near as a cliff beside a high road allows) | Land 80 m or more past the road, where the hinterland covers it |
+| --- | --- | --- |
+| Inland | none on any seed; no sea within 60 m anywhere | 100% on every seed |
+| Touches | 7% to 48% of rays per seed | 54% to 97% of covered rays (median about 82%); the rest is the short stretch where the hinterland gives way to the coast |
+| Coastal | more than half of rays on every seed (seeds 1 to 8) | little land beyond the road |
+
+- On every island: never sea within 10 m of the road edge, the tile edge is open sea, no water cut off from the open sea, no slope steeper than 250% more than 80 m from the road.
+- World build time: R6 itself adds about 50 ms (measured back to back with R5: 1,254 ms before, 1,294 ms after in Node). But the machine was busier than in R5's measurement, so today's absolute numbers are higher: Node about 1.3 s, Chromium worker 1.05 to 1.23 s (median 1.12), Firefox worker 1.72 to 1.83 s (median 1.77). Budget 3 s. Measure again in R8 with nothing else running.
 
 ### Rework risks
 
@@ -288,6 +299,13 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | The width comes from the `track` stream's `width` fork, one sub-stream per straight, and is worked out in `generateWorld` after the winner is known. It is `WorldResult.road.width` and part of the world fingerprint | The plan: it must never change which layout wins |
 | 2026-11-13 | The island keeps a map of each cell's distance to the road edge (`Island.edge`, from `edgeDistance`). The coast, the cover, the bumps and the peak all measure from it | One place knows the true edge; before, every module subtracted half of one fixed width |
 | 2026-11-13 | A cell exactly at the outer edge of a verge takes that section's road height (`fit.ts`) | Found by R5's grid: its blend weight came out as infinity over infinity, and 143 cells of a test fixture became NaN. A test now checks every fitted height is a real number |
+| 2026-11-13 | **The hinterland is a pattern of noise cut at a level** (`shapeHinterland` in `island.ts`, rules in `world.hinterland`). Above the cut the land runs on 120 to 600 m past the road, rising with the pattern; below it there is no hinterland; a short ramp joins them. The cut is chosen per seed so that the share of the road by the sea is what the coast trait asks: none for inland, 15 to 40% for touches, 70 to 95% for coastal | First tried lowering the whole pattern: that left long stretches with the sea 40 to 80 m out, neither by the sea nor with land running on. Measured on 8 seeds per trait before changing |
+| 2026-11-13 | The hinterland's coast uses the same profile as the coast beside the road (`coastProfile`), climbing from its waterline to the nearby road height over the whole reach, never steeper than half a sea cliff; the island's limit is the higher of the two coasts, so the hinterland only ever adds land | A fixed gentle climb would have carved a cliff beside a 100 m mountain road. The plan's rule: its own landform with bounded slopes, never a multiplier on the margin |
+| 2026-11-13 | Sea cut off from the open sea is filled in: the hinterland's coast is measured from the open sea instead (`fillCutOffSea`) | Pools appeared inside the land, and on high ground they were pits dug down to sea level |
+| 2026-11-13 | Bays and headlands go only where the road is by the sea (`Island.seaside`); inland seeds have none | Elsewhere the hinterland would hide them |
+| 2026-11-13 | The coast starts 7 m from the road edge (`coast.clear`, was 5 m): the verge plus a whole grid cell | On the 3 m grid a sea cliff starting at 5 m pulled down the ground read under the barrier (seed 42's barrier top stood 2.2 m clear). A bay beside a road at 12 m now comes in to about 12 m rather than 10 m |
+| 2026-11-13 | Contact sheet thumbnails frame the whole island (buildable area plus 600 m) | The land now runs well past the track; the old frame cut it off. A test checks every thumbnail's edge is sea |
+| 2026-11-13 | The near-coast island tests (`island.test.ts`) run with the hinterland off (`reach: [0, 0]`); `hinterland.test.ts` covers the traits | They test the coast beside the road, which is unchanged |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -302,7 +320,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 ## Known issues and risks
 
 - **The verge still dips a little at its outer edge on steep banks** (about 0.3 m at worst, seed 1; was about 0.45 m before R5's 4 m verge). The road is unaffected and the barrier footing hides it; the barrier test asks for a third of the footing in the ground and passes. Holding the road's height one cell beyond the verge in `fit.ts` would remove the rest.
-- **Sea cliffs have a coarser saw-tooth edge on the 3 m grid** (visible in close views, for example seed 1 `look=bank`). R6 reworks the coast; check it again there.
+- **Sea cliffs have a coarser saw-tooth edge on the 3 m grid** (visible in close views, for example seed 1 `look=bank` and seed 7 `look=water`). R6 left the coast beside the road unchanged. A finer grid near the coast, or smoothing the cliff's top edge, would help.
+- **Coastal mountain seeds keep the sea further out** (seed 1: about half the outside within 35 m), because a cliff from a high road may be no steeper than 250% (check-in 1). Tests allow for it.
+- **Flat seeds show large sandy patches** on the hinterland: their lowland is 3 m, right at the top of the sand band (1 to 2.6 m). Worth a look at check-in 3.
+- **The contact sheet frame is generous** (it holds the furthest the land could reach, 1160 m from the centre), so most islands look small in their thumbnails.
 - **Hilly and mountain islands look like a tilted table with sea cliffs** until R6 (land beyond the road) and R7 (mountains). The road itself sits cleanly.
 - **About one mountain lap in ten has under 60 m of height** (lowest 47 m over 200 seeds), mostly folded layouts that happen to lie across the slope. Raising the elevation weight for mountain seeds would lift it.
 
@@ -352,3 +373,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2 rework):** Step R3 done. `createRelief` builds the ground for the seed's relief; hilly and mountain seeds have a highland (`placeHighland`) whose flank the track climbs. The gradient limit (8%, or 15% on mountain seeds) and the elevation score's targets come from the relief. New tests: `gen/road/climb.<relief>.test.ts` generate 200 seeds of each relief and check gradient, crests, cut and fill, banks and the lap's height range (shared checks in `testing/reliefChecks.ts`). Measured in a throwaway spike before the tests were written. Winners changed on every seed that is not rolling. The 3D screenshot set now includes seed 1 (a mountain seed). Results are in "Rework measurements".
 - **2026-11-13 (Milestone 2 rework):** Step R4 done. `gen/road/width.ts` (`solveWidth`) gives the winner a width per sample; `WorldResult.road.width`. The ribbon, kerbs, barriers, start gate, ground fit, fit report, cover and island all take it (`buildIsland` and the mesh builders have a `width` argument; `fitRoad` and `fitReport` take it in their input; `buildCover` and `carveCoast` take the island's `edge` map). The lab draws the true width and says how much of the lap is wider; the contact sheet draws it too. `profile.ts` did not need to change, because the road is never widened beside a close section. 726 unit tests and 150 Playwright tests pass.
 - **2026-11-13 (Milestone 2 rework):** Step R5 done (switched from Fable 5.2 to Opus 5.5 part way through, when Tane's Fable usage ran out). Tile 2700 m, 3 m cells, verge 4 m. Fixed a NaN in `fitRoad` at cells exactly on a verge's outer edge. Build time and footing depth are in "Rework measurements". 729 unit tests and 150 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R6 done. `world.hinterland` config; `shapeHinterland` and `fillCutOffSea` in `island.ts`; `Island.seaside`. New `hinterland.test.ts` (8 seeds of each coast trait). Contact sheets frame whole islands. Three things found by measuring and fixed on the way: long 40 to 80 m strips (fixed by cutting the pattern instead of lowering it), 400% slopes where the pattern fades out beside high roads (fixed by a gentler pattern and a slower climb), and sea cliffs pulling the barrier's ground down (fixed by the 7 m clear strip). Results are in "Rework measurements". 755 unit tests and 152 Playwright tests pass.

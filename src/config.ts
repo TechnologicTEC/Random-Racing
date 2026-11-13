@@ -441,6 +441,35 @@ export interface CoastConfig {
   border: number;
 }
 
+/**
+ * Land beyond the track. Where the hinterland covers the road, the land runs
+ * on well past it instead of dropping to the sea; where it does not, the coast
+ * follows the road as described in `CoastConfig`. Distances in metres from the road edge.
+ */
+export interface HinterlandConfig {
+  /**
+   * Where it covers the road, the land runs on between this far and this far
+   * past it. [0, 0] leaves the hinterland out altogether (used by tests of the coast beside the road).
+   */
+  reach: Range;
+  /** Size of the hinterland's shapes: metres per unit of noise. Bigger means broader, smoother land. */
+  scale: number;
+  /** A stretch of road counts as by the sea when the hinterland leaves sea within this distance of it. */
+  seasideDistance: number;
+  /** Share of the outside of the road that is by the sea, for each coast trait: lowest and highest. Inland seeds have none. */
+  seaside: { touches: Range; coastal: Range };
+  /** On inland seeds the hinterland keeps the sea at least this far from the road. */
+  inlandClear: number;
+  /**
+   * The hinterland comes from a pattern of noise from 0 to 1, cut at a level
+   * chosen for the seed. Above the cut its reach grows by `rise` metres for each
+   * unit of the pattern; below it the reach falls from the nearest to nothing
+   * over `ramp` units, so the coastline never jumps.
+   */
+  rise: number;
+  ramp: number;
+}
+
 /** Ground that is not for driving on: small bumps everywhere, and one peak in the middle of the island. */
 export interface SceneryConfig {
   /** Small bumps: height either side of the rolling ground, and size, in metres. */
@@ -489,6 +518,7 @@ export interface WorldConfig {
   relief: ReliefConfig;
   tile: TileConfig;
   coast: CoastConfig;
+  hinterland: HinterlandConfig;
   scenery: SceneryConfig;
   cover: CoverConfig;
 }
@@ -720,7 +750,7 @@ export const config: GameConfig = {
     },
     tile: { extent: 2700, cell: 3 },
     coast: {
-      clear: 5,
+      clear: 7,
       minMargin: 10,
       margin: [15, 35],
       marginScale: 260,
@@ -744,6 +774,15 @@ export const config: GameConfig = {
       shelfSlope: 0.18,
       seaDepth: 22,
       border: 30,
+    },
+    hinterland: {
+      reach: [120, 600],
+      scale: 1400,
+      seasideDistance: 35,
+      seaside: { touches: [0.15, 0.4], coastal: [0.7, 0.95] },
+      inlandClear: 70,
+      rise: 500,
+      ramp: 0.18,
     },
     scenery: {
       bumpHeight: 1.5,

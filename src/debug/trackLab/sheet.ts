@@ -51,7 +51,9 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
   if (!run) ref('nav').remove();
 
   const dpr = window.devicePixelRatio || 1;
-  const view = fitView(THUMB, THUMB, cfg.buildableRadius, 6);
+  // Framed to hold the whole island: the land runs on as far as the hinterland reaches beyond the track's area.
+  const islandRadius = cfg.buildableRadius + config.world.hinterland.reach[1] + 60;
+  const view = fitView(THUMB, THUMB, islandRadius, 6);
   // Thumbnails are small, so their islands are built on a coarse grid: 16 times fewer heights, and as many times quicker.
   const sheetConfig: GameConfig = { ...config, world: { ...config.world, tile: { ...config.world.tile, cell: 8 } } };
 

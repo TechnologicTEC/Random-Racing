@@ -3,7 +3,7 @@ import { createNoise, fbm, softRidged, type Noise2 } from '../../core/noise';
 import { createRng, type Rng } from '../../core/rng';
 import { clamp01, lerp, smoothstep } from '../../core/scalar';
 import type { Vec2 } from '../../core/vec2';
-import type { CenterLine, Character, HeightField, RoadProfile } from '../types';
+import type { CenterLine, Character, CoastKind, HeightField, RoadProfile } from '../types';
 import { createField, worldX, worldZ } from './heightfield';
 import { edgeDistance, insideLoop, nearestRoad, type NearestRoad } from './nearest';
 import { createRelief, type Relief } from './relief';
@@ -37,6 +37,8 @@ export interface Island {
   edge: Float32Array;
   /** 1 for cells the track encloses, 0 for the rest. */
   inside: Uint8Array;
+  /** 1 for each sample of the centre line where the sea is beside the road, 0 where the hinterland covers it. */
+  seaside: Uint8Array;
   peak: Peak | null;
   /** Where the coast is pushed out, and where it is pulled in: the points on the road each is centred on. */
   headlands: Vec2[];
@@ -56,17 +58,22 @@ export interface ShoreShape {
 /** The crease where the coast meets the inland ground is rounded over this height, in metres. */
 const JOIN = 1.5;
 
+/** The hinterland's pattern is worked out on every this many cells, and blended between them. */
+const PATTERN_STEP = 4;
+
 /** The land is brought up this far above the road at the clear strip, in metres, so the coast never undercuts it. */
 const HEADROOM = 0.5;
 
 /**
  * Builds the island around a track.
  *
- * Everything the loop encloses is land. Outside it, the sea follows the road
- * at a distance that varies along the coast: usually 15 to 35 m, closer in a
- * bay or two and further at a headland or two. Where the road is low there is
- * room for a beach; where it is high the land drops to the water as a cliff.
- * One peak stands in the infield where it is furthest from the road.
+ * Everything the loop encloses is land. Outside it, a hinterland covers some
+ * of the road, as the seed's coast trait asks: there the land runs on 80 to
+ * 600 m past it. Elsewhere the sea follows the road at a distance that varies
+ * along the coast: usually 15 to 35 m, closer in a bay or two and further at a
+ * headland or two. Where the road is low there is room for a beach; where it
+ * is high the land drops to the water as a cliff. One peak stands in the
+ * infield where it is furthest from the road.
  *
  * @param width road width at each sample of the line, in metres
  * @param character the kind of island this seed makes
@@ -98,7 +105,8 @@ export function buildIsland(
   const bumpNoise = shiftedNoise(rng.fork('bumps'), scenery.bumpScale);
   const peakNoise = shiftedNoise(rng.fork('peak-texture'), 60);
 
-  const features = chooseFeatures(rng.fork('features'), line, profile, width, inland, near, inside, cfg);
+  const hinterland = shapeHinterland(rng.fork('hinterland'), line, inland, near, edge, inside, character.coast, cfg);
+  const features = chooseFeatures(rng.fork('features'), line, profile, width, hinterland.seaside, inland, near, inside, cfg);
   const peak = placePeak(rng.fork('peak'), inland, edge, inside, relief, cfg);
 
   // The height of the road near each cell, smoothed so it changes gradually
@@ -112,6 +120,7 @@ export function buildIsland(
   const shore = new Float32Array(size * size);
   const room = new Float32Array(size * size);
   const beach = new Float32Array(size * size);
+  const beachWide = new Float32Array(size * size);
   const outward = new Float32Array(size * size);
   for (let iz = 0; iz < size; iz++) {
     const z = worldZ(inland, iz);
@@ -145,13 +154,16 @@ export function buildIsland(
       shore[c] = shape.margin - outward[c]!;
       room[c] = shape.margin - coast.clear;
       beach[c] = shape.beach;
+      beachWide[c] = beachWanted;
     }
   }
 
   const smoothed = blur(shore, size, Math.max(1, Math.round(coast.smoothing / tile.cell)));
 
-  // Pass 2: the coast's limit on every cell, and the inland ground wherever it could matter.
+  // Pass 2: the coast's limit on every cell.
   const cap = new Float32Array(size * size);
+  /** How far the hinterland's coast takes to climb to road height at each cell, kept for filling cut-off pools below. */
+  const hinterlandRoom = new Float32Array(size * size);
   const half = tile.extent / 2;
   const fitReach = widest / 2 + cfg.road.verge + cfg.road.blendMax + 2 * tile.cell;
   for (let iz = 0; iz < size; iz++) {
@@ -162,9 +174,44 @@ export function buildIsland(
       // Smoothing must never bring the water nearer the road than the minimum, and the tile's border is always open sea.
       const toBorder = half - Math.max(Math.abs(x), Math.abs(z));
       const inlandBy = Math.min(Math.max(smoothed[c]!, coast.minMargin - outward[c]!), toBorder - coast.border);
-      const limit = coastProfile(inlandBy, { room: room[c]!, beach: beach[c]!, roadHeight: roadHeights[c]! + HEADROOM }, coast);
+      let limit = coastProfile(inlandBy, { room: room[c]!, beach: beach[c]!, roadHeight: roadHeights[c]! + HEADROOM }, coast);
+      if (hinterland.reach) {
+        // The hinterland's own coast: the same shape as the coast beside the road, but its waterline is
+        // `reach` metres out and it climbs to road height over all of that, so it is gentle. It only ever adds land.
+        // Beside a high road it takes longer to climb, so it is never steeper than half a sea cliff: its
+        // coastline also bends with the pattern, which can make the ground up to twice as steep again.
+        // (The beach can take up half the room, so the climb needs twice the room a straight slope would.)
+        const reach = hinterland.reach[c]!;
+        const gentlest = (4 * (roadHeights[c]! + HEADROOM)) / coast.cliffSlope;
+        hinterlandRoom[c] = Math.max(cfg.world.hinterland.reach[0] - coast.clear, gentlest);
+        if (reach > coast.clear + 1) {
+          const roomHere = Math.max(reach - coast.clear, gentlest);
+          hinterlandRoom[c] = Math.max(hinterlandRoom[c]!, roomHere);
+          const shape: ShoreShape = {
+            room: roomHere,
+            beach: Math.min(beachWide[c]!, roomHere / 2),
+            roadHeight: roadHeights[c]! + HEADROOM,
+          };
+          const inlandOfHinterland = Math.min(reach - outward[c]!, toBorder - coast.border);
+          limit = Math.max(limit, coastProfile(inlandOfHinterland, shape, coast));
+        }
+      }
       cap[c] = limit;
+    }
+  }
 
+  // Sea cut off from the open sea would be a pool, or on high ground a pit dug down to sea level.
+  // Measured from the open sea instead, such places are inland, and the hinterland's coast is
+  // worked out again from there. Like the hinterland, this only ever adds land.
+  if (hinterland.reach) fillCutOffSea(cap, inland, hinterlandRoom, beachWide, roadHeights, coast);
+
+  // Pass 3: the inland ground wherever it could matter.
+  for (let iz = 0; iz < size; iz++) {
+    const z = worldZ(inland, iz);
+    for (let ix = 0; ix < size; ix++) {
+      const x = worldX(inland, ix);
+      const c = iz * size + ix;
+      const limit = cap[c]!;
       // Out at sea and out of reach of the road, the inland ground is never looked at.
       if (limit <= 0 && near.distance[c]! > fitReach) {
         inland.height[c] = limit;
@@ -196,10 +243,93 @@ export function buildIsland(
     near,
     edge,
     inside,
+    seaside: hinterland.seaside,
     peak: peak && { x: peak.x, z: peak.z, radius: peak.radius, summit: peak.summit },
     headlands: features.headlands.map(({ x, z }) => ({ x, z })),
     bays: features.bays.map(({ x, z }) => ({ x, z })),
   };
+}
+
+/**
+ * Finds sea that the open sea cannot reach (flooding in from the edge of the
+ * tile) and turns it into land: every cell's distance from the open sea is
+ * measured, and its limit is raised to what the hinterland's coast allows at
+ * that distance. Cells by the open sea are measured as before, so only the
+ * pools and the ground around them change.
+ */
+function fillCutOffSea(
+  cap: Float32Array,
+  field: HeightField,
+  room: Float32Array,
+  beachWide: Float32Array,
+  roadHeights: Float32Array,
+  coast: CoastConfig,
+): void {
+  const { size, cell } = field;
+  const total = size * size;
+  const open = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let tail = 0;
+  for (let k = 0; k < size; k++) {
+    for (const c of [k, (size - 1) * size + k, k * size, k * size + size - 1]) {
+      if (cap[c]! <= 0 && open[c] === 0) {
+        open[c] = 1;
+        queue[tail++] = c;
+      }
+    }
+  }
+  for (let head = 0; head < tail; head++) {
+    const c = queue[head]!;
+    const ix = c % size;
+    const neighbours = [ix > 0 ? c - 1 : -1, ix < size - 1 ? c + 1 : -1, c - size, c + size];
+    for (const next of neighbours) {
+      if (next < 0 || next >= total || open[next] === 1 || cap[next]! > 0) continue;
+      open[next] = 1;
+      queue[tail++] = next;
+    }
+  }
+  let cutOff = false;
+  for (let c = 0; c < total && !cutOff; c++) if (cap[c]! <= 0 && open[c] === 0) cutOff = true;
+  if (!cutOff) return;
+
+  // Distance from the open sea, in metres: two sweeps over the grid, each cell taking the best of its neighbours.
+  const far = new Float32Array(total).fill(Infinity);
+  for (let c = 0; c < total; c++) if (open[c] === 1) far[c] = 0;
+  const diagonal = cell * Math.SQRT2;
+  const relax = (c: number, from: number, step: number): void => {
+    const through = far[from]! + step;
+    if (through < far[c]!) far[c] = through;
+  };
+  for (let iz = 0; iz < size; iz++) {
+    for (let ix = 0; ix < size; ix++) {
+      const c = iz * size + ix;
+      if (ix > 0) relax(c, c - 1, cell);
+      if (iz > 0) {
+        relax(c, c - size, cell);
+        if (ix > 0) relax(c, c - size - 1, diagonal);
+        if (ix < size - 1) relax(c, c - size + 1, diagonal);
+      }
+    }
+  }
+  for (let iz = size - 1; iz >= 0; iz--) {
+    for (let ix = size - 1; ix >= 0; ix--) {
+      const c = iz * size + ix;
+      if (ix < size - 1) relax(c, c + 1, cell);
+      if (iz < size - 1) {
+        relax(c, c + size, cell);
+        if (ix < size - 1) relax(c, c + size + 1, diagonal);
+        if (ix > 0) relax(c, c + size - 1, diagonal);
+      }
+    }
+  }
+
+  for (let c = 0; c < total; c++) {
+    if (open[c] === 1) continue;
+    const roomHere = Math.max(1, room[c]!);
+    const shape: ShoreShape = { room: roomHere, beach: Math.min(beachWide[c]!, roomHere / 2), roadHeight: roadHeights[c]! + HEADROOM };
+    const limit = coastProfile(far[c]!, shape, coast);
+    if (limit > cap[c]!) cap[c] = limit;
+  }
 }
 
 /**
@@ -274,13 +404,15 @@ interface Feature extends Vec2 {
 
 /**
  * Picks where the headlands and bays go. Each is centred on a point of the
- * road that faces the open sea, and they are kept apart from each other.
+ * road that faces the open sea, and they are kept apart from each other. None
+ * go where the hinterland covers the road.
  */
 function chooseFeatures(
   rng: Rng,
   line: CenterLine,
   profile: RoadProfile,
   width: Float64Array,
+  seaside: Uint8Array,
   field: HeightField,
   near: NearestRoad,
   inside: Uint8Array,
@@ -299,6 +431,8 @@ function chooseFeatures(
   const seaward: number[] = [];
   const seaSide = new Int8Array(line.count);
   for (let i = 0; i < line.count; i += 4) {
+    // Where the hinterland covers the road there is no coast beside it to shape.
+    if (seaside[i] === 0) continue;
     for (const side of [1, -1]) {
       // Right of the direction of travel is (-tz, tx) on the map.
       const nx = -line.tz[i]! * side;
@@ -395,6 +529,117 @@ function placePeak(
   const rise = Math.min(summitWanted - base, tallest);
   if (rise <= 0) return null;
   return { x, z, radius, summit: base + rise, base };
+}
+
+/** The hinterland of an island: how far the land runs past the road, and where the road is by the sea. */
+interface Hinterland {
+  /** For each cell, how far past the road edge the hinterland reaches there, in metres. Null when there is none. */
+  reach: Float32Array | null;
+  /** 1 for each sample of the centre line that is by the sea (see Island.seaside). */
+  seaside: Uint8Array;
+}
+
+/**
+ * Shapes the land beyond the track. A smooth pattern of noise is cut at a
+ * level: above it the hinterland covers the road and the land runs on 80 to
+ * 600 m past it, rising with the pattern; below it there is no hinterland and
+ * the coast follows the road. A short ramp joins the two, so the coastline
+ * never jumps. The level is chosen for each seed so that the share of the
+ * road left by the sea is what the coast trait asks for: none for an inland
+ * seed, a stretch or two for one that touches the sea, most of it for a coastal one.
+ *
+ * The hinterland only ever adds land, so the sea is never brought nearer the
+ * road than the coast beside the road allows.
+ */
+function shapeHinterland(
+  rng: Rng,
+  line: CenterLine,
+  field: HeightField,
+  near: NearestRoad,
+  edge: Float32Array,
+  inside: Uint8Array,
+  kind: CoastKind,
+  cfg: GenConfig,
+): Hinterland {
+  const rules = cfg.world.hinterland;
+  const n = line.count;
+  if (rules.reach[1] <= 0) return { reach: null, seaside: new Uint8Array(n).fill(1) };
+  const [least, most] = rules.reach;
+
+  const { size } = field;
+  const shape = shiftedNoise(rng.fork('shape'), rules.scale);
+  // Cells further out than this can never be land, so the pattern is never needed there.
+  const furthest = most + rules.inlandClear;
+  // The pattern is hundreds of metres across, so it is worked out on every few cells only and blended between them.
+  const step = PATTERN_STEP;
+  const coarseSize = Math.ceil((size - 1) / step) + 1;
+  const coarse = new Float32Array(coarseSize * coarseSize);
+  for (let jz = 0; jz < coarseSize; jz++) {
+    const z = worldZ(field, Math.min(size - 1, jz * step));
+    for (let jx = 0; jx < coarseSize; jx++) {
+      const x = worldX(field, Math.min(size - 1, jx * step));
+      coarse[jz * coarseSize + jx] = clamp01(0.5 + 0.6 * fbm(shape.noise, shape.u(x), shape.v(z), 2));
+    }
+  }
+  const level = new Float32Array(size * size).fill(-Infinity);
+  for (let iz = 0; iz < size; iz++) {
+    const jz = Math.min(coarseSize - 2, Math.floor(iz / step));
+    const fz = (iz - jz * step) / step;
+    for (let ix = 0; ix < size; ix++) {
+      const c = iz * size + ix;
+      if (edge[c]! > furthest) continue;
+      const jx = Math.min(coarseSize - 2, Math.floor(ix / step));
+      const fx = (ix - jx * step) / step;
+      const k = jz * coarseSize + jx;
+      const top = coarse[k]! + (coarse[k + 1]! - coarse[k]!) * fx;
+      const bottom = coarse[k + coarseSize]! + (coarse[k + coarseSize + 1]! - coarse[k + coarseSize]!) * fx;
+      level[c] = top + (bottom - top) * fz;
+    }
+  }
+
+  // For each sample, on the cells outside the loop nearest to it: the highest the pattern
+  // goes within `seasideDistance` of the road (it is by the sea only if the hinterland
+  // leaves sea all along there), and the lowest within `inlandClear`.
+  const highNear = new Float64Array(n).fill(-Infinity);
+  const lowFar = new Float64Array(n).fill(Infinity);
+  for (let c = 0; c < level.length; c++) {
+    if (inside[c] === 1 || edge[c]! > rules.inlandClear) continue;
+    const i = near.index[c]!;
+    lowFar[i] = Math.min(lowFar[i]!, level[c]!);
+    if (edge[c]! <= rules.seasideDistance) highNear[i] = Math.max(highNear[i]!, level[c]!);
+  }
+  const sorted = (values: Float64Array): number[] => Array.from(values).filter((value) => value < Infinity).sort((a, b) => a - b);
+
+  // Reach as a function of the pattern: nothing below the ramp, `least` at the cut, rising to `most`.
+  const ramp = rules.ramp;
+  // On the ramp, the pattern level at which the reach falls to the seaside distance.
+  const seasideOnRamp = ramp * (1 - rules.seasideDistance / least);
+  let cut: number;
+  let seasideBelow: number;
+  if (kind === 'inland') {
+    // Cut just below the lowest the pattern goes near the road, so the whole road is covered.
+    const lows = sorted(lowFar);
+    cut = lows.length > 0 ? lows[0]! - 1e-6 : 0;
+    seasideBelow = -Infinity;
+  } else {
+    // Cut so that the share of the road asked for has the pattern low enough beside it for the sea to come in.
+    const highs = Array.from(highNear).filter((value) => value > -Infinity).sort((a, b) => a - b);
+    const [fewest, mostShare] = rules.seaside[kind];
+    const count = Math.round(rng.fork('share').range(fewest, mostShare) * highs.length);
+    seasideBelow = count <= 0 || highs.length === 0 ? -Infinity : highs[Math.min(highs.length, count) - 1]!;
+    cut = (seasideBelow === -Infinity ? (highs[0] ?? 0) - ramp : seasideBelow) + seasideOnRamp + 1e-6;
+  }
+
+  const reach = new Float32Array(size * size);
+  for (let c = 0; c < level.length; c++) {
+    const above = level[c]! - cut;
+    if (above >= 0) reach[c] = Math.min(most, least + rules.rise * above);
+    else if (above > -ramp) reach[c] = least * (1 + above / ramp);
+    else reach[c] = -1;
+  }
+  const seaside = new Uint8Array(n);
+  for (let i = 0; i < n; i++) seaside[i] = highNear[i]! > -Infinity && highNear[i]! <= seasideBelow ? 1 : 0;
+  return { reach, seaside };
 }
 
 /** A noise pattern sized in metres and slid to a place of its own. */
