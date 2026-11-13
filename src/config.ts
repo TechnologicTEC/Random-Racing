@@ -735,6 +735,19 @@ export interface CameraConfig {
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
+  /**
+   * The close view of the lap's highest point, facing the main summit (`&look=summit`). The camera stands
+   * `back` metres behind the point, `lift` metres above the road, and steps further back until the point and
+   * the summit are no more than `spread` radians apart as it sees them. With no mountain it looks `ahead`
+   * metres down the road instead. It always stays `clearance` metres above the ground.
+   */
+  summit: { back: number; lift: number; spread: number; ahead: number; clearance: number };
+  /**
+   * The close view of the steepest stretch of road (`&look=climb`), its gradient averaged over `window` metres.
+   * The camera stands downhill, `distance` metres from the stretch's middle, turned `side` radians off the
+   * road's line and tipped up `tilt` radians; it tips up further if it would be within `clearance` metres of the ground.
+   */
+  climb: { window: number; distance: number; side: number; tilt: number; clearance: number };
   /** The camera that flies the lap. */
   fly: FlyConfig;
 }
@@ -1052,6 +1065,8 @@ export const config: GameConfig = {
       fit: 1.25,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
+    summit: { back: 70, lift: 15, spread: 0.6, ahead: 300, clearance: 4 },
+    climb: { window: 40, distance: 80, side: 0.3, tilt: 0.12, clearance: 4 },
     fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },
   },
 };

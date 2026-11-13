@@ -288,6 +288,15 @@ export interface WorldResult {
   cover: Cover;
   road: Road;
   report: FitReport;
+  /** The island's mountains, the main one first (for a mountain seed, its massif). Empty if it has none. */
+  mountains: MountainSummit[];
+}
+
+/** Where a mountain's summit is, in metres, and its height above the sea. */
+export interface MountainSummit {
+  x: number;
+  z: number;
+  summit: number;
 }
 
 /** A kerb: a run of samples along one edge of the road. */

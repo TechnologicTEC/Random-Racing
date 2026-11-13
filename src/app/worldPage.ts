@@ -1,11 +1,12 @@
 import './world.css';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
-import { lookAtPoint, lookAtSpot, lookAtTrack } from '../camera/spots';
+import { lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
 import type { FitReport, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
+import { shortCharacter } from '../debug/trackLab/format';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
 
@@ -29,6 +30,7 @@ const TEMPLATE = `
     <div class="world-card world-title">
       <h1 data-ref="name" data-testid="world-name">Seed Circuit</h1>
       <p data-ref="code" data-testid="world-code"></p>
+      <p class="world-character" data-ref="character" data-testid="world-character"></p>
       <p class="world-hint" data-ref="hint"></p>
     </div>
     <div class="world-card world-controls">
@@ -53,7 +55,7 @@ const HINTS: Record<CameraMode, string> = {
  *
  * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
- * close, water, hairpin, start) or `at=x,z` for a close view of one place.
+ * close, water, hairpin, start, summit, climb) or `at=x,z` for a close view of one place.
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -207,7 +209,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
 
       // Only the page's first island honours the address's choice of place; a new island starts from its start line.
       const point = opening ? lookAtPoint(at, groundAt) : null;
-      const spot = point ?? (opening ? (lookAtSpot(look, result.report, groundAt) ?? lookAtTrack(look, winner.line, winner.sections, groundAt)) : null);
+      const spot =
+        point ??
+        (opening
+          ? (lookAtSpot(look, result.report, groundAt) ??
+            lookAtTrack(look, winner.line, winner.sections, groundAt) ??
+            lookAtRoad(look, winner.line, winner.profile.height, result.mountains, groundAt))
+          : null);
       if (spot) {
         orbit = spot;
         mode = 'orbit';
@@ -221,6 +229,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       renderControls();
       ref('name').textContent = result.track.name;
       ref('code').textContent = `Seed ${result.seed} · ${formatSeedCode(result.seed, result.generatorVersion)}`;
+      ref('character').textContent = shortCharacter(result.track.character);
       document.title = `${result.track.name} · Seed Circuit`;
       document.body.dataset.worldSeed = String(result.seed);
       document.body.dataset.worldMs = ms.toFixed(0);

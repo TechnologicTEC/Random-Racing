@@ -56,6 +56,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
       gate: buildStartGate(line, profile.height, cross, width, config),
     },
     report,
+    mountains: island.mountains.map(({ x, z, summit }) => ({ x, z, summit })),
   };
 }
 
@@ -81,5 +82,6 @@ export function hashWorld(world: WorldResult): string {
     if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);
   }
   hasher.numbers([report.groundThroughRoad, report.roadFloating]);
+  for (const mountain of world.mountains) hasher.numbers([mountain.x, mountain.z, mountain.summit]);
   return hasher.digest();
 }

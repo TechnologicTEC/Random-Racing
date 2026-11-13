@@ -53,6 +53,19 @@ describe('generateWorld', () => {
     expect(world.road.gate.indices.length).toBeGreaterThan(0);
   });
 
+  it('lists where each mountain s summit is, as plain numbers the page can be sent', () => {
+    // Seed 11 is a circling mountain seed with two lone peaks; its massif is the main one.
+    const mountainous = generateWorld(11, coarse);
+    expect(mountainous.mountains.length).toBeGreaterThanOrEqual(1);
+    expect(structuredClone(mountainous.mountains)).toEqual(mountainous.mountains);
+    const main = mountainous.mountains[0]!;
+    expect(main.summit).toBeGreaterThan(100);
+    // The natural ground at the summit is the summit's height, to the coarse grid.
+    expect(Math.abs(sampleField(mountainous.natural, main.x, main.z, 0) - main.summit)).toBeLessThan(10);
+    // Seed 9 is flat with no mountains.
+    expect(generateWorld(9, coarse).mountains).toEqual([]);
+  });
+
   it('treats the seed as a whole number from 0 to 4,294,967,295, like track generation', () => {
     expect(generateWorld(-1, coarse).seed).toBe(4294967295);
   });

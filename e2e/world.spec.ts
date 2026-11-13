@@ -151,6 +151,33 @@ test('shows red and white kerbs on the inside of the tightest corner', async ({ 
   expect(seen.kerb).toBeGreaterThan(150);
 });
 
+test('names the kind of island under its seed', async ({ page }) => {
+  // Seed 3 is a climbing mountain seed with three ridged ranges.
+  await openWorld(page, 'seed=3&still=1');
+  await expect(page.getByTestId('world-character')).toContainText('mountain, climbing');
+  await expect(page.getByTestId('world-character')).toContainText('3 mountains, ridged range');
+});
+
+test('opens on the lap s highest point, facing the summit, when asked', async ({ page }) => {
+  await openWorld(page, 'seed=3&look=summit');
+  await expect(page.locator('body')).toHaveAttribute('data-world-look', 'summit');
+  const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
+  // Close to the road, not the far view of the whole island.
+  expect(orbit.distance).toBeLessThan(400);
+  const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+  expect(seen.road / seen.total).toBeGreaterThan(0.005);
+  expect(seen.land / seen.total).toBeGreaterThan(0.2);
+});
+
+test('opens on the steepest stretch of road, seen from below, when asked', async ({ page }) => {
+  await openWorld(page, 'seed=3&look=climb');
+  await expect(page.locator('body')).toHaveAttribute('data-world-look', 'climb');
+  const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
+  expect(orbit.distance).toBeLessThan(150);
+  const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+  expect(seen.road / seen.total).toBeGreaterThan(0.02);
+});
+
 test('shows the whole island when the spot asked for is not one it knows', async ({ page }) => {
   await openWorld(page, 'seed=42&look=nonsense');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'island');
@@ -163,7 +190,7 @@ test.describe('3D screenshots', () => {
   const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [1, 7, 42, 100, 2024, 48213];
 
   /** Which close views to take as well as the overview. Override with LOOKS, for example: $env:LOOKS = "cut,water" */
-  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start'];
+  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start', 'summit', 'climb'];
 
   /** Points of the lap to photograph from the flying camera, as fractions. Override with LAPS, for example: $env:LAPS = "0.1,0.6" */
   const laps = process.env.LAPS ? process.env.LAPS.split(',') : ['0.02', '0.3', '0.55', '0.8'];
