@@ -97,6 +97,16 @@ describe('hashWorld', () => {
     expect(hashWorld(world)).not.toBe(afterGrass);
   });
 
+  it('changes if the time of day changes', () => {
+    const world = generateWorld(7, coarse);
+    const before = hashWorld(world);
+    world.sky.hour += 1 / 60;
+    const afterHour = hashWorld(world);
+    expect(afterHour).not.toBe(before);
+    world.sky.bearing += 0.01;
+    expect(hashWorld(world)).not.toBe(afterHour);
+  });
+
   it('changes if the road changes', () => {
     const world = generateWorld(7, coarse);
     const before = hashWorld(world);

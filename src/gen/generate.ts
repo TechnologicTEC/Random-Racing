@@ -14,6 +14,7 @@ import { buildCover } from './world/cover';
 import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
 import { fitReport } from './world/report';
+import { pickSky } from './world/sky';
 
 /**
  * Generates everything for a seed: the track, the island around it, the road
@@ -57,6 +58,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     },
     report,
     mountains: island.mountains.map(({ x, z, summit }) => ({ x, z, summit })),
+    sky: pickSky(track.seed, config.world.sky),
   };
 }
 
@@ -83,5 +85,6 @@ export function hashWorld(world: WorldResult): string {
   }
   hasher.numbers([report.groundThroughRoad, report.roadFloating]);
   for (const mountain of world.mountains) hasher.numbers([mountain.x, mountain.z, mountain.summit]);
+  hasher.numbers([world.sky.hour, world.sky.bearing]);
   return hasher.digest();
 }

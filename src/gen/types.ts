@@ -290,6 +290,20 @@ export interface WorldResult {
   report: FitReport;
   /** The island's mountains, the main one first (for a mountain seed, its massif). Empty if it has none. */
   mountains: MountainSummit[];
+  /** The seed's time of day and the direction of the sun's path. */
+  sky: Sky;
+}
+
+/** The seed's time of day. Drawing turns it into light; generation only picks it. */
+export interface Sky {
+  /** Hours since midnight, in whole minutes (17.5 is 17:30). */
+  hour: number;
+  /**
+   * Compass bearing, in radians, of where the sun rises: 0 is north (-z, up on the
+   * lab's map), a quarter turn is east (+x). The sun sweeps half a circle from
+   * there, through the south of the sky if it rises in the east, to where it sets.
+   */
+  bearing: number;
 }
 
 /** Where a mountain's summit is, in metres, and its height above the sea. */

@@ -5,7 +5,7 @@ import { hashTrack, measureProfile, trackRulesFor, widestTrackArea, type Candida
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
-import { describeCharacter, describeFit, describeProfile, describeScorePart, describeViolation, describeWidth } from './format';
+import { describeCharacter, describeFit, describeProfile, describeScorePart, describeSky, describeViolation, describeWidth } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -292,6 +292,7 @@ export function mountTrackLab(root: HTMLElement): void {
       // For the road's width, say what the winning road actually does.
       addFact(label, label === 'Road width' && world ? describeWidth(world.road.width) : value);
     }
+    if (world) addFact('Time of day', describeSky(world.sky));
     addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);

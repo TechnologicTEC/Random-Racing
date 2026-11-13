@@ -1,4 +1,4 @@
-import type { Character, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, TrackResult, Violation } from '../../gen/types';
+import type { Character, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, Sky, TrackResult, Violation } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -202,4 +202,27 @@ export function summariseTracks(results: readonly TrackResult[]): string {
   ];
   if (fallbacks > 0) parts.push(`${fallbacks} fell back to a plain oval`);
   return `${plural(results.length, 'track')}: ${parts.join('; ')}`;
+}
+
+/** Hours since midnight as a 24-hour clock, to the nearest minute: 17.5 is "17:30". */
+export function formatClock(hour: number): string {
+  const minutes = Math.round(hour * 60);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `${pad(Math.floor(minutes / 60) % 24)}:${pad(minutes % 60)}`;
+}
+
+/** The kind of light at an hour of the day, in a few words. */
+export function lightName(hour: number): string {
+  if (hour < 10) return 'morning light';
+  if (hour < 14) return 'midday light';
+  if (hour < 17) return 'afternoon light';
+  return 'evening light';
+}
+
+const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+
+/** The seed's time of day and where its sun rises, for the lab. */
+export function describeSky(sky: Sky): string {
+  const eighth = Math.round(sky.bearing / (Math.PI / 4)) % 8;
+  return `${formatClock(sky.hour)}, sun rises in the ${COMPASS[eighth]}`;
 }

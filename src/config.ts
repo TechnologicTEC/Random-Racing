@@ -697,6 +697,13 @@ export interface WorldConfig {
   hinterland: HinterlandConfig;
   scenery: SceneryConfig;
   cover: CoverConfig;
+  sky: SkyConfig;
+}
+
+/** The seed's time of day. */
+export interface SkyConfig {
+  /** Seeds pick a time evenly between these two, in hours since midnight (7 is 07:00, 19.5 is 19:30). */
+  hours: Range;
 }
 
 /** How the world is drawn. None of this changes the world itself. */
@@ -719,6 +726,43 @@ export interface RenderConfig {
   seaFloorDepth: number;
   /** Sharp screens are drawn at no more than this many pixels per CSS pixel. */
   maxPixelRatio: number;
+  daylight: DaylightConfig;
+}
+
+/**
+ * How the time of day becomes light. The blends are measured on the height of
+ * the sun: the upward part of a unit vector towards it (0 on the horizon, 1 overhead).
+ */
+export interface DaylightConfig {
+  /** Hours at which the sun rises and sets. It is highest halfway between. */
+  sunrise: number;
+  sunset: number;
+  /** How high the sun stands at its highest, in degrees above the horizon. */
+  highestSun: number;
+  /** Strength of the sun at its highest; at the horizon it is `lowSun` times that, ramping up over `sunRamp`. */
+  sunStrength: number;
+  lowSun: number;
+  sunRamp: Range;
+  /** Strength of the light from the whole sky in the day; with a low sun it is `lowSky` times that. */
+  skyStrength: number;
+  lowSky: number;
+  /** The sky turns from night to day colours over this range of sun heights. */
+  dayBlend: Range;
+  /** The warm glow comes in over the first range and fades out over the second. */
+  sunsetIn: Range;
+  sunsetOut: Range;
+  /** How much of the glow there is at its strongest. */
+  glow: number;
+  /** The sun's light and its disc turn from their low to their high colours over these ranges. */
+  sunColourBlend: Range;
+  discBlend: Range;
+  /** Share of the glow added to the horizon colour to make the haze. */
+  hazeGlow: number;
+  /** Share of the sunset colour mixed into the light from the sky at the strongest glow. */
+  skySunset: number;
+  /** The water reflects the horizon mixed this far towards the zenith, plus this share of the glow. */
+  waterZenith: number;
+  waterGlow: number;
 }
 
 /** Cameras. Angles in radians, distances in metres. */
@@ -1044,6 +1088,7 @@ export const config: GameConfig = {
       roadsideFade: 3,
       variationScale: 55,
     },
+    sky: { hours: [7, 19.5] },
   },
   render: {
     chunkCells: 64,
@@ -1056,6 +1101,26 @@ export const config: GameConfig = {
     seaSize: 16000,
     seaFloorDepth: -23,
     maxPixelRatio: 2,
+    daylight: {
+      sunrise: 6.25,
+      sunset: 20.25,
+      highestSun: 60,
+      sunStrength: 2.4,
+      lowSun: 0.55,
+      sunRamp: [0, 0.5],
+      skyStrength: 1.5,
+      lowSky: 0.75,
+      dayBlend: [-0.12, 0.3],
+      sunsetIn: [-0.28, -0.02],
+      sunsetOut: [0.06, 0.42],
+      glow: 0.9,
+      sunColourBlend: [0, 0.4],
+      discBlend: [0, 0.3],
+      hazeGlow: 0.3,
+      skySunset: 0.45,
+      waterZenith: 0.35,
+      waterGlow: 0.35,
+    },
   },
   camera: {
     orbit: {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeCharacter, describeFit, describeWidth, describeProfile, describeScorePart, describeViolation, shortCharacter, summariseTracks } from './format';
+import { describeCharacter, describeFit, describeSky, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, shortCharacter, summariseTracks } from './format';
 
 describe('describeCharacter', () => {
   it('lists the traits of a seed in plain words', () => {
@@ -225,5 +225,37 @@ describe('summariseTracks', () => {
 
   it('copes with an empty list', () => {
     expect(summariseTracks([])).toBe('No tracks yet');
+  });
+});
+
+describe('formatClock', () => {
+  it('shows hours since midnight as a 24-hour clock', () => {
+    expect(formatClock(7)).toBe('07:00');
+    expect(formatClock(17 + 40 / 60)).toBe('17:40');
+    expect(formatClock(19.5)).toBe('19:30');
+    expect(formatClock(9 + 5 / 60)).toBe('09:05');
+  });
+
+  it('rounds to the nearest minute without ever showing 60', () => {
+    expect(formatClock(12 + 59.7 / 60)).toBe('13:00');
+  });
+});
+
+describe('lightName', () => {
+  it('names the light of the hour', () => {
+    expect(lightName(7.5)).toBe('morning light');
+    expect(lightName(12)).toBe('midday light');
+    expect(lightName(15.5)).toBe('afternoon light');
+    expect(lightName(18.75)).toBe('evening light');
+  });
+});
+
+describe('describeSky', () => {
+  it('gives the time and the side the sun rises on', () => {
+    const quarter = Math.PI / 2;
+    expect(describeSky({ hour: 17 + 40 / 60, bearing: 3.5 * quarter })).toBe('17:40, sun rises in the north-west');
+    expect(describeSky({ hour: 7, bearing: quarter })).toBe('07:00, sun rises in the east');
+    expect(describeSky({ hour: 12, bearing: 0.1 })).toBe('12:00, sun rises in the north');
+    expect(describeSky({ hour: 12, bearing: 4 * quarter - 0.1 })).toBe('12:00, sun rises in the north');
   });
 });
