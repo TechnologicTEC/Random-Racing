@@ -33,7 +33,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const road = { near: island.near, line, height: profile.height, cross, width };
   const fitted = fitRoad({ ...road, natural: island.inland }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
-  const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config);
+  const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
   const report = fitReport(
     { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor },

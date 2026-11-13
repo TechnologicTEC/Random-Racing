@@ -627,24 +627,22 @@ export interface HillsConfig {
  * there is room. Heights in metres above the sea, distances in metres.
  */
 export interface MountainConfig {
-  /** Summit of the main mountain: lowest and highest. */
-  main: Range;
-  /** Summits of the others. */
-  others: Range;
-  /** Steepest a mountain's sides may be, as a fraction (1.1 is about 48 degrees). Sets how wide its foot is. */
-  slope: number;
-  /** Share of that slope left for the ridges on its sides; its smooth shape uses the rest. */
-  ridgeShare: number;
-  /** The ridges are this share of the foot's radius across, so a big mountain has big ridges... */
-  ridgeSize: number;
-  /** ...and at most this share of its height deep, half way up its sides. */
-  ridgeDepth: number;
+  /**
+   * Summits by the seed's landform, in metres above the sea: the main mountain's, lowest and highest,
+   * and the others'. Where a mountain's whole foot does not fit, it is built lower, so it is smaller.
+   */
+  heights: Record<LandformKind, { main: Range; others: Range }>;
   /** A mountain rises at least this far above the ground it stands on, or it is not built. */
   minRise: number;
   /** No part of a mountain's foot comes closer to the road edge than this. */
   clearance: number;
   /** Beyond its foot, the land a mountain stands on runs on at least this far before it meets the sea. */
   skirt: number;
+  /**
+   * A mountain's foot must reach the land the road is on (its infield or hinterland), or come within this
+   * far beyond the clearance, so the land round its foot meets the land beside the road.
+   */
+  join: number;
 }
 
 /** Mid-sized hills on the land away from the road, so infields and hinterland are not flat. In metres. */
@@ -993,7 +991,17 @@ export const config: GameConfig = {
       bumpHeight: 1.5,
       bumpScale: 45,
       bumpFade: 30,
-      mountains: { main: [200, 250], others: [80, 200], slope: 1.1, ridgeShare: 0.2, ridgeSize: 1, ridgeDepth: 0.25, minRise: 40, clearance: 60, skirt: 60 },
+      mountains: {
+        heights: {
+          peak: { main: [200, 250], others: [80, 200] },
+          range: { main: [200, 250], others: [80, 200] },
+          hills: { main: [120, 170], others: [50, 120] },
+        },
+        minRise: 40,
+        clearance: 60,
+        skirt: 60,
+        join: 20,
+      },
       foothills: { height: [5, 25], scale: 150, clearance: 60, fade: 60 },
       landforms: {
         peak: { slope: 1.2, smoothShare: [0.6, 0.78], lobes: [0.3, 0.2, 0.08], concave: [0.55, 1], rockDepth: 0.3, rockSize: 1 },

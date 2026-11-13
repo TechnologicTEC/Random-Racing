@@ -163,6 +163,11 @@ interface Mountain {
 }
 
 function buildMountain(rng: Rng, x: number, z: number, shape: MountainShape): Mountain {
+  return mountainMaker(rng, shape)(x, z);
+}
+
+/** A mountain of this shape, ready to stand anywhere: the slow parts are worked out once. */
+function mountainMaker(rng: Rng, shape: MountainShape): (x: number, z: number) => Mountain {
   const H = shape.height;
   const { outline, widest } = wavyOutline(rng.fork('outline'), shape.lobes);
   const { profile } = shape;
@@ -186,36 +191,38 @@ function buildMountain(rng: Rng, x: number, z: number, shape: MountainShape): Mo
   const rockSize = base * shape.rockSize;
 
   const reach = base * widest + ROUNDING;
-  /** True well beyond the foot, found without the outline's maths: there the height is 0. */
-  const beyond = (px: number, pz: number): boolean => (px - x) * (px - x) + (pz - z) * (pz - z) > reach * reach;
-  const smoothParts = (px: number, pz: number): { g: number; dx: number; dz: number } => {
-    const dx = px - x;
-    const dz = pz - z;
-    const r = Math.sqrt(dx * dx + dz * dz);
-    if (r === 0) return { g: 1, dx, dz };
-    const t = (shape.roundTop ? rounded(r) : r) / (base * outline(dx / r, dz / r).f);
-    return { g: t >= 1 ? 0 : profile.at(t), dx, dz };
+  return (x, z) => {
+    /** True well beyond the foot, found without the outline's maths: there the height is 0. */
+    const beyond = (px: number, pz: number): boolean => (px - x) * (px - x) + (pz - z) * (pz - z) > reach * reach;
+    const smoothParts = (px: number, pz: number): { g: number; dx: number; dz: number } => {
+      const dx = px - x;
+      const dz = pz - z;
+      const r = Math.sqrt(dx * dx + dz * dz);
+      if (r === 0) return { g: 1, dx, dz };
+      const t = (shape.roundTop ? rounded(r) : r) / (base * outline(dx / r, dz / r).f);
+      return { g: t >= 1 ? 0 : profile.at(t), dx, dz };
+    };
+    const smooth = (px: number, pz: number): number => (beyond(px, pz) ? 0 : H * smoothParts(px, pz).g);
+    const at = (px: number, pz: number): number => {
+      if (beyond(px, pz)) return 0;
+      const { g, dx, dz } = smoothParts(px, pz);
+      if (g <= 0) return 0;
+      const u = rock.u + dx / rockSize;
+      const v = rock.v + dz / rockSize;
+      const pattern = shape.sharpRock ? ridged(rock.noise, u, v, 2) : softRidged(rock.noise, u, v, 2);
+      // The rock fades out at the summit and at the foot, so neither moves.
+      return Math.max(0, H * g * (1 + shape.rockDepth * (1 - g) * (pattern - 0.5)));
+    };
+    const outside = (px: number, pz: number): number => {
+      const dx = px - x;
+      const dz = pz - z;
+      const r = Math.sqrt(dx * dx + dz * dz);
+      if (r === 0) return -base;
+      // Measured the same way as the height, so the foot ends exactly where the height reaches 0.
+      return (shape.roundTop ? rounded(r) : r) - base * outline(dx / r, dz / r).f;
+    };
+    return { x, z, height: H, at, smooth, outside, reach };
   };
-  const smooth = (px: number, pz: number): number => (beyond(px, pz) ? 0 : H * smoothParts(px, pz).g);
-  const at = (px: number, pz: number): number => {
-    if (beyond(px, pz)) return 0;
-    const { g, dx, dz } = smoothParts(px, pz);
-    if (g <= 0) return 0;
-    const u = rock.u + dx / rockSize;
-    const v = rock.v + dz / rockSize;
-    const pattern = shape.sharpRock ? ridged(rock.noise, u, v, 2) : softRidged(rock.noise, u, v, 2);
-    // The rock fades out at the summit and at the foot, so neither moves.
-    return Math.max(0, H * g * (1 + shape.rockDepth * (1 - g) * (pattern - 0.5)));
-  };
-  const outside = (px: number, pz: number): number => {
-    const dx = px - x;
-    const dz = pz - z;
-    const r = Math.sqrt(dx * dx + dz * dz);
-    if (r === 0) return -base;
-    // Measured the same way as the height, so the foot ends exactly where the height reaches 0.
-    return (shape.roundTop ? rounded(r) : r) - base * outline(dx / r, dz / r).f;
-  };
-  return { x, z, height: H, at, smooth, outside, reach };
 }
 
 // ---------- Lone peak ----------
@@ -266,8 +273,8 @@ function buildRange(rng: Rng, size: LandformSize, cfg: RangeConfig): Landform {
   // The line of peaks bends gently: this much turn per metre.
   const turn = rng.fork('bend').range(-cfg.bend, cfg.bend) / cfg.length;
 
-  const spire = (pick: Rng, x: number, z: number, height: number): Mountain =>
-    buildMountain(pick, x, z, {
+  const spireMaker = (pick: Rng, height: number): ((x: number, z: number) => Mountain) =>
+    mountainMaker(pick, {
       height,
       slope: cfg.slope,
       share: pick.fork('steepness').range(cfg.smoothShare[0], cfg.smoothShare[1]),
@@ -282,7 +289,7 @@ function buildRange(rng: Rng, size: LandformSize, cfg: RangeConfig): Landform {
   // Outward from the main peak along the line, one way and then the other. Each peak is lower than
   // its neighbour nearer the main one, and stands just far enough from it that the col between them
   // comes out at the share of the lower one drawn for it.
-  const placed: Array<{ mountain: Mountain; order: number }> = [{ mountain: spire(rng.fork('peak-main'), size.x, size.z, H), order: 0 }];
+  const placed: Array<{ mountain: Mountain; order: number }> = [{ mountain: spireMaker(rng.fork('peak-main'), H)(size.x, size.z), order: 0 }];
   for (const side of [1, -1] as const) {
     const wanted = side === 1 ? count - 1 - main : main;
     let previous = placed[0]!.mountain;
@@ -295,7 +302,9 @@ function buildRange(rng: Rng, size: LandformSize, cfg: RangeConfig): Landform {
       const ux = dcos(direction);
       const uz = dsin(direction);
       const from = previous;
-      const make = (gap: number): Mountain => spire(pick.fork('shape'), from.x + ux * gap, from.z + uz * gap, height);
+      // The spire's shape is the same wherever it stands, so it is worked out once.
+      const atGap = spireMaker(pick.fork('shape'), height);
+      const make = (gap: number): Mountain => atGap(from.x + ux * gap, from.z + uz * gap);
       // Further apart means a lower col: find the gap that gives the col wanted.
       let near = cfg.gapMin;
       let far = from.reach + 400;
@@ -333,7 +342,13 @@ function buildRange(rng: Rng, size: LandformSize, cfg: RangeConfig): Landform {
   };
   const outside = (x: number, z: number): number => {
     let nearest = Infinity;
-    for (const mountain of mountains) nearest = Math.min(nearest, mountain.outside(x, z));
+    for (const mountain of mountains) {
+      // A spire's foot reaches no further than its reach, so a point is at least this far outside it.
+      const dx = x - mountain.x;
+      const dz = z - mountain.z;
+      if (Math.sqrt(dx * dx + dz * dz) - mountain.reach >= nearest) continue;
+      nearest = Math.min(nearest, mountain.outside(x, z));
+    }
     return nearest;
   };
 

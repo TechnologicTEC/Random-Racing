@@ -19,7 +19,7 @@ function coverFor(heightAt: (x: number, z: number) => number, seed = 5, roadWidt
   const height = Float64Array.from({ length: line.count }, (_, i) => heightAt(line.x[i]!, line.z[i]!));
   const width = uniformWidth(line, roadWidth);
   const { ground, corridor } = fitRoad({ natural, near, line, height, cross: null, width }, config);
-  return { ground, corridor, near, cover: buildCover(seed, ground, corridor, edgeDistance(near, width), config) };
+  return { ground, corridor, near, cover: buildCover(seed, ground, corridor, edgeDistance(near, width), config, 'peak') };
 }
 
 const at = (field: HeightField, x: number, z: number): number => Math.round((z - field.origin) / field.cell) * field.size + Math.round((x - field.origin) / field.cell);

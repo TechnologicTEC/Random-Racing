@@ -2,16 +2,17 @@ import type { GenConfig } from '../../config';
 import { createNoise, fbm } from '../../core/noise';
 import { createRng } from '../../core/rng';
 import { clamp01, smoothstep } from '../../core/scalar';
-import type { Cover, HeightField } from '../types';
+import type { Cover, HeightField, LandformKind } from '../types';
 import { worldX, worldZ } from './heightfield';
 
 /**
  * Decides what covers every cell of the island: sand on the beach and sea
  * bed, rock where the ground is steep or high, snow on the highest ground,
- * grass everywhere else. Grass
- * never grows on the road or its verges.
+ * grass everywhere else. Grass never grows on the road or its verges.
+ * Hill country stays green: its high ground has no snow, and rock only where it is steep.
  *
  * @param edge distance from every cell to the edge of the road, in metres (see edgeDistance)
+ * @param landform the shape of the island's mountains
  */
 export function buildCover(
   seed: number,
@@ -19,8 +20,10 @@ export function buildCover(
   corridor: Uint8Array,
   edge: Float32Array,
   cfg: GenConfig,
+  landform: LandformKind,
 ): Cover {
   const rules = cfg.world.cover;
+  const alpine = landform !== 'hills';
   const { size, cell, height } = ground;
   const { verge } = cfg.road;
 
@@ -61,11 +64,11 @@ export function buildCover(
         here <= 0
           ? 0
           : Math.max(
-              smoothstep(rules.rockHeight[0], rules.rockHeight[1], here + variation * 6),
+              alpine ? smoothstep(rules.rockHeight[0], rules.rockHeight[1], here + variation * 6) : 0,
               smoothstep(rules.rockSlope[0], rules.rockSlope[1], slope),
             );
       // The snow line wanders a little with the variation, like the edge of the sand.
-      const snow = smoothstep(rules.snowHeight[0], rules.snowHeight[1], here + (variation - 0.5) * 6);
+      const snow = alpine ? smoothstep(rules.snowHeight[0], rules.snowHeight[1], here + (variation - 0.5) * 6) : 0;
       let grass = 0;
       if (corridor[c] !== 1 && here > 0) {
         const roadside = smoothstep(verge, verge + rules.roadsideFade, edge[c]!);

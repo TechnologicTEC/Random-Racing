@@ -5,7 +5,7 @@ import { circleLine, stadiumLine, uniformWidth } from '../../testing/trackFixtur
 import { solveProfile } from '../road/profile';
 import { generateTrack } from '../track/pipeline';
 import type { CenterLine, Character, RoadProfile } from '../types';
-import { sampleField } from './heightfield';
+import { sampleField, worldX, worldZ } from './heightfield';
 import { buildIsland, carveCoast, coastProfile, shoreShape, type Island } from './island';
 
 const HALF_ROAD = config.track.roadWidth / 2;
@@ -228,7 +228,7 @@ describe('buildIsland around a high road', () => {
 });
 
 describe('mountains on a hand-made island', () => {
-  // The full-size tile: a 250 m mountain is about 700 m across and must stay 60 m clear of the road.
+  // The full-size tile: a 250 m lone peak is about 1.7 km across and must stay 60 m clear of the road, so it may come out lower.
   const roomy: GenConfig = nearCoast({ ...config, world: { ...config.world, tile: { extent: config.world.tile.extent, cell: 6 } } });
   const mountainIsland = (line: CenterLine, count: number): Island => {
     const relief = (): number => 10;
@@ -238,19 +238,26 @@ describe('mountains on a hand-made island', () => {
   const island = mountainIsland(circleLine(200), 2);
   const mountains = config.world.scenery.mountains;
 
-  it('places the mountains asked for, the main one 200 to 250 m high', () => {
+  it('places the mountains asked for, lone peaks no higher than 250 m and at least 40 m above the ground, as high as they are said to be', () => {
     expect(island.mountains).toHaveLength(2);
-    expect(island.mountains[0]!.summit).toBeGreaterThanOrEqual(mountains.main[0]);
-    expect(island.mountains[0]!.summit).toBeLessThanOrEqual(mountains.main[1]);
-    expect(sampleField(island.natural, island.mountains[0]!.x, island.mountains[0]!.z, 0)).toBeGreaterThan(mountains.main[0] * 0.95);
+    for (const mountain of island.mountains) {
+      expect(mountain.landform.kind).toBe('peak');
+      expect(mountain.summit).toBeLessThanOrEqual(mountains.heights.peak.main[1]);
+      expect(mountain.summit - mountain.base).toBeGreaterThanOrEqual(mountains.minRise);
+      expect(sampleField(island.natural, mountain.x, mountain.z, 0)).toBeGreaterThan(mountain.summit * 0.95);
+    }
   });
 
-  it('keeps every part of them at least 60 m from the road', () => {
+  it('keeps every part of their feet at least 60 m from the road', () => {
+    const { size, cell } = island.natural;
     for (const mountain of island.mountains) {
-      // The road is a 200 m circle about the origin, so the foot must end 60 m short of the road on whichever side it is.
-      const fromCentre = Math.sqrt(mountain.x * mountain.x + mountain.z * mountain.z);
-      const gap = fromCentre > 200 ? fromCentre - mountain.radius - 200 - HALF_ROAD : 200 - HALF_ROAD - fromCentre - mountain.radius;
-      expect(gap).toBeGreaterThanOrEqual(mountains.clearance - 0.001);
+      for (let c = 0; c < size * size; c++) {
+        const x = worldX(island.natural, c % size);
+        const z = worldZ(island.natural, Math.floor(c / size));
+        if (mountain.landform.outside(x, z) > 0) continue;
+        // The road is a 200 m circle about the origin.
+        expect(Math.abs(Math.hypot(x, z) - 200) - HALF_ROAD).toBeGreaterThanOrEqual(mountains.clearance - cell);
+      }
     }
   });
 
@@ -428,7 +435,8 @@ describe('buildIsland on generated tracks', () => {
     const { winner, island } = worlds[0]!;
     const again = buildIsland(1, winner.line, winner.profile, uniformWidth(winner.line, config.track.roadWidth), rolling, PLAIN);
     expect(again.natural.height).toEqual(island.natural.height);
-    expect(again.mountains).toEqual(island.mountains);
+    const plain = (mountains: Island['mountains']) => mountains.map(({ x, z, radius, summit, base }) => ({ x, z, radius, summit, base }));
+    expect(plain(again.mountains)).toEqual(plain(island.mountains));
     expect(worlds[1]!.island.natural.height).not.toEqual(island.natural.height);
   });
 });

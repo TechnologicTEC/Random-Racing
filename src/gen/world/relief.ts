@@ -60,8 +60,16 @@ export interface Massif {
  * every candidate layout can be judged against the same ground.
  *
  * @param reach radius of the buildable area, in metres
+ * @param massif the seed's massif, if already placed (see placeMassif)
  */
-export function createRelief(seed: number, cfg: ReliefConfig, landforms: LandformConfig, traits: ReliefTraits, reach: number): Relief {
+export function createRelief(
+  seed: number,
+  cfg: ReliefConfig,
+  landforms: LandformConfig,
+  traits: ReliefTraits,
+  reach: number,
+  massif: Massif | null = placeMassif(seed, cfg, landforms, traits),
+): Relief {
   const kind = traits.relief;
   const rng = createRng(seed, 'world').fork('relief');
   const broad = createNoise(rng.fork('broad'));
@@ -74,7 +82,6 @@ export function createRelief(seed: number, cfg: ReliefConfig, landforms: Landfor
   const { ease } = cfg.highland;
   // Length of the flank, from its foot to the edge of the flat top.
   const flank = highland ? highland.radius - highland.plateau : 0;
-  const massif = placeMassif(seed, cfg, landforms, traits);
   const cone = cfg.massif;
 
   return (x, z) => {
