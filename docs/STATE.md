@@ -332,6 +332,7 @@ Plan approved in plan mode. Tane's choices: seeds pick a time from 07:00 to 19:3
 | 12d | Water (`render/water.ts`, `render/waterDepth.ts`) in place of the flat sea; waves move every frame unless held still | Done |
 | 12e | Clock, slider and "Seed's time" button; the title card names the time and its light | Done |
 | 12f | Screenshots, counts, this file | Done |
+| 12g | Tane's feedback on the water (below): waves of our own in `render/waves.ts` | Done |
 
 **What carried over from the island demo:** the sky shader (horizon to zenith, glow round a low sun, sun disc and halo, haze below the horizon), its day colour keys and blends, and its water shader (summed wave slopes, shallow to deep colour by depth, sky reflection, sun glints, moving shore foam, see-through shallows). Moon and stars were left out: there is no night.
 
@@ -342,6 +343,17 @@ Plan approved in plan mode. Tane's choices: seeds pick a time from 07:00 to 19:3
 - *Triangles and draw calls per frame* (Chromium, 1280 by 720, seeds 1, 3, 7, 12, 44, 53, 2024): circling view 184k to 401k in 26 to 81 calls; flying view 94k to 193k in 14 to 39; summit view 118k to 339k in 18 to 69. As in C6 plus the dome's one call (the water replaces the flat sea's).
 - *Budget:* both 3-second budget tests pass in the full run. Frame rate on a real graphics card is for step 15 (headless browsers draw in software).
 - 883 unit tests and 194 browser tests pass.
+
+**Tane's feedback after trying it (2026-11-14):** the time, sunrise and sunset all look good. The water looks like a checker pattern, blurry and not like waves: waves should be spaced out more and come unevenly, some bigger, some later, some smaller.
+
+**12g, the response.** The demo's five regular waves crossed at wide angles and made a lattice, and far-off waves smaller than a pixel shimmered into false patterns. The waves are now our own (`render/waves.ts`, settings in `render.water`):
+- Eight trains, 62 m down to 2.1 m long, all within 40 degrees of one wind direction, so crests are long lines across the wind and not a grid.
+- Each train builds up and dies down in patches about 4.5 wavelengths across (waves come in groups), and its crests are pushed forward or back by up to half a wavelength from patch to patch, so they bend and come sooner or later.
+- Crests are peaked, with broad troughs between; long waves travel faster than short ones, as at sea.
+- A wave is dropped once a pixel covers 7% to 30% of its length (measured the way it travels), which replaces the fades by distance. Where waves are dropped, the sun's glints spread and soften.
+- The water takes light and shade from the waves' faces, and the tops of the taller waves are a little lighter. The demo's water only showed waves through reflections, so they vanished when seen from above.
+
+`waveField` does the sums in TypeScript for the tests (13 of them: uneven gaps between big crests, crests of very different sizes, no repeat down or across the wind, peaked crests, slopes that match heights, travel down the wind); `wavesGlsl` writes the same sums for the shader. Checked by eye on seeds 2, 4, 5, 6, 7, 9, 13, 15, 17, 18, 19 and 20, from above, flying and close to the shore. 896 unit tests and 194 browser tests pass.
 
 ### Rework risks
 
@@ -551,7 +563,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-14 | Tests that count land, sea and road pixels open at `time=13:00` | They test the island, not the light; the time-of-day tests cover the light |
 | 2026-11-14 | `look=sun`: from 60 m behind the start line, looking level towards the sun | For the sun-disc test and the time strip |
 | 2026-11-14 | The water reads its depth from the fitted ground (which includes the sea bed) as a one-channel float texture of the 3 m grid; outside the tile it is open sea at `seaFloorDepth`. `depthAt` in `render/waterDepth.ts` does the shader's sums for tests | No new data from generation; works in Chromium and Firefox |
-| 2026-11-14 | **Waves fade with distance:** small ones between 60 and 220 m (the demo's), large ones between 300 and 1500 m, and glints drop to 25% where the small waves have gone (`render.water`) | Seen from the circling camera the regular waves made a fish-scale pattern |
+| 2026-11-14 | ~~Waves fade with distance: small ones between 60 and 220 m, large ones between 300 and 1500 m, glints to 25%~~ Replaced the same day by the waves of 12g | Seen from the circling camera the regular waves made a fish-scale pattern; fading them did not cure it |
+| 2026-11-14 | **The sea's waves are our own, not the demo's** (`render/waves.ts`): eight trains down one wind, in groups, with bent, peaked crests; each dropped when too small on screen to draw; the water shaded by the waves' faces with lighter crests. The wind is a setting (`render.water.wind`), the same on every island | Tane: the water looked like a checker pattern, not waves |
+| 2026-11-14 | The wave sums are written twice, in TypeScript (`waveField`, tested) and in the shader (`wavesGlsl`), from the same settings | The shader cannot be unit tested; the same pattern as `depthAt` |
+| 2026-11-14 | `patch` and `sample` are reserved words in the shader language (WebGL 2); a shader that fails to compile draws nothing and only logs to the console | Cost a confusing screenshot of a sea with no water. The test "builds the island in 3D" fails on any console error |
 | 2026-11-14 | The waves move every frame unless the page is held still (`still=1`) or the system asks for reduced motion; then they stand at `render.water.stillTime`, so screenshots repeat exactly | Tane's choice; replaces "draw only when something changed" for moving pictures |
 | 2026-11-14 | `time=HH:MM` opens the first island at that time, held to 07:00 to 19:30; a new island goes back to its own time. The slider moves in 5-minute steps and keeps its own arrow keys | Tane's choice for the player's pick until Milestone 4's menus |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
@@ -590,7 +605,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
 - In 3D the sea cliffs read well as rock faces. The peak is craggy and a bit lumpy from the ridge texture on its sides; worth a look once lighting and shadows are in.
-- **The sea shows a regular ripple pattern in low sun** half a kilometre or so from the circling camera (seed 6 at 17:45, seed 7 at 10:00), softened but not gone after the far-wave fade. More waves at odd angles, or a noise term, would break it up.
+- **The sun's glare on the sea, seen from the circling camera, is a wide pale patch with wave stripes in it** (seed 7 at 10:00). Softer than it was; `render.water.glint*` are the settings.
+- **The water shader does more work per pixel than the demo's** (eight wave trains, each with a noise lookup). Step 15 measures the frame rate on a real graphics card; fewer trains is the lever.
+- The wind blows the same way on every island. It could come from the seed.
 - **07:00 and 19:30 are quite dark**, with pink skies (see the step 12 time strip). Sunrise, sunset and the blends are config values; for Tane to judge.
 - **The page now draws every frame** while the waves move. Step 15 measures the frame rate on a real graphics card; reduced motion and `still=1` stop it.
 - 10:00 is called "midday light" on the title card (morning ends at 10:00 in `lightName`).
@@ -646,3 +663,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2):** Step C6 done. `WorldResult.mountains`; `look=summit` and `look=climb` (`lookAtRoad`); the 3D title card names the kind of island; close cameras turn away from a hillside in the way. Screenshots of seeds 1 to 20 plus 27, 44, 47 and 53 checked by eye; triangle counts and budget in "Rework measurements", C6. 854 unit tests and 412 Playwright tests pass. **Check-in 3 response complete; stopped for check-in 4.**
 - **2026-11-13 (Milestone 2):** Check-in 4. Tane looked at the C6 screenshots: looks good, carry on. No changes asked. Next: step 12.
 - **2026-11-14 (Milestone 2):** Step 12 planned in plan mode (Tane chose daylight only, a slider, always-moving waves, a seed's sun bearing) and done in six commits (12a to 12f): the seed's time of day, `render/daylight.ts`, the sky dome, the water shader, the time controls, and screenshots of seeds 1 to 20 plus a time strip. Found on the way: the budget test failed under load once the page drew while worlds were built (fixed by not drawing during builds), and Vitest does not run from Git Bash on this machine. 883 unit tests and 194 browser tests pass. Next: step 13.
+- **2026-11-14 (Milestone 2):** Tane tried step 12: time, sunrise and sunset good; the water looked like a checker pattern, not waves. Step 12g: new waves in `render/waves.ts` (wind-driven trains in groups, bent and peaked crests, dropped when too small to draw), shading from the waves and lighter crests in `render/water.ts`. 896 unit tests and 194 browser tests pass.

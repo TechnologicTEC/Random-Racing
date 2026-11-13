@@ -731,25 +731,38 @@ export interface RenderConfig {
   water: WaterConfig;
 }
 
-/** One wave of the sea's surface. It only tilts the surface's shading; the sea itself stays flat. */
+/** One train of waves on the sea. It only tilts the surface's shading; the sea itself stays flat. */
 export interface Wave {
-  /** Direction it travels across the map (x, z); need not be a unit vector. */
-  direction: [number, number];
-  /** Metres from crest to crest, and how far a crest rises above the mean surface. */
+  /** Which way it travels, in degrees to one side (+) or the other (-) of the wind. */
+  angle: number;
+  /** Metres from crest to crest, and the height of its crests when they are neither built up nor died down. */
   length: number;
   height: number;
-  /** How fast it moves, in radians of its cycle per second. */
-  speed: number;
-  /** Small waves fade out with distance (see `detailFade`), so far water does not shimmer. */
-  small: boolean;
 }
 
-/** The sea (the island demo's water shader). Depths and distances in metres. */
+/** The sea (the island demo's water shader, with waves of our own). Depths and distances in metres. */
 export interface WaterConfig {
+  /** The way the wind blows the waves across the map (x, z); need not be a unit vector. */
+  wind: [number, number];
+  /** The wave trains, longest first. Their lengths should not be near multiples of each other, or the sea repeats. */
   waves: Wave[];
-  /** Small waves fade out between these distances from the camera, and the large ones between `swellFade`, so the sea seen from far off is smooth rather than patterned. */
-  detailFade: Range;
-  swellFade: Range;
+  /** How peaked the crests are: 1 is an even swell, higher gives narrow crests with broad troughs between. */
+  crest: number;
+  /** How fast the waves travel, as a share of the speed real waves of their length have in deep water. */
+  speed: number;
+  /**
+   * Waves come in groups. Each train builds up and dies down in patches `lengths` wavelengths across,
+   * its height running from the first to the second of `gain` times its usual height.
+   */
+  groups: { lengths: number; gain: Range };
+  /** Each train's crests are pushed forward or back by up to this share of its wavelength from patch to patch, so they bend and come unevenly. */
+  bend: number;
+  /**
+   * A wave is drawn in full while a pixel covers less than the first of these shares of its wavelength
+   * (measured the way the wave travels), and not at all from the second: a wave too small to draw would
+   * otherwise shimmer into false patterns.
+   */
+  resolve: Range;
   /** The water turns from its shallow colour to its deep one over this depth. */
   shallowDepth: number;
   /** Bands of foam run along the shore in water shallower than this, and solid foam lies at the very edge. */
@@ -761,14 +774,26 @@ export interface WaterConfig {
   /** How opaque the water is in the shallowest water and from `clearDepth` down. */
   opacity: Range;
   clearDepth: number;
+  /**
+   * The tops of the taller waves are lighter. As a share of the height of all the trains' crests together:
+   * the lightening starts at the first and is full at the second; the third is how far towards the shallow colour it goes.
+   */
+  crestLight: readonly [from: number, to: number, strength: number];
+  /** The sun lights the waves' faces and leaves their backs darker, as if their slopes were this many times steeper. */
+  shade: number;
   /** Reflection of the sky at low angles: sharpness and most of the colour it may take. */
   fresnel: number;
   fresnelMost: number;
   /** The sun's glints: sharpness and strength. */
   glint: number;
   glintStrength: number;
-  /** Share of the glints' strength left where the small waves have faded out. */
-  farGlint: number;
+  /**
+   * Where waves are too small to draw, the glints spread out and soften instead, as light scattered
+   * by unseen waves does: how strongly the lost waves spread them, and how much a spread glint dims
+   * (0 not at all, 1 fully).
+   */
+  glintSpread: number;
+  glintDim: number;
   /** Seconds on the wave clock at which the waves stand for a still picture. */
   stillTime: number;
 }
@@ -1199,15 +1224,22 @@ export const config: GameConfig = {
       groundFade: [-0.04, 0.03],
     },
     water: {
+      wind: [1, 0.3],
       waves: [
-        { direction: [1, 0.3], length: 35, height: 0.35, speed: 1.1, small: false },
-        { direction: [-0.4, 1], length: 23, height: 0.22, speed: 1.4, small: false },
-        { direction: [0.7, -0.8], length: 11.4, height: 0.09, speed: 2.0, small: false },
-        { direction: [-0.9, -0.2], length: 4.8, height: 0.035, speed: 2.7, small: true },
-        { direction: [0.2, -1], length: 2.4, height: 0.012, speed: 3.4, small: true },
+        { angle: -7, length: 62, height: 0.5 },
+        { angle: 16, length: 39, height: 0.34 },
+        { angle: -24, length: 25, height: 0.22 },
+        { angle: 9, length: 15.5, height: 0.13 },
+        { angle: 33, length: 9.7, height: 0.08 },
+        { angle: -38, length: 5.9, height: 0.045 },
+        { angle: 21, length: 3.7, height: 0.027 },
+        { angle: -14, length: 2.1, height: 0.014 },
       ],
-      detailFade: [60, 220],
-      swellFade: [300, 1500],
+      crest: 2.2,
+      speed: 1,
+      groups: { lengths: 4.5, gain: [0.15, 1.9] },
+      bend: 0.5,
+      resolve: [0.07, 0.3],
       shallowDepth: 7,
       foamDepth: 1.6,
       edgeFoam: 0.35,
@@ -1215,11 +1247,14 @@ export const config: GameConfig = {
       foamSpeed: 1.6,
       opacity: [0.5, 1],
       clearDepth: 5,
+      crestLight: [0.35, 0.8, 0.16],
+      shade: 3,
       fresnel: 4,
       fresnelMost: 0.85,
-      glint: 140,
-      glintStrength: 1.4,
-      farGlint: 0.25,
+      glint: 180,
+      glintStrength: 0.75,
+      glintSpread: 1.5,
+      glintDim: 0.65,
       stillTime: 0,
     },
   },

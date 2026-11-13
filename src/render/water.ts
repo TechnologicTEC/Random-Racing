@@ -3,6 +3,7 @@ import type { WaterConfig } from '../config';
 import type { Daylight } from './daylight';
 import { toLinear, WATER, type Rgb } from './palette';
 import { DEPTH_GLSL, type WaterDepthGrid } from './waterDepth';
+import { wavesGlsl } from './waves';
 
 /** The sea's surface, and how to change its light, its depths and its waves. */
 export interface Water {
@@ -21,24 +22,18 @@ const linear = (target: THREE.Color | THREE.Vector3, rgb: Rgb, strength = 1): vo
 };
 const float = (value: number): string => (Number.isInteger(value) ? `${value}.0` : String(value));
 
-/** One line of GLSL adding a wave's slope, faded with distance (`detail` for small waves, `swell` for large ones). */
-function waveLine(wave: WaterConfig['waves'][number]): string {
-  const [dx, dz] = wave.direction;
-  const length = Math.hypot(dx, dz);
-  const k = (2 * Math.PI) / wave.length;
-  const term = `wave(p, vec2(${float(dx / length)}, ${float(dz / length)}), ${float(k)}, ${float(wave.height)}, ${float(wave.speed)})`;
-  return `g += ${term} * ${wave.small ? 'detail' : 'swell'};`;
-}
-
 /**
- * The island demo's water: a flat plane whose shading moves with summed waves,
- * coloured from shallow to deep by the depth of the ground under it, reflecting
- * the sky at low angles and the sun in glints, with moving foam along the shore,
- * see-through in the shallows, and hazed with distance like everything else.
+ * The island demo's water, with waves of our own (`waves.ts`): a flat plane
+ * whose shading moves with the waves, coloured from shallow to deep by the
+ * depth of the ground under it, reflecting the sky at low angles and the sun
+ * in glints, with moving foam along the shore, see-through in the shallows,
+ * and hazed with distance like everything else.
  *
  * @param size width of the plane, in metres
  */
 export function createWater(size: number, cfg: WaterConfig): Water {
+  /** The height of the sea when every train is at its usual height and all their crests meet. */
+  const usualHeight = cfg.waves.reduce((sum, wave) => sum + wave.height, 0);
   const ground = new THREE.DataTexture(new Float32Array(1), 1, 1, THREE.RedFormat, THREE.FloatType);
   const uniforms = THREE.UniformsUtils.merge([
     THREE.UniformsLib.fog,
@@ -86,30 +81,33 @@ export function createWater(size: number, cfg: WaterConfig): Water {
       uniform float uTime;
       uniform vec3 uSunDir, uSunLight, uAmbient, uSky, uGlint, uDeep, uShallow, uFoam;
       varying vec3 vWorld;
-      vec2 wave(vec2 p, vec2 d, float k, float a, float s) {
-        return d * k * a * cos(dot(d, p) * k + uTime * s);
-      }
+      ${wavesGlsl(cfg)}
       void main() {
         vec2 p = vWorld.xz;
-        float away = length(cameraPosition - vWorld);
-        float detail = 1.0 - smoothstep(${float(cfg.detailFade[0])}, ${float(cfg.detailFade[1])}, away);
-        float swell = 1.0 - smoothstep(${float(cfg.swellFade[0])}, ${float(cfg.swellFade[1])}, away);
-        vec2 g = vec2(0.0);
-        ${cfg.waves.map(waveLine).join('\n        ')}
+        // Waves a pixel cannot show are left out; "lost" is how rough they would have made the sea.
+        float lost;
+        float rise;
+        vec2 g = seaSlope(p, uTime, dFdx(p), dFdy(p), lost, rise);
         vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
         vec3 V = normalize(cameraPosition - vWorld);
 
         float depth = depthAt(p);
         vec3 water = mix(uDeep, uShallow, 1.0 - smoothstep(0.0, ${float(cfg.shallowDepth)}, depth));
-        vec3 light = uAmbient + uSunLight * (0.35 + 0.65 * max(uSunDir.y, 0.0));
+        // The tops of the taller waves are thinner water with the light in them: a little towards the shallow colour.
+        float top = smoothstep(${float(cfg.crestLight[0])}, ${float(cfg.crestLight[1])}, rise / ${float(usualHeight)});
+        water = mix(water, uShallow, top * ${float(cfg.crestLight[2])});
+        // The sun lights the faces of the waves turned towards it and leaves their backs darker.
+        vec3 face = normalize(vec3(-g.x * ${float(cfg.shade)}, 1.0, -g.y * ${float(cfg.shade)}));
+        vec3 light = uAmbient + uSunLight * (0.35 + 0.65 * max(dot(face, uSunDir), 0.0));
         vec3 col = water * light;
 
         float fres = pow(1.0 - max(dot(n, V), 0.0), ${float(cfg.fresnel)});
         col = mix(col, uSky, clamp(fres * 0.9, 0.0, ${float(cfg.fresnelMost)}));
         vec3 R = reflect(-uSunDir, n);
-        // Without the small waves to break them up, glints off the large ones line up into a grid: far off they are dimmed.
-        float glints = mix(${float(cfg.farGlint)}, 1.0, detail);
-        col += uGlint * pow(max(dot(R, V), 0.0), ${float(cfg.glint)}) * ${float(cfg.glintStrength)} * glints;
+        // Where waves were left out, the sun's glints spread and soften, as light off unseen waves does.
+        float sharp = ${float(cfg.glint)} / (1.0 + ${float(cfg.glint * cfg.glintSpread)} * lost);
+        float glints = pow(sharp / ${float(cfg.glint)}, ${float(cfg.glintDim)});
+        col += uGlint * pow(max(dot(R, V), 0.0), sharp) * ${float(cfg.glintStrength)} * glints;
 
         float band = sin(depth * ${float(cfg.foamBands)} - uTime * ${float(cfg.foamSpeed)} + sin(p.x * 0.15 + p.y * 0.12) * 2.0) * 0.5 + 0.5;
         float foam = (1.0 - smoothstep(0.0, ${float(cfg.foamDepth)}, depth)) * smoothstep(0.55, 0.9, band);
