@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** C2, the landform trait and the climb or circle route, shown in the lab and on contact sheets. Nothing reads them yet, so tracks and islands are unchanged
-- **Next step:** C3, `landforms.ts` (range, hill country, lone peak). Then C4 to C6, check-in 4, then the original steps 12 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** C3, `gen/world/landforms.ts`: the three mountain shapes, tested on their own. Nothing uses them yet, so tracks and islands are unchanged
+- **Next step:** C4, the main mountain in the relief (climbing and circling), longer mountain laps, candidate turns, the earthworks rule. Then C5 and C6, check-in 4, then the original steps 12 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -136,7 +136,7 @@ Tests first, watched failing. Unit and browser suites must pass before each comm
 | C0 | Record the plan and Tane's choices here | Pushed | Done |
 | C1 | **Spike** (throwaway): a simple concave massif in the relief of 200 mountain seeds, laps of 1.6 to 3 km, 1, 4 and 8 turns, earthworks rule. Measure lap range, how many winners go round the summit or within 150 m of its steep top, rejects per seed, fallbacks, cut and fill, whether 3 km fits in 500 m, time per seed | Numbers here; decisions on summit distance, flank profile, turns, buildable radius, lap minimum, score numbers. **If the median range is under 110 m, report to Tane before going on** | Done: reported; Tane chose half climbing, half circling |
 | C2 | Landform trait: `character.ts`, config weights, lab and contact sheets | Tests: same seed same landform; each shape at about its weight over 2000 seeds; other traits unchanged on seeds 1 to 2000 | Done, with the climb or circle route for mountain seeds |
-| C3 | `landforms.ts`: range, hills, peak | Tests per shape: heights in range; steepest slope within limit; peak foot not a circle (radius varies at least 25%); range has 3 to 6 summits with saddles at least 55% of the lower neighbour; hill country at least 5 swells, below the snow line, slopes at most about 60%; no copies | To do |
+| C3 | `landforms.ts`: range, hills, peak | Tests per shape: heights in range; steepest slope within limit; peak foot not a circle (radius varies at least 25%); range has 3 to 6 summits with saddles at least 55% of the lower neighbour; hill country at least 5 swells, below the snow line, slopes at most about 60%; no copies | Done; slope limits 120% for peaks and 150% for ranges (see decisions) |
 | C4 | Massif in the relief, longer mountain laps, turns, earthworks rule, score changes | Mountain climb tests: new lap range band, 15%, crests, cut and fill and banks on every valid candidate, no fallback on 200 seeds, most winners round the summit or near its top, laps at most 3 km. Other reliefs still pass at 2.4 km. Build time measured | To do |
 | C5 | Island with shapes and the main mountain from the relief; joined-land placement; softer coast join | Mountain tests rewritten: not doubled; others in shape and 60 m clear; every mountain joined by land to the road's land; main top never carved; coastal mountain seeds keep sea by the road; snow only on range and peak. Fit clean on 30 worlds; barrier footing passes | To do |
 | C6 | Lab and 3D: shape shown, `look=summit`, `look=climb` | Screenshots of seeds 1 to 20 plus mountain seeds of each shape checked by eye; triangle counts; 3 s budget passes in Chromium and Firefox | To do |
@@ -272,6 +272,16 @@ What it shows: a dome steeper than the road's 15% almost everywhere leaves few l
 - Test bands for lap range: climbing 90 to 160 m; circling 55 to 100 m.
 - 3 km laps fit (the longest winner is 2.97 km, no layout failed to build), so only mountain seeds get the bigger area, for the climb.
 - Not measured yet: hilly seeds (C4 measures whether turns help them) and whole-world build time in browsers (C4).
+
+**C3 results (2026-11-13): the three shapes on their own, 30 streams each** (peaks and ranges 200 and 250 m high, hill country 120 and 170 m), measured on the game's 3 m grid.
+
+| Shape | Slope limit | Steepest (median / worst of 30) | Size, including the foot |
+| --- | --- | --- | --- |
+| Lone peak | 120% | 95% / 115% | about 1.0 to 1.6 km across |
+| Ridged range | 150% | 116% / 122% | 3 to 6 peaks over 300 to 1200 m; with the feet up to about 2 km long and 0.8 km wide |
+| Hill country | 60% | 54% / 58% | about 1.3 to 2 km across; the tallest is the widest |
+
+Looked at as shaded maps of 8 streams per shape (not yet in the game): peaks are oval with rock ridges and gullies; ranges are lines of spires, some bending; hill country is clusters of swells running into each other on an uneven dome. The first two attempts were rejected by eye: peaks read as smooth domes with a "+"-shaped top, ranges as faceted crystals with a sawtooth outline, hill country sat on a round disc.
 
 ### Rework risks
 
@@ -450,6 +460,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | Mountain seeds get a 600 m track area (others keep 500 m), 8 candidate turns and 25% weight on elevation | C1: a 500 m area capped the climbing median at 105 m; the wider area and weight lift it to 120 m with 5 of 200 laps under 90 m |
 | 2026-11-13 | `Character.landform` (`range`, `hills`, `peak`; weights 40, 35, 25 in `world.character.landform`) and `Character.route` (`climb` or `circle`, half each in `world.character.route`; null on seeds that are not mountain seeds), each from its own sub-stream (`world/character/landform`, `world/character/route`). Both are part of the track fingerprint | The plan, and Tane's split after C1. The route is drawn for every seed and then dropped off mountain seeds, so a change to the relief weights never reshuffles it. A test checks relief, coast, width and mountain count are unchanged on seeds 1 to 2000 (fingerprint taken before) |
 | 2026-11-13 | The Firefox budget test now runs after the Chromium one, not beside it (`playwright.config.ts`) | Found in C2: side by side, Chromium's world took 3.2 to 4.3 s (alone 1.1 to 2.2 s) and failed the 3 s budget. Measured on the code from before C2 too, with the same result, so it was not caused by C2 |
+| 2026-11-13 | **Mountain shapes** (`gen/world/landforms.ts`, rules in `world.scenery.landforms`). A lone peak is one mountain with a wavy foot (one, two and three swings round), a profile from an even rounded hill to a long gentle foot below steep upper slopes, and rock ridges and gullies from noise. A ridged range is 3 to 6 spires along a gently bending line, each placed by search so the col to its neighbour is 60% to 78% of the lower one, blended where they meet. Hill country is 6 to 11 oval swells on a low dome with a wavy edge, the higher swell winning where they meet with the join rounded | Tane's check-in 3 references. Ranges were first built as one ridge line with sides measured from it; that looked faceted, so each peak became a mountain of its own |
+| 2026-11-13 | Slope limits: lone peaks 120%, ranges 150%, hill country 60% (the plan said about 110% for mountains) | Sharp spires and rock gullies do not fit under 110%. Only bare rock is that steep and nothing drives there; the island already allows 250% away from the road. Measured worst: 115%, 122%, 58% |
+| 2026-11-13 | Each shape is sized from its height: its smooth form uses a set share of the slope limit (measured over directions and distances when it is built) and the rest is left for the rock | So no shape can be steeper than its limit whatever its outline. Tests check the limit on the 3 m grid |
+| 2026-11-13 | Spire tips are rounded over about 4 m | A 3 m grid triangle straddling a knife edge came out steeper than either side (118% against a 110% shape) |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -473,6 +487,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **The contact sheet frame is generous** (it holds the furthest the land could reach, 1160 m from the centre), so most islands look small in their thumbnails.
 - **Hilly and mountain islands look like a tilted table with sea cliffs** until R6 (land beyond the road) and R7 (mountains). The road itself sits cleanly.
 - **About one mountain lap in ten has under 60 m of height** (lowest 47 m over 200 seeds), mostly folded layouts that happen to lie across the slope. Raising the elevation weight for mountain seeds would lift it.
+
+- **The mountain shapes are big** (C3): hill country and ranges reach about 2 km across with their feet, on a 2.7 km tile. C5 places them; a smaller main height for hill country, or smaller other mountains, are the levers.
+- **The mountain shapes have only been seen from above** (shaded maps). Their look in 3D is checked in C5 and C6.
 
 - **Firefox builds worlds about 1.6 times more slowly than Chromium** (measured in R1: about 0.6 s against 0.37 s per world in the worker; 0.85 s at the new tile size). Both are well inside the 3-second budget. Playwright waits up to 15 s for a new seed to appear, which covers a busy machine.
 
@@ -527,3 +544,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2):** Check-in 3 response planned in plan mode and approved (steps C0 to C6, then check-in 4). Tane chose 3 km laps on mountain seeds, every mountain seed climbing its mountain, and three shapes (range, hill country, lone peak). Step C0 done: the plan is recorded under "Check-in 3 response". No code changed.
 - **2026-11-13 (Milestone 2):** Step C1 done, measurements only (throwaway spike, deleted). A broad dome rejects almost every layout; a 15% cone with a steep top works. A lap climbs high or circles the mountain, not both, so Tane chose half and half for mountain seeds. Mountain seeds get a 600 m track area, 8 turns and 25% elevation weight. Numbers and decisions are under "Rework measurements", C1. No generator code changed.
 - **2026-11-13 (Milestone 2):** Step C2 done. `Character.landform` and `Character.route`, their weights, `withCharacter` can force them, and the lab shows "Route" and "Mountain shape"; captions read like "mountain, circling · touches · 3 mountains, lone peak" and the sheet summary counts shapes and routes. Nothing reads them yet, so the lab can name a route or shape the land does not show until C4 and C5. The budget tests now run one after the other (see decisions). World build time alone, seed 7, worker: Chromium 1.1 to 2.2 s, Firefox 1.3 to 1.6 s, slower than R7's measurement on a busier machine. 779 unit tests and 154 Playwright tests pass.
+- **2026-11-13 (Milestone 2):** Step C3 done. `gen/world/landforms.ts` (`buildLandform`: peak, range, hills) and `world.scenery.landforms`; 25 new tests in `landforms.test.ts`. Nothing uses it yet. Shapes reworked twice after looking at shaded maps (see "Rework measurements", C3). 804 unit tests and 154 Playwright tests pass.

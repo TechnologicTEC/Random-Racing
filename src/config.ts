@@ -479,6 +479,88 @@ export interface SceneryConfig {
   bumpFade: number;
   mountains: MountainConfig;
   foothills: FoothillConfig;
+  landforms: LandformConfig;
+}
+
+/**
+ * The three shapes an island's mountains can have (`gen/world/landforms.ts`).
+ * Slopes are fractions (1.1 is about 48 degrees); shares are fractions of a height or size.
+ */
+export interface LandformConfig {
+  peak: PeakConfig;
+  range: RangeConfig;
+  hills: HillsConfig;
+}
+
+/** A lone peak: a long gentle foot, steep upper slopes, a foot that is not round, rock ridges and gullies down its sides. */
+export interface PeakConfig {
+  /** Steepest its sides may be. */
+  slope: number;
+  /** Share of that slope its smooth shape uses, lowest and highest (peaks vary); the rest is left for the rock. */
+  smoothShare: Range;
+  /**
+   * How far the foot's radius swings with direction: the largest share for one, two and three
+   * swings round the mountain. The first one also pushes the summit off the middle of the foot.
+   */
+  lobes: [number, number, number];
+  /** How much its profile has a long gentle foot below steep upper slopes (1) rather than an even rounded hill (0): lowest and highest. */
+  concave: Range;
+  /** Rock ridges and gullies on its sides: how much they raise or lower the ground, as a share of its height there half way down, and their size as a share of the foot's radius. */
+  rockDepth: number;
+  rockSize: number;
+}
+
+/** A ridged range: sharp peaks along a gently bending line, joined by cols. */
+export interface RangeConfig {
+  /** Steepest its sides may be. */
+  slope: number;
+  /** Share of that slope each peak's smooth shape uses, lowest and highest; the rest is left for the rock. */
+  smoothShare: Range;
+  /** How far each peak's foot swings in and out with direction (see `PeakConfig.lobes`). */
+  lobes: [number, number, number];
+  /** How many peaks. */
+  peaks: Range;
+  /** Each peak is this share of the height of its neighbour nearer the main one... */
+  neighbour: Range;
+  /** ...and never lower than this share of the main one. */
+  lowest: number;
+  /** The col between two neighbouring peaks, as a share of the lower one: they stand as far apart as that needs. */
+  saddle: Range;
+  /** Most metres from the first peak to the last. */
+  length: number;
+  /** Peaks are at least this far apart, in metres. */
+  gapMin: number;
+  /** How far the line of peaks bends over its length, in radians at most. */
+  bend: number;
+  /** Where two peaks meet, the join is rounded over up to this many metres of height. */
+  blend: number;
+  /** Sharp rock on the peaks: how much it raises or lowers the ground, as a share of the height there half way down, and its size as a share of a peak's foot radius. */
+  rockDepth: number;
+  rockSize: number;
+}
+
+/** Rolling hill country: soft swells that run into each other, on a low dome. */
+export interface HillsConfig {
+  /** Steepest its slopes may be. */
+  slope: number;
+  /** Share of that slope left unused: where two swells meet, the rounded join can add a little to the slope. */
+  margin: number;
+  /** Where two swells meet, the join is rounded over up to this many metres of height. */
+  blend: number;
+  /** How many swells. */
+  swells: Range;
+  /** Height of the swells other than the main one, as a share of the main one. */
+  others: Range;
+  /** Swells are oval: the long side is this many times the short one. */
+  aspect: Range;
+  /** A swell's middle is this many times the two swells' radii from the swell it grows from. */
+  spread: Range;
+  /** The low dome under them all, as a share of the height... */
+  dome: number;
+  /** ...reaching this many times the main swell's half-length from it... */
+  domeReach: number;
+  /** ...with an edge that swings in and out like a lone peak's foot (see `PeakConfig.lobes`), so the hill country is not round. */
+  lobes: [number, number, number];
 }
 
 /**
@@ -832,6 +914,25 @@ export const config: GameConfig = {
       bumpFade: 30,
       mountains: { main: [200, 250], others: [80, 200], slope: 1.1, ridgeShare: 0.2, ridgeSize: 1, ridgeDepth: 0.25, minRise: 40, clearance: 60, skirt: 60 },
       foothills: { height: [5, 25], scale: 150, clearance: 60, fade: 60 },
+      landforms: {
+        peak: { slope: 1.2, smoothShare: [0.6, 0.78], lobes: [0.3, 0.2, 0.08], concave: [0.55, 1], rockDepth: 0.3, rockSize: 1 },
+        range: {
+          slope: 1.5,
+          smoothShare: [0.62, 0.76],
+          lobes: [0.2, 0.12, 0.06],
+          peaks: [3, 6],
+          neighbour: [0.75, 1],
+          lowest: 0.5,
+          saddle: [0.6, 0.78],
+          length: 1200,
+          gapMin: 140,
+          bend: 0.5,
+          blend: 12,
+          rockDepth: 0.22,
+          rockSize: 0.6,
+        },
+        hills: { slope: 0.6, margin: 0.05, blend: 30, swells: [6, 11], others: [0.35, 0.8], aspect: [1, 1.5], spread: [0.55, 0.9], dome: 0.2, domeReach: 1.7, lobes: [0.22, 0.12, 0.06] },
+      },
     },
     cover: {
       sandTop: [1.0, 2.6],
