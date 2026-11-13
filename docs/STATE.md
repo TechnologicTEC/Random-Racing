@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** C6, the lab and 3D: close views `look=summit` and `look=climb`, the seed's kind of island on the 3D title card, close cameras that turn away from a hillside in the way; screenshots of seeds 1 to 20 and mountain seeds of each shape checked (see C6 results)
-- **Next step:** check-in 4 with Tane (contact sheets, flying mountain seeds of each shape), then the original steps 12 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 12, water and sky with the time of day from the seed. Check-in 4 is done (Tane: looks good, carry on). Then steps 13 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -30,7 +30,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 11 | Fly-along camera and HUD | Done |
 | | **Check-in 2 with Tane:** fly a few seeds | Done: islands too basic. See "Milestone 2 rework" |
 | R1–R8 | **Rework** (table below), then check-in 3 | Done |
-| C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done; check-in 4 next |
+| C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
 | 12 | Water and sky; time of day from the seed | To do |
 | 13 | Trees, rocks and clouds | To do |
 | 14 | Grass | To do |
@@ -140,7 +140,7 @@ Tests first, watched failing. Unit and browser suites must pass before each comm
 | C4 | Massif in the relief, longer mountain laps, turns, earthworks rule, score changes | Mountain climb tests: new lap range band, 15%, crests, cut and fill and banks on every valid candidate, no fallback on 200 seeds, most winners round the summit or near its top, laps at most 3 km. Other reliefs still pass at 2.4 km. Build time measured | Done; steep rock cuttings beside mountain roads allowed (Tane's choice, see decisions) |
 | C5 | Island with shapes and the main mountain from the relief; joined-land placement; softer coast join | Mountain tests rewritten: not doubled; others in shape and 60 m clear; every mountain joined by land to the road's land; main top never carved; coastal mountain seeds keep sea by the road; snow only on range and peak. Fit clean on 30 worlds; barrier footing passes | Done, except the softer coast join: it did not soften the bands (see C5 results) |
 | C6 | Lab and 3D: shape shown, `look=summit`, `look=climb` | Screenshots of seeds 1 to 20 plus mountain seeds of each shape checked by eye; triangle counts; 3 s budget passes in Chromium and Firefox | Done |
-| | **Check-in 4:** Tane looks at contact sheets and flies mountain seeds of each shape | Feedback | To do |
+| | **Check-in 4:** Tane looks at contact sheets and flies mountain seeds of each shape | Feedback | Done: looks good, no changes asked; the rock trenches on climbing seeds stay as they are for now |
 
 #### Risks
 
@@ -606,3 +606,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2):** Step C4 done. Massif in the relief (`placeMassif`), rules by relief (`gen/track/rules.ts`), candidate turns, the earthworks rule (`gen/track/earthworks.ts`), mountain score weights; the island lists the massif as its main mountain; the lab shows the turn and the new rejection reasons. Tried checking earthworks at the verge edges (rejected too many circling layouts) and a faster blur (no measurable gain); both undone. Tane chose to allow steep rock cuttings beside mountain roads. 838 unit tests and 154 Playwright tests pass. Numbers under "Rework measurements", C4.
 - **2026-11-13 (Milestone 2):** Step C5 done. Island mountains are landforms in the seed's shape (heights by shape), built lower where they do not fit, joined to the road's land, kept from the coast by their own foot; hill country stays green. Mountain tests rewritten (19, including a flood fill from the road); shore widths reworked twice after steep spots on seeds 5 and 7. The softer coast join was tried three ways and undone. Spire shapes are built once; the massif once per island. 843 unit tests and 154 Playwright tests pass. Numbers under "Rework measurements", C5.
 - **2026-11-13 (Milestone 2):** Step C6 done. `WorldResult.mountains`; `look=summit` and `look=climb` (`lookAtRoad`); the 3D title card names the kind of island; close cameras turn away from a hillside in the way. Screenshots of seeds 1 to 20 plus 27, 44, 47 and 53 checked by eye; triangle counts and budget in "Rework measurements", C6. 854 unit tests and 412 Playwright tests pass. **Check-in 3 response complete; stopped for check-in 4.**
+- **2026-11-13 (Milestone 2):** Check-in 4. Tane looked at the C6 screenshots: looks good, carry on. No changes asked. Next: step 12.
