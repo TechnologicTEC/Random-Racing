@@ -727,6 +727,28 @@ export interface RenderConfig {
   /** Sharp screens are drawn at no more than this many pixels per CSS pixel. */
   maxPixelRatio: number;
   daylight: DaylightConfig;
+  sky: SkyDomeConfig;
+}
+
+/** The dome of sky drawn round the camera (the island demo's sky). Directions are measured as unit vectors. */
+export interface SkyDomeConfig {
+  /** Radius of the dome as a share of the camera's far distance, so it is never cut off. */
+  domeShare: number;
+  /** The sun's disc: how closely a direction must line up with the sun to be on its edge, and fully inside it. */
+  disc: Range;
+  /** The halo round the sun: sharpness (higher is tighter) and strength. */
+  halo: number;
+  haloStrength: number;
+  /** The glow of a low sun spreads round it with this sharpness, and fades out by this height up the sky. */
+  glowSharpness: number;
+  glowHeight: number;
+  /** A band of glow all along the horizon: its strength and the height by which it fades out. */
+  lowGlow: number;
+  lowGlowHeight: number;
+  /** How quickly the sky turns from the horizon colour to the zenith colour going up (below 1 is quicker). */
+  horizonCurve: number;
+  /** Below the horizon the dome turns to the haze colour over this range of heights. */
+  groundFade: Range;
 }
 
 /**
@@ -1120,6 +1142,18 @@ export const config: GameConfig = {
       skySunset: 0.45,
       waterZenith: 0.35,
       waterGlow: 0.35,
+    },
+    sky: {
+      domeShare: 0.9,
+      disc: [0.99965, 0.9998],
+      halo: 220,
+      haloStrength: 0.5,
+      glowSharpness: 5,
+      glowHeight: 0.45,
+      lowGlow: 0.3,
+      lowGlowHeight: 0.25,
+      horizonCurve: 0.6,
+      groundFade: [-0.04, 0.03],
     },
   },
   camera: {

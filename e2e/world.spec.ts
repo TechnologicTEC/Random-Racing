@@ -15,7 +15,8 @@ test('builds the island in 3D and draws land and sea', async ({ page }) => {
     if (message.type() === 'error') errors.push(message.text());
   });
 
-  await openWorld(page, 'seed=42&cam=orbit');
+  // Colour counts are taken in midday light, so they test the island and not the time of day.
+  await openWorld(page, 'seed=42&cam=orbit&time=13:00');
 
   await expect(page.locator('body')).toHaveAttribute('data-world-seed', '42');
   await expect(page.getByTestId('world-name')).toHaveText('Thalgard Circuit');
@@ -35,7 +36,9 @@ test('builds the island in 3D and draws land and sea', async ({ page }) => {
 });
 
 test('generates the 3D world in the worker within the 3-second budget @budget', async ({ page }) => {
-  await openWorld(page, 'seed=7');
+  // Held still, as the page is behind its loading screen while a new world is built: the builds below
+  // bypass that screen, and a headless browser drawing in software would take time from the worker.
+  await openWorld(page, 'seed=7&still=1');
   expect(page.workers()).toHaveLength(1);
   const ms = Number(await page.locator('body').getAttribute('data-world-ms'));
   expect(ms).toBeGreaterThan(0);
@@ -109,7 +112,7 @@ test('switches between flying the lap and circling the island', async ({ page })
 });
 
 test('holds still at a chosen point of the lap when asked', async ({ page }) => {
-  await openWorld(page, 'seed=42&still=1&lap=0.5');
+  await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00');
   const camera = await page.evaluate(() => window.seedCircuit.view!.camera());
   expect(camera.mode).toBe('fly');
   expect(camera.playing).toBe(false);
@@ -130,7 +133,7 @@ test('raises a new island from the button, and records its seed', async ({ page 
 });
 
 test('opens on a close view of a spot from the fit report when asked', async ({ page }) => {
-  await openWorld(page, 'seed=42&look=cut');
+  await openWorld(page, 'seed=42&look=cut&time=13:00');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'cut');
   const { orbit, report } = await page.evaluate(() => ({
     orbit: window.seedCircuit.view!.orbit(),
@@ -145,7 +148,7 @@ test('opens on a close view of a spot from the fit report when asked', async ({ 
 });
 
 test('shows red and white kerbs on the inside of the tightest corner', async ({ page }) => {
-  await openWorld(page, 'seed=42&look=hairpin');
+  await openWorld(page, 'seed=42&look=hairpin&time=13:00');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'hairpin');
   const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
   expect(seen.kerb).toBeGreaterThan(150);
@@ -159,7 +162,7 @@ test('names the kind of island under its seed', async ({ page }) => {
 });
 
 test('opens on the lap s highest point, facing the summit, when asked', async ({ page }) => {
-  await openWorld(page, 'seed=3&look=summit');
+  await openWorld(page, 'seed=3&look=summit&time=13:00');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'summit');
   const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
   // Close to the road, not the far view of the whole island.
@@ -170,7 +173,7 @@ test('opens on the lap s highest point, facing the summit, when asked', async ({
 });
 
 test('opens on the steepest stretch of road, seen from below, when asked', async ({ page }) => {
-  await openWorld(page, 'seed=3&look=climb');
+  await openWorld(page, 'seed=3&look=climb&time=13:00');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'climb');
   const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
   expect(orbit.distance).toBeLessThan(150);
@@ -181,6 +184,56 @@ test('opens on the steepest stretch of road, seen from below, when asked', async
 test('shows the whole island when the spot asked for is not one it knows', async ({ page }) => {
   await openWorld(page, 'seed=42&look=nonsense');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'island');
+});
+
+/** Brightness of a mean colour, 0 to 255. */
+const brightness = ([r, g, b]: readonly number[]): number => 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+/** Red over blue: higher is warmer. */
+const warmth = ([r, , b]: readonly number[]): number => r! / Math.max(1, b!);
+
+test.describe('time of day', () => {
+  test('opens at the seed s own time, a daylight time in whole minutes', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1');
+    const time = await page.locator('body').getAttribute('data-world-time');
+    expect(time).toMatch(/^\d\d:\d\d$/);
+    expect(time! >= '07:00' && time! <= '19:30').toBe(true);
+    const sky = await page.evaluate(async () => {
+      const { genClient } = await import('/src/worker/client.ts');
+      const { config } = await import('/src/config.ts');
+      return (await genClient().world(42, config)).result.sky;
+    });
+    const minutes = Math.round(sky.hour * 60);
+    expect(time).toBe(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`);
+  });
+
+  test('opens at the time in the address, held to daylight', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1&time=17:45');
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', '17:45');
+    await openWorld(page, 'seed=42&still=1&time=06:30');
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', '07:00');
+    await openWorld(page, 'seed=42&still=1&time=23:00');
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', '19:30');
+  });
+
+  test('draws an evening sky darker, and its light warmer, than a midday one', async ({ page }) => {
+    // Seed 9 is flat with no mountain, so the top of a flying view is open sky.
+    await openWorld(page, 'seed=9&still=1&lap=0.3&time=13:00');
+    const midday = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    await openWorld(page, 'seed=9&still=1&lap=0.3&time=19:15');
+    const evening = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(brightness(evening.bands[0]!)).toBeLessThan(brightness(midday.bands[0]!) * 0.9);
+    expect(warmth(evening.mean)).toBeGreaterThan(warmth(midday.mean) * 1.08);
+  });
+
+  test('shows the sun low in the sky when facing it in the evening, and above the view at midday', async ({ page }) => {
+    await openWorld(page, 'seed=9&still=1&look=sun&time=19:15');
+    await expect(page.locator('body')).toHaveAttribute('data-world-look', 'sun');
+    const evening = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(evening.sun).toBeGreaterThan(30);
+    await openWorld(page, 'seed=9&still=1&look=sun&time=13:00');
+    const midday = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(midday.sun).toBeLessThan(5);
+  });
 });
 
 test.describe('3D screenshots', () => {
@@ -195,8 +248,25 @@ test.describe('3D screenshots', () => {
   /** Points of the lap to photograph from the flying camera, as fractions. Override with LAPS, for example: $env:LAPS = "0.1,0.6" */
   const laps = process.env.LAPS ? process.env.LAPS.split(',') : ['0.02', '0.3', '0.55', '0.8'];
 
+  /**
+   * A time strip: with TIMES set, each seed is also photographed from above and facing the sun at each time,
+   * for example: $env:TIMES = "07:00,13:00,19:30"
+   */
+  const times = process.env.TIMES ? process.env.TIMES.split(',') : [];
+
   for (const seed of seeds) {
     const name = String(seed).padStart(5, '0');
+    for (const time of times) {
+      const at = time.replace(':', '');
+      test(`island ${seed} at ${time}, from above`, async ({ page }) => {
+        await openWorld(page, `seed=${seed}&still=1&cam=orbit&time=${time}`);
+        await page.screenshot({ path: `test-results/screens/world-${name}-at-${at}.png` });
+      });
+      test(`island ${seed} at ${time}, facing the sun`, async ({ page }) => {
+        await openWorld(page, `seed=${seed}&still=1&look=sun&time=${time}`);
+        await page.screenshot({ path: `test-results/screens/world-${name}-at-${at}-sun.png` });
+      });
+    }
     test(`island ${seed} from above`, async ({ page }) => {
       await openWorld(page, `seed=${seed}&still=1&cam=orbit`);
       await page.screenshot({ path: `test-results/screens/world-${name}.png` });

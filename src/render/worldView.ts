@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { WorldResult } from '../gen/types';
-import { SEA, SKY, TERRAIN, toLinear, type Rgb } from './palette';
+import type { Daylight } from './daylight';
+import { SEA, TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
+import { createSkyDome } from './sky';
 import { buildTerrainChunks } from './terrainChunks';
 
 /** What the renderer is drawing, for checks and the performance pass. */
@@ -26,12 +28,19 @@ export interface PixelCounts {
   road: number;
   /** Pixels that are the red of a kerb. */
   kerb: number;
+  /** Pixels as bright and warm as the sun's disc. */
+  sun: number;
+  /** Mean colour (0 to 255 each) of the whole picture, and of five bands from top to bottom. */
+  mean: [number, number, number];
+  bands: Array<[number, number, number]>;
 }
 
 /** The 3D picture of a world. It only draws data it is given; it decides nothing about the world. */
 export interface WorldView {
   /** Replaces whatever is shown with this world. */
   load(world: WorldResult): void;
+  /** Lights the world, and colours its sky and haze, for a moment of the day. */
+  setDaylight(light: Daylight): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
   resize(width: number, height: number, pixelRatio: number): void;
@@ -46,15 +55,22 @@ const colour = (rgb: Rgb): THREE.Color => new THREE.Color(toLinear(rgb[0]), toLi
 export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): WorldView {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   const scene = new THREE.Scene();
-  scene.background = colour(SKY);
-  scene.fog = new THREE.Fog(colour(SKY), cfg.fogNear, cfg.fogFar);
+  // The haze and the background share the colour of the sky at the horizon, set with the daylight.
+  const haze = new THREE.Color();
+  scene.background = haze;
+  const fog = new THREE.Fog(haze, cfg.fogNear, cfg.fogFar);
+  scene.fog = fog;
 
-  const camera = new THREE.PerspectiveCamera(cfg.fieldOfView, 1, 1, cfg.fogFar * 1.5);
+  const far = cfg.fogFar * 1.5;
+  const camera = new THREE.PerspectiveCamera(cfg.fieldOfView, 1, 1, far);
 
-  // Plain daylight until the sky arrives: soft light from above and a sun from the south-west.
-  scene.add(new THREE.HemisphereLight(0xcfe3f5, 0x6b5f4a, 1.5));
-  const sun = new THREE.DirectionalLight(0xfff4e0, 2.4);
-  sun.position.set(-0.55, 0.75, 0.4).multiplyScalar(1000);
+  const sky = createSkyDome(far * cfg.sky.domeShare, cfg.sky);
+  scene.add(sky.mesh);
+
+  // Light from the whole sky, and the sun. Their colours and strengths come with the daylight.
+  const skyLight = new THREE.HemisphereLight();
+  scene.add(skyLight);
+  const sun = new THREE.DirectionalLight();
   scene.add(sun);
 
   // A flat sea, a little see-through so the shallows show. The water shader replaces it later.
@@ -110,6 +126,19 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       road.add(createRoadMesh(world.road.gate, roadMaterial));
     },
 
+    setDaylight(light) {
+      const linear = (target: THREE.Color, rgb: Rgb): THREE.Color => target.setRGB(toLinear(rgb[0]), toLinear(rgb[1]), toLinear(rgb[2]));
+      linear(haze, light.haze);
+      fog.color.copy(haze);
+      linear(skyLight.color, light.skyLight);
+      linear(skyLight.groundColor, light.groundLight);
+      skyLight.intensity = light.skyStrength;
+      linear(sun.color, light.sunColour);
+      sun.intensity = light.sunStrength;
+      sun.position.set(light.sun.x, light.sun.y, light.sun.z).multiplyScalar(1000);
+      sky.update(light);
+    },
+
     setCamera(eye, look) {
       camera.position.set(eye.x, eye.y, eye.z);
       camera.lookAt(look.x, look.y, look.z);
@@ -123,6 +152,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     },
 
     render() {
+      sky.mesh.position.copy(camera.position);
       renderer.render(scene, camera);
     },
 
@@ -132,6 +162,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
 
     pixelCounts() {
       // Draw and read back in one go: the picture is only guaranteed to be there until the browser shows it.
+      sky.mesh.position.copy(camera.position);
       renderer.render(scene, camera);
       const gl = renderer.getContext();
       const width = gl.drawingBufferWidth;
@@ -142,16 +173,31 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       let sea = 0;
       let road = 0;
       let kerb = 0;
+      let sun = 0;
+      const sums = [0, 0, 0];
+      const bands = Array.from({ length: 5 }, () => [0, 0, 0, 0]);
       for (let p = 0; p < pixels.length; p += 4) {
         const r = pixels[p]!;
         const g = pixels[p + 1]!;
         const b = pixels[p + 2]!;
+        sums[0] += r;
+        sums[1] += g;
+        sums[2] += b;
+        // The rows come from the bottom of the picture up.
+        const band = bands[4 - Math.min(4, Math.floor((p / 4 / width / height) * 5))]!;
+        band[0] += r;
+        band[1] += g;
+        band[2] += b;
+        band[3]++;
+        if (r > 245 && g > 190 && b > 120) sun++;
         if (r > 140 && g < 90 && b < 90) kerb++;
         else if (b > r + 30 && b > g) sea++;
         else if (g > b + 15 || (r > b + 25 && g > b + 10)) land++;
         else if (Math.abs(r - g) < 14 && Math.abs(g - b) < 18 && r > 40 && r < 130) road++;
       }
-      return { total: width * height, land, sea, road, kerb };
+      const total = width * height;
+      const mean = (sum: number[], count: number): [number, number, number] => [sum[0]! / count, sum[1]! / count, sum[2]! / count];
+      return { total, land, sea, road, kerb, sun, mean: mean(sums, total), bands: bands.map((band) => mean(band, Math.max(1, band[3]!))) };
     },
 
     dispose() {
@@ -161,6 +207,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       seaGeometry.dispose();
       seaMaterial.dispose();
       floorMaterial.dispose();
+      sky.dispose();
       renderer.dispose();
     },
   };

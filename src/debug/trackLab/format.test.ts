@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeCharacter, describeFit, describeSky, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, shortCharacter, summariseTracks } from './format';
+import { describeCharacter, describeFit, describeSky, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, parseClock, shortCharacter, summariseTracks } from './format';
 
 describe('describeCharacter', () => {
   it('lists the traits of a seed in plain words', () => {
@@ -257,5 +257,17 @@ describe('describeSky', () => {
     expect(describeSky({ hour: 7, bearing: quarter })).toBe('07:00, sun rises in the east');
     expect(describeSky({ hour: 12, bearing: 0.1 })).toBe('12:00, sun rises in the north');
     expect(describeSky({ hour: 12, bearing: 4 * quarter - 0.1 })).toBe('12:00, sun rises in the north');
+  });
+});
+
+describe('parseClock', () => {
+  it('reads a 24-hour clock as hours since midnight', () => {
+    expect(parseClock('17:45')).toBe(17.75);
+    expect(parseClock('07:00')).toBe(7);
+    expect(parseClock('9:05')).toBeCloseTo(9 + 5 / 60, 12);
+  });
+
+  it('gives null for anything that is not a time', () => {
+    for (const text of ['', 'noon', '25:00', '12:60', '12', '12:5', '-1:00']) expect(parseClock(text), text).toBeNull();
   });
 });

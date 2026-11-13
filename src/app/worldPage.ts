@@ -6,7 +6,8 @@ import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
 import type { FitReport, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
-import { shortCharacter } from '../debug/trackLab/format';
+import { formatClock, parseClock, shortCharacter } from '../debug/trackLab/format';
+import { daylightAt } from '../render/daylight';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
 
@@ -55,7 +56,8 @@ const HINTS: Record<CameraMode, string> = {
  *
  * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
- * close, water, hairpin, start, summit, climb) or `at=x,z` for a close view of one place.
+ * close, water, hairpin, start, summit, climb, sun) or `at=x,z` for a close view of one place;
+ * `time=17:45` to open at that time of day instead of the seed's own (held to daylight).
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -70,6 +72,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const look = params.get('look') ?? '';
   const at = params.get('at') ?? '';
   const startLap = Number(params.get('lap') ?? '0');
+  const askedTime = parseClock(params.get('time') ?? '');
+  const [earliest, latest] = config.world.sky.hours;
+  /** Holds a time of day to the hours seeds pick from. */
+  const daylightHour = (hour: number): number => Math.min(latest, Math.max(earliest, hour));
   const fly = config.camera.fly;
 
   const view = createWorldView(canvas, config.render);
@@ -82,6 +88,18 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let playing = params.get('still') !== '1' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let report: FitReport | null = null;
   let dirty = true;
+  /** The time of day shown, and the bearing of the sun's path of the world shown. */
+  let hour = 12;
+  let bearing = 0;
+  /** While a new world is being built nothing is drawn, so a slow machine's drawing does not slow the build. */
+  let building = false;
+
+  const setTime = (next: number): void => {
+    hour = daylightHour(next);
+    view.setDaylight(daylightAt(hour, bearing, config.render.daylight));
+    document.body.dataset.worldTime = formatClock(hour);
+    dirty = true;
+  };
 
   const renderControls = (): void => {
     ref('play').textContent = playing ? 'Pause' : 'Play';
@@ -127,7 +145,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       distance = (distance + speed * seconds) % flight.length;
       dirty = true;
     }
-    if (dirty) {
+    if (dirty && !building) {
       aimCamera();
       view.render();
       dirty = false;
@@ -185,10 +203,19 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     };
   };
 
+  /** A view from just behind a point on the road, looking level towards where the sun is now. */
+  const lookAtSun = (x: number, z: number, height: number): Orbit => {
+    const { sun } = daylightAt(hour, bearing, config.render.daylight);
+    // The camera stands on the side away from the sun: its angle is measured from the target to the eye.
+    const towardsSun = Math.atan2(sun.x, -sun.z);
+    return { targetX: x, targetY: height + 8, targetZ: z, angle: -towardsSun, tilt: 0.08, distance: 60 };
+  };
+
   /** The seed last asked for. Its world may still be on its way from the worker. */
   let wantedSeed = -1;
   const show = async (seed: number, opening: boolean): Promise<void> => {
     wantedSeed = seed;
+    building = true;
     loading.hidden = false;
     ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
@@ -199,8 +226,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       const { result, ms } = await genClient().world(seed, config);
       // A newer island was asked for while this one was being raised: drop this one.
       if (wantedSeed !== seed) return;
+      building = false;
       view.load(result);
       report = result.report;
+      // Only the page's first island honours the address's time; a new island has its own.
+      bearing = result.sky.bearing;
+      setTime(opening && askedTime !== null ? askedTime : result.sky.hour);
 
       const winner = result.track.candidates[result.track.winnerIndex]!;
       const groundAt = (x: number, z: number): number => sampleField(result.ground, x, z, 0);
@@ -214,7 +245,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         (opening
           ? (lookAtSpot(look, result.report, groundAt) ??
             lookAtTrack(look, winner.line, winner.sections, groundAt) ??
-            lookAtRoad(look, winner.line, winner.profile.height, result.mountains, groundAt))
+            lookAtRoad(look, winner.line, winner.profile.height, result.mountains, groundAt) ??
+            (look === 'sun' ? lookAtSun(winner.line.x[0]!, winner.line.z[0]!, winner.profile.height[0]!) : null))
           : null);
       if (spot) {
         orbit = spot;
@@ -236,6 +268,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       loading.hidden = true;
       document.body.dataset.worldReady = 'true';
     } catch (error) {
+      if (wantedSeed === seed) building = false;
       if (wantedSeed === seed) ref('loadingText').textContent = error instanceof Error ? error.message : String(error);
     }
   };

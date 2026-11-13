@@ -226,3 +226,13 @@ export function describeSky(sky: Sky): string {
   const eighth = Math.round(sky.bearing / (Math.PI / 4)) % 8;
   return `${formatClock(sky.hour)}, sun rises in the ${COMPASS[eighth]}`;
 }
+
+/** Reads a 24-hour clock such as "17:45" as hours since midnight (17.75), or null if it is not one. */
+export function parseClock(text: string): number | null {
+  const match = /^(\d{1,2}):(\d\d)$/.exec(text.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 24 || minutes > 59 || (hours === 24 && minutes > 0)) return null;
+  return hours + minutes / 60;
+}
