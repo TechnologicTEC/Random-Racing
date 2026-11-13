@@ -728,6 +728,47 @@ export interface RenderConfig {
   maxPixelRatio: number;
   daylight: DaylightConfig;
   sky: SkyDomeConfig;
+  water: WaterConfig;
+}
+
+/** One wave of the sea's surface. It only tilts the surface's shading; the sea itself stays flat. */
+export interface Wave {
+  /** Direction it travels across the map (x, z); need not be a unit vector. */
+  direction: [number, number];
+  /** Metres from crest to crest, and how far a crest rises above the mean surface. */
+  length: number;
+  height: number;
+  /** How fast it moves, in radians of its cycle per second. */
+  speed: number;
+  /** Small waves fade out with distance (see `detailFade`), so far water does not shimmer. */
+  small: boolean;
+}
+
+/** The sea (the island demo's water shader). Depths and distances in metres. */
+export interface WaterConfig {
+  waves: Wave[];
+  /** Small waves fade out between these distances from the camera, and the large ones between `swellFade`, so the sea seen from far off is smooth rather than patterned. */
+  detailFade: Range;
+  swellFade: Range;
+  /** The water turns from its shallow colour to its deep one over this depth. */
+  shallowDepth: number;
+  /** Bands of foam run along the shore in water shallower than this, and solid foam lies at the very edge. */
+  foamDepth: number;
+  edgeFoam: number;
+  /** The foam bands: how close together they are (per metre of depth) and how fast they move. */
+  foamBands: number;
+  foamSpeed: number;
+  /** How opaque the water is in the shallowest water and from `clearDepth` down. */
+  opacity: Range;
+  clearDepth: number;
+  /** Reflection of the sky at low angles: sharpness and most of the colour it may take. */
+  fresnel: number;
+  fresnelMost: number;
+  /** The sun's glints: sharpness and strength. */
+  glint: number;
+  glintStrength: number;
+  /** Seconds on the wave clock at which the waves stand for a still picture. */
+  stillTime: number;
 }
 
 /** The dome of sky drawn round the camera (the island demo's sky). Directions are measured as unit vectors. */
@@ -1154,6 +1195,29 @@ export const config: GameConfig = {
       lowGlowHeight: 0.25,
       horizonCurve: 0.6,
       groundFade: [-0.04, 0.03],
+    },
+    water: {
+      waves: [
+        { direction: [1, 0.3], length: 35, height: 0.35, speed: 1.1, small: false },
+        { direction: [-0.4, 1], length: 23, height: 0.22, speed: 1.4, small: false },
+        { direction: [0.7, -0.8], length: 11.4, height: 0.09, speed: 2.0, small: false },
+        { direction: [-0.9, -0.2], length: 4.8, height: 0.035, speed: 2.7, small: true },
+        { direction: [0.2, -1], length: 2.4, height: 0.012, speed: 3.4, small: true },
+      ],
+      detailFade: [60, 220],
+      swellFade: [300, 1500],
+      shallowDepth: 7,
+      foamDepth: 1.6,
+      edgeFoam: 0.35,
+      foamBands: 5,
+      foamSpeed: 1.6,
+      opacity: [0.5, 1],
+      clearDepth: 5,
+      fresnel: 4,
+      fresnelMost: 0.85,
+      glint: 140,
+      glintStrength: 1.4,
+      stillTime: 0,
     },
   },
   camera: {

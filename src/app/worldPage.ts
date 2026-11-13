@@ -85,7 +85,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let distance = 0;
   let speed = fly.speed;
   // Anyone who has asked their system for less motion starts paused, as does a still picture.
-  let playing = params.get('still') !== '1' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = params.get('still') === '1' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let playing = !still;
+  // The waves keep moving unless the picture is held still: then they stand at a set moment, so screenshots repeat exactly.
+  let waveClock = config.render.water.stillTime;
   let report: FitReport | null = null;
   let dirty = true;
   /** The time of day shown, and the bearing of the sun's path of the world shown. */
@@ -135,7 +138,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     }
   };
 
-  // Draw only when something has changed: a paused or circling camera costs nothing while it is left alone.
+  // Draw only when something has changed. The moving waves change every frame; a still picture costs nothing while it is left alone.
   let last = performance.now();
   const frame = (now: number): void => {
     // A long gap (a hidden tab, say) must not fling the camera down the road.
@@ -143,6 +146,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     last = now;
     if (mode === 'fly' && playing && flight) {
       distance = (distance + speed * seconds) % flight.length;
+      dirty = true;
+    }
+    if (!still) {
+      waveClock += seconds;
+      view.setWaveTime(waveClock);
       dirty = true;
     }
     if (dirty && !building) {

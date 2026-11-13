@@ -236,6 +236,38 @@ test.describe('time of day', () => {
   });
 });
 
+test.describe('water', () => {
+  test('shows shallows and open sea round an island in midday light', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
+    const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(seen.sea / seen.total).toBeGreaterThan(0.1);
+    expect(seen.shallow / seen.total).toBeGreaterThan(0.005);
+  });
+
+  test('shows foam where the sea meets the shore', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1&look=water&time=13:00');
+    const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(seen.foam / seen.total).toBeGreaterThan(0.002);
+  });
+
+  test('keeps its waves moving', async ({ page }) => {
+    await openWorld(page, 'seed=7&cam=orbit&time=13:00');
+    const first = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest);
+    await page.waitForTimeout(1000);
+    const later = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest);
+    expect(later).not.toBe(first);
+  });
+
+  test('freezes its waves in a still picture, so screenshots repeat exactly', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
+    const first = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest);
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest)).toBe(first);
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest)).toBe(first);
+  });
+});
+
 test.describe('3D screenshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Screenshots are taken in Chromium only');
 

@@ -41,9 +41,12 @@ export const ROAD = {
   gateBeam: [0.9, 0.9, 0.88] as Rgb,
 };
 
-/** A simple flat sea, until the water shader arrives. */
-export const SEA: Rgb = [0.1, 0.42, 0.56];
-export const SKY: Rgb = [0.62, 0.78, 0.9];
+/** The sea: deep and shallow water, and foam. From the island demo. */
+export const WATER = {
+  deep: [0.03, 0.19, 0.3] as Rgb,
+  shallow: [0.13, 0.62, 0.6] as Rgb,
+  foam: [0.92, 0.96, 0.97] as Rgb,
+};
 
 /**
  * The colours of the sky and its light, from the island demo. Each comes as a

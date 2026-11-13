@@ -3,10 +3,12 @@ import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { WorldResult } from '../gen/types';
 import type { Daylight } from './daylight';
-import { SEA, TERRAIN, toLinear, type Rgb } from './palette';
+import { TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
 import { createSkyDome } from './sky';
 import { buildTerrainChunks } from './terrainChunks';
+import { createWater } from './water';
+import { waterDepthGrid } from './waterDepth';
 
 /** What the renderer is drawing, for checks and the performance pass. */
 export interface ViewStats {
@@ -30,6 +32,11 @@ export interface PixelCounts {
   kerb: number;
   /** Pixels as bright and warm as the sun's disc. */
   sun: number;
+  /** Pixels of the light green-blue of shallow water, and near-white like foam. */
+  shallow: number;
+  foam: number;
+  /** A fingerprint of every pixel, to tell whether two pictures are the same. */
+  digest: number;
   /** Mean colour (0 to 255 each) of the whole picture, and of five bands from top to bottom. */
   mean: [number, number, number];
   bands: Array<[number, number, number]>;
@@ -41,6 +48,8 @@ export interface WorldView {
   load(world: WorldResult): void;
   /** Lights the world, and colours its sky and haze, for a moment of the day. */
   setDaylight(light: Daylight): void;
+  /** Moves the sea's waves to this many seconds on their clock. */
+  setWaveTime(seconds: number): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
   resize(width: number, height: number, pixelRatio: number): void;
@@ -73,11 +82,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   const sun = new THREE.DirectionalLight();
   scene.add(sun);
 
-  // A flat sea, a little see-through so the shallows show. The water shader replaces it later.
+  // The sea: see-through in the shallows, coloured by the depth of the ground under it.
+  const water = createWater(cfg.seaSize, cfg.water);
+  scene.add(water.mesh);
   const seaGeometry = new THREE.PlaneGeometry(cfg.seaSize, cfg.seaSize).rotateX(-Math.PI / 2);
-  const seaMaterial = new THREE.MeshStandardMaterial({ color: colour(SEA), transparent: true, opacity: 0.8, roughness: 0.35, metalness: 0 });
-  const sea = new THREE.Mesh(seaGeometry, seaMaterial);
-  scene.add(sea);
 
   // The bed of the open sea, the same colour as the deepest ground, so the
   // edge of the pieces of sea bed that are drawn cannot be seen through the water.
@@ -104,6 +112,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   return {
     load(world) {
       clearGround();
+      water.setDepths(waterDepthGrid(world.ground, cfg.seaFloorDepth));
       const winner = world.track.candidates[world.track.winnerIndex]!;
       const chunks = buildTerrainChunks(world.ground, world.cover, {
         chunkCells: cfg.chunkCells,
@@ -137,6 +146,11 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       sun.intensity = light.sunStrength;
       sun.position.set(light.sun.x, light.sun.y, light.sun.z).multiplyScalar(1000);
       sky.update(light);
+      water.setDaylight(light);
+    },
+
+    setWaveTime(seconds) {
+      water.setTime(seconds);
     },
 
     setCamera(eye, look) {
@@ -174,6 +188,9 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       let road = 0;
       let kerb = 0;
       let sun = 0;
+      let shallow = 0;
+      let foam = 0;
+      let digest = 0;
       const sums = [0, 0, 0];
       const bands = Array.from({ length: 5 }, () => [0, 0, 0, 0]);
       for (let p = 0; p < pixels.length; p += 4) {
@@ -189,7 +206,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         band[1] += g;
         band[2] += b;
         band[3]++;
+        digest = (Math.imul(digest, 31) + ((r << 16) | (g << 8) | b)) | 0;
         if (r > 245 && g > 190 && b > 120) sun++;
+        if (r > 200 && g > 215 && b > 215) foam++;
+        else if (g > 110 && b > 100 && r < 110 && Math.abs(g - b) < 45) shallow++;
         if (r > 140 && g < 90 && b < 90) kerb++;
         else if (b > r + 30 && b > g) sea++;
         else if (g > b + 15 || (r > b + 25 && g > b + 10)) land++;
@@ -197,7 +217,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       }
       const total = width * height;
       const mean = (sum: number[], count: number): [number, number, number] => [sum[0]! / count, sum[1]! / count, sum[2]! / count];
-      return { total, land, sea, road, kerb, sun, mean: mean(sums, total), bands: bands.map((band) => mean(band, Math.max(1, band[3]!))) };
+      return { total, land, sea, road, kerb, sun, shallow, foam, digest, mean: mean(sums, total), bands: bands.map((band) => mean(band, Math.max(1, band[3]!))) };
     },
 
     dispose() {
@@ -205,7 +225,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       groundMaterial.dispose();
       roadMaterial.dispose();
       seaGeometry.dispose();
-      seaMaterial.dispose();
+      water.dispose();
       floorMaterial.dispose();
       sky.dispose();
       renderer.dispose();
