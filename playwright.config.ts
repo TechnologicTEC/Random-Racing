@@ -20,7 +20,11 @@ export default defineConfig({
     reuseExistingServer: true,
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, grepInvert: /@budget/ },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, grepInvert: /@budget/ },
+    // Timings against the brief's budgets run on their own once everything else has finished: while four
+    // browsers draw islands in software at once, every core is busy and a world takes three or four times as long.
+    { name: 'chromium-budget', use: { ...devices['Desktop Chrome'] }, grep: /@budget/, dependencies: ['chromium', 'firefox'] },
+    { name: 'firefox-budget', use: { ...devices['Desktop Firefox'] }, grep: /@budget/, dependencies: ['chromium', 'firefox'] },
   ],
 });

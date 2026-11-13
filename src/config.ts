@@ -562,6 +562,9 @@ export interface RenderConfig {
   chunkCells: number;
   /** Pieces of sea bed entirely deeper than this are not drawn, in metres (a negative number). */
   skipSeaBedBelow: number;
+  /** Pieces of ground further than this from the road, in metres, are drawn with only every `farStride`-th height each way. */
+  detailDistance: number;
+  farStride: number;
   /** Camera field of view, top to bottom, in degrees. */
   fieldOfView: number;
   /** Distance at which haze starts, and at which it hides everything, in metres. */
@@ -836,10 +839,12 @@ export const config: GameConfig = {
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,
+    detailDistance: 250,
+    farStride: 2,
     fieldOfView: 50,
-    fogNear: 900,
-    fogFar: 4200,
-    seaSize: 9000,
+    fogNear: 1500,
+    fogFar: 6600,
+    seaSize: 16000,
     seaFloorDepth: -23,
     maxPixelRatio: 2,
   },
@@ -847,7 +852,7 @@ export const config: GameConfig = {
     orbit: {
       start: { angle: 0.6, tilt: 0.75, distance: 900 },
       nearest: 30,
-      furthest: 2400,
+      furthest: 3600,
       fit: 1.25,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },

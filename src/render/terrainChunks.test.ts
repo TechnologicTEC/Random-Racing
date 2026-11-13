@@ -116,6 +116,95 @@ describe('buildTerrainChunks', () => {
   });
 });
 
+describe('buildTerrainChunks with far ground at lower detail', () => {
+  // 129 samples a side: 128 cells of 2 m, cut into 16 chunks of 32 by 32 cells. A road runs down the left edge.
+  const { ground, cover } = world(256, 2, (x, z) => 10 + 6 * Math.sin(x / 9) * Math.cos(z / 7) + x * 0.05);
+  const road = { x: Array.from({ length: 65 }, () => -120), z: Array.from({ length: 65 }, (_, i) => -128 + i * 4) };
+  const options = { chunkCells: 32, skipBelow: -100, far: { x: road.x, z: road.z, distance: 70, stride: 2 } };
+  const chunks = buildTerrainChunks(ground, cover, options);
+  const full = buildTerrainChunks(ground, cover, { chunkCells: 32, skipBelow: -100 });
+  /** The x of a chunk's left edge. */
+  const left = (chunk: { positions: Float32Array }): number => {
+    let low = Infinity;
+    for (let v = 0; v < chunk.positions.length; v += 3) low = Math.min(low, chunk.positions[v]!);
+    return low;
+  };
+
+  it('draws ground near the road in full and ground far from it with a quarter of the triangles', () => {
+    expect(chunks).toHaveLength(16);
+    let near = 0;
+    let far = 0;
+    chunks.forEach((chunk, k) => {
+      const triangles = chunk.indices.length / 3;
+      // A chunk's left edge is 16 m or more from the road at x = -120 once it is past the first two columns.
+      if (left(chunk) - -120 > options.far.distance) {
+        expect(triangles).toBe(full[k]!.indices.length / 3 / 4);
+        far++;
+      } else {
+        expect(triangles).toBe(full[k]!.indices.length / 3);
+        near++;
+      }
+    });
+    expect(near).toBeGreaterThan(0);
+    expect(far).toBeGreaterThan(0);
+  });
+
+  it('puts every coarse vertex exactly at its sample', () => {
+    for (const chunk of chunks) {
+      for (let v = 0; v < chunk.positions.length; v += 3) {
+        const x = chunk.positions[v]!;
+        const z = chunk.positions[v + 2]!;
+        const c = Math.round((z + 128) / 2) * ground.size + Math.round((x + 128) / 2);
+        const sample = ground.height[c]!;
+        // Full-detail vertices may be pulled onto a coarse neighbour's edge (tested below); all others are exact.
+        if (left(chunk) - -120 > options.far.distance) expect(chunk.positions[v + 1]).toBeCloseTo(sample, 5);
+      }
+    }
+  });
+
+  it('leaves no cracks where a full chunk meets a coarse one: shared edges match all the way along', () => {
+    // Every position on an edge shared by two chunks must have the same height in both, including between the coarse vertices.
+    const heightAlong = new Map<string, number>();
+    const coarseEdge = new Map<number, Array<[number, number]>>();
+    for (const chunk of chunks) {
+      const p = chunk.positions;
+      for (let v = 0; v < p.length; v += 3) heightAlong.set(`${p[v]},${p[v + 2]}`, p[v + 1]!);
+      if (left(chunk) - -120 > options.far.distance) {
+        // Remember the coarse chunk's left edge: its z and height at each vertex.
+        const x = left(chunk);
+        const edge: Array<[number, number]> = [];
+        for (let v = 0; v < p.length; v += 3) if (p[v] === x) edge.push([p[v + 2]!, p[v + 1]!]);
+        coarseEdge.set(x, edge.sort((a, b) => a[0] - b[0]));
+      }
+    }
+    let checked = 0;
+    for (const chunk of chunks) {
+      const p = chunk.positions;
+      if (left(chunk) - -120 > options.far.distance) continue;
+      for (let v = 0; v < p.length; v += 3) {
+        const edge = coarseEdge.get(p[v]!);
+        if (!edge) continue;
+        // On a coarse neighbour's edge: the height must lie on the straight line between its two coarse vertices.
+        const z = p[v + 2]!;
+        const k = edge.findIndex(([ez]) => ez >= z);
+        const [z1, h1] = edge[k]!;
+        const [z0, h0] = edge[Math.max(0, k - 1)]!;
+        const expected = z1 === z0 ? h1 : h0 + ((h1 - h0) * (z - z0)) / (z1 - z0);
+        expect(p[v + 1]).toBeCloseTo(expected, 4);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(30);
+  });
+
+  it('keeps everything in full when no road is given', () => {
+    const triangles = (list: typeof chunks): number => list.reduce((sum, chunk) => sum + chunk.indices.length, 0);
+    expect(triangles(full)).toBe(128 * 128 * 2 * 3);
+    // Half the chunks (the two columns furthest from the road) are coarse: 8 in full and 8 at a quarter.
+    expect(triangles(chunks)).toBe((triangles(full) * (8 + 8 / 4)) / 16);
+  });
+});
+
 describe('terrainColour', () => {
   const colour = (height: number, cover: { grass?: number; sand?: number; rock?: number; snow?: number; variation?: number }) =>
     terrainColour(height, cover.grass ?? 0, cover.sand ?? 0, cover.rock ?? 0, cover.snow ?? 0, cover.variation ?? 0.5);

@@ -88,7 +88,13 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   return {
     load(world) {
       clearGround();
-      const chunks = buildTerrainChunks(world.ground, world.cover, { chunkCells: cfg.chunkCells, skipBelow: cfg.skipSeaBedBelow });
+      const winner = world.track.candidates[world.track.winnerIndex]!;
+      const chunks = buildTerrainChunks(world.ground, world.cover, {
+        chunkCells: cfg.chunkCells,
+        skipBelow: cfg.skipSeaBedBelow,
+        // Ground far from the road is only ever seen from a distance, so it is drawn with a quarter of the triangles.
+        far: { x: winner.line.x, z: winner.line.z, distance: cfg.detailDistance, stride: cfg.farStride },
+      });
       for (const chunk of chunks) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));

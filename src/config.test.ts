@@ -62,4 +62,18 @@ describe('config', () => {
     expect(kinds.hilly.lapRange).toEqual([30, 60]);
     expect(kinds.mountain.lapRange).toEqual([60, 120]);
   });
+
+  it('lets the 3D view see and frame the whole 2700 m tile', () => {
+    const extent = config.world.tile.extent;
+    // From the furthest the orbit camera goes, the far side of the tile is still inside the haze.
+    expect(config.camera.orbit.furthest).toBeGreaterThanOrEqual(extent * 1.3);
+    expect(config.render.fogFar).toBeGreaterThanOrEqual(config.camera.orbit.furthest + extent);
+    // The sea reaches past the haze in every direction.
+    expect(config.render.seaSize / 2).toBeGreaterThanOrEqual(config.render.fogFar + extent / 2);
+  });
+
+  it('draws ground far from the road at a quarter of the detail', () => {
+    expect(config.render.farStride).toBe(2);
+    expect(config.render.detailDistance).toBeGreaterThan(config.world.scenery.mountains.clearance);
+  });
 });
