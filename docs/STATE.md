@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** rework step R8 (far ground at quarter detail, fog and camera limits for the bigger island). The whole rework, R1 to R8, is built and pushed
-- **Next step:** check-in 3 is done (feedback below, under "Check-in 3 feedback"). **Plan the response in plan mode, in a fresh session**, then the original steps 12 to 17. Read "Milestone 2 rework" below first; it replaces parts of "Milestone 2 design"
+- **Last finished step:** C0, the response to check-in 3 is planned and approved (see "Check-in 3 response" below). The rework R1 to R8 is built and pushed
+- **Next step:** C1, the spike (measurements only). Then C2 to C6, check-in 4, then the original steps 12 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -29,7 +29,8 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 10 | Barriers, start line and gate | Done |
 | 11 | Fly-along camera and HUD | Done |
 | | **Check-in 2 with Tane:** fly a few seeds | Done: islands too basic. See "Milestone 2 rework" |
-| R1–R8 | **Rework** (table below), then check-in 3 | To do |
+| R1–R8 | **Rework** (table below), then check-in 3 | Done |
+| C0–C6 | **Check-in 3 response** (table below), then check-in 4 | In progress |
 | 12 | Water and sky; time of day from the seed | To do |
 | 13 | Trees, rocks and clouds | To do |
 | 14 | Grass | To do |
@@ -99,6 +100,55 @@ Tane looked at the contact sheets and flew seeds (screenshots: a single cone-sha
 - Shapes: rolling hill country (overlapping soft swells, perhaps from noise rather than separate bells) and ridged ranges (several sharp peaks joined by ridges, from ridged noise along a spine), chosen per seed like the other traits.
 - These would also answer the check-in 3 issues already noted under "Known issues": round dome-islands off the coast, and coastal ramps slicing hills into bands.
 - Elevation targets: the mountain relief band (60 to 120 m per lap) and its score target may need raising, within the cut and fill limits.
+
+### Check-in 3 response (agreed 2026-11-13)
+
+**The limit found while planning:** a 15% road on a lap of at most 2.4 km can rise about 150 m at most, so it can reach a 200 to 250 m mountain's shoulder, not its summit.
+
+**Tane's choices:**
+- Mountain seeds may have laps up to **3 km** (departs from the brief's 1.4 to 2.4 km). The gradient stays 15%. That allows about 180 m of climb.
+- **Every mountain-relief seed** (20% of seeds) climbs onto its main mountain and goes round it. Hilly seeds keep climbing the lower slopes of a mountain beyond the track, in the new shapes.
+- **Three shapes, one per seed:** ridged range about 40%, rolling hill country about 35%, lone peak about 25%. The lone peak is reshaped too: an uneven foot, spurs and a steep top instead of a cone.
+
+#### Design
+
+1. **Landform trait.** `Character.landform`: `range`, `hills` or `peak`, from its own stream (`world/character/landform`), so no other trait changes. The mountain count (0 to 4) stays; every mountain on an island has the seed's shape.
+   - *Range:* 3 to 6 sharp peaks along a curved spine 500 to 1200 m long; saddles at 55 to 75% of the lower neighbouring peak; steep sides (up to about 110%) with crags from ridged noise. The tallest peak is 200 to 250 m.
+   - *Hill country:* overlapping soft swells from smooth noise over a raised dome, rounded and folding into each other. Tops stay below the snow line (main 120 to 170 m, others 50 to 120 m).
+   - *Lone peak:* gentle foot and steep top; the foot's radius varies by about 30% with direction; the summit is off-centre; 3 to 5 spurs run down from it.
+2. **Shapes module** `src/gen/world/landforms.ts` (new, pure, exact maths): height above its base at any point, distance outside its foot, summits, bounds. Used by the relief (main mountain) and the island (the others). Replaces the round bell in `placeMountains`.
+3. **The main mountain moves into the relief.** `placeHighland` becomes `placeMassif`, in the seed's landform. The relief still depends only on the seed. On mountain seeds the summit is inside the track area (150 to 300 m from the centre, settled by C1), with lower slopes a 15% road can climb by running across them; the steep top is kept clear by the earthworks rule. On hilly seeds the massif stays beyond the track area with an 8% lower flank, as today's highland.
+4. **Longer mountain laps.** Lap length becomes a range per relief: mountain about 1600 to 3000 m (C1 sets the lower end), the others 1400 to 2400 m as now. If 3 km laps do not fit, mountain seeds get a 600 m buildable radius instead of 500 m (C1 decides).
+5. **Turning candidates to face the mountain.** Each candidate's shape is tried at several turns about the centre (about 8 on mountain seeds, 4 on hilly, 1 on the others; C1 settles it), and the best-scoring valid turn is kept. The candidate records its `turn` for the lab.
+6. **Earthworks rule.** A new reason to reject a candidate: its road needs a cut deeper than 8 m, a fill taller than 6 m, or a bank between close sections steeper than 45%. Gentle ground used to guarantee these; now the ground can be steeper than the road.
+7. **Scoring.** Higher elevation targets on mountain seeds (about range 160 m, climb 240 m) and more weight on elevation there (C1 sets the numbers). If fewer than about half of mountain winners go round the mountain, a "goes round the mountain" share joins the elevation part.
+8. **Island.** On hilly and mountain seeds the main mountain comes from the relief (listed, not added twice); the others use `landforms.ts` and stay 60 m clear of the road. The main mountain's upper part is never cut by the coast; its lower slopes meet the sea like other land. Other mountains go only where their foot touches the road's land (no more dome islands across a channel, seed 4). The coast's join with high ground is rounded over a height that grows with the cut (softens seed 12's bands). Snow on range and peak tops above 180 m; hill country stays green.
+9. **Lab and 3D.** The shape in the Track panel, captions and sheet summary. New close views `look=summit` (the lap's highest point, facing the summit) and `look=climb` (the steepest stretch).
+
+#### Steps
+
+Tests first, watched failing. Unit and browser suites must pass before each commit.
+
+| # | Step | Ends with | Status |
+| --- | --- | --- | --- |
+| C0 | Record the plan and Tane's choices here | Pushed | Done |
+| C1 | **Spike** (throwaway): a simple concave massif in the relief of 200 mountain seeds, laps of 1.6 to 3 km, 1, 4 and 8 turns, earthworks rule. Measure lap range, how many winners go round the summit or within 150 m of its steep top, rejects per seed, fallbacks, cut and fill, whether 3 km fits in 500 m, time per seed | Numbers here; decisions on summit distance, flank profile, turns, buildable radius, lap minimum, score numbers. **If the median range is under 110 m, report to Tane before going on** | To do |
+| C2 | Landform trait: `character.ts`, config weights, lab and contact sheets | Tests: same seed same landform; each shape at about its weight over 2000 seeds; other traits unchanged on seeds 1 to 2000 | To do |
+| C3 | `landforms.ts`: range, hills, peak | Tests per shape: heights in range; steepest slope within limit; peak foot not a circle (radius varies at least 25%); range has 3 to 6 summits with saddles at least 55% of the lower neighbour; hill country at least 5 swells, below the snow line, slopes at most about 60%; no copies | To do |
+| C4 | Massif in the relief, longer mountain laps, turns, earthworks rule, score changes | Mountain climb tests: new lap range band, 15%, crests, cut and fill and banks on every valid candidate, no fallback on 200 seeds, most winners round the summit or near its top, laps at most 3 km. Other reliefs still pass at 2.4 km. Build time measured | To do |
+| C5 | Island with shapes and the main mountain from the relief; joined-land placement; softer coast join | Mountain tests rewritten: not doubled; others in shape and 60 m clear; every mountain joined by land to the road's land; main top never carved; coastal mountain seeds keep sea by the road; snow only on range and peak. Fit clean on 30 worlds; barrier footing passes | To do |
+| C6 | Lab and 3D: shape shown, `look=summit`, `look=climb` | Screenshots of seeds 1 to 20 plus mountain seeds of each shape checked by eye; triangle counts; 3 s budget passes in Chromium and Firefox | To do |
+| | **Check-in 4:** Tane looks at contact sheets and flies mountain seeds of each shape | Feedback | To do |
+
+#### Risks
+
+- Too few valid candidates on mountain seeds once the earthworks rule bites. Turns first, extra rounds second; the fallback oval must try every turn too.
+- Build time: up to 8 turns of 30 candidates on longer laps. If too slow, a quick ground-only check picks the best two or three turns before the full road solve.
+- A road across a 30% mountainside makes wide cuttings and embankments. The report and the barrier footing test catch problems; C6 screenshots check the look.
+- Every hilly and mountain winner changes and every mountain changes shape (allowed while the generator is v0).
+- Milestone 3 must handle 3 km laps with 15% climbs.
+
+The full plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\read-claude-md-docs-state-md-and-purring-pearl.md`.
 
 ### Rework measurements
 
@@ -345,6 +395,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | **Far ground at quarter detail**: a chunk none of whose square comes within 250 m of the road uses every second height each way (`render.detailDistance`, `render.farStride`). Where a full chunk meets a coarse one, the full chunk's edge heights are laid on the coarse chunk's edge, so no crack opens | Pulled forward from step 15, as the plan says. Fixed when the world loads, not by camera distance: the flying camera is always on the road. 400 m saved only 18% to 27% |
 | 2026-11-13 | Haze from 1,500 m to 6,600 m (was 900 to 4,200), sea 16 km across (was 9 km), orbit camera out to 3,600 m (was 2,400) | The plan: scaled for the 2,700 m tile. A test checks the far side of the tile stays inside the haze from the furthest orbit |
 | 2026-11-13 | The 3-second budget test runs in its own Playwright projects (`chromium-budget`, `firefox-budget`), after all the other tests, and takes the fastest of three builds | Headless browsers draw WebGL in software. With four of them drawing islands at once, a world took 3.1 to 4.8 s; alone it takes 0.7 to 1.2 s |
+| 2026-11-13 | **Check-in 3 response approved.** Mountain-relief seeds may have laps up to 3 km (departs from the brief's 1.4 to 2.4 km); the gradient stays 15% | Tane's choice: a 15% road on a 2.4 km lap can rise only about 150 m, short of a 200 to 250 m mountain. 3 km allows about 180 m |
+| 2026-11-13 | Every mountain-relief seed climbs onto its main mountain and goes round it; hilly seeds climb the lower slopes of one beyond the track | Tane's choice (check-in 3: tracks should include the mountains) |
+| 2026-11-13 | Mountain shape is a per-seed trait: ridged range about 40%, rolling hill country about 35%, lone peak about 25% | Tane's choice (check-in 3: mountains are copies of one cone) |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -419,3 +472,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2 rework):** Step R7 done. `placeMountains` replaces `placePeak`; `Island.mountains`; foothills; `Cover.snow` and its colour. New `mountains.test.ts` (16 seeds: mountain-relief, and rolling with three mountains). Found and fixed by measuring: mountain sides of 250% to 450% (ridges too small), a 2 m mountain on a plateau, 500% slopes at the edge of a mountain's skirt (no sea-bed shelf), creases where the nearest road changes (the hinterland's coast now climbs to the land's height), and a step 670 m from the road (the land height has to be used everywhere). Two new known issues for check-in 3: coastal ramps slicing hills into bands, and very round mountains. 768 unit tests and 152 Playwright tests pass.
 - **2026-11-13 (Milestone 2 rework):** Step R8 done. `buildTerrainChunks` takes the road and draws far chunks at quarter detail with stitched edges; fog, sea and orbit range scaled; the budget test moved to its own projects that run last. Triangle counts are in "Rework measurements". 774 unit tests and 307 Playwright tests pass (with screenshots of seeds 1 to 20). **The rework is complete; stopped for check-in 3.**
 - **2026-11-13 (Milestone 2):** Check-in 3 with Tane. Feedback recorded under "Check-in 3 feedback": tracks should go up and round mountains, some laps should climb more, and mountains should vary in shape (rolling hills, ridged ranges of sharp peaks). The session was at about 770,000 tokens, so the response will be planned in plan mode in a fresh session.
+- **2026-11-13 (Milestone 2):** Check-in 3 response planned in plan mode and approved (steps C0 to C6, then check-in 4). Tane chose 3 km laps on mountain seeds, every mountain seed climbing its mountain, and three shapes (range, hill country, lone peak). Step C0 done: the plan is recorded under "Check-in 3 response". No code changed.
