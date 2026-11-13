@@ -215,6 +215,46 @@ test.describe('time of day', () => {
     await expect(page.locator('body')).toHaveAttribute('data-world-time', '19:30');
   });
 
+  test('names the time and its light on the title card and the clock', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1&time=17:45');
+    await expect(page.getByTestId('world-time')).toHaveText('17:45 · evening light');
+    await expect(page.getByTestId('world-clock')).toHaveText('17:45');
+    await expect(page.getByTestId('world-time-slider')).toHaveValue(String(17 * 60 + 45));
+  });
+
+  test('moves the time with the slider, redrawing the light, and brings back the seed s own time', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1');
+    const seeds = await page.locator('body').getAttribute('data-world-time');
+    const before = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest);
+    const target = seeds === '08:00' ? '18:00' : '08:00';
+    const [h, m] = target.split(':').map(Number);
+    await page.getByTestId('world-time-slider').fill(String(h! * 60 + m!));
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', target);
+    await expect(page.getByTestId('world-clock')).toHaveText(target);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest)).not.toBe(before);
+
+    await page.getByTestId('world-seed-time').click();
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', seeds!);
+  });
+
+  test('gives a new island its own time, not the one chosen for the last', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1&time=07:00');
+    await page.getByTestId('world-new').click();
+    await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '42');
+    await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
+    const seed = Number(await page.locator('body').getAttribute('data-world-seed'));
+    const sky = await page.evaluate(async (seed) => {
+      const { genClient } = await import('/src/worker/client.ts');
+      const { config } = await import('/src/config.ts');
+      return (await genClient().world(seed, config)).result.sky;
+    }, seed);
+    const minutes = Math.round(sky.hour * 60);
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-world-time',
+      `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`,
+    );
+  });
+
   test('draws an evening sky darker, and its light warmer, than a midday one', async ({ page }) => {
     // Seed 9 is flat with no mountain, so the top of a flying view is open sky.
     await openWorld(page, 'seed=9&still=1&lap=0.3&time=13:00');

@@ -95,6 +95,7 @@ body,
   border-radius: 10px;
   padding: 7px 14px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .world-controls button.primary {
@@ -109,4 +110,29 @@ body,
 
 .world-controls button[hidden] {
   display: none;
+}
+
+.world-time-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(22, 52, 47, 0.15);
+}
+
+.world-time-control output {
+  min-width: 3.2em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.world-time-control input[type="range"] {
+  width: 140px;
+  accent-color: #1a7d77;
+}
+
+.world-time-control input[type="range"]:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
 }

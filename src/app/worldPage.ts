@@ -6,7 +6,7 @@ import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
 import type { FitReport, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
-import { formatClock, parseClock, shortCharacter } from '../debug/trackLab/format';
+import { formatClock, lightName, parseClock, shortCharacter } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
@@ -32,11 +32,17 @@ const TEMPLATE = `
       <h1 data-ref="name" data-testid="world-name">Seed Circuit</h1>
       <p data-ref="code" data-testid="world-code"></p>
       <p class="world-character" data-ref="character" data-testid="world-character"></p>
+      <p data-ref="time" data-testid="world-time"></p>
       <p class="world-hint" data-ref="hint"></p>
     </div>
     <div class="world-card world-controls">
       <button type="button" data-ref="play" data-testid="world-play"></button>
       <button type="button" data-ref="toggle" data-testid="world-camera-toggle"></button>
+      <div class="world-time-control">
+        <output data-ref="clock" data-testid="world-clock" aria-live="off"></output>
+        <input type="range" data-ref="slider" data-testid="world-time-slider" aria-label="Time of day" step="5" />
+        <button type="button" data-ref="seedTime" data-testid="world-seed-time" title="Back to the time this seed chose">Seed's time</button>
+      </div>
       <button type="button" class="primary" data-ref="new" data-testid="world-new">New island</button>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
@@ -94,13 +100,20 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   /** The time of day shown, and the bearing of the sun's path of the world shown. */
   let hour = 12;
   let bearing = 0;
+  /** The time the seed of the world shown chose. */
+  let seedHour = 12;
   /** While a new world is being built nothing is drawn, so a slow machine's drawing does not slow the build. */
   let building = false;
 
   const setTime = (next: number): void => {
     hour = daylightHour(next);
     view.setDaylight(daylightAt(hour, bearing, config.render.daylight));
-    document.body.dataset.worldTime = formatClock(hour);
+    const clock = formatClock(hour);
+    document.body.dataset.worldTime = clock;
+    ref('clock').textContent = clock;
+    ref('time').textContent = `${clock} · ${lightName(hour)}`;
+    const slider = ref<HTMLInputElement>('slider');
+    if (document.activeElement !== slider) slider.value = String(Math.round(hour * 60));
     dirty = true;
   };
 
@@ -239,7 +252,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       report = result.report;
       // Only the page's first island honours the address's time; a new island has its own.
       bearing = result.sky.bearing;
-      setTime(opening && askedTime !== null ? askedTime : result.sky.hour);
+      seedHour = result.sky.hour;
+      setTime(opening && askedTime !== null ? askedTime : seedHour);
 
       const winner = result.track.candidates[result.track.winnerIndex]!;
       const groundAt = (x: number, z: number): number => sampleField(result.ground, x, z, 0);
@@ -284,11 +298,21 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   // Picking a random seed is app code, not generation, so Math.random is fine here.
   const randomSeed = (): number => 1 + Math.floor(Math.random() * 99999);
 
+  const slider = ref<HTMLInputElement>('slider');
+  slider.min = String(earliest * 60);
+  slider.max = String(latest * 60);
+  slider.addEventListener('input', () => setTime(Number(slider.value) / 60));
+  ref('seedTime').addEventListener('click', () => {
+    slider.blur();
+    setTime(seedHour);
+  });
   ref('play').addEventListener('click', () => setPlaying(!playing));
   ref('toggle').addEventListener('click', () => setMode(mode === 'fly' ? 'orbit' : 'fly'));
   ref('new').addEventListener('click', () => void show(randomSeed(), false));
   window.addEventListener('keydown', (event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    // The time slider takes its own arrow keys.
+    if (event.target instanceof HTMLInputElement) return;
     const key = event.key.toLowerCase();
     if (key === ' ' && mode === 'fly') setPlaying(!playing);
     else if (key === 'c') setMode(mode === 'fly' ? 'orbit' : 'fly');
