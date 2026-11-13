@@ -75,7 +75,9 @@ interface Built {
 
 function build(seed: number, kind: CoastKind): Built {
   // No mountains: these tests are about the hinterland alone. A mountain grows the island too; see mountains.test.ts.
-  const cfg = withCharacter(coarse, { coast: kind, mountains: 0 });
+  // A mountain seed's massif is part of its ground whatever the mountain count, so mountain seeds are tested as hilly ones.
+  let cfg = withCharacter(coarse, { coast: kind, mountains: 0 });
+  if (generateTrack(seed, cfg).character.relief === 'mountain') cfg = withCharacter(coarse, { coast: kind, mountains: 0, relief: 'hilly' });
   const track = generateTrack(seed, cfg);
   const winner = track.candidates[track.winnerIndex]!;
   const width = solveWidth(seed, winner.line, winner.sections, track.character.width, cfg);

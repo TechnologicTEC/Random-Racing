@@ -15,6 +15,7 @@ const TIE_TOLERANCE = 0.05;
  *
  * @param ground height of the natural ground at a point, in metres above the sea
  * @param maxGradient steepest climb or descent allowed, as a fraction (it depends on the seed's relief)
+ * @param neighbours the line's close sections, if already found (they do not change when the line is turned)
  */
 export function solveProfile(
   line: CenterLine,
@@ -22,6 +23,7 @@ export function solveProfile(
   cfg: RoadConfig,
   roadWidth: number,
   maxGradient: number,
+  neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
 ): RoadProfile {
   const n = line.count;
   const groundAt = new Float64Array(n);
@@ -36,7 +38,6 @@ export function solveProfile(
   let window = Math.ceil((2 * maxGradient * cfg.crestMinRadius) / line.spacing);
   if (window % 2 === 0) window++;
 
-  const neighbours = findNeighbours(line, cfg, roadWidth);
   let height = smoothLoop(limitGradient(target, maxStep), window);
   for (let round = 1; round < cfg.solverRounds; round++) {
     if (!pullTogether(target, height, neighbours, cfg)) break;
@@ -46,7 +47,13 @@ export function solveProfile(
 }
 
 /** Measures a road profile: how much it climbs, how steep it gets and how well it fits the ground. */
-export function measureProfile(line: CenterLine, profile: RoadProfile, cfg: RoadConfig, roadWidth: number): ProfileStats {
+export function measureProfile(
+  line: CenterLine,
+  profile: RoadProfile,
+  cfg: RoadConfig,
+  roadWidth: number,
+  neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
+): ProfileStats {
   const n = line.count;
   const { height, ground } = profile;
   let min = Infinity;
@@ -69,13 +76,7 @@ export function measureProfile(line: CenterLine, profile: RoadProfile, cfg: Road
     maxCut = Math.max(maxCut, ground[i]! - here);
   }
 
-  const neighbours = findNeighbours(line, cfg, roadWidth);
-  let steepestBank = 0;
-  for (let i = 0; i < n; i++) {
-    const j = neighbours.index[i]!;
-    if (j < 0) continue;
-    steepestBank = Math.max(steepestBank, Math.abs(height[i]! - height[j]!) / neighbours.bankRun[i]!);
-  }
+  const steepestBank = findSteepestBank(line, height, cfg, roadWidth, neighbours).slope;
 
   return {
     min,
@@ -90,15 +91,42 @@ export function measureProfile(line: CenterLine, profile: RoadProfile, cfg: Road
   };
 }
 
+/**
+ * The steepest bank between two neighbouring sections of the road: its slope as a fraction (0 when no
+ * sections are close), and the two samples it runs between (-1 when there are none).
+ */
+export function findSteepestBank(
+  line: CenterLine,
+  height: Float64Array,
+  cfg: RoadConfig,
+  roadWidth: number,
+  neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
+): { slope: number; from: number; to: number } {
+  let slope = 0;
+  let from = -1;
+  let to = -1;
+  for (let i = 0; i < line.count; i++) {
+    const j = neighbours.index[i]!;
+    if (j < 0) continue;
+    const here = Math.abs(height[i]! - height[j]!) / neighbours.bankRun[i]!;
+    if (here > slope) {
+      slope = here;
+      from = i;
+      to = j;
+    }
+  }
+  return { slope, from, to };
+}
+
 /** For each sample, the closest sample on a separate section of the lap, if any is near enough to share ground with. */
-interface Neighbours {
+export interface Neighbours {
   /** Index of the neighbouring sample, or -1. */
   index: Int32Array;
   /** Width of ground available for a bank between the two sections, in metres. */
   bankRun: Float64Array;
 }
 
-function findNeighbours(line: CenterLine, cfg: RoadConfig, roadWidth: number): Neighbours {
+export function findNeighbours(line: CenterLine, cfg: RoadConfig, roadWidth: number): Neighbours {
   const n = line.count;
   const { x, z } = line;
   const index = new Int32Array(n).fill(-1);

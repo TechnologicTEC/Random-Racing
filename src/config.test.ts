@@ -60,7 +60,10 @@ describe('config', () => {
     expect(kinds.flat.lapRange).toEqual([0, 8]);
     expect(kinds.rolling.lapRange).toEqual([15, 30]);
     expect(kinds.hilly.lapRange).toEqual([30, 60]);
-    expect(kinds.mountain.lapRange).toEqual([60, 120]);
+    expect(kinds.mountain.lapRange).toEqual([55, 160]);
+    // Mountain seeds aim higher when they climb onto the mountain than when they go round it.
+    expect(config.world.relief.massif.routes.climb.lapRange).toEqual([90, 160]);
+    expect(config.world.relief.massif.routes.circle.lapRange).toEqual([55, 100]);
   });
 
   it('lets the 3D view see and frame the whole 2700 m tile', () => {

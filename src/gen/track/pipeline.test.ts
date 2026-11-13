@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { config, type GenConfig, type TrackConfig } from '../../config';
+import { withCharacter } from '../../testing/characters';
 import type { Candidate, CornerSection, StraightSection, TrackResult } from '../types';
 import { hashTrack } from './hash';
 import { generateTrack } from './pipeline';
+import { trackRulesFor } from './rules';
 import { validateLayout } from './validate';
 
 const cfg = config.track;
@@ -44,7 +46,7 @@ describe('generateTrack', () => {
   });
 
   it('returns a winner that still passes validation after the start line is placed', () => {
-    expect(validateLayout(winnerOf(result).line, cfg)).toEqual([]);
+    expect(validateLayout(winnerOf(result).line, trackRulesFor(cfg, result.character.relief))).toEqual([]);
   });
 
   it('puts the start line part way along the longest straight', () => {
@@ -138,6 +140,59 @@ describe('generateTrack across many seeds', () => {
 
   it('gives most seeds a different name', () => {
     expect(new Set(results.map((r) => r.name)).size).toBeGreaterThan(150);
+  });
+});
+
+describe('generateTrack turning candidates to fit the ground', () => {
+  const EARTHWORKS = ['cut-too-deep', 'fill-too-high', 'bank-too-steep'];
+  const mountain = Array.from({ length: 12 }, (_, i) => generateTrack(i + 1, withCharacter(config, { relief: 'mountain' })));
+  const others = Array.from({ length: 12 }, (_, i) => generateTrack(i + 1, withCharacter(config, { relief: 'rolling' })));
+
+  it('tries mountain candidates at eight turns and keeps one of them', () => {
+    const turns = new Set<number>();
+    for (const r of mountain) for (const c of r.candidates) turns.add(c.turn);
+    for (const turn of turns) expect(turn % 45).toBe(0);
+    // Different candidates fit the ground best at different turns.
+    expect(turns.size).toBeGreaterThanOrEqual(4);
+    expect(new Set(mountain.map((r) => winnerOf(r).turn)).size).toBeGreaterThan(1);
+  });
+
+  it('never turns candidates on other ground', () => {
+    for (const r of others) for (const c of r.candidates) expect(c.turn).toBe(0);
+  });
+
+  it('keeps mountain laps within 3 km and a 600 m track area, and the others within 2.4 km and 500 m', () => {
+    for (const r of mountain) {
+      const winner = winnerOf(r);
+      expect(winner.line.length, `seed ${r.seed}`).toBeLessThanOrEqual(3000);
+      expect(validateLayout(winner.line, trackRulesFor(cfg, 'mountain')), `seed ${r.seed}`).toEqual([]);
+    }
+    expect(Math.max(...mountain.map((r) => winnerOf(r).line.length))).toBeGreaterThan(2400);
+    for (const r of others) {
+      expect(winnerOf(r).line.length, `seed ${r.seed}`).toBeLessThanOrEqual(2400);
+      expect(validateLayout(winnerOf(r).line, cfg), `seed ${r.seed}`).toEqual([]);
+    }
+  });
+
+  it('turns the control points with the line', () => {
+    for (const r of mountain.slice(0, 3)) {
+      const winner = winnerOf(r);
+      // Every control point is near the lap it shapes.
+      for (const p of winner.controlPoints) {
+        let nearest = Infinity;
+        for (let i = 0; i < winner.line.count; i += 2) nearest = Math.min(nearest, Math.hypot(winner.line.x[i]! - p.x, winner.line.z[i]! - p.z));
+        expect(nearest, `seed ${r.seed}`).toBeLessThan(120);
+      }
+    }
+  });
+
+  it('rejects a candidate whose every turn needs too much earthworks, saying why, and never picks it', () => {
+    for (const r of mountain) {
+      expect(winnerOf(r).violations).toEqual([]);
+      for (const c of r.candidates) {
+        if (c.violations.some((v) => EARTHWORKS.includes(v.kind))) expect(c.score).toBeNull();
+      }
+    }
   });
 });
 

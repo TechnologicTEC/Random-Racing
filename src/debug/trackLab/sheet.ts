@@ -1,7 +1,7 @@
 import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig } from '../../config';
 import { MAX_SEED } from '../../core/seedCode';
-import type { TrackResult, WorldResult } from '../../gen';
+import { trackRulesFor, type TrackResult, type WorldResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawThumbnail } from './draw';
 import { shortCharacter, summariseTracks } from './format';
@@ -51,8 +51,8 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
   if (!run) ref('nav').remove();
 
   const dpr = window.devicePixelRatio || 1;
-  // Framed to hold the whole island: the land runs on as far as the hinterland reaches beyond the track's area.
-  const islandRadius = cfg.buildableRadius + config.world.hinterland.reach[1] + 60;
+  // Framed to hold the whole tile, so the whole island shows: a mountain seed's massif can reach well beyond the hinterland.
+  const islandRadius = config.world.tile.extent / 2;
   const view = fitView(THUMB, THUMB, islandRadius, 6);
   // Thumbnails are small, so their islands are built on a coarse grid: 16 times fewer heights, and as many times quicker.
   const sheetConfig: GameConfig = { ...config, world: { ...config.world, tile: { ...config.world.tile, cell: 8 } } };
@@ -72,7 +72,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Four pixels per sample of the coarse grid, so coastlines are smooth even at this size.
-      drawThumbnail(ctx, view, winner, cfg, terrainPicture(world.ground, null, 4), world.road.width);
+      drawThumbnail(ctx, view, winner, trackRulesFor(cfg, result.character.relief), terrainPicture(world.ground, null, 4), world.road.width);
     }
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';

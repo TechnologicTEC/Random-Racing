@@ -2,14 +2,16 @@ import type { GenConfig, RoadConfig, TrackConfig } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createRng } from '../../core/rng';
 import { pickCharacter } from '../character';
-import { measureProfile, solveProfile } from '../road/profile';
-import type { Candidate, CenterLine, Corner, ReliefKind, StraightSection, TrackResult } from '../types';
+import { findNeighbours, measureProfile, solveProfile } from '../road/profile';
+import type { Candidate, CenterLine, Corner, ReliefKind, ScoreBreakdown, StraightSection, TrackResult, Violation } from '../types';
 import { createRelief, type Relief } from '../world/relief';
 import { GENERATOR_VERSION } from '../version';
 import { analyseSections } from './analysis';
+import { checkEarthworks } from './earthworks';
 import { generateLayout, pickStyle } from './layout';
 import { generateTrackName } from './name';
 import { scoreLayout } from './score';
+import { trackRulesFor } from './rules';
 import { resampleClosedPath, sampleClosedSpline } from './spline';
 import { validateLayout } from './validate';
 
@@ -21,16 +23,18 @@ import { validateLayout } from './validate';
  * rejected or how it scored.
  */
 export function generateTrack(seed: number, config: GenConfig): TrackResult {
-  const cfg = config.track;
   const normalisedSeed = seed >>> 0;
   const rng = createRng(normalisedSeed, 'track');
   // What kind of island this is. It comes from the seed alone, like the style.
   const character = pickCharacter(normalisedSeed, config.world.character);
+  // Some reliefs have their own limits: mountain seeds have longer laps in a wider area.
+  const cfg = trackRulesFor(config.track, character.relief);
   // The ground comes from the seed alone, so every candidate is laid over the same hills.
   const terrain: Terrain = {
-    relief: createRelief(normalisedSeed, config.world.relief, character.relief, cfg.buildableRadius),
+    relief: createRelief(normalisedSeed, config.world.relief, config.world.scenery.landforms, character, cfg.buildableRadius),
     kind: character.relief,
     road: config.road,
+    turns: config.track.byRelief[character.relief].turns,
   };
   // One style per seed, so different seeds give different kinds of track.
   const style = pickStyle(rng.fork('style'), cfg.layout);
@@ -72,13 +76,19 @@ export function generateTrack(seed: number, config: GenConfig): TrackResult {
   };
 }
 
-/** The ground a layout is laid over, and the rules for laying a road on it. */
+/** The ground a layout is laid over, the rules for laying a road on it, and how many ways to turn a layout to fit it. */
 interface Terrain {
   relief: Relief;
   kind: ReliefKind;
   road: RoadConfig;
+  turns: number;
 }
 
+/**
+ * Judges a layout. One that breaks the layout rules is rejected as it is. One that keeps them is laid
+ * over the ground at each turn about the centre in turn, and the best-scoring turn whose road keeps the
+ * earthworks rule is kept. If no turn does, the layout is rejected unturned, with that turn's reasons.
+ */
 function buildCandidate(
   index: number,
   controlPoints: Corner[],
@@ -88,12 +98,53 @@ function buildCandidate(
   terrain: Terrain,
   alwaysScore: boolean,
 ): Candidate {
-  const violations = validateLayout(line, cfg);
+  const layoutViolations = validateLayout(line, cfg);
+  // Turning changes where the lap is, not its shape, so it is valid at every turn or at none.
   const sections = analyseSections(line, cfg);
-  const profile = solveProfile(line, terrain.relief, terrain.road, cfg.roadWidth, terrain.road.maxGradient[terrain.kind]);
-  const elevation = measureProfile(line, profile, terrain.road, cfg.roadWidth);
-  const score = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg, elevation, terrain.kind) : null;
-  return { index, controlPoints, buildAttempts, line, profile, violations, sections, score };
+  const turns = layoutViolations.length === 0 ? terrain.turns : 1;
+  // Which sections run side by side depends on the lap's shape, not on which way it is turned.
+  const neighbours = findNeighbours(line, terrain.road, cfg.roadWidth);
+  let best: Candidate | null = null;
+  let unturned: Candidate | null = null;
+  for (let k = 0; k < turns; k++) {
+    const turn = (k * 360) / turns;
+    const angle = (k * TAU) / turns;
+    const turned = turnLine(line, angle);
+    const profile = solveProfile(turned, terrain.relief, terrain.road, cfg.roadWidth, terrain.road.maxGradient[terrain.kind], neighbours);
+    const elevation = measureProfile(turned, profile, terrain.road, cfg.roadWidth, neighbours);
+    const violations: Violation[] = [...layoutViolations, ...checkEarthworks(turned, profile, elevation, terrain.road, cfg.roadWidth, neighbours)];
+    const score: ScoreBreakdown | null = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg, elevation, terrain.kind) : null;
+    const candidate: Candidate = { index, controlPoints: turnPoints(controlPoints, angle), buildAttempts, turn, line: turned, profile, violations, sections, score };
+    if (k === 0) unturned = candidate;
+    if (violations.length === 0 && score && (!best || score.total > best.score!.total)) best = candidate;
+  }
+  return best ?? unturned!;
+}
+
+/** The loop turned about the centre of the track area by `angle` radians. */
+function turnLine(line: CenterLine, angle: number): CenterLine {
+  if (angle === 0) return line;
+  const c = dcos(angle);
+  const s = dsin(angle);
+  const n = line.count;
+  const x = new Float64Array(n);
+  const z = new Float64Array(n);
+  const tx = new Float64Array(n);
+  const tz = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    x[i] = line.x[i]! * c - line.z[i]! * s;
+    z[i] = line.x[i]! * s + line.z[i]! * c;
+    tx[i] = line.tx[i]! * c - line.tz[i]! * s;
+    tz[i] = line.tx[i]! * s + line.tz[i]! * c;
+  }
+  return { ...line, x, z, tx, tz };
+}
+
+function turnPoints(points: Corner[], angle: number): Corner[] {
+  if (angle === 0) return points;
+  const c = dcos(angle);
+  const s = dsin(angle);
+  return points.map((p) => ({ ...p, x: p.x * c - p.z * s, z: p.x * s + p.z * c }));
 }
 
 /** Index of the valid candidate with the highest score (the earliest one on a tie), or -1. */

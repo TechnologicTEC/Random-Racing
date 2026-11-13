@@ -6,7 +6,8 @@ import type { Vec2 } from '../../core/vec2';
 import type { CenterLine, Character, CoastKind, HeightField, RoadProfile } from '../types';
 import { createField, sampleGrid, worldX, worldZ } from './heightfield';
 import { edgeDistance, insideLoop, nearestRoad, type NearestRoad } from './nearest';
-import { createRelief, placeHighland, type Highland, type Relief } from './relief';
+import { trackRulesFor } from '../track/rules';
+import { createRelief, placeHighland, placeMassif, type Highland, type Massif, type Relief } from './relief';
 
 /** One of an island's mountains. */
 export interface Mountain {
@@ -23,6 +24,8 @@ export interface Mountain {
 interface PlacedMountain extends Mountain {
   base: number;
   skirt: number;
+  /** True for a mountain seed's massif: it is already in the relief, so it is not added again. */
+  inRelief: boolean;
 }
 
 /** A bell of the shape mountains have is steepest part way up, at this many times its height over its radius. */
@@ -96,7 +99,13 @@ export function buildIsland(
   width: Float64Array,
   cfg: GenConfig,
   character: Character,
-  relief: Relief = createRelief(seed, cfg.world.relief, character.relief, cfg.track.buildableRadius),
+  relief: Relief = createRelief(
+    seed,
+    cfg.world.relief,
+    cfg.world.scenery.landforms,
+    character,
+    trackRulesFor(cfg.track, character.relief).buildableRadius,
+  ),
 ): Island {
   const { tile, coast, scenery } = cfg.world;
   const inland = createField(tile.extent, tile.cell);
@@ -120,7 +129,8 @@ export function buildIsland(
   const hinterland = shapeHinterland(rng.fork('hinterland'), line, inland, near, edge, inside, character.coast, cfg);
   const features = chooseFeatures(rng.fork('features'), line, profile, width, hinterland.seaside, inland, near, inside, cfg);
   const highland = placeHighland(seed, cfg.world.relief, character.relief, cfg.track.buildableRadius);
-  const mountains = placeMountains(rng.fork('mountains'), inland, edge, inside, hinterland.reach, relief, highland, character, cfg);
+  const massif = placeMassif(seed, cfg.world.relief, cfg.world.scenery.landforms, character);
+  const mountains = placeMountains(rng.fork('mountains'), inland, edge, inside, hinterland.reach, relief, highland, massif, character, cfg);
 
   // The height of the road near each cell, smoothed so it changes gradually
   // where the nearest part of the track switches from one section to another.
@@ -185,6 +195,13 @@ export function buildIsland(
   const landTop = new Float32Array(size * size);
   const landExtra = scenery.foothills.height[1] + scenery.bumpHeight + HEADROOM;
   const landShaped = hinterland.reach !== null || mountains.length > 0;
+  // The relief at each cell, looked up once: it can be slow (a massif's top) and passes 2 and 3 both need it.
+  const reliefAt = new Float64Array(size * size).fill(NaN);
+  const reliefOf = (c: number, x: number, z: number): number => {
+    let height = reliefAt[c]!;
+    if (Number.isNaN(height)) reliefAt[c] = height = relief(x, z);
+    return height;
+  };
   const half = tile.extent / 2;
   const fitReach = widest / 2 + cfg.road.verge + cfg.road.blendMax + 2 * tile.cell;
   for (let iz = 0; iz < size; iz++) {
@@ -196,7 +213,7 @@ export function buildIsland(
       const toBorder = half - Math.max(Math.abs(x), Math.abs(z));
       const inlandBy = Math.min(Math.max(smoothed[c]!, coast.minMargin - outward[c]!), toBorder - coast.border);
       let limit = coastProfile(inlandBy, { room: room[c]!, beach: beach[c]!, roadHeight: roadHeights[c]! + HEADROOM }, coast);
-      landTop[c] = landShaped ? Math.max(0, relief(x, z)) + landExtra : roadHeights[c]! + HEADROOM;
+      landTop[c] = landShaped ? Math.max(0, reliefOf(c, x, z)) + landExtra : roadHeights[c]! + HEADROOM;
       hinterlandRoom[c] = Math.max(cfg.world.hinterland.reach[0] - coast.clear, (4 * landTop[c]!) / coast.cliffSlope);
       if (hinterland.reach) {
         // The hinterland's own coast: the same shape as the coast beside the road, but its waterline is
@@ -228,7 +245,7 @@ export function buildIsland(
           const shape: ShoreShape = {
             room: mountain.skirt,
             beach: Math.min(beachWide[c]!, mountain.skirt / 2),
-            roadHeight: relief(x, z) + scenery.foothills.height[1] + HEADROOM,
+            roadHeight: reliefOf(c, x, z) + scenery.foothills.height[1] + HEADROOM,
           };
           limit = Math.max(limit, coastProfile(Math.min(mountain.radius + mountain.skirt - fromSummit, toBorder - coast.border), shape, coast));
         }
@@ -255,7 +272,7 @@ export function buildIsland(
         continue;
       }
 
-      let ground = relief(x, z);
+      let ground = reliefOf(c, x, z);
       let bell = 0;
       // Foothills give way to a mountain: gone at its foot, back to full height a third of its radius further out.
       let open = 1;
@@ -264,13 +281,14 @@ export function buildIsland(
         open = Math.min(open, smoothstep(1, 1.33, fromSummit));
         if (fromSummit >= 1) continue;
         const here = (1 - fromSummit * fromSummit) * (1 - fromSummit * fromSummit);
+        bell = Math.max(bell, here);
+        if (mountain.inRelief) continue;
         // Ridges roughen its sides; they fade to nothing at the summit and at the foot. They are sized to
         // the mountain, so their slope is the same share of its slope however big it is.
         const size = mountain.radius * scenery.mountains.ridgeSize;
         const ridges = softRidged(peakNoise.noise, peakNoise.u(mountain.x) + (x - mountain.x) / size, peakNoise.v(mountain.z) + (z - mountain.z) / size, 2);
         const texture = scenery.mountains.ridgeDepth * here * (1 - here) * (ridges - 0.5);
         ground += (mountain.summit - mountain.base) * (here + texture);
-        bell = Math.max(bell, here);
       }
       const bumps = smoothstep(0, scenery.bumpFade, Math.max(0, edge[c]!)) * (1 - bell);
       if (bumps > 0) ground += scenery.bumpHeight * bumps * fbm(bumpNoise.noise, bumpNoise.u(x), bumpNoise.v(z), 2);
@@ -544,8 +562,8 @@ function chooseFeatures(
  * Places the island's mountains: as many as its character asks for, where there is room.
  * The main one comes first and is the tallest. Each one's foot is as wide as its
  * height needs for its sides to be no steeper than the limit, and stays clear of
- * the road. On a mountain seed the main one stands on the highland the track
- * climbs towards. The others go where the land already is if they can, and
+ * the road. On a hilly seed the main one stands on the highland the track
+ * climbs towards; on a mountain seed it is the massif already in the relief. The others go where the land already is if they can, and
  * otherwise where the island can grow to hold them; a mountain with nowhere to go
  * is left out.
  */
@@ -557,12 +575,14 @@ function placeMountains(
   reach: Float32Array | null,
   relief: Relief,
   highland: Highland | null,
+  massif: Massif | null,
   character: Character,
   cfg: GenConfig,
 ): PlacedMountain[] {
   const rules = cfg.world.scenery.mountains;
   const { coast } = cfg.world;
-  if (character.mountains <= 0) return [];
+  // A massif is part of the ground whatever the mountain count says, so it is always the main mountain.
+  if (character.mountains <= 0 && !massif) return [];
 
   const summits = [rng.fork('main').range(rules.main[0], rules.main[1])];
   const others: number[] = [];
@@ -591,6 +611,14 @@ function placeMountains(
     });
 
   summits.forEach((summit, k) => {
+    if (k === 0 && massif) {
+      // The massif is the main mountain. Its top is kept from the sea; the road may climb it, so it has no clearance.
+      const { top } = massif;
+      const radius = Math.max(top.bounds.maxX - massif.x, massif.x - top.bounds.minX, top.bounds.maxZ - massif.z, massif.z - top.bounds.minZ);
+      const base = relief(massif.x, massif.z) - massif.summit + massif.cone;
+      placed.push({ x: massif.x, z: massif.z, radius, summit: relief(massif.x, massif.z), base, skirt: skirtFor(base), inRelief: true });
+      return;
+    }
     if (k === 0 && highland) {
       // Out along the highland from the middle of its flat top, the first place with room enough.
       const length = Math.sqrt(highland.x * highland.x + highland.z * highland.z);
@@ -606,12 +634,12 @@ function placeMountains(
         const room = roomAt(x, z);
         if (!fitsTile(x, z, Math.min(radius, room))) break;
         if (room >= radius) {
-          placed.push({ x, z, radius, summit, base, skirt });
+          placed.push({ x, z, radius, summit, base, skirt, inRelief: false });
           return;
         }
         // No room for its full height here: remember the roomiest place, with the summit it would allow.
         const lower = base + (room * smoothSlope) / BELL_STEEPEST;
-        if (lower - base >= rules.minRise && (!fallback || room > fallback.radius)) fallback = { x, z, radius: room, summit: lower, base, skirt };
+        if (lower - base >= rules.minRise && (!fallback || room > fallback.radius)) fallback = { x, z, radius: room, summit: lower, base, skirt, inRelief: false };
       }
       if (fallback) {
         placed.push(fallback);
@@ -642,7 +670,7 @@ function placeMountains(
         const score = (onLand ? 1000 : 0) - room + pick.next() * 40;
         if (score > bestScore) {
           bestScore = score;
-          best = { x, z, radius, summit, base, skirt };
+          best = { x, z, radius, summit, base, skirt, inRelief: false };
         }
       }
     }

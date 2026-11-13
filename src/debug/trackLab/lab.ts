@@ -1,7 +1,7 @@
 import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { hashTrack, measureProfile, type Candidate, type FitReport, type TrackResult, type WorldResult } from '../../gen';
+import { hashTrack, measureProfile, trackRulesFor, widestTrackArea, type Candidate, type FitReport, type TrackResult, type WorldResult } from '../../gen';
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
@@ -173,7 +173,7 @@ export function mountTrackLab(root: HTMLElement): void {
   /** The seed last asked for. Its track may still be on its way from the worker. */
   let wantedSeed = 0;
   let selectedIndex = 0;
-  let view: View = fitView(1, 1, cfg.buildableRadius, 24);
+  let view: View = fitView(1, 1, widestTrackArea(cfg), 24);
   let fitted = true;
 
   function render(): void {
@@ -190,7 +190,8 @@ export function mountTrackLab(root: HTMLElement): void {
     const terrain = isWinner && islandBox.checked ? islandPicture(tintBox.checked) : null;
     // Only the winner has had its width worked out; other candidates are drawn at the usual width.
     const width = isWinner && world ? world.road.width : null;
-    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width }, cfg);
+    // The seed's own track area: mountain seeds have a wider one.
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width }, trackRulesFor(cfg, result.character.relief));
   }
 
   function resize(): void {
@@ -199,7 +200,7 @@ export function mountTrackLab(root: HTMLElement): void {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
-    view = fitted ? fitView(width, height, cfg.buildableRadius, 24) : { ...view, width, height };
+    view = fitted ? fitView(width, height, widestTrackArea(cfg), 24) : { ...view, width, height };
     render();
   }
 
@@ -295,6 +296,7 @@ export function mountTrackLab(root: HTMLElement): void {
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);
     addFact('Build attempts', String(candidate.buildAttempts));
+    addFact('Turned', `${candidate.turn}°`);
 
     const straights = candidate.sections.filter((s) => s.type === 'straight');
     const corners = candidate.sections.filter((s) => s.type === 'corner');

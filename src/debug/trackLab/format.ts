@@ -22,6 +22,12 @@ export function describeViolation(violation: Violation): string {
       return `Lap too long: ${value} m (maximum ${limit} m)`;
     case 'out-of-bounds':
       return `Leaves the buildable area: ${value} m from the centre (maximum ${limit} m)`;
+    case 'cut-too-deep':
+      return `Cutting too deep: ${short(violation.value)} m (maximum ${limit} m)`;
+    case 'fill-too-high':
+      return `Embankment too high: ${short(violation.value)} m (maximum ${limit} m)`;
+    case 'bank-too-steep':
+      return `Bank between sections too steep: ${Math.round(violation.value * 100)}% (maximum ${Math.round(violation.limit * 100)}%)`;
   }
 }
 

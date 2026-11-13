@@ -22,7 +22,7 @@ export interface TrackConfig {
    * width. On some seeds the finished road is wider in places: see `road.width`.
    */
   roadWidth: number;
-  /** Shortest and longest allowed lap, in metres. */
+  /** Shortest and longest allowed lap, in metres. Some reliefs change these: see `byRelief`. */
   lapLengthMin: number;
   lapLengthMax: number;
   /** Tightest allowed corner radius, in metres (brief: about 15). */
@@ -35,7 +35,7 @@ export interface TrackConfig {
    * being judged against each other.
    */
   sectionGapMinArc: number;
-  /** The whole track must stay within this distance of the island centre, in metres. */
+  /** The whole track must stay within this distance of the island centre, in metres. Some reliefs change this: see `byRelief`. */
   buildableRadius: number;
   /** Distance between centre-line samples, in metres. */
   sampleSpacing: number;
@@ -44,12 +44,35 @@ export interface TrackConfig {
   layout: LayoutConfig;
   analysis: AnalysisConfig;
   score: ScoreConfig;
+  /** How the rules above change with the seed's relief. */
+  byRelief: Record<ReliefKind, ReliefTrackRules>;
+}
+
+/**
+ * Track rules for one kind of relief. Each candidate's shape is tried turned to
+ * `turns` evenly spaced directions about the centre of the track area, and the
+ * best turn that fits the ground is kept. Limits not given are as in `TrackConfig`.
+ */
+export interface ReliefTrackRules {
+  turns: number;
+  lapLength?: Range;
+  buildableRadius?: number;
+  weights?: ScoreWeights;
+}
+
+/** How much each part of the fun score counts towards the total; they add up to 1. */
+export interface ScoreWeights {
+  straights: number;
+  cornerMix: number;
+  drift: number;
+  flow: number;
+  elevation: number;
 }
 
 /** How valid layouts are rated for fun. Each part scores 0 to 1. */
 export interface ScoreConfig {
-  /** How much each part counts towards the total. */
-  weights: { straights: number; cornerMix: number; drift: number; flow: number; elevation: number };
+  /** How much each part counts towards the total. Some reliefs change these: see `TrackConfig.byRelief`. */
+  weights: ScoreWeights;
   /**
    * Elevation, by the seed's relief: a lap with `range` metres between its
    * lowest and highest point earns full marks for range, and one that climbs
@@ -257,6 +280,8 @@ export interface RoadConfig {
   coupleMinArc: number;
   /** Steepest grass bank allowed between two tied sections, as a fraction (0.45 is a 45% slope). */
   maxBankSlope: number;
+  /** The solver can leave a bank this much steeper than `maxBankSlope`; only a steeper one rejects a layout. */
+  bankSlack: number;
   /** The solver repeats at most this many times to bring tied sections within reach of each other. */
   solverRounds: number;
   /** The ground under the road and verge sits this far below the road surface, in metres, so it can never show through. */
@@ -305,9 +330,9 @@ export interface RoadConfig {
   bankFade: Range;
   /** The road tilts in and out of a bank over this length, in metres. */
   bankEase: number;
-  /** The road should sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). */
+  /** The road may sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). A layout that needs more is rejected. */
   maxFill: number;
-  /** The road should sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). */
+  /** The road may sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). A layout that needs more is rejected. */
   maxCut: number;
 }
 
@@ -345,25 +370,59 @@ export interface ReliefConfig {
   /** What each kind of relief is made of. */
   kinds: Record<ReliefKind, ReliefKindConfig>;
   highland: HighlandConfig;
+  massif: MassifConfig;
+}
+
+/**
+ * The main mountain of a mountain seed, part of the ground the track is laid
+ * over: a cone no steeper than the road may climb, with a flat shoulder near
+ * the top and the steep top itself, in the seed's landform, standing on it.
+ * Distances in metres.
+ */
+export interface MassifConfig {
+  /** Slope of the cone, as a fraction. Never steeper than the road may climb, so a road can run straight up it. */
+  slope: number;
+  /** The cone eases in at its foot over this distance. */
+  ease: number;
+  /** Its foot is this far past the centre of the track area, on the side away from the summit. */
+  beyond: number;
+  /** What changes with the seed's route. */
+  routes: Record<RouteKind, MassifRoute>;
+  /** A range on top is at most this long from its first peak to its last, so the lap can get round it. */
+  rangeLength: number;
+}
+
+export interface MassifRoute {
+  /** How far the summit is from the centre of the track area. */
+  distance: number;
+  /** Radius of the flat shoulder round the summit. */
+  shoulder: number;
+  /**
+   * Height of the top above the shoulder, by landform: lowest and highest. Its foot spreads with its
+   * height, so a circling seed, whose lap goes round the top, has a smaller one.
+   */
+  top: Record<LandformKind, Range>;
+  /** The height range most laps should have. Checked by tests, not enforced in code. */
+  lapRange: Range;
 }
 
 export interface ReliefKindConfig {
   /** Hills rise this far above the lowland, in metres. */
   hillHeight: number;
   /**
-   * Hilly and mountain seeds have a highland to one side of the track, and the
-   * track sits on its flank. This is the flank's slope as a fraction; 0 for no
-   * highland. It must not be steeper than the road may climb, so that a road
-   * can run straight up it.
+   * Hilly seeds have a highland to one side of the track, and the track sits
+   * on its flank. This is the flank's slope as a fraction; 0 for no highland.
+   * It must not be steeper than the road may climb, so that a road can run
+   * straight up it. (Mountain seeds have a massif instead: see `massif`.)
    */
   flankSlope: number;
-  /** The height between a lap's lowest and highest point that this relief aims for, in metres. Checked by tests, not enforced in code. */
+  /** The height between a lap's lowest and highest point that this relief aims for, in metres. Checked by tests, not enforced in code. Mountain seeds: by route, see `massif`. */
   lapRange: Range;
-  /** Nearly all of the ground the track can use is gentler than this, as a fraction. Checked by a test, not enforced in code. */
+  /** Nearly all of the ground the track can use is gentler than this, as a fraction, apart from a massif's top. Checked by a test, not enforced in code. */
   maxSlope: number;
 }
 
-/** The shape of the highland that hilly and mountain seeds have. Distances in metres. */
+/** The shape of the highland that hilly seeds have. Distances in metres. */
 export interface HighlandConfig {
   /** The flank starts to rise this far from the centre of the buildable area, on its low side. Bigger tracks reach the flat ground below it. */
   foot: number;
@@ -722,6 +781,17 @@ export const config: GameConfig = {
     buildableRadius: 500,
     sampleSpacing: 2,
     curvatureWindow: 4,
+    byRelief: {
+      flat: { turns: 1 },
+      rolling: { turns: 1 },
+      hilly: { turns: 4 },
+      mountain: {
+        turns: 8,
+        lapLength: [1600, 3000],
+        buildableRadius: 600,
+        weights: { straights: 0.1875, cornerMix: 0.1875, drift: 0.1875, flow: 0.1875, elevation: 0.25 },
+      },
+    },
     layout: {
       controlPointsMin: 10,
       controlPointsMax: 18,
@@ -792,7 +862,7 @@ export const config: GameConfig = {
         flat: { range: 3, climb: 5 },
         rolling: { range: 24, climb: 40 },
         hilly: { range: 55, climb: 85 },
-        mountain: { range: 110, climb: 160 },
+        mountain: { range: 160, climb: 240 },
       },
       longStraight: 150,
       targetLongStraights: 2,
@@ -818,6 +888,7 @@ export const config: GameConfig = {
     coupleDistance: 55,
     coupleMinArc: 110,
     maxBankSlope: 0.45,
+    bankSlack: 0.02,
     solverRounds: 8,
     sink: 0.25,
     blendMin: 10,
@@ -868,9 +939,19 @@ export const config: GameConfig = {
         flat: { hillHeight: 7, flankSlope: 0, lapRange: [0, 8], maxSlope: 0.04 },
         rolling: { hillHeight: 33, flankSlope: 0, lapRange: [15, 30], maxSlope: 0.15 },
         hilly: { hillHeight: 14, flankSlope: 0.08, lapRange: [30, 60], maxSlope: 0.14 },
-        mountain: { hillHeight: 12, flankSlope: 0.15, lapRange: [60, 120], maxSlope: 0.2 },
+        mountain: { hillHeight: 12, flankSlope: 0, lapRange: [55, 160], maxSlope: 0.2 },
       },
       highland: { foot: 300, margin: 60, plateau: 200, ease: 120 },
+      massif: {
+        slope: 0.15,
+        ease: 120,
+        beyond: 600,
+        routes: {
+          climb: { distance: 550, shoulder: 130, top: { peak: [70, 95], range: [70, 95], hills: [25, 40] }, lapRange: [90, 160] },
+          circle: { distance: 200, shoulder: 110, top: { peak: [50, 70], range: [50, 70], hills: [25, 40] }, lapRange: [55, 100] },
+        },
+        rangeLength: 450,
+      },
     },
     tile: { extent: 2700, cell: 3 },
     coast: {

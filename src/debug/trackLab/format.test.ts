@@ -81,6 +81,15 @@ describe('describeViolation', () => {
     expect(describeViolation({ kind: 'out-of-bounds', x: 0, z: 0, value: 520.3, limit: 500 })).toBe(
       'Leaves the buildable area: 520 m from the centre (maximum 500 m)',
     );
+    expect(describeViolation({ kind: 'cut-too-deep', x: 0, z: 0, value: 11.62, limit: 8 })).toBe(
+      'Cutting too deep: 11.6 m (maximum 8 m)',
+    );
+    expect(describeViolation({ kind: 'fill-too-high', x: 0, z: 0, value: 7.04, limit: 6 })).toBe(
+      'Embankment too high: 7 m (maximum 6 m)',
+    );
+    expect(describeViolation({ kind: 'bank-too-steep', x: 0, z: 0, value: 0.613, limit: 0.47 })).toBe(
+      'Bank between sections too steep: 61% (maximum 47%)',
+    );
   });
 });
 

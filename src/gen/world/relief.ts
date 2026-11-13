@@ -1,9 +1,10 @@
-import type { ReliefConfig } from '../../config';
+import type { LandformConfig, ReliefConfig } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createNoise } from '../../core/noise';
 import { createRng } from '../../core/rng';
 import { clamp01 } from '../../core/scalar';
-import type { ReliefKind } from '../types';
+import type { Character, ReliefKind } from '../types';
+import { buildLandform, type Landform } from './landforms';
 
 /** Height of the natural ground at a point on the map, in metres above the sea. */
 export type Relief = (x: number, z: number) => number;
@@ -25,17 +26,43 @@ export interface Highland {
   radius: number;
 }
 
+/** The parts of a seed's character its relief depends on. */
+export type ReliefTraits = Pick<Character, 'relief' | 'landform' | 'route'>;
+
+/**
+ * The main mountain of a mountain seed: a cone the road can climb, a flat
+ * shoulder near the top, and the steep top itself, in the seed's landform.
+ * Heights are above the lowland and its hills, in metres.
+ */
+export interface Massif {
+  /** The summit. */
+  x: number;
+  z: number;
+  /** Height of the summit: the cone's height at the shoulder plus the top's. */
+  summit: number;
+  /** Height of the cone at its shoulder, where the top stands. */
+  cone: number;
+  /** Radius of the flat shoulder round the summit. */
+  shoulder: number;
+  /** The cone reaches the lowland this far from the summit. */
+  reach: number;
+  /** The top: its main summit is the massif's summit, and its height is above the shoulder. */
+  top: Landform;
+}
+
 /**
  * The ground a seed's track is laid over: broad hills with smaller rises on
- * top and wide lowlands between them and, for hilly and mountain seeds, the
- * long flank of a highland for the lap to climb.
+ * top and wide lowlands between them and, for hilly seeds, the long flank of a
+ * highland for the lap to climb; for mountain seeds, a massif the lap climbs
+ * onto or goes round.
  *
- * It depends only on the seed and its kind of relief, never on the track, so
+ * It depends only on the seed and its character, never on the track, so
  * every candidate layout can be judged against the same ground.
  *
  * @param reach radius of the buildable area, in metres
  */
-export function createRelief(seed: number, cfg: ReliefConfig, kind: ReliefKind, reach: number): Relief {
+export function createRelief(seed: number, cfg: ReliefConfig, landforms: LandformConfig, traits: ReliefTraits, reach: number): Relief {
+  const kind = traits.relief;
   const rng = createRng(seed, 'world').fork('relief');
   const broad = createNoise(rng.fork('broad'));
   const fine = createNoise(rng.fork('fine'));
@@ -47,6 +74,8 @@ export function createRelief(seed: number, cfg: ReliefConfig, kind: ReliefKind, 
   const { ease } = cfg.highland;
   // Length of the flank, from its foot to the edge of the flat top.
   const flank = highland ? highland.radius - highland.plateau : 0;
+  const massif = placeMassif(seed, cfg, landforms, traits);
+  const cone = cfg.massif;
 
   return (x, z) => {
     const mixed =
@@ -62,8 +91,45 @@ export function createRelief(seed: number, cfg: ReliefConfig, kind: ReliefKind, 
       const up = highland.radius - Math.sqrt(dx * dx + dz * dz);
       height += flankSlope * climbed(up, flank, ease);
     }
+    if (massif) {
+      const dx = x - massif.x;
+      const dz = z - massif.z;
+      const fromSummit = Math.sqrt(dx * dx + dz * dz);
+      if (fromSummit < massif.reach) height += cone.slope * risen(massif.reach - Math.max(fromSummit, massif.shoulder), cone.ease);
+      height += massif.top.height(x, z);
+    }
     return height;
   };
+}
+
+/**
+ * A mountain seed's massif, or null for other kinds of relief. Its direction
+ * from the centre comes from the seed, its distance and shoulder from the
+ * seed's route, its top from the seed's landform.
+ */
+export function placeMassif(seed: number, cfg: ReliefConfig, landforms: LandformConfig, traits: ReliefTraits): Massif | null {
+  if (traits.relief !== 'mountain' || !traits.route) return null;
+  const rules = cfg.massif;
+  const { distance, shoulder, top: tops } = rules.routes[traits.route];
+  const rng = createRng(seed, 'world').fork('relief').fork('massif');
+  const angle = rng.fork('direction').range(0, TAU);
+  const x = dcos(angle) * distance;
+  const z = dsin(angle) * distance;
+  const reach = distance + rules.beyond;
+  const cone = rules.slope * risen(reach - shoulder, rules.ease);
+  const [low, high] = tops[traits.landform];
+  const topHeight = rng.fork('top-height').range(low, high);
+  // A range on top is kept short, so the lap can get round it.
+  const shapes: LandformConfig = { ...landforms, range: { ...landforms.range, length: Math.min(landforms.range.length, rules.rangeLength) } };
+  const top = buildLandform(rng.fork('top'), traits.landform, { x, z, height: topHeight }, shapes);
+  return { x, z, summit: cone + topHeight, cone, shoulder, reach, top };
+}
+
+/** Height gained `up` metres up a slope that rises one metre per metre, easing in over its first `ease` metres. */
+function risen(up: number, ease: number): number {
+  if (up <= 0) return 0;
+  if (up < ease) return (up * up) / (2 * ease);
+  return up - ease / 2;
 }
 
 /**

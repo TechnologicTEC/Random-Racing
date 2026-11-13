@@ -126,8 +126,13 @@ describe('the road sits cleanly in the island on real seeds', () => {
     }
   });
 
-  it('keeps every bank beside the road gentle enough to stand', () => {
-    for (const world of worlds) expect(world.report.steepestBank.value, `seed ${world.seed}`).toBeLessThan(0.9);
+  it('keeps every bank beside the road gentle enough to stand, or on a mountain seed no steeper than a rock cutting', () => {
+    for (const world of worlds) {
+      // A road across a mountainside 50 to 90% steep is cut into it; the blend beside it is at most 25 m wide,
+      // so there the cutting can be as steep as about 65 degrees.
+      const limit = world.track.character.relief === 'mountain' ? 2.2 : 0.9;
+      expect(world.report.steepestBank.value, `seed ${world.seed}`).toBeLessThan(limit);
+    }
   });
 
   it('keeps the surf at least 10 m from the road, and brings it that close somewhere beside low road', () => {

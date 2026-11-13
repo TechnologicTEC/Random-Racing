@@ -2,8 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function openLab(page: Page, query: string): Promise<void> {
   await page.goto(`/${query}`);
-  // A contact sheet generates 20 tracks before it is ready, which can take a while on a busy machine.
-  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 20_000 });
+  // A contact sheet generates 20 worlds before it is ready, which can take a while on a busy machine: mountain and
+  // hilly seeds try each layout at several turns. On its own it takes about 6 s in Chromium and 12 s in Firefox.
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
 }
 
 /** Counts canvas pixels that are clearly brighter than the dark background. */

@@ -7,7 +7,7 @@ import type { Character } from '../types';
 import { buildCover } from './cover';
 import { worldX, worldZ } from './heightfield';
 import { buildIsland, type Island } from './island';
-import { placeHighland } from './relief';
+import { placeMassif } from './relief';
 
 const scenery = config.world.scenery;
 const rules = scenery.mountains;
@@ -41,6 +41,8 @@ const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const mountainSeeds = SEEDS.map((seed) => build(seed, { relief: 'mountain' }));
 const rollingSeeds = SEEDS.map((seed) => build(seed, { relief: 'rolling', mountains: 3 }));
 const all = [...mountainSeeds, ...rollingSeeds];
+/** A mountain seed's main mountain is its massif, which the road climbs: it has rules of its own. */
+const isMassif = (built: Built, k: number): boolean => k === 0 && built.character.relief === 'mountain';
 
 describe('placing mountains', () => {
   it('never gives an island more mountains than its character asks for, and mountain seeds at least one', () => {
@@ -57,8 +59,10 @@ describe('placing mountains', () => {
   });
 
   it('makes the main mountain 200 to 250 m high and the others 80 to 200 m', () => {
-    for (const { island, seed } of all) {
+    for (const built of all) {
+      const { island, seed } = built;
       island.mountains.forEach((mountain, k) => {
+        if (isMassif(built, k)) return;
         const [lowest, highest] = k === 0 ? rules.main : rules.others;
         expect(mountain.summit, `seed ${seed} mountain ${k}`).toBeGreaterThanOrEqual(lowest - 0.001);
         expect(mountain.summit, `seed ${seed} mountain ${k}`).toBeLessThanOrEqual(highest + 0.001);
@@ -76,10 +80,12 @@ describe('placing mountains', () => {
     }
   });
 
-  it('keeps every mountain at least 60 m from the road', () => {
+  it('keeps every mountain at least 60 m from the road, apart from a massif the road climbs', () => {
     expect(rules.clearance).toBe(60);
-    for (const { island, seed } of all) {
-      for (const mountain of island.mountains) {
+    for (const built of all) {
+      const { island, seed } = built;
+      for (const [k, mountain] of island.mountains.entries()) {
+        if (isMassif(built, k)) continue;
         let closest = Infinity;
         for (let c = 0; c < island.edge.length; c++) {
           if (cellDistance(island, c, mountain.x, mountain.z) <= mountain.radius) closest = Math.min(closest, island.edge[c]!);
@@ -89,18 +95,23 @@ describe('placing mountains', () => {
     }
   });
 
-  it('keeps their sides no steeper than about 110%', () => {
+  it('keeps their sides no steeper than about 110%, or a massif no steeper than its shape on its cone', () => {
     expect(rules.slope).toBeCloseTo(1.1, 9);
-    for (const { island, seed } of all) {
+    for (const built of all) {
+      const { island, seed, character, cfg } = built;
       const { size, cell, height } = island.natural;
-      for (const mountain of island.mountains) {
+      for (const [k, mountain] of island.mountains.entries()) {
+        const massif = isMassif(built, k);
+        const limit = massif ? cfg.world.scenery.landforms[character.landform].slope + cfg.world.relief.massif.slope : rules.slope;
         let steepest = 0;
         for (let c = 0; c < height.length - size - 1; c++) {
           if (cellDistance(island, c, mountain.x, mountain.z) > mountain.radius) continue;
+          // Beside the road the ground is cut and filled to meet it.
+          if (massif && island.edge[c]! < 30) continue;
           steepest = Math.max(steepest, Math.abs(height[c + 1]! - height[c]!) / cell, Math.abs(height[c + size]! - height[c]!) / cell);
         }
         // A little over the limit is allowed for the ridges on their sides.
-        expect(steepest, `seed ${seed}`).toBeLessThan(rules.slope + 0.35);
+        expect(steepest, `seed ${seed}`).toBeLessThan(limit + 0.35);
       }
     }
   });
@@ -139,16 +150,17 @@ describe('placing mountains', () => {
     }
   });
 
-  it('puts the main mountain of a mountain seed on top of the highland the track climbs towards', () => {
-    const reach = config.track.buildableRadius;
-    for (const { island, seed, cfg } of mountainSeeds) {
-      const highland = placeHighland(seed, cfg.world.relief, 'mountain', reach)!;
+  it('makes the massif the main mountain of a mountain seed, standing once at its summit', () => {
+    for (const { island, seed, cfg, character } of mountainSeeds) {
+      const massif = placeMassif(seed, cfg.world.relief, cfg.world.scenery.landforms, character)!;
       const main = island.mountains[0]!;
-      // In the highland's direction from the centre, and no nearer the centre than the edge of its flat top.
-      const along = (main.x * highland.x + main.z * highland.z) / Math.hypot(highland.x, highland.z);
-      expect(along, `seed ${seed}`).toBeGreaterThan(Math.hypot(highland.x, highland.z) - highland.plateau - 1);
-      const across = Math.abs(main.x * highland.z - main.z * highland.x) / Math.hypot(highland.x, highland.z);
-      expect(across, `seed ${seed}`).toBeLessThan(highland.plateau);
+      expect(main.x).toBe(massif.x);
+      expect(main.z).toBe(massif.z);
+      // Not built twice: the ground at the summit is the relief's, not the relief's plus another mountain.
+      const { size, cell, origin } = island.natural;
+      const c = Math.round((main.z - origin) / cell) * size + Math.round((main.x - origin) / cell);
+      expect(island.natural.height[c]!, `seed ${seed}`).toBeLessThan(massif.summit + cfg.world.relief.lowland + cfg.world.relief.kinds.mountain.hillHeight + 5);
+      expect(island.natural.height[c]!, `seed ${seed}`).toBeGreaterThan(massif.summit * 0.95);
     }
   });
 

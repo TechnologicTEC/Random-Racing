@@ -81,7 +81,10 @@ export type ViolationKind =
   | 'sections-too-close'
   | 'lap-too-short'
   | 'lap-too-long'
-  | 'out-of-bounds';
+  | 'out-of-bounds'
+  | 'cut-too-deep'
+  | 'fill-too-high'
+  | 'bank-too-steep';
 
 /** One reason a candidate layout was rejected, with where it happened. */
 export interface Violation {
@@ -89,9 +92,9 @@ export interface Violation {
   /** Where to mark the problem on the map, in metres. */
   x: number;
   z: number;
-  /** The measured value (a radius, gap, length or distance in metres). */
+  /** The measured value (a radius, gap, length, distance or depth in metres; a bank's slope as a fraction). */
   value: number;
-  /** The limit it broke, in metres. */
+  /** The limit it broke, in the same units. */
   limit: number;
 }
 
@@ -203,6 +206,11 @@ export interface Candidate {
   controlPoints: Corner[];
   /** How many tries the layout builder needed before it produced this layout. */
   buildAttempts: number;
+  /**
+   * How far the layout was turned about the centre of the track area, in degrees (0 to 360), to sit
+   * best on the ground. The control points and line are given already turned.
+   */
+  turn: number;
   line: CenterLine;
   /** The road's height along the line. */
   profile: RoadProfile;

@@ -185,6 +185,9 @@ function buildMountain(rng: Rng, x: number, z: number, shape: MountainShape): Mo
   const rock = placeNoise(rng.fork('rock'));
   const rockSize = base * shape.rockSize;
 
+  const reach = base * widest + ROUNDING;
+  /** True well beyond the foot, found without the outline's maths: there the height is 0. */
+  const beyond = (px: number, pz: number): boolean => (px - x) * (px - x) + (pz - z) * (pz - z) > reach * reach;
   const smoothParts = (px: number, pz: number): { g: number; dx: number; dz: number } => {
     const dx = px - x;
     const dz = pz - z;
@@ -193,8 +196,9 @@ function buildMountain(rng: Rng, x: number, z: number, shape: MountainShape): Mo
     const t = (shape.roundTop ? rounded(r) : r) / (base * outline(dx / r, dz / r).f);
     return { g: t >= 1 ? 0 : profile.at(t), dx, dz };
   };
-  const smooth = (px: number, pz: number): number => H * smoothParts(px, pz).g;
+  const smooth = (px: number, pz: number): number => (beyond(px, pz) ? 0 : H * smoothParts(px, pz).g);
   const at = (px: number, pz: number): number => {
+    if (beyond(px, pz)) return 0;
     const { g, dx, dz } = smoothParts(px, pz);
     if (g <= 0) return 0;
     const u = rock.u + dx / rockSize;
@@ -211,7 +215,7 @@ function buildMountain(rng: Rng, x: number, z: number, shape: MountainShape): Mo
     // Measured the same way as the height, so the foot ends exactly where the height reaches 0.
     return (shape.roundTop ? rounded(r) : r) - base * outline(dx / r, dz / r).f;
   };
-  return { x, z, height: H, at, smooth, outside, reach: base * widest + ROUNDING };
+  return { x, z, height: H, at, smooth, outside, reach };
 }
 
 // ---------- Lone peak ----------
