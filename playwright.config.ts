@@ -24,7 +24,8 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] }, grepInvert: /@budget/ },
     // Timings against the brief's budgets run on their own once everything else has finished: while four
     // browsers draw islands in software at once, every core is busy and a world takes three or four times as long.
+    // The two run one after the other too: side by side, Chromium's world took 3.2 to 4.3 s instead of 1.1 to 2.2 s.
     { name: 'chromium-budget', use: { ...devices['Desktop Chrome'] }, grep: /@budget/, dependencies: ['chromium', 'firefox'] },
-    { name: 'firefox-budget', use: { ...devices['Desktop Firefox'] }, grep: /@budget/, dependencies: ['chromium', 'firefox'] },
+    { name: 'firefox-budget', use: { ...devices['Desktop Firefox'] }, grep: /@budget/, dependencies: ['chromium-budget'] },
   ],
 });

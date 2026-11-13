@@ -12,6 +12,7 @@ export function hashTrack(result: TrackResult): string {
   hasher.text(result.name).text(result.style);
   const { character } = result;
   hasher.text(character.relief).text(character.coast).text(character.width).numbers([character.mountains]);
+  hasher.text(character.landform).text(character.route ?? 'none');
   for (const candidate of result.candidates) {
     hasher.numbers(candidate.line.x).numbers(candidate.line.z).numbers(candidate.line.curvature);
     hasher.numbers(candidate.profile.height);

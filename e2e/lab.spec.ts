@@ -89,13 +89,20 @@ test('shows a valid winner with a score and its breakdown', async ({ page }) => 
   await expect(page.getByTestId('score-bars')).toContainText('of climbing');
 });
 
-test('shows the character of the seed: relief, coast, mountains and road width', async ({ page }) => {
+test('shows the character of the seed: relief, coast, mountains, their shape and road width', async ({ page }) => {
   await openLab(page, '?seed=48213');
   const facts = page.getByTestId('facts');
   await expect(facts).toContainText('Relief');
   await expect(facts).toContainText('Coast');
   await expect(facts).toContainText('Mountains');
+  await expect(facts).toContainText('Mountain shape');
   await expect(facts).toContainText('Road width');
+});
+
+test('says whether a mountain seed climbs its mountain or circles it', async ({ page }) => {
+  // Seed 1 is a mountain seed.
+  await openLab(page, '?seed=1');
+  await expect(page.getByTestId('facts')).toContainText(/Climbs high onto its mountain|Circles its mountain/);
 });
 
 test('shows the road height along the lap as a chart with its facts', async ({ page }) => {

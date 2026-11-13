@@ -161,6 +161,19 @@ export type CoastKind = 'inland' | 'touches' | 'coastal';
 export type WidthKind = 'constant' | 'varied';
 
 /**
+ * The shape of an island's mountains: a ridged range of sharp peaks joined by
+ * ridges, rolling hill country of soft swells, or a lone peak.
+ */
+export type LandformKind = 'range' | 'hills' | 'peak';
+
+/**
+ * How a mountain seed's lap uses its main mountain: it climbs high onto its
+ * shoulder and back, or goes round it at about one height. A lap cannot do
+ * both, because going round a mountain follows its contour.
+ */
+export type RouteKind = 'climb' | 'circle';
+
+/**
  * What kind of island a seed makes. The traits are drawn independently of
  * each other and of the layout style, so they combine differently from seed to seed.
  */
@@ -170,6 +183,10 @@ export interface Character {
   /** How many mountains the island has, 0 to 4. */
   mountains: number;
   width: WidthKind;
+  /** The shape every mountain on the island has. */
+  landform: LandformKind;
+  /** How the lap uses the main mountain. Only mountain seeds have one; null for the others. */
+  route: RouteKind | null;
 }
 
 /** One corner of a layout skeleton, with the radius it is rounded to. */

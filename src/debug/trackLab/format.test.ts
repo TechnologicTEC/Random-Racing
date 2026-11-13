@@ -6,21 +6,32 @@ import { describeCharacter, describeFit, describeWidth, describeProfile, describ
 
 describe('describeCharacter', () => {
   it('lists the traits of a seed in plain words', () => {
-    expect(describeCharacter({ relief: 'mountain', coast: 'touches', mountains: 3, width: 'varied' })).toEqual([
+    expect(describeCharacter({ relief: 'mountain', coast: 'touches', mountains: 3, width: 'varied', landform: 'range', route: 'climb' })).toEqual([
       ['Relief', 'Mountain'],
+      ['Route', 'Climbs high onto its mountain'],
       ['Coast', 'Touches the sea in places'],
       ['Mountains', '3'],
+      ['Mountain shape', 'Ridged range'],
       ['Road width', 'Varied'],
     ]);
-    expect(describeCharacter({ relief: 'flat', coast: 'inland', mountains: 0, width: 'constant' })).toEqual([
+    expect(describeCharacter({ relief: 'flat', coast: 'inland', mountains: 0, width: 'constant', landform: 'hills', route: null })).toEqual([
       ['Relief', 'Flat'],
       ['Coast', 'Inland: never beside the sea'],
       ['Mountains', 'None'],
+      ['Mountain shape', 'Rolling hill country'],
       ['Road width', 'Constant'],
     ]);
-    expect(describeCharacter({ relief: 'hilly', coast: 'coastal', mountains: 1, width: 'constant' })[1]).toEqual([
+    expect(describeCharacter({ relief: 'hilly', coast: 'coastal', mountains: 1, width: 'constant', landform: 'peak', route: null })[1]).toEqual([
       'Coast',
       'Coastal: mostly beside the sea',
+    ]);
+    expect(describeCharacter({ relief: 'mountain', coast: 'inland', mountains: 1, width: 'constant', landform: 'peak', route: 'circle' })).toContainEqual([
+      'Route',
+      'Circles its mountain',
+    ]);
+    expect(describeCharacter({ relief: 'hilly', coast: 'inland', mountains: 1, width: 'constant', landform: 'peak', route: null })).toContainEqual([
+      'Mountain shape',
+      'Lone peak',
     ]);
   });
 });
@@ -38,13 +49,17 @@ describe('describeWidth', () => {
 
 describe('shortCharacter', () => {
   it('fits the traits into a few words for a contact sheet caption', () => {
-    expect(shortCharacter({ relief: 'mountain', coast: 'touches', mountains: 3, width: 'varied' })).toBe(
-      'mountain · touches · 3 mountains · varied width',
+    expect(shortCharacter({ relief: 'mountain', coast: 'touches', mountains: 3, width: 'varied', landform: 'range', route: 'climb' })).toBe(
+      'mountain, climbing · touches · 3 mountains, ridged range · varied width',
     );
-    expect(shortCharacter({ relief: 'flat', coast: 'inland', mountains: 1, width: 'constant' })).toBe(
-      'flat · inland · 1 mountain',
+    expect(shortCharacter({ relief: 'mountain', coast: 'inland', mountains: 1, width: 'constant', landform: 'hills', route: 'circle' })).toBe(
+      'mountain, circling · inland · 1 mountain, hill country',
     );
-    expect(shortCharacter({ relief: 'rolling', coast: 'coastal', mountains: 0, width: 'constant' })).toBe('rolling · coastal');
+    expect(shortCharacter({ relief: 'flat', coast: 'inland', mountains: 1, width: 'constant', landform: 'peak', route: null })).toBe(
+      'flat · inland · 1 mountain, lone peak',
+    );
+    // With no mountains the shape has nothing to describe.
+    expect(shortCharacter({ relief: 'rolling', coast: 'coastal', mountains: 0, width: 'constant', landform: 'range', route: null })).toBe('rolling · coastal');
   });
 });
 
@@ -183,6 +198,14 @@ describe('summariseTracks', () => {
     expect(Number(reliefs[1]) + Number(reliefs[2]) + Number(reliefs[3]) + Number(reliefs[4])).toBe(6);
     const coasts = /(\d+) inland, (\d+) touching the sea, (\d+) coastal/.exec(summary)!;
     expect(Number(coasts[1]) + Number(coasts[2]) + Number(coasts[3])).toBe(6);
+  });
+
+  it('counts the mountain shapes, and how the mountain seeds use their mountain', () => {
+    const shapes = /(\d+) ridged range, (\d+) hill country, (\d+) lone peak/.exec(summary)!;
+    expect(Number(shapes[1]) + Number(shapes[2]) + Number(shapes[3])).toBe(6);
+    const mountainSeeds = results.filter((r) => r.character.relief === 'mountain');
+    const climbing = mountainSeeds.filter((r) => r.character.route === 'climb').length;
+    expect(summary).toContain(`${mountainSeeds.length} mountain (${climbing} climbing, ${mountainSeeds.length - climbing} circling)`);
   });
 
   it('mentions fallbacks only when there are some', () => {

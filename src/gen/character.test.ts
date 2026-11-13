@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config, type CharacterConfig } from '../config';
+import { createHasher } from '../core/hash';
 import { withCharacter } from '../testing/characters';
 import { pickCharacter } from './character';
 import { hashTrack } from './track/hash';
@@ -24,7 +25,40 @@ describe('pickCharacter', () => {
   it('is plain data', () => {
     const character = pickCharacter(7, cfg);
     expect(structuredClone(character)).toEqual(character);
-    expect(Object.keys(character).sort()).toEqual(['coast', 'mountains', 'relief', 'width']);
+    expect(Object.keys(character).sort()).toEqual(['coast', 'landform', 'mountains', 'relief', 'route', 'width']);
+  });
+
+  it('leaves the traits drawn before landform and route exactly as they were on seeds 1 to 2000', () => {
+    // Fingerprint of relief, coast, width and mountain count, taken before landform and route were added.
+    const hasher = createHasher();
+    for (const c of all) hasher.text(c.relief).text(c.coast).text(c.width).numbers([c.mountains]);
+    expect(hasher.digest()).toBe('79af4bd2');
+  });
+
+  it('picks each mountain shape at about its weight over 2000 seeds', () => {
+    for (const landform of ['range', 'hills', 'peak'] as const) {
+      expect(Math.abs(share(all, (c) => c.landform === landform) - cfg.landform[landform]), landform).toBeLessThan(0.04);
+    }
+  });
+
+  it('gives mountain seeds a route, climbing or circling at about their weights, and no other seed one', () => {
+    const mountains = all.filter((c) => c.relief === 'mountain');
+    expect(mountains.length).toBeGreaterThan(300);
+    for (const route of ['climb', 'circle'] as const) {
+      expect(Math.abs(share(mountains, (c) => c.route === route) - cfg.route[route]), route).toBeLessThan(0.06);
+    }
+    for (const character of all) {
+      if (character.relief !== 'mountain') expect(character.route).toBeNull();
+    }
+  });
+
+  it('draws the mountain shape independently of the relief', () => {
+    for (const relief of ['flat', 'rolling', 'hilly', 'mountain'] as const) {
+      const some = all.filter((c) => c.relief === relief);
+      for (const landform of ['range', 'hills', 'peak'] as const) {
+        expect(Math.abs(share(some, (c) => c.landform === landform) - cfg.landform[landform]), `${landform} when ${relief}`).toBeLessThan(0.08);
+      }
+    }
   });
 
   it('gives different seeds different characters', () => {
@@ -90,12 +124,19 @@ describe('pickCharacter', () => {
 
   it('keeps one trait the same when the weights of another change', () => {
     const moreCoast: CharacterConfig = { ...cfg, coast: { inland: 0, touches: 0, coastal: 1 } };
+    const onlyRanges: CharacterConfig = { ...cfg, landform: { range: 1, hills: 0, peak: 0 }, route: { climb: 0, circle: 1 } };
     for (const seed of seeds.slice(0, 200)) {
       const before = pickCharacter(seed, cfg);
       const after = pickCharacter(seed, moreCoast);
       expect(after.relief).toBe(before.relief);
       expect(after.width).toBe(before.width);
       expect(after.mountains).toBe(before.mountains);
+      expect(after.landform).toBe(before.landform);
+      expect(after.route).toBe(before.route);
+      const shaped = pickCharacter(seed, onlyRanges);
+      expect(shaped.landform).toBe('range');
+      expect(shaped.route).toBe(shaped.relief === 'mountain' ? 'circle' : null);
+      expect({ ...shaped, landform: before.landform, route: before.route }).toEqual(before);
     }
   });
 });
@@ -122,5 +163,9 @@ describe('the character of a generated track', () => {
     expect(hashTrack({ ...result, character: other })).not.toBe(hashTrack(result));
     const coast = result.character.coast === 'inland' ? 'coastal' : 'inland';
     expect(hashTrack({ ...result, character: { ...result.character, coast } })).not.toBe(hashTrack(result));
+    const landform = result.character.landform === 'range' ? 'hills' : 'range';
+    expect(hashTrack({ ...result, character: { ...result.character, landform } })).not.toBe(hashTrack(result));
+    const climbing = hashTrack({ ...result, character: { ...result.character, route: 'climb' } });
+    expect(hashTrack({ ...result, character: { ...result.character, route: 'circle' } })).not.toBe(climbing);
   });
 });

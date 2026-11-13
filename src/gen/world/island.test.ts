@@ -12,7 +12,7 @@ const HALF_ROAD = config.track.roadWidth / 2;
 const coast = config.world.coast;
 
 /** The kind of island these tests were written for. Other kinds are covered as the rework reaches them. */
-const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 0, width: 'constant' };
+const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 0, width: 'constant', landform: 'peak', route: null };
 /** The config with no hinterland, so these tests see only the coast beside the road. The hinterland has its own tests. */
 const nearCoast = (base: GenConfig): GenConfig => ({ ...base, world: { ...base.world, hinterland: { ...base.world.hinterland, reach: [0, 0] } } });
 

@@ -3,7 +3,7 @@
  * test can look at many seeds of one kind of island.
  */
 import type { CharacterConfig, GenConfig } from '../config';
-import type { Character, CoastKind, ReliefKind, WidthKind } from '../gen/types';
+import type { Character, CoastKind, LandformKind, ReliefKind, RouteKind, WidthKind } from '../gen/types';
 
 /** Weights that always pick `chosen` out of `values`. */
 function only<T extends string>(values: readonly T[], chosen: T): Record<T, number> {
@@ -13,6 +13,8 @@ function only<T extends string>(values: readonly T[], chosen: T): Record<T, numb
 const RELIEFS: readonly ReliefKind[] = ['flat', 'rolling', 'hilly', 'mountain'];
 const COASTS: readonly CoastKind[] = ['inland', 'touches', 'coastal'];
 const WIDTHS: readonly WidthKind[] = ['constant', 'varied'];
+const LANDFORMS: readonly LandformKind[] = ['range', 'hills', 'peak'];
+const ROUTES: readonly RouteKind[] = ['climb', 'circle'];
 
 /** The config with the given traits forced for every seed. Traits left out are still drawn from the seed. */
 export function withCharacter<C extends GenConfig>(base: C, traits: Partial<Character>): C {
@@ -20,6 +22,9 @@ export function withCharacter<C extends GenConfig>(base: C, traits: Partial<Char
   if (traits.relief) character.relief = only(RELIEFS, traits.relief);
   if (traits.coast) character.coast = only(COASTS, traits.coast);
   if (traits.width) character.width = only(WIDTHS, traits.width);
+  if (traits.landform) character.landform = only(LANDFORMS, traits.landform);
+  // A route only shows on mountain seeds; forcing one leaves the relief as it is.
+  if (traits.route) character.route = only(ROUTES, traits.route);
   if (traits.mountains !== undefined) {
     const count = traits.mountains;
     character.mountains = { flat: [count, count], rolling: [count, count], hilly: [count, count], mountain: [count, count] };

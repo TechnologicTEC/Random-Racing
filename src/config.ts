@@ -6,7 +6,7 @@
  * an argument, which keeps generation pure and easy to test.
  */
 
-import type { CoastKind, LayoutStyle, ReliefKind, WidthKind } from './gen/types';
+import type { CoastKind, LandformKind, LayoutStyle, ReliefKind, RouteKind, WidthKind } from './gen/types';
 
 export { GENERATOR_VERSION } from './gen/version';
 
@@ -544,6 +544,10 @@ export interface CharacterConfig {
   width: Record<WidthKind, number>;
   /** How many mountains an island gets, fewest and most, by its relief. */
   mountains: Record<ReliefKind, Range>;
+  /** How often each mountain shape is picked. */
+  landform: Record<LandformKind, number>;
+  /** How often a mountain seed climbs its mountain or circles it. Other seeds have no route. */
+  route: Record<RouteKind, number>;
 }
 
 export interface WorldConfig {
@@ -770,6 +774,8 @@ export const config: GameConfig = {
       coast: { inland: 0.25, touches: 0.45, coastal: 0.3 },
       width: { constant: 0.35, varied: 0.65 },
       mountains: { flat: [0, 1], rolling: [0, 4], hilly: [0, 4], mountain: [1, 4] },
+      landform: { range: 0.4, hills: 0.35, peak: 0.25 },
+      route: { climb: 0.5, circle: 0.5 },
     },
     relief: {
       lowland: 3,

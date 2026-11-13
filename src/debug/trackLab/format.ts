@@ -1,4 +1,4 @@
-import type { Character, FitReport, ProfileStats, ScorePart, TrackResult, Violation } from '../../gen/types';
+import type { Character, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, TrackResult, Violation } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -65,16 +65,38 @@ const COAST_WORDS: Record<Character['coast'], string> = {
   coastal: 'Coastal: mostly beside the sea',
 };
 
+const LANDFORM_WORDS: Record<LandformKind, string> = {
+  range: 'Ridged range',
+  hills: 'Rolling hill country',
+  peak: 'Lone peak',
+};
+
+const LANDFORM_SHORT: Record<LandformKind, string> = {
+  range: 'ridged range',
+  hills: 'hill country',
+  peak: 'lone peak',
+};
+
+const ROUTE_WORDS: Record<RouteKind, string> = {
+  climb: 'Climbs high onto its mountain',
+  circle: 'Circles its mountain',
+};
+
+const ROUTE_SHORT: Record<RouteKind, string> = { climb: 'climbing', circle: 'circling' };
+
 const capital = (word: string): string => word[0]!.toUpperCase() + word.slice(1);
 
 /** The kind of island a seed makes, as label and value pairs for the lab's track panel. */
 export function describeCharacter(character: Character): Array<[label: string, value: string]> {
-  return [
-    ['Relief', capital(character.relief)],
+  const facts: Array<[string, string]> = [['Relief', capital(character.relief)]];
+  if (character.route) facts.push(['Route', ROUTE_WORDS[character.route]]);
+  facts.push(
     ['Coast', COAST_WORDS[character.coast]],
     ['Mountains', character.mountains === 0 ? 'None' : String(character.mountains)],
+    ['Mountain shape', LANDFORM_WORDS[character.landform]],
     ['Road width', capital(character.width)],
-  ];
+  );
+  return facts;
 }
 
 /**
@@ -98,8 +120,8 @@ export function describeWidth(width: ArrayLike<number>): string {
 
 /** The kind of island in a few words, for a contact sheet caption. */
 export function shortCharacter(character: Character): string {
-  const words: string[] = [character.relief, character.coast];
-  if (character.mountains > 0) words.push(plural(character.mountains, 'mountain'));
+  const words: string[] = [character.route ? `${character.relief}, ${ROUTE_SHORT[character.route]}` : character.relief, character.coast];
+  if (character.mountains > 0) words.push(`${plural(character.mountains, 'mountain')}, ${LANDFORM_SHORT[character.landform]}`);
   if (character.width === 'varied') words.push('varied width');
   return words.join(' · ');
 }
@@ -160,11 +182,14 @@ export function summariseTracks(results: readonly TrackResult[]): string {
 
   const reliefCount = (relief: Character['relief']): number => results.filter((result) => result.character.relief === relief).length;
   const coastCount = (coast: Character['coast']): number => results.filter((result) => result.character.coast === coast).length;
+  const shapeCount = (landform: LandformKind): number => results.filter((result) => result.character.landform === landform).length;
+  const routeCount = (route: RouteKind): number => results.filter((result) => result.character.route === route).length;
 
   const parts = [
     `${styleCount('folded')} folded, ${styleCount('stretched')} stretched, ${styleCount('round')} round`,
-    `${reliefCount('flat')} flat, ${reliefCount('rolling')} rolling, ${reliefCount('hilly')} hilly, ${reliefCount('mountain')} mountain`,
+    `${reliefCount('flat')} flat, ${reliefCount('rolling')} rolling, ${reliefCount('hilly')} hilly, ${reliefCount('mountain')} mountain (${routeCount('climb')} climbing, ${routeCount('circle')} circling)`,
     `${coastCount('inland')} inland, ${coastCount('touches')} touching the sea, ${coastCount('coastal')} coastal`,
+    `${shapeCount('range')} ridged range, ${shapeCount('hills')} hill country, ${shapeCount('peak')} lone peak`,
     `laps ${Math.min(...laps)} to ${Math.max(...laps)} m`,
     `scores ${Math.min(...scores)} to ${Math.max(...scores)}`,
     `${hairpins} of ${results.length} with a hairpin`,
