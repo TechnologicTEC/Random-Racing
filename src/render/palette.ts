@@ -45,6 +45,33 @@ export const ROAD = {
 export const SEA: Rgb = [0.1, 0.42, 0.56];
 export const SKY: Rgb = [0.62, 0.78, 0.9];
 
+/**
+ * The colours of the sky and its light, from the island demo. Each comes as a
+ * day colour and the colour it turns towards as the sun nears the horizon (the
+ * "night" end is only ever partly reached: the sun never sets in the game).
+ * The day colours of the lights are the 3D page's plain daylight from before the sky.
+ */
+export const SKY_COLOURS = {
+  zenithDay: [0.22, 0.47, 0.84] as Rgb,
+  zenithNight: [0.01, 0.018, 0.05] as Rgb,
+  horizonDay: [0.66, 0.81, 0.93] as Rgb,
+  horizonNight: [0.04, 0.06, 0.12] as Rgb,
+  /** The warm glow round a low sun. */
+  glow: [1.0, 0.45, 0.18] as Rgb,
+  /** The sun's light, low and high. */
+  sunLow: [1.0, 0.55, 0.3] as Rgb,
+  sunHigh: [1.0, 0.957, 0.878] as Rgb,
+  /** The sun's disc in the sky, low and high. */
+  discLow: [1.0, 0.6, 0.32] as Rgb,
+  discHigh: [1.0, 0.97, 0.9] as Rgb,
+  /** Light from the sky above, and bounced up from the ground. */
+  skyDay: [0.812, 0.89, 0.961] as Rgb,
+  skyNight: [0.17, 0.21, 0.36] as Rgb,
+  skySunset: [0.85, 0.58, 0.48] as Rgb,
+  groundDay: [0.42, 0.373, 0.29] as Rgb,
+  groundNight: [0.04, 0.04, 0.06] as Rgb,
+};
+
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 const ramp = (from: number, to: number, value: number): number => {
