@@ -27,7 +27,7 @@ const at = (field: HeightField, x: number, z: number): number => Math.round((z -
 describe('buildCover', () => {
   it('makes one value from 0 to 255 per cell for each kind of cover', () => {
     const { ground, cover } = coverFor(() => 8);
-    for (const map of [cover.grass, cover.sand, cover.rock, cover.variation]) {
+    for (const map of [cover.grass, cover.sand, cover.rock, cover.snow, cover.variation]) {
       expect(map).toBeInstanceOf(Uint8Array);
       expect(map).toHaveLength(ground.size * ground.size);
     }
@@ -39,6 +39,7 @@ describe('buildCover', () => {
     expect(cover.grass[at(ground, 180, 180)]).toBeGreaterThan(230);
     expect(cover.sand[at(ground, 0, 0)]).toBe(0);
     expect(cover.rock[at(ground, 0, 0)]).toBe(0);
+    expect(cover.snow[at(ground, 0, 0)]).toBe(0);
   });
 
   it('grows no grass at all on the road or its verges', () => {

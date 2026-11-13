@@ -12,7 +12,7 @@ function world(extent: number, cell: number, heightAt: (x: number, z: number) =>
   }
   const cells = ground.size * ground.size;
   const map = (value = 0): Uint8Array => new Uint8Array(cells).fill(value);
-  const full: Cover = { grass: map(cover.grass), sand: map(cover.sand), rock: map(cover.rock), variation: map(cover.variation ?? 128) };
+  const full: Cover = { grass: map(cover.grass), sand: map(cover.sand), rock: map(cover.rock), snow: map(cover.snow), variation: map(cover.variation ?? 128) };
   return { ground, cover: full };
 }
 
@@ -117,8 +117,13 @@ describe('buildTerrainChunks', () => {
 });
 
 describe('terrainColour', () => {
-  const colour = (height: number, cover: { grass?: number; sand?: number; rock?: number; variation?: number }) =>
-    terrainColour(height, cover.grass ?? 0, cover.sand ?? 0, cover.rock ?? 0, cover.variation ?? 0.5);
+  const colour = (height: number, cover: { grass?: number; sand?: number; rock?: number; snow?: number; variation?: number }) =>
+    terrainColour(height, cover.grass ?? 0, cover.sand ?? 0, cover.rock ?? 0, cover.snow ?? 0, cover.variation ?? 0.5);
+
+  it('is near white under snow, even over rock', () => {
+    const [r, g, b] = colour(220, { rock: 1, snow: 1 });
+    expect(Math.min(r, g, b)).toBeGreaterThan(0.85);
+  });
 
   it('is green for grass, sandy for sand and grey for rock', () => {
     const [gr, gg, gb] = colour(8, { grass: 1 });

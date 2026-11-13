@@ -60,7 +60,7 @@ export function buildTerrainChunks(ground: HeightField, cover: Cover, options: C
           positions[v] = origin + (startX + dx) * cell;
           positions[v + 1] = h;
           positions[v + 2] = origin + (startZ + dz) * cell;
-          const [r, g, b] = terrainColour(h, cover.grass[c]! / 255, cover.sand[c]! / 255, cover.rock[c]! / 255, cover.variation[c]! / 255);
+          const [r, g, b] = terrainColour(h, cover.grass[c]! / 255, cover.sand[c]! / 255, cover.rock[c]! / 255, cover.snow[c]! / 255, cover.variation[c]! / 255);
           colors[v] = toLinear(r);
           colors[v + 1] = toLinear(g);
           colors[v + 2] = toLinear(b);

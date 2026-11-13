@@ -218,6 +218,8 @@ export interface Cover {
   grass: Uint8Array;
   sand: Uint8Array;
   rock: Uint8Array;
+  /** Snow on the high ground. It lies over everything else. */
+  snow: Uint8Array;
   /** Patches of lusher (low) and drier (high) ground, for varying colours. */
   variation: Uint8Array;
 }

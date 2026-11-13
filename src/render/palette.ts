@@ -19,6 +19,7 @@ export const TERRAIN = {
   /** Rock runs between these two with the variation map. */
   rockLight: [0.52, 0.49, 0.46] as Rgb,
   rockDark: [0.38, 0.36, 0.35] as Rgb,
+  snow: [0.95, 0.96, 0.98] as Rgb,
 };
 
 /** The road and its paint. */
@@ -55,10 +56,10 @@ const ramp = (from: number, to: number, value: number): number => {
  * The colour of a point on the ground, from its height and what covers it.
  *
  * @param height metres above the sea (negative under water)
- * @param grass, sand, rock how much of each covers the point, 0 to 1
+ * @param grass, sand, rock, snow how much of each covers the point, 0 to 1. Snow lies over the rest
  * @param variation 0 for lush ground, 1 for dry
  */
-export function terrainColour(height: number, grass: number, sand: number, rock: number, variation: number): Rgb {
+export function terrainColour(height: number, grass: number, sand: number, rock: number, snow: number, variation: number): Rgb {
   let colour = mix(TERRAIN.earth, mix(TERRAIN.grassLush, TERRAIN.grassDry, variation), clamp01(grass));
 
   let sandColour = TERRAIN.sand;
@@ -69,6 +70,7 @@ export function terrainColour(height: number, grass: number, sand: number, rock:
   }
   colour = mix(colour, sandColour, clamp01(sand));
   colour = mix(colour, mix(TERRAIN.rockLight, TERRAIN.rockDark, variation), clamp01(rock));
+  colour = mix(colour, TERRAIN.snow, clamp01(snow));
   return colour;
 }
 

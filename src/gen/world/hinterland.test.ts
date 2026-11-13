@@ -74,7 +74,8 @@ interface Built {
 }
 
 function build(seed: number, kind: CoastKind): Built {
-  const cfg = withCharacter(coarse, { coast: kind });
+  // No mountains: these tests are about the hinterland alone. A mountain grows the island too; see mountains.test.ts.
+  const cfg = withCharacter(coarse, { coast: kind, mountains: 0 });
   const track = generateTrack(seed, cfg);
   const winner = track.candidates[track.winnerIndex]!;
   const width = solveWidth(seed, winner.line, winner.sections, track.character.width, cfg);

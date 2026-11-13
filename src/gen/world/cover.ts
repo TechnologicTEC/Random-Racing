@@ -7,7 +7,8 @@ import { worldX, worldZ } from './heightfield';
 
 /**
  * Decides what covers every cell of the island: sand on the beach and sea
- * bed, rock where the ground is steep or high, grass everywhere else. Grass
+ * bed, rock where the ground is steep or high, snow on the highest ground,
+ * grass everywhere else. Grass
  * never grows on the road or its verges.
  *
  * @param edge distance from every cell to the edge of the road, in metres (see edgeDistance)
@@ -32,6 +33,7 @@ export function buildCover(
     grass: new Uint8Array(size * size),
     sand: new Uint8Array(size * size),
     rock: new Uint8Array(size * size),
+    snow: new Uint8Array(size * size),
     variation: new Uint8Array(size * size),
   };
 
@@ -62,15 +64,18 @@ export function buildCover(
               smoothstep(rules.rockHeight[0], rules.rockHeight[1], here + variation * 6),
               smoothstep(rules.rockSlope[0], rules.rockSlope[1], slope),
             );
+      // The snow line wanders a little with the variation, like the edge of the sand.
+      const snow = smoothstep(rules.snowHeight[0], rules.snowHeight[1], here + (variation - 0.5) * 6);
       let grass = 0;
       if (corridor[c] !== 1 && here > 0) {
         const roadside = smoothstep(verge, verge + rules.roadsideFade, edge[c]!);
-        grass = (1 - sand) * (1 - rock) * roadside;
+        grass = (1 - sand) * (1 - rock) * (1 - snow) * roadside;
       }
 
       cover.grass[c] = Math.round(grass * 255);
       cover.sand[c] = Math.round(sand * 255);
       cover.rock[c] = Math.round(rock * 255);
+      cover.snow[c] = Math.round(snow * 255);
       cover.variation[c] = Math.round(variation * 255);
     }
   }

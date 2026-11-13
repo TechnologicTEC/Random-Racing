@@ -70,7 +70,7 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers([world.natural.size, world.natural.cell, world.natural.origin]);
   hasher.numbers(world.natural.height);
   hasher.numbers(world.ground.height);
-  hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.variation);
+  hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.snow).numbers(world.cover.variation);
   hasher.numbers(world.road.cross).numbers(world.road.width);
   for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate]) {
     hasher.numbers(mesh.positions).numbers(mesh.indices).numbers(mesh.materials);

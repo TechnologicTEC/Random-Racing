@@ -470,21 +470,52 @@ export interface HinterlandConfig {
   ramp: number;
 }
 
-/** Ground that is not for driving on: small bumps everywhere, and one peak in the middle of the island. */
+/** Ground that is not for driving on: small bumps everywhere, foothills away from the road, and mountains. */
 export interface SceneryConfig {
   /** Small bumps: height either side of the rolling ground, and size, in metres. */
   bumpHeight: number;
   bumpScale: number;
   /** Bumps fade in over this distance from the road edge, in metres. */
   bumpFade: number;
-  /** Height of the summit of the island's one peak above the sea, in metres: lowest and highest. */
-  peakSummit: Range;
-  /** No part of the peak comes closer to the road edge than this, in metres. */
-  peakClearance: number;
-  /** The peak's foot is a circle of this radius, in metres: smallest worth building, and largest. */
-  peakRadius: Range;
-  /** Steepest the peak's sides may be, as a fraction (1.6 is about 58 degrees). A peak with very little room is built lower to keep to it. */
-  peakSlope: number;
+  mountains: MountainConfig;
+  foothills: FoothillConfig;
+}
+
+/**
+ * The island's mountains: as many as the seed's character asks for, where
+ * there is room. Heights in metres above the sea, distances in metres.
+ */
+export interface MountainConfig {
+  /** Summit of the main mountain: lowest and highest. */
+  main: Range;
+  /** Summits of the others. */
+  others: Range;
+  /** Steepest a mountain's sides may be, as a fraction (1.1 is about 48 degrees). Sets how wide its foot is. */
+  slope: number;
+  /** Share of that slope left for the ridges on its sides; its smooth shape uses the rest. */
+  ridgeShare: number;
+  /** The ridges are this share of the foot's radius across, so a big mountain has big ridges... */
+  ridgeSize: number;
+  /** ...and at most this share of its height deep, half way up its sides. */
+  ridgeDepth: number;
+  /** A mountain rises at least this far above the ground it stands on, or it is not built. */
+  minRise: number;
+  /** No part of a mountain's foot comes closer to the road edge than this. */
+  clearance: number;
+  /** Beyond its foot, the land a mountain stands on runs on at least this far before it meets the sea. */
+  skirt: number;
+}
+
+/** Mid-sized hills on the land away from the road, so infields and hinterland are not flat. In metres. */
+export interface FoothillConfig {
+  /** How tall the hills are: they vary from place to place between these. */
+  height: Range;
+  /** How big they are: metres per unit of noise. */
+  scale: number;
+  /** None within this distance of the road edge... */
+  clearance: number;
+  /** ...and they grow to full height over this distance beyond it. */
+  fade: number;
 }
 
 /** What covers the ground: sand, grass or bare rock. Heights in metres above the sea, slopes as fractions. */
@@ -495,6 +526,8 @@ export interface CoverConfig {
   rockHeight: Range;
   /** ...and between these slopes. */
   rockSlope: Range;
+  /** Snow covers the ground between these heights and above. */
+  snowHeight: Range;
   /** Grass returns over this distance beyond the verge, in metres. */
   roadsideFade: number;
   /** Size of the patches of lusher and drier ground: metres per unit of noise. */
@@ -788,15 +821,14 @@ export const config: GameConfig = {
       bumpHeight: 1.5,
       bumpScale: 45,
       bumpFade: 30,
-      peakSummit: [40, 70],
-      peakClearance: 60,
-      peakRadius: [30, 110],
-      peakSlope: 1.6,
+      mountains: { main: [200, 250], others: [80, 200], slope: 1.1, ridgeShare: 0.2, ridgeSize: 1, ridgeDepth: 0.25, minRise: 40, clearance: 60, skirt: 60 },
+      foothills: { height: [5, 25], scale: 150, clearance: 60, fade: 60 },
     },
     cover: {
       sandTop: [1.0, 2.6],
       rockHeight: [130, 160],
       rockSlope: [0.55, 0.85],
+      snowHeight: [180, 200],
       roadsideFade: 3,
       variationScale: 55,
     },

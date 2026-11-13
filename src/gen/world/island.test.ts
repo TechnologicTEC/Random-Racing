@@ -5,20 +5,19 @@ import { circleLine, stadiumLine, uniformWidth } from '../../testing/trackFixtur
 import { solveProfile } from '../road/profile';
 import { generateTrack } from '../track/pipeline';
 import type { CenterLine, Character, RoadProfile } from '../types';
-import { sampleField, sampleGrid } from './heightfield';
+import { sampleField } from './heightfield';
 import { buildIsland, carveCoast, coastProfile, shoreShape, type Island } from './island';
 
 const HALF_ROAD = config.track.roadWidth / 2;
 const coast = config.world.coast;
-const scenery = config.world.scenery;
 
 /** The kind of island these tests were written for. Other kinds are covered as the rework reaches them. */
-const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 1, width: 'constant' };
+const PLAIN: Character = { relief: 'rolling', coast: 'coastal', mountains: 0, width: 'constant' };
 /** The config with no hinterland, so these tests see only the coast beside the road. The hinterland has its own tests. */
 const nearCoast = (base: GenConfig): GenConfig => ({ ...base, world: { ...base.world, hinterland: { ...base.world.hinterland, reach: [0, 0] } } });
 
 /** Real seeds, all on rolling ground. */
-const rolling = nearCoast(withCharacter(config, { relief: 'rolling', width: 'constant' }));
+const rolling = nearCoast(withCharacter(config, { relief: 'rolling', width: 'constant', mountains: 0 }));
 
 /** A coarser grid keeps hand-made cases quick; real seeds below use the full grid. */
 const coarse: GenConfig = nearCoast({ ...config, world: { ...config.world, tile: { extent: 1400, cell: 4 } } });
@@ -28,10 +27,11 @@ function flatIsland(
   groundHeight: number,
   line: CenterLine = circleLine(200),
   roadWidth = config.track.roadWidth,
+  character: Character = PLAIN,
 ): { island: Island; line: CenterLine; profile: RoadProfile } {
   const relief = (): number => groundHeight;
   const profile = solveProfile(line, relief, config.road, config.track.roadWidth, config.road.maxGradient.rolling);
-  return { island: buildIsland(7, line, profile, uniformWidth(line, roadWidth), coarse, PLAIN, relief), line, profile };
+  return { island: buildIsland(7, line, profile, uniformWidth(line, roadWidth), coarse, character, relief), line, profile };
 }
 
 /** Calls back for every cell with its height and its distance from the road edge (negative on the road). */
@@ -227,50 +227,40 @@ describe('buildIsland around a high road', () => {
   });
 });
 
-describe('the peak', () => {
-  it('stands in the middle of a roomy infield, 40 to 70 m high', () => {
-    const { island } = flatIsland(10);
-    expect(island.peak).not.toBeNull();
-    const peak = island.peak!;
-    expect(Math.sqrt(peak.x * peak.x + peak.z * peak.z)).toBeLessThan(15);
-    expect(peak.summit).toBeGreaterThanOrEqual(scenery.peakSummit[0]);
-    expect(peak.summit).toBeLessThanOrEqual(scenery.peakSummit[1]);
-    expect(sampleField(island.natural, peak.x, peak.z, 0)).toBeCloseTo(peak.summit, 0);
+describe('mountains on a hand-made island', () => {
+  // The full-size tile: a 250 m mountain is about 700 m across and must stay 60 m clear of the road.
+  const roomy: GenConfig = nearCoast({ ...config, world: { ...config.world, tile: { extent: config.world.tile.extent, cell: 6 } } });
+  const mountainIsland = (line: CenterLine, count: number): Island => {
+    const relief = (): number => 10;
+    const profile = solveProfile(line, relief, config.road, config.track.roadWidth, config.road.maxGradient.rolling);
+    return buildIsland(7, line, profile, uniformWidth(line, config.track.roadWidth), roomy, { ...PLAIN, mountains: count }, relief);
+  };
+  const island = mountainIsland(circleLine(200), 2);
+  const mountains = config.world.scenery.mountains;
+
+  it('places the mountains asked for, the main one 200 to 250 m high', () => {
+    expect(island.mountains).toHaveLength(2);
+    expect(island.mountains[0]!.summit).toBeGreaterThanOrEqual(mountains.main[0]);
+    expect(island.mountains[0]!.summit).toBeLessThanOrEqual(mountains.main[1]);
+    expect(sampleField(island.natural, island.mountains[0]!.x, island.mountains[0]!.z, 0)).toBeGreaterThan(mountains.main[0] * 0.95);
   });
 
-  it('keeps every part of itself at least 60 m from the road', () => {
-    const { island } = flatIsland(10);
-    const peak = island.peak!;
-    // The road is a 200 m circle about the origin, so the peak's foot must end 60 m short of its inner edge.
-    expect(Math.sqrt(peak.x * peak.x + peak.z * peak.z) + peak.radius).toBeLessThanOrEqual(200 - HALF_ROAD - scenery.peakClearance + 0.001);
-    // Inside that 60 m the ground is just the flat relief and its small bumps.
-    eachCell(island, (height, edge, inside) => {
-      if (inside && edge < scenery.peakClearance) expect(height).toBeLessThan(10 + scenery.bumpHeight + 0.01);
-    });
-  });
-
-  it('is no steeper than its limit', () => {
-    const { island } = flatIsland(10);
-    const peak = island.peak!;
-    const { size, cell, height, origin } = island.natural;
-    let steepest = 0;
-    for (let iz = 0; iz < size - 1; iz++) {
-      for (let ix = 0; ix < size - 1; ix++) {
-        const x = origin + ix * cell - peak.x;
-        const z = origin + iz * cell - peak.z;
-        if (x * x + z * z > peak.radius * peak.radius) continue;
-        const c = iz * size + ix;
-        steepest = Math.max(steepest, Math.abs(height[c + 1]! - height[c]!) / cell, Math.abs(height[c + size]! - height[c]!) / cell);
-      }
+  it('keeps every part of them at least 60 m from the road', () => {
+    for (const mountain of island.mountains) {
+      // The road is a 200 m circle about the origin, so the foot must end 60 m short of the road on whichever side it is.
+      const fromCentre = Math.sqrt(mountain.x * mountain.x + mountain.z * mountain.z);
+      const gap = fromCentre > 200 ? fromCentre - mountain.radius - 200 - HALF_ROAD : 200 - HALF_ROAD - fromCentre - mountain.radius;
+      expect(gap).toBeGreaterThanOrEqual(mountains.clearance - 0.001);
     }
-    // A little over the limit is allowed for the bumps and the texture on its sides.
-    expect(steepest).toBeLessThan(scenery.peakSlope + 0.25);
   });
 
-  it('is left out when the infield has no room 60 m from the road', () => {
-    // Two straights 40 m apart: nowhere inside is more than 20 m from the road.
-    const { island } = flatIsland(10, stadiumLine(300, 20));
-    expect(island.peak).toBeNull();
+  it('leaves no mountain where there is no room: a road 40 m from itself has an infield too narrow', () => {
+    const narrow = mountainIsland(stadiumLine(300, 20), 1);
+    for (const mountain of narrow.mountains) {
+      // Any mountain it does get stands outside the loop.
+      const c = Math.round((mountain.z - narrow.natural.origin) / narrow.natural.cell) * narrow.natural.size + Math.round((mountain.x - narrow.natural.origin) / narrow.natural.cell);
+      expect(narrow.inside[c]).toBe(0);
+    }
   });
 });
 
@@ -411,18 +401,6 @@ describe('buildIsland on generated tracks', () => {
     expect(withBeach).toBeGreaterThanOrEqual(5);
   });
 
-  it('keeps any peak at least 60 m from the road and within its height range', () => {
-    for (const { island, seed } of worlds) {
-      const peak = island.peak;
-      if (!peak) continue;
-      expect(peak.summit, `seed ${seed}`).toBeGreaterThanOrEqual(scenery.peakSummit[0] - 0.001);
-      expect(peak.summit, `seed ${seed}`).toBeLessThanOrEqual(scenery.peakSummit[1]);
-      // The whole foot of the peak: its centre is this far from the road, less its radius.
-      const centre = sampleGrid(island.natural, island.near.distance, peak.x, peak.z, 0) - HALF_ROAD;
-      expect(centre - peak.radius, `seed ${seed}`).toBeGreaterThanOrEqual(scenery.peakClearance - 2);
-    }
-  });
-
   it('shelves the sea bed steadily away from the shore, with no deep holes close in', () => {
     for (const { island, seed } of worlds) {
       // The water is never nearer than the minimum margin, so the bed can be no deeper than a steady slope from there.
@@ -450,7 +428,7 @@ describe('buildIsland on generated tracks', () => {
     const { winner, island } = worlds[0]!;
     const again = buildIsland(1, winner.line, winner.profile, uniformWidth(winner.line, config.track.roadWidth), rolling, PLAIN);
     expect(again.natural.height).toEqual(island.natural.height);
-    expect(again.peak).toEqual(island.peak);
+    expect(again.mountains).toEqual(island.mountains);
     expect(worlds[1]!.island.natural.height).not.toEqual(island.natural.height);
   });
 });

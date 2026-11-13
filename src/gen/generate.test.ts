@@ -78,7 +78,10 @@ describe('hashWorld', () => {
     const afterGround = hashWorld(world);
     expect(afterGround).not.toBe(before);
     world.cover.grass[4321] = world.cover.grass[4321] === 0 ? 1 : 0;
-    expect(hashWorld(world)).not.toBe(afterGround);
+    const afterGrass = hashWorld(world);
+    expect(afterGrass).not.toBe(afterGround);
+    world.cover.snow[4321] = world.cover.snow[4321] === 0 ? 1 : 0;
+    expect(hashWorld(world)).not.toBe(afterGrass);
   });
 
   it('changes if the road changes', () => {
