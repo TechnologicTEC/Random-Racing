@@ -767,6 +767,8 @@ export interface WaterConfig {
   /** The sun's glints: sharpness and strength. */
   glint: number;
   glintStrength: number;
+  /** Share of the glints' strength left where the small waves have faded out. */
+  farGlint: number;
   /** Seconds on the wave clock at which the waves stand for a still picture. */
   stillTime: number;
 }
@@ -1217,6 +1219,7 @@ export const config: GameConfig = {
       fresnelMost: 0.85,
       glint: 140,
       glintStrength: 1.4,
+      farGlint: 0.25,
       stillTime: 0,
     },
   },

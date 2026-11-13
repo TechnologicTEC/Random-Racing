@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** C6, the lab and 3D: close views `look=summit` and `look=climb`, the seed's kind of island on the 3D title card, close cameras that turn away from a hillside in the way; screenshots of seeds 1 to 20 and mountain seeds of each shape checked (see C6 results)
-- **Next step:** step 12, water and sky with the time of day from the seed. Check-in 4 is done (Tane: looks good, carry on). Then steps 13 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** 12, water and sky with the time of day from the seed (see "Step 12" below)
+- **Next step:** step 13, trees, rocks and clouds. Then steps 14 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -31,7 +31,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | | **Check-in 2 with Tane:** fly a few seeds | Done: islands too basic. See "Milestone 2 rework" |
 | R1–R8 | **Rework** (table below), then check-in 3 | Done |
 | C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
-| 12 | Water and sky; time of day from the seed | To do |
+| 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | To do |
 | 14 | Grass | To do |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | To do |
@@ -320,6 +320,29 @@ No fallbacks. Deepest centre-line cut 7.5 m, tallest fill 6.0 m, steepest bank b
 - *Triangles drawn per frame* (Chromium, 1280 by 720), seeds 1, 3, 7, 12, 13, 27, 44, 47, 53, 2024, 48213: circling view 182k to 428k in 25 to 80 draw calls (R8: 182k to 407k, 25 to 70); flying view 92k to 197k in 13 to 38 calls (R8: 92k to 141k, 13 to 29); summit view 116k to 337k in 17 to 68 calls.
 - *Budget:* the 3-second budget test (seed 7) passes in Chromium and Firefox.
 
+## Step 12: water and sky (2026-11-14)
+
+Plan approved in plan mode. Tane's choices: seeds pick a time from 07:00 to 19:30, all equally likely, no night; a clock and slider with a "Seed's time" button and a `time=17:30` address option; waves always moving (the page draws every frame unless held still); the seed also picks the compass direction of the sun's path. The full plan: `C:\Users\tanee\.claude\plans\read-claude-md-docs-state-md-and-graceful-peach.md`.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 12a | `gen/world/sky.ts` (`pickSky`), `world.sky`, `WorldResult.sky` in the world fingerprint, lab line | Done |
+| 12b | `render/daylight.ts` (`daylightAt`): sun direction, sky, haze, light and water colours as plain numbers | Done |
+| 12c | Sky dome (`render/sky.ts`), lights and haze from the daylight; `time=`; `look=sun`; no drawing while a world is built | Done |
+| 12d | Water (`render/water.ts`, `render/waterDepth.ts`) in place of the flat sea; waves move every frame unless held still | Done |
+| 12e | Clock, slider and "Seed's time" button; the title card names the time and its light | Done |
+| 12f | Screenshots, counts, this file | Done |
+
+**What carried over from the island demo:** the sky shader (horizon to zenith, glow round a low sun, sun disc and halo, haze below the horizon), its day colour keys and blends, and its water shader (summed wave slopes, shallow to deep colour by depth, sky reflection, sun glints, moving shore foam, see-through shallows). Moon and stars were left out: there is no night.
+
+**What changed for the 2.7 km tile:** the sun's path (sunrise 06:30, sunset 20:00, 60 degrees at its highest, so 07:00 and 19:30 are about 7 degrees up; the demo's sun set at 18:00); colours converted to linear light and light strengths matched to the old midday (sun 2.4, sky 1.5); the dome sized from the camera's far distance and drawn first, hiding nothing; the depth comes from the island's fitted ground as a 901 by 901 float texture; the large waves fade between 300 and 1500 m and the glints dim where the small waves have faded, because from the circling camera, a kilometre or more out, the regular waves made a fish-scale pattern; the sun disc is about half the demo's size.
+
+**Results.**
+- *Screenshots checked by eye:* seeds 1 to 20 at their own times (view from above, four flying views and eight close views each, 260 pictures); a time strip of seeds 1, 7, 12, 44 and 53 at 07:00, 10:00, 13:00, 16:30, 18:30 and 19:30, from above and facing the sun (`look=sun`); seed 44 in Firefox against Chromium (same picture; only the slider's thumb differs). Sky and sea meet at the horizon with no seam; shallows and foam line beaches and cliff feet; the sun shows low in morning and evening views; nothing is hidden by the dome.
+- *Triangles and draw calls per frame* (Chromium, 1280 by 720, seeds 1, 3, 7, 12, 44, 53, 2024): circling view 184k to 401k in 26 to 81 calls; flying view 94k to 193k in 14 to 39; summit view 118k to 339k in 18 to 69. As in C6 plus the dome's one call (the water replaces the flat sea's).
+- *Budget:* both 3-second budget tests pass in the full run. Frame rate on a real graphics card is for step 15 (headless browsers draw in software).
+- 883 unit tests and 194 browser tests pass.
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -372,7 +395,8 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
 - Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
 - Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
 - Never let a failing test run be followed by a commit in the same command. On 2026-11-12 a Firefox failure was committed past because the test output was piped through a filter, which hid the exit code.
-- Throwaway measurements go in a temporary `src/explore.tmp.test.ts` (deleted before committing). One-off screenshots: copy a script into `test-results/` (ignored by git) so it can import Playwright, with `npm run dev` running.
+- Throwaway measurements go in a temporary `src/explore.tmp.test.ts` (deleted before committing). One-off screenshots: copy a script into `test-results/` (ignored by git) so it can import Playwright, with `npm run dev` running. Every Playwright run empties `test-results/`, so keep the script's master copy in the scratchpad and copy it in again.
+- Run Vitest from PowerShell. From Git Bash every test file fails with "Vitest failed to find the current suite" (found 2026-11-14).
 - On this machine, bash heredocs fail when their text has an odd number of apostrophes. Write multi-line scripts and test files with the Write tool, then run them.
 - Windows and PowerShell: use `python -I` scripts in the scratchpad for multi-line file edits; avoid bash heredocs containing backticks or `${}`.
 - **No Claude attribution** on commits, pull requests or issues.
@@ -519,6 +543,17 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | **Close views `look=summit` and `look=climb`** (`lookAtRoad` in `camera/spots.ts`, numbers in `camera.summit` and `camera.climb`). Summit: the camera stands behind the lap's highest point on the side away from the main summit, 15 m above the road, and steps back until the point and the summit are within 0.6 radians of each other, then looks between them; with no mountain it looks 300 m down the road. Climb: the steepest 40 m of road, seen from 80 m downhill along the road, 0.3 radians to one side, tipped up until 4 m clear of the ground | The plan. Tane chose "from below, looking up" over side-on for the climb |
 | 2026-11-13 | The 3D title card shows the contact sheet's short description of the seed (for example "mountain, climbing · touches · 3 mountains, ridged range") | Tane's choice at C6, for check-in 4 |
 | 2026-11-13 | **A close camera whose view is blocked turns**: it tries its usual direction, then an eighth of a circle each way and further, and takes the first whose line of sight clears the ground by 2 m (or the clearest) | Mountain seeds have ground far above the road beside it: at the usual direction seed 44's `bank` camera stood inside the snow |
+| 2026-11-14 | **Each seed picks a time of day** from 07:00 to 19:30, evenly, in whole minutes, and the compass bearing of the sun's path, from its own stream (`world/sky`); `WorldResult.sky`, part of the world fingerprint, shown in the lab's Track panel | Tane's choices for step 12. The track fingerprint of seeds 1 to 40 is unchanged (a test) |
+| 2026-11-14 | The sun's bearing is a compass bearing: 0 is north, which is -z, up on the lab's map; a quarter turn is east (+x). The sun sweeps half a circle from where it rises | One convention for the lab's words and the 3D sun |
+| 2026-11-14 | **Sun path: rises 06:30, sets 20:00, 60 degrees at its highest** (`render.daylight`) | The demo's sun set at 18:00, so 19:30 would have been dark. A first guess (06:15 to 20:15) left 19:00 too high for evening light |
+| 2026-11-14 | Light strengths at midday match the 3D page before the sky (sun 2.4, sky 1.5); a low sun has 55% of the sun's strength and 75% of the sky's | So midday pictures look as before; tests pin it |
+| 2026-11-14 | **Nothing is drawn while a new world is being built**, and the budget test holds its page still (`still=1`) | Headless browsers draw in software; drawing took time from the worker (the budget test failed at 3.4 s twice on a busy machine). Players see the loading screen meanwhile |
+| 2026-11-14 | Tests that count land, sea and road pixels open at `time=13:00` | They test the island, not the light; the time-of-day tests cover the light |
+| 2026-11-14 | `look=sun`: from 60 m behind the start line, looking level towards the sun | For the sun-disc test and the time strip |
+| 2026-11-14 | The water reads its depth from the fitted ground (which includes the sea bed) as a one-channel float texture of the 3 m grid; outside the tile it is open sea at `seaFloorDepth`. `depthAt` in `render/waterDepth.ts` does the shader's sums for tests | No new data from generation; works in Chromium and Firefox |
+| 2026-11-14 | **Waves fade with distance:** small ones between 60 and 220 m (the demo's), large ones between 300 and 1500 m, and glints drop to 25% where the small waves have gone (`render.water`) | Seen from the circling camera the regular waves made a fish-scale pattern |
+| 2026-11-14 | The waves move every frame unless the page is held still (`still=1`) or the system asks for reduced motion; then they stand at `render.water.stillTime`, so screenshots repeat exactly | Tane's choice; replaces "draw only when something changed" for moving pictures |
+| 2026-11-14 | `time=HH:MM` opens the first island at that time, held to 07:00 to 19:30; a new island goes back to its own time. The slider moves in 5-minute steps and keeps its own arrow keys | Tane's choice for the player's pick until Milestone 4's menus |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -555,7 +590,10 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
 - In 3D the sea cliffs read well as rock faces. The peak is craggy and a bit lumpy from the ridge texture on its sides; worth a look once lighting and shadows are in.
-- The sea is a flat see-through sheet and the light is plain daylight until step 12.
+- **The sea shows a regular ripple pattern in low sun** half a kilometre or so from the circling camera (seed 6 at 17:45, seed 7 at 10:00), softened but not gone after the far-wave fade. More waves at odd angles, or a noise term, would break it up.
+- **07:00 and 19:30 are quite dark**, with pink skies (see the step 12 time strip). Sunrise, sunset and the blends are config values; for Tane to judge.
+- **The page now draws every frame** while the waves move. Step 15 measures the frame rate on a real graphics card; reduced motion and `still=1` stop it.
+- 10:00 is called "midday light" on the title card (morning ends at 10:00 in `lightName`).
 - A whole world (track, island, fit, cover, report) takes 430 to 640 ms in Node and about the same in a Chromium worker. Budget is 3 s.
 - For two test files (`cover.test.ts`, `report.test.ts`) the tests were written first but only run once the code existed, so they were never seen failing for a reason other than the missing module.
 - **The start line can sit on a steep slope** (seed 42 starts on an 8% descent). The solver does not yet know where the start is. Worth flattening the start area before Milestone 4 puts a grid there.
@@ -607,3 +645,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-13 (Milestone 2):** Step C5 done. Island mountains are landforms in the seed's shape (heights by shape), built lower where they do not fit, joined to the road's land, kept from the coast by their own foot; hill country stays green. Mountain tests rewritten (19, including a flood fill from the road); shore widths reworked twice after steep spots on seeds 5 and 7. The softer coast join was tried three ways and undone. Spire shapes are built once; the massif once per island. 843 unit tests and 154 Playwright tests pass. Numbers under "Rework measurements", C5.
 - **2026-11-13 (Milestone 2):** Step C6 done. `WorldResult.mountains`; `look=summit` and `look=climb` (`lookAtRoad`); the 3D title card names the kind of island; close cameras turn away from a hillside in the way. Screenshots of seeds 1 to 20 plus 27, 44, 47 and 53 checked by eye; triangle counts and budget in "Rework measurements", C6. 854 unit tests and 412 Playwright tests pass. **Check-in 3 response complete; stopped for check-in 4.**
 - **2026-11-13 (Milestone 2):** Check-in 4. Tane looked at the C6 screenshots: looks good, carry on. No changes asked. Next: step 12.
+- **2026-11-14 (Milestone 2):** Step 12 planned in plan mode (Tane chose daylight only, a slider, always-moving waves, a seed's sun bearing) and done in six commits (12a to 12f): the seed's time of day, `render/daylight.ts`, the sky dome, the water shader, the time controls, and screenshots of seeds 1 to 20 plus a time strip. Found on the way: the budget test failed under load once the page drew while worlds were built (fixed by not drawing during builds), and Vitest does not run from Git Bash on this machine. 883 unit tests and 194 browser tests pass. Next: step 13.

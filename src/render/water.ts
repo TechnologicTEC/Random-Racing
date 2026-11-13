@@ -107,7 +107,9 @@ export function createWater(size: number, cfg: WaterConfig): Water {
         float fres = pow(1.0 - max(dot(n, V), 0.0), ${float(cfg.fresnel)});
         col = mix(col, uSky, clamp(fres * 0.9, 0.0, ${float(cfg.fresnelMost)}));
         vec3 R = reflect(-uSunDir, n);
-        col += uGlint * pow(max(dot(R, V), 0.0), ${float(cfg.glint)}) * ${float(cfg.glintStrength)};
+        // Without the small waves to break them up, glints off the large ones line up into a grid: far off they are dimmed.
+        float glints = mix(${float(cfg.farGlint)}, 1.0, detail);
+        col += uGlint * pow(max(dot(R, V), 0.0), ${float(cfg.glint)}) * ${float(cfg.glintStrength)} * glints;
 
         float band = sin(depth * ${float(cfg.foamBands)} - uTime * ${float(cfg.foamSpeed)} + sin(p.x * 0.15 + p.y * 0.12) * 2.0) * 0.5 + 0.5;
         float foam = (1.0 - smoothstep(0.0, ${float(cfg.foamDepth)}, depth)) * smoothstep(0.55, 0.9, band);
