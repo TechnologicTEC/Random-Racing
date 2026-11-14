@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 13, trees, rocks and clouds (see "Step 13" below)
-- **Next step:** step 14, grass. Then steps 15 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 14, grass: planned and approved, 14a done (see "Step 14" below); 14b is next. Then steps 15 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -33,7 +33,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
-| 14 | Grass | To do |
+| 14 | Grass | In progress (14a done, see "Step 14") |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | To do |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
@@ -414,6 +414,48 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-
 
 **Risks:** a close camera (`look=`) can stand behind a tree, since it only checks the ground; clouds count as foam in the pixel counts, so tests that count foam or land open with `decor=off`; the palm is a new shape, judged by eye in 13g.
 
+## Step 14: grass (2026-11-14)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-content-id-4f36-random-racing-sorted-mist.md`.
+
+**Why the demo is not copied as it is:** its 110,000 blades fill a square 58 m to each side of a walker. Our camera flies 4 m above a 12 to 22 m road with a 4 m bare verge, so the nearest grass is about 10 m away and the view runs 100 m and more down the road. The flying view already draws 83k to 332k triangles.
+
+**Tane's choices:**
+- Grass varies in patches on every island: long meadow grass and short turf, following the lush-to-dry map each island already has.
+- Blades reach about 120 m from the camera, thinning with distance.
+- A mown strip beside the road: short grass for the first metres beyond the verge, longer further out.
+- Wildflowers among the long grass, in some patches.
+
+**Claude's calls, approved with the plan:**
+- Grass is drawing only. No generation code changes, so world and track fingerprints stay as they are. Where grass grows is already world data (`cover.grass`).
+- Blades sway down the same wind as the waves and clouds, on the same clock, and stand still with `still=1` or reduced motion.
+- `grass=off` in the 3D address leaves the blades out. `decor=off` does not touch grass.
+- No blades are drawn when the camera is too high to see them (the far circling view).
+- Grass is scenery only: Milestone 3's off-road slowdown will read the cover map, not the blades.
+- No shadows yet (step 15). The lab is unchanged.
+
+**Design.** The pattern of `waves.ts` and `clouds.ts`: the sums as plain numbers, unit tested; the same sums written out for the shader; a thin Three.js wrapper.
+- *Tiers:* three square fields of blades, one inside the next, all following the camera: near (about 30 m, many thin blades), middle (about 60 m, fewer and wider) and far (about 120 m, few, wide, one triangle each). A blade has a fixed place in its tier's square and wraps round as the camera moves; each tier fades its blades to nothing at its edge, so none pops. Each square sits ahead of the camera, so most blades are in view.
+- *On the ground:* a blade's foot is read from the fitted ground heights with the same two-triangle split per cell as the ground mesh.
+- *Where it grows:* a blade lives only if its own fixed number is under the grass cover there. None on the road, verge, sand, bare rock, snow or sea.
+- *Length:* long in lush patches, short in dry ones (`cover.variation`); held to a mown height near the road edge, easing up beyond it.
+- *Flowers:* about 4% of blades can flower (white, yellow or red tips), only in long grass inside flower patches about 40 m across, placed by the seed.
+- *Wind, colour, light:* the demo's sway (a slow gust down the wind plus a flutter per blade); the ground's own greens, darker at the foot and lighter at the tip, lit by the time of day and hazed like everything else.
+- *Files:* `render/grassMaps.ts` (distance from the road edge, flower patches, and the grid the shader reads), `render/grass.ts` (blades, shape, the sums, the shader text), `render/grassView.ts` (Three.js). Settings in `render.grass`; colours in the palette.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 14a | Record the plan and Tane's choices here | Done |
+| 14b | `render.grass` config; `grassMaps.ts` | To do |
+| 14c | `grass.ts`: blades, shape, the sums, the shader text | To do |
+| 14d | `grassView.ts`, shared ground texture, the 3D page; `grass=off` | To do |
+| 14e | Look pass from pictures: tier numbers, lengths, mown strip, flowers, colours | To do |
+| 14f | Screenshots of seeds 1 to 20 and a time strip, triangle counts, this file | To do |
+
+**Budgets:** grass adds at most about 250k triangles and 3 draw calls to a flying or close view, and nothing to the far circling view. The browser suite is timed before and after 14d; if it grows by more than about a quarter, the tiers shrink.
+
+**Risks:** a visible ring where the blades end; shimmer from blades thinner than a pixel when moving; blade feet a little off the mesh on far ground drawn at quarter detail (only a circling camera zoomed in there would show it); Milestone 3's chase camera will be lower than today's 4 m (reach, tiers and lengths are config values); a shader mistake draws nothing and only logs to the console.
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -644,6 +686,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-14 | Clouds' shaded sides are lit by 70% of the sky's light for the time of day (`cloudGlow`), not the demo's fixed glow | The demo's glow left undersides nearly black under Three.js 0.187's lighting; this also dims and warms them in the evening |
 | 2026-11-14 | `decor=off` in the 3D address leaves out trees, rocks and clouds; the foam test uses it | Clouds would be counted as foam. Also handy for comparing triangle counts |
 | 2026-11-14 | The pixel counts report near-white pixels and a fingerprint of the top two fifths of the picture alone (`cloud`, `skyDigest`) | To test that clouds are drawn and that they move, apart from the waves |
+| 2026-11-14 | **Step 14, Tane's choices:** grass varies in patches on every island (long meadow, short turf, following the lush-to-dry map); blades reach about 120 m, thinning with distance; a mown strip beside the road; wildflowers in some patches | Asked in plan mode before the plan was written |
+| 2026-11-14 | Grass is drawing only: no generation code changes, so no fingerprint changes. `grass=off` leaves the blades out; `decor=off` does not touch them | Where grass grows is already world data (`cover.grass`). Approved with the plan |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -748,3 +792,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-14 (Milestone 2):** Tane tried step 12: time, sunrise and sunset good; the water looked like a checker pattern, not waves. Step 12g: new waves in `render/waves.ts` (wind-driven trains in groups, bent and peaked crests, dropped when too small to draw), shading from the waves and lighter crests in `render/water.ts`. 896 unit tests and 194 browser tests pass.
 - **2026-11-14 (Milestone 2):** Step 13 planned in plan mode and approved (Tane chose woods that vary by seed, three kinds of tree with a palm by the beach, trees close to the road in patches, and a cloud amount picked by the seed). Step 13a done: the plan is recorded under "Step 13". No code changed.
 - **2026-11-14 (Milestone 2):** Step 13 done in seven commits (13a to 13g): the woods trait, trees and rocks (`gen/world/decor.ts`), the seed's clouds (`gen/world/clouds.ts`), `WorldResult.decor` and `.clouds` in the world fingerprint, the shapes and groups as plain numbers, the instanced 3D drawing with near and far shapes, drifting clouds, `decor=off`, and the lab's dots and lines. Changed after looking at pictures: more clouds over a smaller square, clouds lit underneath by the sky, and clouds that thin away near the camera. On this machine long bash heredocs fail (code files were written with the Write tool), and Vitest hides `console.log` from passing tests (throwaway measurements write a file instead). 971 unit tests and 212 browser tests pass. Next: step 14, grass.
+- **2026-11-14 (Milestone 2):** Step 14 planned in plan mode and approved (Tane chose grass in patches of long and short on every island, blades to about 120 m thinning with distance, a mown strip beside the road, and wildflowers). Step 14a done: the plan is recorded under "Step 14". No code changed.
