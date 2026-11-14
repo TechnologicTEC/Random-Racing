@@ -715,7 +715,7 @@ export interface RockConfig {
   shore: { height: Range; chance: number; size: Range };
   /** No rock lies closer to the road edge than this. */
   roadClearance: number;
-  /** Smallest and largest boulder, in metres across (about). */
+  /** Smallest and largest boulder: its radius, in metres (about). */
   size: Range;
   /** A rock's height is this share of its size: they lie flat. */
   tall: Range;
@@ -832,6 +832,29 @@ export interface RenderConfig {
   daylight: DaylightConfig;
   sky: SkyDomeConfig;
   water: WaterConfig;
+  decor: DecorViewConfig;
+  clouds: CloudViewConfig;
+}
+
+/** How trees and rocks are drawn. Distances in metres. */
+export interface DecorViewConfig {
+  /** Trees and rocks are drawn in groups, one for each kind in each square of the map this wide, so groups out of view are skipped. */
+  groupSize: number;
+  /** A group whose nearest point is further than this from the camera is drawn with its simpler far shapes. */
+  detailDistance: number;
+  /** A tree's foot is sunk this far into the ground for each unit of its size; a rock is sunk this share of its size. */
+  treeSink: number;
+  rockSink: number;
+  /** How dark the darkest tree or rock is and how light the lightest, as multiples of its shape's colours. */
+  shade: Range;
+}
+
+/** How the clouds are drawn. */
+export interface CloudViewConfig {
+  /** How fast they drift down the wind (`water.wind`), in metres per second. */
+  speed: number;
+  /** A cloud within this many metres of the edge of the square the clouds wrap round is shrunk, down to nothing at the edge. */
+  edgeFade: number;
 }
 
 /** One train of waves on the sea. It only tilts the surface's shading; the sea itself stays flat. */
@@ -1409,6 +1432,8 @@ export const config: GameConfig = {
       glintDim: 0.65,
       stillTime: 0,
     },
+    decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: 0.4, shade: [0.8, 1.12] },
+    clouds: { speed: 10, edgeFade: 400 },
   },
   camera: {
     orbit: {

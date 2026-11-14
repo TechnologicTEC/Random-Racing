@@ -48,6 +48,37 @@ export const WATER = {
   foam: [0.92, 0.96, 0.97] as Rgb,
 };
 
+/** Trees, from the island demo; the palm is our own. Each list is the shades of one tree's leaves. */
+export const TREES = {
+  bark: [0.34, 0.24, 0.16] as Rgb,
+  pine: [
+    [0.15, 0.32, 0.19],
+    [0.17, 0.36, 0.21],
+    [0.19, 0.4, 0.23],
+  ] as Rgb[],
+  broadleaf: [
+    [0.29, 0.49, 0.19],
+    [0.33, 0.53, 0.21],
+    [0.27, 0.46, 0.18],
+  ] as Rgb[],
+  palmTrunk: [0.47, 0.37, 0.25] as Rgb,
+  palm: [
+    [0.25, 0.5, 0.2],
+    [0.32, 0.56, 0.22],
+  ] as Rgb[],
+};
+
+/** Boulders and shore rocks. */
+export const ROCKS = {
+  boulder: [0.525, 0.5, 0.48] as Rgb,
+};
+
+/** Clouds: white, with a faint light of their own so their shaded sides are never black. */
+export const CLOUDS = {
+  puff: [1, 1, 1] as Rgb,
+  glow: [0.1, 0.115, 0.135] as Rgb,
+};
+
 /**
  * The colours of the sky and its light, from the island demo. Each comes as a
  * day colour and the colour it turns towards as the sun nears the horizon (the
