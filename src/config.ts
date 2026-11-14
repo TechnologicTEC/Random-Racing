@@ -852,6 +852,18 @@ export interface GrassTier {
   triangles: 1 | 3;
 }
 
+/** The wind in the grass. */
+export interface SwayConfig {
+  /** How far a blade s tip is pushed down the wind by a gust, and how far it flutters either way, as shares of its length. */
+  gust: number;
+  flutter: number;
+  /** Metres from one gust to the next, and how fast gusts travel down the wind, in metres per second. */
+  gustLength: number;
+  gustSpeed: number;
+  /** How fast a blade flutters, in radians per second. */
+  flutterSpeed: number;
+}
+
 /**
  * The grass blades. Drawing only: where grass grows is the world's cover map. Lengths and distances in metres.
  * The wind is the sea's (`water.wind`).
@@ -888,18 +900,11 @@ export interface GrassConfig {
     tip: number;
     widen: number;
   };
-  sway: {
-    /** How far a blade s tip is pushed down the wind by a gust, and how far it flutters either way, as shares of its length. */
-    gust: number;
-    flutter: number;
-    /** Metres from one gust to the next, and how fast gusts travel down the wind, in metres per second. */
-    gustLength: number;
-    gustSpeed: number;
-    /** How fast a blade flutters, in radians per second. */
-    flutterSpeed: number;
-  };
+  sway: SwayConfig;
   /** A blade s foot is sunk this far into the ground. */
   sink: number;
+  /** No blade stands with its foot lower than this above the sea: none in the water at the foot of a steep shore. */
+  dry: number;
   /** How dark a blade is at its foot and how light at its tip, as multiples of the ground s grass colour. */
   shade: Range;
   /** No blades are drawn when the camera is more than this far above the ground below it. */
@@ -1523,6 +1528,7 @@ export const config: GameConfig = {
       flowers: { share: 0.05, patches: 0.25, scale: 45, cell: 9, soft: 0.08, minLength: 0.45, tip: 0.3, widen: 2.2 },
       sway: { gust: 0.4, flutter: 0.16, gustLength: 180, gustSpeed: 20, flutterSpeed: 2.1 },
       sink: 0.05,
+      dry: 0.3,
       shade: [0.42, 1.15],
       ceiling: 150,
     },
