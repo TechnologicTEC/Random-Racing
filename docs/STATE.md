@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15, shadows, far-terrain detail levels, a low quality option and performance numbers. Then steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15b (step 15 is planned and recorded under "Step 15" below; 15a done): a frame-time meter and baseline frame times on a real graphics card, reported to Tane before going on. Then 15c to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | To do |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -487,6 +487,54 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-
 - 1,043 unit tests and 224 browser tests pass (406 with the screenshots of 20 seeds).
 - *Not done as the plan said:* the grid's build time is checked against a loose 1 s limit, not about 30 ms (it took 190 ms once with every test file running, and failed the first limit of 150 ms). One shader-text test (a far blade's flower) was written together with its change and not seen failing first. The grass was judged from still pictures only: nobody has watched it move yet.
 
+## Step 15: shadows, far-ground detail, a low quality option and performance numbers (2026-11-15)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable-wishing-wall.md`.
+
+**Found while planning.**
+- Tane's laptop is the brief's target machine: Intel Arc graphics (Core Ultra 7 155H), screen 2880 by 1800 at 120 Hz. Real frame times can be measured on it by opening a real browser window from Playwright (headless browsers draw in software).
+- Full screen on that laptop draws about 2.5 times the pixels of 1080p (the page draws up to 2 pixels per CSS pixel today).
+- Three.js 0.187 ships a sun light with two fitted shadow maps (`SunLight`, in the pinned `three` package under `three/addons/lights`; no new dependency). Good for crisp shadows near the camera.
+- That alone is not enough. At 07:00 and 19:30 the sun is 7 degrees up: a 250 m mountain throws a 2 km shadow, and clouds shade ground 3 km away. Shadow maps fitted to the view cannot reach that far, so those shadows would be missing or would pop as the camera turns.
+- Far ground is already at quarter detail beyond 250 m from the road (R8). From above, the ground is still most of what is drawn (182k to 428k of up to 589k triangles).
+
+**Tane's choices:**
+- High favours steady speed over full sharpness. On screens sharper than 1080p, High draws at most a set number of pixels (between 1080p and 1440p worth, settled from the measurements) and stretches the picture to fit.
+- Low keeps tree and barrier shadows. It may thin the grass, draw fewer pixels and use a plainer sea.
+- Quality is chosen with a button and remembered. Nothing switches by itself.
+
+**Claude's calls, approved with the plan:**
+- Drawing only. No generation code changes, so world and track fingerprints stay as they are.
+- What casts: trees, rocks, barriers and the start gate (crisp, near the camera); the land itself, mountains included (long shadows at low sun); clouds (soft, drifting on the wave clock, still with `still=1`). Grass blades and kerbs cast nothing.
+- What is shaded: ground, road, trees, rocks, grass and the sea. Clouds are not.
+- Shadows only take away the sun's light, never the sky's, so they are blue-grey, never black. How dark is tuned from pictures.
+- `shadows=off` in the address leaves them all out. A frame-time readout shows with `fps=1` or the F key.
+- No settings menu yet (Milestone 6).
+
+**Design.** Three kinds of shadow, each done the cheapest way that is right. (One shadow map following the camera, as in the demo, covers about 250 m and gives no mountain or cloud shadows. Three.js's fitted maps for everything cut off long low-sun shadows and draw the whole island twice more each frame.)
+- *Land shade* (`render/terrainShade.ts`, plain numbers): `shadeGrid(ground, sun, cfg)` says how much of the sun reaches every cell of the height grid. One pass over the grid travelling away from the sun, carrying the height of the shadow's top edge and dropping it by the sun's slope each cell; a soft edge of a few metres. Done when a world loads and again when the time of day moves.
+- *Cloud shade* (`render/cloudShade.ts`, plain numbers): `cloudShadeMap(clouds, size)` is a soft dark patch under every puff, over the clouds' own square, built once per world. The shader slides it by wind times time and finds its place by following the sun's ray from the ground up to the cloud layer. `cloudShadeAt` does the same sum for the tests.
+- *Near shadows* (`worldView.ts`): the `DirectionalLight` becomes `SunLight` with its two shadow maps. Trees, rocks, barriers and the gate cast; ground, road, trees, rocks and grass receive. The ground does not cast here (the land shade does that). How far the maps reach follows the camera's height (`shadowReach`): about 350 m when flying the road, the whole island when circling high.
+- *One shared piece of shader text* (`render/shade.ts`: `sunShade(worldPosition)` = land shade times cloud shade). Standard materials (ground, road, trees, rocks) get it through a small patch that throws if the line it replaces is missing. The grass and water shaders multiply their sun term by it; grass also takes the near shadows at each blade's foot.
+- *Far ground:* `buildTerrainChunks` gains a list of levels: full detail near the road, quarter detail beyond 250 m, sixteenth detail beyond about 700 m and for sea bed under about 3 m of water (distances settled in 15b). No blades grow on ground drawn coarse.
+- *Quality:* `render.quality` says what `low` changes from `high`; `qualitySettings(render, level)` and `pixelRatioFor(width, height, devicePixelRatio, budget)` in `render/quality.ts`. A pixel budget replaces the fixed pixel ratio. A "Quality" button, the Q key and `quality=low` in the address; remembered in the browser; the address wins. Switching rebuilds the picture of the same island, keeping the camera and the time.
+- *Measuring:* `render/frameMeter.ts` (median, 95th percentile, worst, share over 16.7 ms); `ViewHandle.frames()`; `e2e/perf.spec.ts` in its own Playwright project (`npm run perf`, not part of `npm run e2e`): a real Chromium window at 1920 by 1080, frame limit off, flying 10 s of a lap and holding the circling and summit views on seeds 1, 7, 8, 20 and 2024. It refuses to run if the browser reports software drawing.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 15a | Record the plan and Tane's choices here | Done |
+| 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | To do |
+| 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | To do |
+| 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | To do |
+| 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | To do |
+| 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | To do |
+| 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | To do |
+| 15h | Look pass from pictures; final frame times for High and Low; this file | To do |
+
+**Budgets.** High holds a median of 16.7 ms or less (95th percentile under about 20 ms) in every measured view at 1080p on the Arc laptop; Low is at least about a third faster. If the baseline is already over, or near shadows push High over and the levers do not bring it back, report to Tane before going on. Near shadows add at most about 200k triangles and 90 draw calls to a view from the road. The browser suite takes 428 s now; if it grows by more than about a quarter, tests that are not about shadows open with `shadows=off`.
+
+**Risks:** `SunLight` is new in Three.js (fallback: one ordinary shadow map following the camera, about 200 m each way, with land and cloud shade unchanged); wiring Three.js's shadow lookup into the grass shader (fallback: grass takes land and cloud shade only); streaks in the land shade along the sun's direction at very low sun, and a soft 3 m edge; stripes or gaps where shadows meet their casters on flat-shaded shapes; cloud shadows at low sun fall kilometres from their clouds and will not line up exactly; 07:00 and 19:30 are already quite dark, and long mountain shadows make parts darker still (shadow strength is a setting, for Tane to judge); frame times wobble from run to run (each view run three times, the middle one kept).
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -841,3 +889,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-14 (Milestone 2):** Step 13 done in seven commits (13a to 13g): the woods trait, trees and rocks (`gen/world/decor.ts`), the seed's clouds (`gen/world/clouds.ts`), `WorldResult.decor` and `.clouds` in the world fingerprint, the shapes and groups as plain numbers, the instanced 3D drawing with near and far shapes, drifting clouds, `decor=off`, and the lab's dots and lines. Changed after looking at pictures: more clouds over a smaller square, clouds lit underneath by the sky, and clouds that thin away near the camera. On this machine long bash heredocs fail (code files were written with the Write tool), and Vitest hides `console.log` from passing tests (throwaway measurements write a file instead). 971 unit tests and 212 browser tests pass. Next: step 14, grass.
 - **2026-11-14 (Milestone 2):** Step 14 planned in plan mode and approved (Tane chose grass in patches of long and short on every island, blades to about 120 m thinning with distance, a mown strip beside the road, and wildflowers). Step 14a done: the plan is recorded under "Step 14". No code changed.
 - **2026-11-15 (Milestone 2):** Step 14 done in six commits (14a to 14f): the grass settings and maps (`render/grassMaps.ts`), the blades and their sums with the same sums as shader text (`render/grass.ts`), the drawing (`render/grassView.ts`, `grass=off`, `stats().blades`), a look pass from pictures, and screenshots of seeds 1 to 20 plus a time strip. Changed after looking at pictures: blades take their ground's light, no blades on thin cover, a narrower and taller mown strip, wider blades, more and bigger flowers. No generation code changed. Found on the way: a wall-clock test limit failed under load and was loosened; a page made in memory cannot load pictures from disk (contact sheets are written as files); an `out` name in a shader clashed with a local of the same name, caught by the console-error check. 1,043 unit tests and 224 browser tests pass. Next: step 15.
+- **2026-11-15 (Milestone 2):** Step 15 planned in plan mode and approved (Tane chose steady speed over full sharpness on High, a Low setting that keeps tree and barrier shadows, and a quality button that is remembered). Step 15a done: the plan is recorded under "Step 15". No code changed.
