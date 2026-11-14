@@ -292,6 +292,10 @@ export interface WorldResult {
   mountains: MountainSummit[];
   /** The seed's time of day and the direction of the sun's path. */
   sky: Sky;
+  /** Trees and rocks, standing on `ground`. */
+  decor: Decor;
+  /** The clouds in the sky, all above the island's highest ground. */
+  clouds: Clouds;
 }
 
 /** The seed's time of day. Drawing turns it into light; generation only picks it. */
@@ -334,6 +338,44 @@ export interface Scatter {
   kind: Uint8Array;
   /** How light or dark it is, 0 (darkest) to 255 (lightest), so no two look quite alike. */
   shade: Uint8Array;
+}
+
+/** The kinds of rock. A rock's `kind` number is its place in `ROCK_KINDS` (gen/world/decor.ts). */
+export type RockKind = 'boulder' | 'shore' | 'field';
+
+/** The island's trees and rocks. Scenery only: nothing collides with them. */
+export interface Decor {
+  woods: WoodsKind;
+  trees: Scatter;
+  rocks: Scatter;
+}
+
+/** How much cloud a seed's sky has. */
+export type CloudCover = 'clear' | 'fair' | 'cloudy';
+
+/**
+ * The seed's clouds, as they stand before they start to drift. Each cloud is a
+ * handful of puffs: flattened balls that overlap. Everything in metres.
+ */
+export interface Clouds {
+  cover: CloudCover;
+  /** The clouds are spread over a square this wide, centred on the island, and wrap round it as they drift. */
+  span: number;
+  /** Number of clouds, and where the middle of each is. */
+  count: number;
+  x: Float32Array;
+  z: Float32Array;
+  /** Number of puffs in all. */
+  puffCount: number;
+  /** Which cloud each puff belongs to. */
+  puffCloud: Uint16Array;
+  /** Where each puff's middle is: across the map from its cloud's middle (x and z), and its height above the sea. */
+  puffX: Float32Array;
+  puffY: Float32Array;
+  puffZ: Float32Array;
+  /** Each puff's radius across, and its smaller radius up and down. */
+  puffSize: Float32Array;
+  puffThick: Float32Array;
 }
 
 /** Where a mountain's summit is, in metres, and its height above the sea. */

@@ -3,6 +3,7 @@ import { config, type GenConfig } from '../config';
 import { generateWorld, hashWorld } from './generate';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
+import { pickWoods } from './world/decor';
 import { sampleField } from './world/heightfield';
 
 /** A coarse grid keeps these quick; the island tests cover the full grid. */
@@ -66,6 +67,30 @@ describe('generateWorld', () => {
     expect(generateWorld(9, coarse).mountains).toEqual([]);
   });
 
+  it('contains the trees and rocks of the seed, as its own woods ask', () => {
+    const { decor } = world;
+    expect(decor.woods).toBe(pickWoods(48213, coarse.world.decor));
+    expect(decor.trees.count).toBeGreaterThan(50);
+    expect(decor.rocks.count).toBeGreaterThan(5);
+    // Every tree stands on the fitted ground, the ground that is drawn.
+    for (let i = 0; i < decor.trees.count; i += 7) {
+      expect(Math.abs(decor.trees.y[i]! - sampleField(world.ground, decor.trees.x[i]!, decor.trees.z[i]!, -99))).toBeLessThan(0.01);
+    }
+    expect(structuredClone(decor)).toEqual(decor);
+  });
+
+  it('contains clouds, all above the highest ground of the island', () => {
+    // Seed 11 is a circling mountain seed with two lone peaks.
+    for (const made of [world, generateWorld(11, coarse)]) {
+      let highest = 0;
+      for (const height of made.ground.height) highest = Math.max(highest, height);
+      expect(made.clouds.puffCount).toBeGreaterThan(0);
+      for (let p = 0; p < made.clouds.puffCount; p++) {
+        expect(made.clouds.puffY[p]! - made.clouds.puffThick[p]!).toBeGreaterThanOrEqual(highest + coarse.world.clouds.aboveSummit - 0.01);
+      }
+    }
+  });
+
   it('treats the seed as a whole number from 0 to 4,294,967,295, like track generation', () => {
     expect(generateWorld(-1, coarse).seed).toBe(4294967295);
   });
@@ -105,6 +130,35 @@ describe('hashWorld', () => {
     expect(afterHour).not.toBe(before);
     world.sky.bearing += 0.01;
     expect(hashWorld(world)).not.toBe(afterHour);
+  });
+
+  it('changes if a tree, a rock or the woods change', () => {
+    const world = generateWorld(7, coarse);
+    const before = hashWorld(world);
+    world.decor.trees.x[3] = world.decor.trees.x[3]! + 0.5;
+    const afterTree = hashWorld(world);
+    expect(afterTree).not.toBe(before);
+    world.decor.trees.kind[3] = (world.decor.trees.kind[3]! + 1) % 3;
+    const afterKind = hashWorld(world);
+    expect(afterKind).not.toBe(afterTree);
+    world.decor.rocks.size[0] = world.decor.rocks.size[0]! + 0.25;
+    const afterRock = hashWorld(world);
+    expect(afterRock).not.toBe(afterKind);
+    world.decor.woods = world.decor.woods === 'open' ? 'forest' : 'open';
+    expect(hashWorld(world)).not.toBe(afterRock);
+  });
+
+  it('changes if a cloud or the amount of cloud changes', () => {
+    const world = generateWorld(7, coarse);
+    const before = hashWorld(world);
+    world.clouds.x[0] = world.clouds.x[0]! + 1;
+    const afterCloud = hashWorld(world);
+    expect(afterCloud).not.toBe(before);
+    world.clouds.puffY[2] = world.clouds.puffY[2]! + 1;
+    const afterPuff = hashWorld(world);
+    expect(afterPuff).not.toBe(afterCloud);
+    world.clouds.cover = world.clouds.cover === 'clear' ? 'cloudy' : 'clear';
+    expect(hashWorld(world)).not.toBe(afterPuff);
   });
 
   it('changes if the road changes', () => {

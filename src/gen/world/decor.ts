@@ -3,7 +3,7 @@ import { TAU } from '../../core/dmath';
 import { createNoise, fbm } from '../../core/noise';
 import { createRng, pickWeighted } from '../../core/rng';
 import { clamp01, lerp, smoothstep } from '../../core/scalar';
-import type { Cover, HeightField, Scatter, TreeKind, WoodsKind } from '../types';
+import type { Cover, Decor, HeightField, RockKind, Scatter, TreeKind, WoodsKind } from '../types';
 import { sampleField, sampleGrid } from './heightfield';
 
 /** The kinds of tree, in the order of their `kind` numbers in a scatter of trees. */
@@ -11,6 +11,12 @@ export const TREE_KINDS: readonly TreeKind[] = ['broadleaf', 'pine', 'palm'];
 const BROADLEAF = 0;
 const PINE = 1;
 const PALM = 2;
+
+/** The kinds of rock, in the order of their `kind` numbers in a scatter of rocks. */
+export const ROCK_KINDS: readonly RockKind[] = ['boulder', 'shore', 'field'];
+const BOULDER = 0;
+const SHORE = 1;
+const FIELD = 2;
 
 const WOODS: readonly WoodsKind[] = ['open', 'wooded', 'forest'];
 
@@ -193,4 +199,80 @@ export function placeTrees(seed: number, ground: HeightField, cover: Cover, edge
   }
   trees.count = count;
   return finish(trees, rules.max);
+}
+
+/**
+ * Strews the island's rocks: boulders on rocky ground that is not too steep,
+ * small rocks along the shore and in the shallows, and the odd boulder out on
+ * the grass. One pass over squares, like the trees, with the same random
+ * numbers drawn for every square. None within `roadClearance` of the road edge.
+ *
+ * @param edge distance from every cell to the edge of the road, in metres (see edgeDistance)
+ */
+export function placeRocks(seed: number, ground: HeightField, cover: Cover, edge: Float32Array, cfg: GenConfig): Scatter {
+  const rules = cfg.world.decor.rocks;
+  const draw = createRng(seed, 'decor').fork('rocks');
+
+  const extent = (ground.size - 1) * ground.cell;
+  const across = Math.floor(extent / rules.spacing);
+  const start = (-across * rules.spacing) / 2;
+  const rocks = emptyScatter(across * across);
+  let count = 0;
+
+  for (let iz = 0; iz < across; iz++) {
+    for (let ix = 0; ix < across; ix++) {
+      const offX = draw.next();
+      const offZ = draw.next();
+      const kindRoll = draw.next();
+      const sizeRoll = draw.next();
+      const tallRoll = draw.next();
+      const turnRoll = draw.next();
+      const leanRoll = draw.next();
+      const shadeRoll = draw.next();
+
+      const x = start + (ix + 0.5 + (offX * 2 - 1) * rules.jitter) * rules.spacing;
+      const z = start + (iz + 0.5 + (offZ * 2 - 1) * rules.jitter) * rules.spacing;
+      const height = sampleField(ground, x, z, -99);
+      const { shore } = rules;
+      if (height < shore.height[0]) continue;
+      if (sampleGrid(ground, edge, x, z, 0) < rules.roadClearance) continue;
+
+      let kind: number;
+      if (height <= shore.height[1]) {
+        if (kindRoll >= shore.chance) continue;
+        kind = SHORE;
+      } else if (sampleGrid(ground, cover.rock, x, z, 0) >= rules.minRock * 255) {
+        if (kindRoll >= rules.chance || slopeAt(ground, x, z) > rules.maxSlope) continue;
+        kind = BOULDER;
+      } else {
+        if (kindRoll >= rules.field || sampleGrid(ground, cover.grass, x, z, 0) < 128) continue;
+        kind = FIELD;
+      }
+      const range = kind === SHORE ? shore.size : rules.size;
+
+      rocks.x[count] = x;
+      rocks.y[count] = height;
+      rocks.z[count] = z;
+      rocks.size[count] = lerp(range[0], range[1], sizeRoll);
+      rocks.tall[count] = lerp(rules.tall[0], rules.tall[1], tallRoll);
+      rocks.turn[count] = turnRoll * FULL_TURN;
+      rocks.lean[count] = leanRoll * rules.lean;
+      rocks.kind[count] = kind;
+      rocks.shade[count] = Math.floor(shadeRoll * 256);
+      count++;
+    }
+  }
+  rocks.count = count;
+  return finish(rocks, rules.max);
+}
+
+/**
+ * The island's trees and rocks, for the woods the seed picks. They stand on
+ * `ground`, the island with the road fitted into it.
+ *
+ * @param edge distance from every cell to the edge of the road, in metres (see edgeDistance)
+ */
+export function buildDecor(seed: number, ground: HeightField, cover: Cover, edge: Float32Array, cfg: GenConfig): Decor {
+  const woods = pickWoods(seed, cfg.world.decor);
+  return { woods, trees: placeTrees(seed, ground, cover, edge, cfg, woods), rocks: placeRocks(seed, ground, cover, edge, cfg) };
 }

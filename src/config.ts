@@ -6,7 +6,7 @@
  * an argument, which keeps generation pure and easy to test.
  */
 
-import type { CoastKind, LandformKind, LayoutStyle, ReliefKind, RouteKind, TreeKind, WidthKind, WoodsKind } from './gen/types';
+import type { CloudCover, CoastKind, LandformKind, LayoutStyle, ReliefKind, RouteKind, TreeKind, WidthKind, WoodsKind } from './gen/types';
 
 export { GENERATOR_VERSION } from './gen/version';
 
@@ -694,6 +694,59 @@ export interface DecorConfig {
   /** How often seeds get each amount of woodland, relative to the others. */
   woods: Record<WoodsKind, number>;
   trees: TreeConfig;
+  rocks: RockConfig;
+}
+
+/**
+ * Where rocks lie. Like the trees, at most one to a square: boulders on rocky
+ * ground, small rocks along the shore, and the odd boulder out on the grass.
+ */
+export interface RockConfig {
+  /** Width of a square, and how far a rock lies from its middle (see `TreeConfig`). */
+  spacing: number;
+  jitter: number;
+  /** A boulder needs at least this share of rock cover (0 to 1), on ground no steeper than `maxSlope`; such a square has one with this chance. */
+  minRock: number;
+  maxSlope: number;
+  chance: number;
+  /** Chance that a grassy square has a boulder. */
+  field: number;
+  /** Shore rocks: ground between these heights (negative is under water) has one with this chance, between these sizes. */
+  shore: { height: Range; chance: number; size: Range };
+  /** No rock lies closer to the road edge than this. */
+  roadClearance: number;
+  /** Smallest and largest boulder, in metres across (about). */
+  size: Range;
+  /** A rock's height is this share of its size: they lie flat. */
+  tall: Range;
+  /** Rocks are tipped over by up to this, in radians. */
+  lean: number;
+  /** Most rocks an island may have. */
+  max: number;
+}
+
+/** The clouds a seed's sky has. Distances and heights in metres. */
+export interface CloudConfig {
+  /** How often seeds get each amount of cloud, relative to the others. */
+  cover: Record<CloudCover, number>;
+  /** How many clouds each amount means: fewest and most. */
+  count: Record<CloudCover, Range>;
+  /** The clouds are spread over a square this wide, centred on the island, and wrap round it as they drift. */
+  span: number;
+  /** No cloud hangs lower than this, nor less than `aboveSummit` over the island's highest ground. */
+  floor: number;
+  aboveSummit: number;
+  /** The undersides of the clouds are spread over this much height above that. */
+  layer: number;
+  /** How many puffs a cloud is made of. */
+  puffs: Range;
+  /** Radius of a puff, and its thickness up and down as a share of that. */
+  puffSize: Range;
+  flatten: number;
+  /** How far a puff may lie from the middle of its cloud: along it (east and west), across it, and upward. */
+  reach: { along: number; across: number; up: number };
+  /** Each cloud is this many times the sizes above, so there are small clouds and big ones. */
+  scale: Range;
 }
 
 /**
@@ -747,6 +800,7 @@ export interface WorldConfig {
   cover: CoverConfig;
   sky: SkyConfig;
   decor: DecorConfig;
+  clouds: CloudConfig;
 }
 
 /** The seed's time of day. */
@@ -1249,6 +1303,33 @@ export const config: GameConfig = {
         lean: { broadleaf: 0.04, pine: 0.04, palm: 0.22 },
         max: 22000,
       },
+      rocks: {
+        spacing: 12,
+        jitter: 0.35,
+        minRock: 0.35,
+        maxSlope: 1,
+        chance: 0.5,
+        field: 0.004,
+        shore: { height: [-1.2, 2.2], chance: 0.25, size: [0.4, 1.6] },
+        roadClearance: 6,
+        size: [0.8, 3.2],
+        tall: [0.5, 1],
+        lean: 1.2,
+        max: 5000,
+      },
+    },
+    clouds: {
+      cover: { clear: 0.3, fair: 0.45, cloudy: 0.25 },
+      count: { clear: [3, 7], fair: [10, 18], cloudy: [24, 38] },
+      span: 7000,
+      floor: 320,
+      aboveSummit: 60,
+      layer: 180,
+      puffs: [5, 9],
+      puffSize: [28, 60],
+      flatten: 0.6,
+      reach: { along: 75, across: 34, up: 26 },
+      scale: [0.7, 1.6],
     },
   },
   render: {

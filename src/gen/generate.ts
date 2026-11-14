@@ -10,7 +10,9 @@ import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
 import type { WorldResult } from './types';
 import { GENERATOR_VERSION } from './version';
+import { pickClouds } from './world/clouds';
 import { buildCover } from './world/cover';
+import { buildDecor } from './world/decor';
 import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
 import { fitReport } from './world/report';
@@ -35,6 +37,9 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const fitted = fitRoad({ ...road, natural: island.inland }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
   const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
+  const decor = buildDecor(track.seed, ground, cover, island.edge, config);
+  let highest = 0;
+  for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
   const report = fitReport(
     { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor },
@@ -59,12 +64,14 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     report,
     mountains: island.mountains.map(({ x, z, summit }) => ({ x, z, summit })),
     sky: pickSky(track.seed, config.world.sky),
+    decor,
+    clouds: pickClouds(track.seed, config.world.clouds, highest),
   };
 }
 
 /**
  * A fingerprint of a whole world: the track's fingerprint plus every height,
- * every cover value and the fit report. Two runs with the same fingerprint
+ * every cover value, the fit report, the sky, and every tree, rock and cloud. Two runs with the same fingerprint
  * produced the same world.
  */
 export function hashWorld(world: WorldResult): string {
@@ -86,5 +93,15 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers([report.groundThroughRoad, report.roadFloating]);
   for (const mountain of world.mountains) hasher.numbers([mountain.x, mountain.z, mountain.summit]);
   hasher.numbers([world.sky.hour, world.sky.bearing]);
+  hasher.text(world.decor.woods);
+  for (const scatter of [world.decor.trees, world.decor.rocks]) {
+    hasher.numbers([scatter.count]);
+    hasher.numbers(scatter.x).numbers(scatter.y).numbers(scatter.z).numbers(scatter.size).numbers(scatter.tall);
+    hasher.numbers(scatter.turn).numbers(scatter.lean).numbers(scatter.kind).numbers(scatter.shade);
+  }
+  const { clouds } = world;
+  hasher.text(clouds.cover).numbers([clouds.span, clouds.count, clouds.puffCount]);
+  hasher.numbers(clouds.x).numbers(clouds.z).numbers(clouds.puffCloud);
+  hasher.numbers(clouds.puffX).numbers(clouds.puffY).numbers(clouds.puffZ).numbers(clouds.puffSize).numbers(clouds.puffThick);
   return hasher.digest();
 }

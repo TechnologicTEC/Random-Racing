@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { generateWorld } from '../generate';
 import type { Scatter, WoodsKind, WorldResult } from '../types';
-import { pickWoods, placeTrees, TREE_KINDS } from './decor';
+import { buildDecor, pickWoods, placeRocks, placeTrees, ROCK_KINDS, TREE_KINDS } from './decor';
 import { sampleField, sampleGrid } from './heightfield';
 import { edgeDistance, nearestRoad } from './nearest';
 
@@ -17,6 +17,7 @@ interface Built {
   /** Distance from every cell to the road edge, as the island works it out. */
   edge: Float32Array;
   byWoods: Record<WoodsKind, Scatter>;
+  rocks: Scatter;
 }
 
 function build(seed: number): Built {
@@ -24,7 +25,8 @@ function build(seed: number): Built {
   const winner = world.track.candidates[world.track.winnerIndex]!;
   const edge = edgeDistance(nearestRoad(winner.line, world.ground), world.road.width);
   const place = (woods: WoodsKind): Scatter => placeTrees(seed, world.ground, world.cover, edge, config, woods);
-  return { seed, world, edge, byWoods: { open: place('open'), wooded: place('wooded'), forest: place('forest') } };
+  const rocks = placeRocks(seed, world.ground, world.cover, edge, config);
+  return { seed, world, edge, byWoods: { open: place('open'), wooded: place('wooded'), forest: place('forest') }, rocks };
 }
 
 // Flat, rolling, hilly and mountain seeds; inland and coastal; every mountain shape.
@@ -277,5 +279,111 @@ describe('placeTrees', () => {
     }
     expect(wooded).toBeGreaterThan(20);
     expect(open).toBeGreaterThan(20);
+  });
+});
+
+describe('placeRocks', () => {
+  const rocks = rules.rocks;
+  const rockKind = (scatter: Scatter, i: number): string => ROCK_KINDS[scatter.kind[i]!]!;
+
+  it('gives the same seed the same rocks every time', () => {
+    const { seed, world, edge } = built[0]!;
+    expect(placeRocks(seed, world.ground, world.cover, edge, config)).toEqual(built[0]!.rocks);
+  });
+
+  it('is plain data: a count and arrays of that length', () => {
+    for (const { rocks: scatter } of built) {
+      for (const list of [scatter.x, scatter.y, scatter.z, scatter.size, scatter.tall, scatter.turn, scatter.lean, scatter.kind, scatter.shade]) {
+        expect(list).toHaveLength(scatter.count);
+      }
+      expect(scatter.count).toBeLessThanOrEqual(rocks.max);
+    }
+  });
+
+  it('rests every rock on the ground inside the tile, clear of the road', () => {
+    const half = config.world.tile.extent / 2;
+    for (const { world, edge, rocks: scatter } of built) {
+      let worst = 0;
+      let nearest = Infinity;
+      let furthest = 0;
+      for (let i = 0; i < scatter.count; i++) {
+        const x = scatter.x[i]!;
+        const z = scatter.z[i]!;
+        furthest = Math.max(furthest, Math.abs(x), Math.abs(z));
+        worst = Math.max(worst, Math.abs(scatter.y[i]! - sampleField(world.ground, x, z, -99)));
+        nearest = Math.min(nearest, sampleGrid(world.ground, edge, x, z, 0));
+      }
+      expect(furthest).toBeLessThan(half);
+      expect(worst).toBeLessThan(0.01);
+      expect(nearest).toBeGreaterThanOrEqual(rocks.roadClearance - 0.01);
+    }
+  });
+
+  it('knows three kinds: boulders on rocky ground, rocks along the shore, and a few out in the fields', () => {
+    expect(ROCK_KINDS).toEqual(['boulder', 'shore', 'field']);
+    for (const { world, rocks: scatter } of built) {
+      let stray = 0;
+      for (let i = 0; i < scatter.count; i++) {
+        const x = scatter.x[i]!;
+        const z = scatter.z[i]!;
+        const y = scatter.y[i]!;
+        const kind = rockKind(scatter, i);
+        if (kind === 'boulder') {
+          if (sampleGrid(world.ground, world.cover.rock, x, z, 0) < rocks.minRock * 255 - 0.01) stray++;
+          if (slopeAt(world, x, z) > rocks.maxSlope + 1e-6 || y <= 0) stray++;
+        } else if (kind === 'shore') {
+          if (y < rocks.shore.height[0] - 0.01 || y > rocks.shore.height[1] + 0.01) stray++;
+        } else if (kind === 'field') {
+          if (sampleGrid(world.ground, world.cover.grass, x, z, 0) < 128 || y <= 0) stray++;
+        } else {
+          stray++;
+        }
+      }
+      expect(stray).toBe(0);
+    }
+  });
+
+  it('sizes rocks within their ranges: shore rocks small, boulders up to several metres', () => {
+    for (const { rocks: scatter } of built) {
+      let bad = 0;
+      for (let i = 0; i < scatter.count; i++) {
+        const [smallest, largest] = rockKind(scatter, i) === 'shore' ? rocks.shore.size : rocks.size;
+        if (scatter.size[i]! < smallest - 1e-5 || scatter.size[i]! > largest + 1e-5) bad++;
+        if (scatter.tall[i]! < rocks.tall[0] - 1e-5 || scatter.tall[i]! > rocks.tall[1] + 1e-5) bad++;
+        if (scatter.turn[i]! < 0 || scatter.turn[i]! >= TAU) bad++;
+        if (scatter.lean[i]! < 0 || scatter.lean[i]! > rocks.lean + 1e-5) bad++;
+      }
+      expect(bad).toBe(0);
+    }
+  });
+
+  it('strews boulders over mountains and rocks along every shore', () => {
+    for (const { world, rocks: scatter } of built) {
+      const count = (kind: string): number => scatter.kind.filter((k) => ROCK_KINDS[k] === kind).length;
+      expect(count('shore')).toBeGreaterThanOrEqual(10);
+      if (world.track.character.relief === 'mountain') expect(count('boulder')).toBeGreaterThan(100);
+    }
+  });
+});
+
+describe('buildDecor', () => {
+  it('gives the seed its own woods, the trees for them, and the rocks', () => {
+    const { seed, world, edge, byWoods, rocks } = built[0]!;
+    const decor = buildDecor(seed, world.ground, world.cover, edge, config);
+    expect(decor.woods).toBe(pickWoods(seed, rules));
+    expect(decor.trees).toEqual(byWoods[decor.woods]);
+    expect(decor.rocks).toEqual(rocks);
+  });
+
+  it('builds the decoration of a whole island quickly', () => {
+    // Fastest of three, so a busy machine does not fail the test.
+    const { seed, world, edge } = built.find((b) => b.seed === 12)!;
+    let fastest = Infinity;
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now();
+      buildDecor(seed, world.ground, world.cover, edge, config);
+      fastest = Math.min(fastest, performance.now() - started);
+    }
+    expect(fastest).toBeLessThan(80);
   });
 });

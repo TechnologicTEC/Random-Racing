@@ -64,6 +64,16 @@ describe('handleRequest for a whole world', () => {
     expect(transfer).toContain(response.result.natural.height.buffer);
     expect(new Set(transfer).size).toBe(transfer.length);
   });
+
+  it('hands over the trees, rocks and clouds with the world', () => {
+    const { response, transfer } = run({ id: 4, scope: 'world', seed: 42, config: coarse })[0]!;
+    if (response.type !== 'done' || response.scope !== 'world') throw new Error('expected a finished world');
+    const { decor, clouds } = response.result;
+    expect(decor.trees.count).toBeGreaterThan(0);
+    for (const list of [decor.trees.x, decor.trees.kind, decor.rocks.x, decor.rocks.shade, clouds.x, clouds.puffY, clouds.puffCloud]) {
+      expect(transfer).toContain(list.buffer);
+    }
+  });
 });
 
 describe('collectBuffers', () => {
