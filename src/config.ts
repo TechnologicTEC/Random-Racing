@@ -6,7 +6,7 @@
  * an argument, which keeps generation pure and easy to test.
  */
 
-import type { CoastKind, LandformKind, LayoutStyle, ReliefKind, RouteKind, WidthKind } from './gen/types';
+import type { CoastKind, LandformKind, LayoutStyle, ReliefKind, RouteKind, TreeKind, WidthKind, WoodsKind } from './gen/types';
 
 export { GENERATOR_VERSION } from './gen/version';
 
@@ -689,6 +689,54 @@ export interface CharacterConfig {
   route: Record<RouteKind, number>;
 }
 
+/** Trees and rocks: scenery that nothing collides with. Distances and heights in metres. */
+export interface DecorConfig {
+  /** How often seeds get each amount of woodland, relative to the others. */
+  woods: Record<WoodsKind, number>;
+  trees: TreeConfig;
+}
+
+/**
+ * Where trees grow. The tile is divided into squares and each square holds at
+ * most one tree, so trees never stand on top of each other.
+ */
+export interface TreeConfig {
+  /** Width of a square. */
+  spacing: number;
+  /** A tree stands up to this share of the spacing from the middle of its square, each way. Under 0.5, so neighbours keep apart. */
+  jitter: number;
+  /** Size of the woods: metres per unit of the pattern they follow. */
+  scale: number;
+  /** Trees grow where the pattern (0 to 1) is above this level, by the seed's woods. Lower means more of the island is wooded. */
+  level: Record<WoodsKind, number>;
+  /** The edge of a wood is ragged: each tree needs the pattern up to this much above the level. */
+  ragged: number;
+  /** Chance that a square outside the woods holds a tree standing on its own. */
+  lone: number;
+  /** No tree stands closer to the road edge than this. */
+  roadClearance: number;
+  /** No tree grows on ground steeper than this, as a fraction. */
+  maxSlope: number;
+  /** Broadleaf trees and pines need at least this share of grass cover (0 to 1), which keeps them off sand, rock, snow and the roadside. */
+  minGrass: number;
+  /** Trees thin out between these heights, and none grow above the second. */
+  treeLine: Range;
+  /** Trees near the tree line are smaller, by up to this share. */
+  stunt: number;
+  /** Below the first height every tree is broadleaf, above the second every one a pine, mixed between. */
+  pineBand: Range;
+  /** Palms: ground between these heights, with sea within `shore` metres, has a palm in each square with this chance. They do not follow the woods. */
+  palm: { height: Range; shore: number; chance: number };
+  /** Smallest and largest of each kind, as a multiple of its shape's usual size. */
+  size: Record<TreeKind, Range>;
+  /** Each tree's height is stretched by a factor in this range. */
+  tall: Range;
+  /** The furthest each kind leans from upright, in radians. */
+  lean: Record<TreeKind, number>;
+  /** Most trees an island may have. Past it, trees are thinned evenly over the whole island. */
+  max: number;
+}
+
 export interface WorldConfig {
   character: CharacterConfig;
   relief: ReliefConfig;
@@ -698,6 +746,7 @@ export interface WorldConfig {
   scenery: SceneryConfig;
   cover: CoverConfig;
   sky: SkyConfig;
+  decor: DecorConfig;
 }
 
 /** The seed's time of day. */
@@ -1179,6 +1228,28 @@ export const config: GameConfig = {
       variationScale: 55,
     },
     sky: { hours: [7, 19.5] },
+    decor: {
+      woods: { open: 0.3, wooded: 0.45, forest: 0.25 },
+      trees: {
+        spacing: 9,
+        jitter: 0.3,
+        scale: 260,
+        level: { open: 0.72, wooded: 0.55, forest: 0.36 },
+        ragged: 0.12,
+        lone: 0.012,
+        roadClearance: 8,
+        maxSlope: 0.5,
+        minGrass: 0.55,
+        treeLine: [100, 125],
+        stunt: 0.3,
+        pineBand: [20, 70],
+        palm: { height: [0.9, 6], shore: 28, chance: 0.3 },
+        size: { broadleaf: [0.8, 1.5], pine: [0.8, 1.55], palm: [0.85, 1.3] },
+        tall: [0.9, 1.15],
+        lean: { broadleaf: 0.04, pine: 0.04, palm: 0.22 },
+        max: 22000,
+      },
+    },
   },
   render: {
     chunkCells: 64,

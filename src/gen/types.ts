@@ -306,6 +306,36 @@ export interface Sky {
   bearing: number;
 }
 
+/** How wooded an island is: a few groves on open grassland, woods and clearings, or mostly forest. */
+export type WoodsKind = 'open' | 'wooded' | 'forest';
+
+/** The kinds of tree. A tree's `kind` number is its place in `TREE_KINDS` (gen/world/decor.ts). */
+export type TreeKind = 'broadleaf' | 'pine' | 'palm';
+
+/**
+ * Things scattered over the island (trees, or rocks), one entry in each list
+ * per thing. Positions in metres; angles in radians.
+ */
+export interface Scatter {
+  count: number;
+  /** Where it stands, and the height of the ground under it. */
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  /** How big it is, as a multiple of its shape's usual size. */
+  size: Float32Array;
+  /** Its height as a multiple of that again: above 1 is tall and thin, below 1 squat. */
+  tall: Float32Array;
+  /** How far it is turned about its upright axis, 0 to a full circle. */
+  turn: Float32Array;
+  /** How far it leans from upright, towards the way it is turned. */
+  lean: Float32Array;
+  /** Which kind it is; the numbers are listed where the scatter is built. */
+  kind: Uint8Array;
+  /** How light or dark it is, 0 (darkest) to 255 (lightest), so no two look quite alike. */
+  shade: Uint8Array;
+}
+
 /** Where a mountain's summit is, in metres, and its height above the sea. */
 export interface MountainSummit {
   x: number;
