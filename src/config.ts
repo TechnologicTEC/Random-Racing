@@ -829,12 +829,23 @@ export interface RenderConfig {
   seaFloorDepth: number;
   /** Sharp screens are drawn at no more than this many pixels per CSS pixel. */
   maxPixelRatio: number;
+  frames: FramesConfig;
   daylight: DaylightConfig;
   sky: SkyDomeConfig;
   water: WaterConfig;
   decor: DecorViewConfig;
   clouds: CloudViewConfig;
   grass: GrassConfig;
+}
+
+/** How the page measures the time its frames take. */
+export interface FramesConfig {
+  /** How many of the latest frames the numbers are worked out from. */
+  keep: number;
+  /** The frame time to hold, in milliseconds: 16.7 is 60 frames per second. A frame over it counts as slow. */
+  target: number;
+  /** The readout on the page is brought up to date this often, in seconds. */
+  readoutEvery: number;
 }
 
 /**
@@ -1455,6 +1466,7 @@ export const config: GameConfig = {
     seaSize: 16000,
     seaFloorDepth: -23,
     maxPixelRatio: 2,
+    frames: { keep: 600, target: 16.7, readoutEvery: 0.5 },
     daylight: {
       sunrise: 6.5,
       sunset: 20,

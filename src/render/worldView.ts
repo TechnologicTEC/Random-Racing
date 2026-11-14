@@ -79,12 +79,21 @@ export interface WorldView {
   setGrassTime(seconds: number): void;
   /** Shows or hides the grass blades. */
   setGrassShown(shown: boolean): void;
+  /** Shows or hides the surface of the sea. Hidden, the sea bed shows: for telling what the water costs. */
+  setWaterShown(shown: boolean): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
   resize(width: number, height: number, pixelRatio: number): void;
   render(): void;
+  /**
+   * Waits until the graphics card has finished everything it was asked to draw. Browsers hand drawing over and
+   * carry on, so without this the time between frames says little about what a frame costs.
+   */
+  finish(): void;
   stats(): ViewStats;
   pixelCounts(): PixelCounts;
+  /** The name of the graphics card doing the drawing, as the browser gives it. */
+  graphics(): string;
   dispose(): void;
 }
 
@@ -145,6 +154,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   let land: HeightField | null = null;
   /** The point the camera was last aimed at. */
   const aim = new THREE.Vector3();
+  const onePixel = new Uint8Array(4);
 
   /** Everything that follows the camera, moved to it. Called before every picture. */
   const follow = (): void => {
@@ -233,6 +243,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       grassShown = shown;
     },
 
+    setWaterShown(shown) {
+      water.mesh.visible = shown;
+    },
+
     setCamera(eye, look) {
       camera.position.set(eye.x, eye.y, eye.z);
       camera.lookAt(look.x, look.y, look.z);
@@ -249,6 +263,12 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     render() {
       follow();
       renderer.render(scene, camera);
+    },
+
+    finish() {
+      // Reading a pixel back cannot be answered until every drawing command before it is done.
+      const gl = renderer.getContext();
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, onePixel);
     },
 
     stats() {
@@ -336,6 +356,12 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         mean: mean(sums, total),
         bands: bands.map((band) => mean(band, Math.max(1, band[3]!))),
       };
+    },
+
+    graphics() {
+      const gl = renderer.getContext();
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
     },
 
     dispose() {

@@ -8,6 +8,7 @@ import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
+import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
 
@@ -23,6 +24,12 @@ export interface ViewHandle {
   camera(): { mode: CameraMode; distance: number; lapLength: number; playing: boolean; speed: number };
   /** The fit report of the world being shown, once there is one. */
   report(): FitReport | null;
+  /** What the latest frames took, in milliseconds. Only frames drawn one straight after another are counted. */
+  frames(): FrameStats;
+  /** Forgets the frames counted so far. */
+  resetFrames(): void;
+  /** The name of the graphics card doing the drawing. */
+  graphics(): string;
   /** What the world being shown has for scenery, whether or not it is drawn. */
   decor(): { woods: WoodsKind; trees: number; rocks: number; sky: CloudCover; clouds: number; puffs: number } | null;
 }
@@ -48,6 +55,7 @@ const TEMPLATE = `
       </div>
       <button type="button" class="primary" data-ref="new" data-testid="world-new">New island</button>
     </div>
+    <div class="world-card world-frames" data-ref="frames" data-testid="world-frames" hidden></div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
     </div>
@@ -67,7 +75,9 @@ const HINTS: Record<CameraMode, string> = {
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
  * close, water, hairpin, start, summit, climb, sun) or `at=x,z` for a close view of one place;
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
- * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades.
+ * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
+ * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
+ * `sync=1` to wait for the graphics card to finish each frame before the next, so frame times are what frames cost (for `npm run perf`).
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -91,6 +101,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const view = createWorldView(canvas, config.render);
   view.setDecorShown(params.get('decor') !== 'off');
   view.setGrassShown(params.get('grass') !== 'off');
+  view.setWaterShown(params.get('water') !== 'off');
+  const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
+  const readout = ref('frames');
+  readout.hidden = params.get('fps') !== '1';
+  const sync = params.get('sync') === '1';
+  document.body.dataset.worldSync = String(sync);
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
   let mode: CameraMode = params.get('cam') === 'orbit' ? 'orbit' : 'fly';
   let flight: FlyPath | null = null;
@@ -160,11 +176,23 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     }
   };
 
+  /** Writes the latest frame times, and what the last frame drew, on the readout. */
+  const renderReadout = (): void => {
+    const { count, median } = meter.stats();
+    const { triangles, calls } = view.stats();
+    const speed = count > 0 ? `${median.toFixed(1)} ms · ${Math.round(1000 / median)} fps` : 'held still';
+    readout.textContent = `${speed} · ${Math.round(triangles / 1000)}k triangles · ${calls} calls`;
+  };
+
   // Draw only when something has changed. The moving waves change every frame; a still picture costs nothing while it is left alone.
   let last = performance.now();
+  /** Whether the frame before this one was drawn: only then is the time since it the time a frame takes. */
+  let drewLast = false;
+  let readoutAge = Infinity;
   const frame = (now: number): void => {
+    const gap = now - last;
     // A long gap (a hidden tab, say) must not fling the camera down the road.
-    const seconds = Math.min(0.05, (now - last) / 1000);
+    const seconds = Math.min(0.05, gap / 1000);
     last = now;
     if (mode === 'fly' && playing && flight) {
       distance = (distance + speed * seconds) % flight.length;
@@ -181,7 +209,17 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (dirty && !building) {
       aimCamera();
       view.render();
+      if (sync) view.finish();
       dirty = false;
+      if (drewLast) meter.add(gap);
+      drewLast = true;
+    } else {
+      drewLast = false;
+    }
+    readoutAge += gap / 1000;
+    if (!readout.hidden && readoutAge >= config.render.frames.readoutEvery) {
+      renderReadout();
+      readoutAge = 0;
     }
     requestAnimationFrame(frame);
   };
@@ -331,7 +369,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (key === ' ' && mode === 'fly') setPlaying(!playing);
     else if (key === 'c') setMode(mode === 'fly' ? 'orbit' : 'fly');
     else if (key === 'n') void show(randomSeed(), false);
-    else if (key === 'arrowup') speed = Math.min(fly.speedRange[1], speed * 1.25);
+    else if (key === 'f') {
+      readout.hidden = !readout.hidden;
+      if (!readout.hidden) renderReadout();
+    } else if (key === 'arrowup') speed = Math.min(fly.speedRange[1], speed * 1.25);
     else if (key === 'arrowdown') speed = Math.max(fly.speedRange[0], speed / 1.25);
     else return;
     event.preventDefault();
@@ -349,6 +390,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     orbit: () => orbit,
     camera: () => ({ mode, distance, lapLength: flight?.length ?? 0, playing, speed }),
     report: () => report,
+    frames: () => meter.stats(),
+    resetFrames: () => meter.reset(),
+    graphics: () => view.graphics(),
     decor: () =>
       shown && {
         woods: shown.decor.woods,

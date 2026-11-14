@@ -63,6 +63,21 @@ body,
   margin-top: 8px;
 }
 
+.world-frames {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.world-frames[hidden] {
+  display: none;
+}
+
 .world-loading {
   position: absolute;
   inset: 0;

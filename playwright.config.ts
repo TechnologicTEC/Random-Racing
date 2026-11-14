@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'e2e',
+  // Frame times on a real graphics card have their own run (`npm run perf`, playwright.perf.config.ts).
+  testIgnore: /perf\.spec\.ts/,
   outputDir: 'test-results',
   fullyParallel: true,
   // Each page now generates whole islands, which keeps a processor core busy. More browsers than this at once and the slow ones time out.

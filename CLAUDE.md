@@ -27,6 +27,7 @@ Run from the repo folder in PowerShell.
 - `npm test`: run the Vitest unit tests once. `npm run test:watch` reruns them on save.
 - `npm run typecheck`: type-check everything, then check `src/core` and `src/gen` again without browser types.
 - `npm run e2e`: run the Playwright smoke tests and screenshots (starts the dev server itself).
+- `npm run perf`: measure frame times on the real graphics card. Opens a real browser window for about 8 minutes; leave it in front, plugged in, with little else open. Not part of `npm run e2e`. Fewer runs: `$env:SEEDS = "7"; $env:PARTS = "0"; npm run perf`.
 - `npm run build`: type-check and build to `dist/`.
 - Screenshots land in `test-results/screens/`. To choose what is captured: `$env:SEEDS = "5,6,7"; $env:SHEETS = "1,21"; npm run e2e` (clear them afterwards with `Remove-Item Env:SEEDS, Env:SHEETS`).
 - Lab addresses: `/?seed=48213` (one seed), `/?sheet=20&from=1` (contact sheet), `/?seeds=5,99` (chosen seeds), `&candidate=7` (one candidate), `&minRadius=30` or `&gapWidths=4` (what-if rules).

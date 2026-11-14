@@ -492,6 +492,73 @@ test.describe('grass', () => {
   });
 });
 
+test.describe('frame times', () => {
+  test('counts the frames it draws while flying, and starts again when asked', async ({ page }) => {
+    await openWorld(page, 'seed=7');
+    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count).toBeGreaterThan(5);
+    const frames = await page.evaluate(() => window.seedCircuit.view!.frames());
+    expect(frames.median).toBeGreaterThan(0);
+    expect(frames.worst).toBeGreaterThanOrEqual(frames.p95);
+    expect(frames.p95).toBeGreaterThanOrEqual(frames.median);
+    const after = await page.evaluate(() => {
+      window.seedCircuit.view!.resetFrames();
+      return window.seedCircuit.view!.frames().count;
+    });
+    expect(after).toBe(0);
+  });
+
+  test('counts nothing while the picture is held still', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1');
+    await page.waitForTimeout(500);
+    expect((await page.evaluate(() => window.seedCircuit.view!.frames())).count).toBe(0);
+  });
+
+  test('shows frame times, triangles and draw calls when the address says fps=1', async ({ page }) => {
+    await openWorld(page, 'seed=7&fps=1');
+    const readout = page.getByTestId('world-frames');
+    await expect(readout).toBeVisible();
+    await expect(readout).toHaveText(/\d+(\.\d)? ms · \d+ fps · \d+k triangles · \d+ calls/);
+  });
+
+  test('keeps the readout hidden until F is pressed, and hides it again', async ({ page }) => {
+    await openWorld(page, 'seed=7');
+    const readout = page.getByTestId('world-frames');
+    await expect(readout).toBeHidden();
+    await page.keyboard.press('f');
+    await expect(readout).toBeVisible();
+    await expect(readout).toHaveText(/ ms · /);
+    await page.keyboard.press('f');
+    await expect(readout).toBeHidden();
+  });
+
+  test('waits for each frame to be drawn before the next when the address says sync=1, and still counts frames', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await openWorld(page, 'seed=7&sync=1');
+    await expect(page.locator('body')).toHaveAttribute('data-world-sync', 'true');
+    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count).toBeGreaterThan(5);
+    expect(errors).toEqual([]);
+    await openWorld(page, 'seed=7');
+    await expect(page.locator('body')).toHaveAttribute('data-world-sync', 'false');
+  });
+
+  test('names the graphics card that is drawing', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1');
+    expect((await page.evaluate(() => window.seedCircuit.view!.graphics())).length).toBeGreaterThan(3);
+  });
+
+  test('leaves the sea surface out when the address says water=off', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&decor=off');
+    const whole = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&decor=off&water=off');
+    const dry = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    // One draw call fewer, and most of the light green-blue of the shallows gone: the bare sea bed shows instead.
+    expect(dry.stats.calls).toBe(whole.stats.calls - 1);
+    expect(whole.seen.shallow).toBeGreaterThan(500);
+    expect(dry.seen.shallow).toBeLessThan(whole.seen.shallow * 0.5);
+  });
+});
+
 test.describe('3D screenshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Screenshots are taken in Chromium only');
 

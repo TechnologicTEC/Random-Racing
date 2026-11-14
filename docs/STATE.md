@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15b (step 15 is planned and recorded under "Step 15" below; 15a done): a frame-time meter and baseline frame times on a real graphics card, reported to Tane before going on. Then 15c to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15c (step 15 is planned and recorded under "Step 15" below; 15a and 15b done, baseline frame times there): far-ground detail levels. Then 15d to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a and 15b done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -523,7 +523,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | # | Step | Status |
 | --- | --- | --- |
 | 15a | Record the plan and Tane's choices here | Done |
-| 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | To do |
+| 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | Done (results below) |
 | 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | To do |
 | 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | To do |
 | 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | To do |
@@ -534,6 +534,34 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 **Budgets.** High holds a median of 16.7 ms or less (95th percentile under about 20 ms) in every measured view at 1080p on the Arc laptop; Low is at least about a third faster. If the baseline is already over, or near shadows push High over and the levers do not bring it back, report to Tane before going on. Near shadows add at most about 200k triangles and 90 draw calls to a view from the road. The browser suite takes 428 s now; if it grows by more than about a quarter, tests that are not about shadows open with `shadows=off`.
 
 **Risks:** `SunLight` is new in Three.js (fallback: one ordinary shadow map following the camera, about 200 m each way, with land and cloud shade unchanged); wiring Three.js's shadow lookup into the grass shader (fallback: grass takes land and cloud shade only); streaks in the land shade along the sun's direction at very low sun, and a soft 3 m edge; stripes or gaps where shadows meet their casters on flat-shaded shapes; cloud shadows at low sun fall kilometres from their clouds and will not line up exactly; 07:00 and 19:30 are already quite dark, and long mountain shadows make parts darker still (shadow strength is a setting, for Tane to judge); frame times wobble from run to run (each view run three times, the middle one kept).
+
+**15b as built.**
+- `render/frameMeter.ts` (`createFrameMeter`): the last 600 frame times; median, 95th percentile, worst, share over 16.7 ms. Settings in `render.frames`. The page counts a frame only when the frame before it was drawn too, so a still picture counts nothing.
+- A readout at the top right ("6.3 ms · 159 fps · 356k triangles · 51 calls"): `fps=1` in the address or the F key.
+- `water=off` leaves out the sea's surface (the sea bed shows), to tell what the water costs. `sync=1` makes the page wait for the graphics card to finish each frame before the next (`WorldView.finish`, one pixel read back).
+- `ViewHandle.frames()`, `resetFrames()`, `graphics()` (the graphics card's name).
+- `npm run perf` (`e2e/perf.spec.ts`, `playwright.perf.config.ts`): a real Chromium window with the frame limit off and `sync=1`, at 13:00. Each view settles for 1.5 s, then three spells of 3 s are timed and the middle one kept. It fails if the browser is drawing in software. It prints a table; `SEEDS`, `PARTS=0` and `EXTRA` trim or change the runs. `npm run e2e` leaves it out.
+
+- 1,049 unit tests and 238 browser tests pass. The browser suite took 556 s (428 s at 14f, with 14 fewer tests); it ran straight after the frame-time run on a warm laptop, so it is timed again in 15c before anything is read into that.
+
+**Why `sync=1`.** With only the frame limit off, the page handed frames to the graphics card faster than it could draw them: the middle frame time read 0.4 to 1.2 ms with stalls of 16 to 90 ms. Waiting for each frame gives what a frame costs (a little more than in play, since the page and the card no longer work at the same time).
+
+**Baseline frame times (2026-11-15), before any shadows.** Intel Arc graphics (Core Ultra 7 155H), Chromium, 13:00. Median and 95th percentile, in ms; 16.7 ms is 60 frames per second.
+
+| View | 1920 by 1080 | 2880 by 1800 (the laptop's screen, full) |
+| --- | --- | --- |
+| Flying the lap (seeds 1, 7, 8, 20, 2024) | 5.2 to 5.9, 95th 6.8 to 7.1 | 9.3 to 9.7, 95th 11.6 to 12.2 (seeds 1, 7, 8) |
+| Circling from above | 8.0 to 9.4, 95th 10.1 to 11.3 | 15.1 to 18.8, 95th 17.7 to 33.5; 11% to 72% of frames over 16.7 ms |
+| Summit view | 5.5 to 7.0, 95th 7.0 to 8.1 | 8.8 to 10.1, 95th 10.3 to 11.7 |
+
+Parts switched off, flying at 1080p (seeds 1, 7, 8): whole 5.2 to 5.9 ms; no grass 4.8 to 5.4; no trees, rocks or clouds 4.9 to 5.5; no sea surface 4.8 to 5.3; none of the three 4.2 to 4.7.
+
+**What the numbers say.**
+- At 1080p every view holds 60 frames per second with room to spare: the slowest (circling) leaves about 6 ms for shadows.
+- Triangles hardly matter on this card: 653k triangles in 132 calls (seed 8's summit) takes 6.6 ms, and switching off grass, scenery and sea together saves only about 1.2 ms of 5.5.
+- Pixels matter most. The laptop's full screen has 2.5 times the pixels of 1080p and takes 1.6 to 2 times as long; the circling view, where the sea fills the picture, goes over 16.7 ms there. This is what Tane's choice of steady speed on High is for.
+- So High's pixel budget does the most for speed; a third level of far-ground detail does little for it here (it still cuts the triangles a weaker card has to draw).
+- Provisional pixel budget for High: about 2.8 million pixels (1080p is 2.1 million, the full screen 5.2 million), to be settled in 15g once shadows are in.
 
 ### Rework risks
 
@@ -890,3 +918,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-14 (Milestone 2):** Step 14 planned in plan mode and approved (Tane chose grass in patches of long and short on every island, blades to about 120 m thinning with distance, a mown strip beside the road, and wildflowers). Step 14a done: the plan is recorded under "Step 14". No code changed.
 - **2026-11-15 (Milestone 2):** Step 14 done in six commits (14a to 14f): the grass settings and maps (`render/grassMaps.ts`), the blades and their sums with the same sums as shader text (`render/grass.ts`), the drawing (`render/grassView.ts`, `grass=off`, `stats().blades`), a look pass from pictures, and screenshots of seeds 1 to 20 plus a time strip. Changed after looking at pictures: blades take their ground's light, no blades on thin cover, a narrower and taller mown strip, wider blades, more and bigger flowers. No generation code changed. Found on the way: a wall-clock test limit failed under load and was loosened; a page made in memory cannot load pictures from disk (contact sheets are written as files); an `out` name in a shader clashed with a local of the same name, caught by the console-error check. 1,043 unit tests and 224 browser tests pass. Next: step 15.
 - **2026-11-15 (Milestone 2):** Step 15 planned in plan mode and approved (Tane chose steady speed over full sharpness on High, a Low setting that keeps tree and barrier shadows, and a quality button that is remembered). Step 15a done: the plan is recorded under "Step 15". No code changed.
+- **2026-11-15 (Milestone 2):** Step 15b done: a frame meter (`render/frameMeter.ts`), a readout on the page (`fps=1`, F key), `water=off`, `sync=1`, and `npm run perf`, which times views in a real browser window on the laptop's Intel Arc graphics. Baseline before shadows: 5 to 9 ms a frame at 1080p in every view; 9 to 19 ms on the full 2880 by 1800 screen, where the circling view goes over 16.7 ms. Pixels cost far more than triangles. Found on the way: with only the frame limit off, frame times read as under a millisecond because the page ran ahead of the graphics card; the page now waits for each frame when timing.
