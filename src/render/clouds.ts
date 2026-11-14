@@ -1,4 +1,6 @@
 import type { Clouds } from '../gen/types';
+import type { Daylight } from './daylight';
+import type { Rgb } from './palette';
 
 /** How the clouds move: metres per second across the map, and how near the edge of their square they start to shrink. */
 export interface CloudDrift {
@@ -17,6 +19,18 @@ export interface CloudDrift {
 export function cloudDrift(wind: readonly [number, number], speed: number, fade: number): CloudDrift {
   const length = Math.hypot(wind[0], wind[1]) || 1;
   return { x: (wind[0] / length) * speed, z: (wind[1] / length) * speed, fade };
+}
+
+/**
+ * The light the clouds give off themselves, so their shaded sides and
+ * undersides are not dark: a share of the light from the sky, which dims and
+ * warms towards evening. An ordinary screen colour, each channel 0 to 1.
+ *
+ * @param fullSkyStrength the strength of the sky's light in full day
+ */
+export function cloudGlow(light: Daylight, share: number, fullSkyStrength: number): Rgb {
+  const strength = share * (light.skyStrength / fullSkyStrength);
+  return [light.skyLight[0] * strength, light.skyLight[1] * strength, light.skyLight[2] * strength];
 }
 
 /**

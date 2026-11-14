@@ -285,7 +285,8 @@ test.describe('water', () => {
   });
 
   test('shows foam where the sea meets the shore', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1&look=water&time=13:00');
+    // Without clouds, which the count would take for foam.
+    await openWorld(page, 'seed=42&still=1&look=water&time=13:00&decor=off');
     const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
     expect(seen.foam / seen.total).toBeGreaterThan(0.002);
   });
@@ -305,6 +306,91 @@ test.describe('water', () => {
     expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest)).toBe(first);
     await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
     expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest)).toBe(first);
+  });
+});
+
+test.describe('trees, rocks and clouds', () => {
+  test('draws every tree, rock and cloud puff of the seed, with no errors', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+
+    // Seed 7 is a wooded, hilly island under a fair sky.
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
+    const { decor, stats } = await page.evaluate(() => ({ decor: window.seedCircuit.view!.decor()!, stats: window.seedCircuit.view!.stats() }));
+    expect(decor.woods).toBe('wooded');
+    expect(decor.trees).toBeGreaterThan(1000);
+    expect(decor.rocks).toBeGreaterThan(100);
+    expect(decor.puffs).toBeGreaterThan(20);
+    expect(stats.trees).toBe(decor.trees);
+    expect(stats.rocks).toBe(decor.rocks);
+    expect(stats.puffs).toBe(decor.puffs);
+
+    // The same island without them: fewer triangles. Seen from far off, every tree and rock is its simpler far shape.
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&decor=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
+    const added = stats.triangles - bare.triangles;
+    expect(added).toBeGreaterThan(decor.trees * 4);
+    expect(added).toBeLessThan(decor.trees * 16 + decor.rocks * 8 + decor.puffs * 80);
+    expect(errors).toEqual([]);
+  });
+
+  test('draws nearby trees in full and far ones simply', async ({ page }) => {
+    // Flying through the woods, the trees close by have several times the triangles of their far shapes.
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00');
+    const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
+    expect(stats.nearGroups).toBeGreaterThan(0);
+    expect(stats.triangles - bare.triangles).toBeGreaterThan(2000);
+    // ...but the far side of the island is still drawn simply: well under a full tree each.
+    expect(stats.triangles - bare.triangles).toBeLessThan(stats.trees * 28);
+  });
+
+  test('hides them all when the address says decor=off', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&decor=off');
+    const { decor, stats } = await page.evaluate(() => ({ decor: window.seedCircuit.view!.decor()!, stats: window.seedCircuit.view!.stats() }));
+    // The world still has them; they are only not drawn.
+    expect(decor.trees).toBeGreaterThan(1000);
+    expect(stats.trees).toBe(0);
+    expect(stats.rocks).toBe(0);
+    expect(stats.puffs).toBe(0);
+  });
+
+  test('shows white clouds in the sky of a cloudy seed', async ({ page }) => {
+    // Seed 2 is a flat island (no snow in sight) under a cloudy sky.
+    await openWorld(page, 'seed=2&still=1&look=sun&time=13:00');
+    const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    await openWorld(page, 'seed=2&still=1&look=sun&time=13:00&decor=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(bare.cloud / bare.total).toBeLessThan(0.0003);
+    expect(seen.cloud / seen.total).toBeGreaterThan(0.002);
+  });
+
+  test('keeps its clouds drifting, and holds them where they are in a still picture', async ({ page }) => {
+    await openWorld(page, 'seed=2&look=sun&time=13:00');
+    const first = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().skyDigest);
+    await page.waitForTimeout(1500);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().skyDigest)).not.toBe(first);
+
+    await openWorld(page, 'seed=2&still=1&look=sun&time=13:00');
+    const still = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().skyDigest);
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().skyDigest)).toBe(still);
+  });
+
+  test('gives a new island its own trees and clouds', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1');
+    const before = await page.evaluate(() => window.seedCircuit.view!.stats());
+    await page.getByTestId('world-new').click();
+    await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '7');
+    await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
+    const { decor, stats } = await page.evaluate(() => ({ decor: window.seedCircuit.view!.decor()!, stats: window.seedCircuit.view!.stats() }));
+    expect(stats.trees).toBe(decor.trees);
+    expect(stats.puffs).toBe(decor.puffs);
+    expect(`${stats.trees}:${stats.rocks}:${stats.puffs}`).not.toBe(`${before.trees}:${before.rocks}:${before.puffs}`);
   });
 });
 

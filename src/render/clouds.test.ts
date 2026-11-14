@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import type { Clouds } from '../gen/types';
 import { pickClouds } from '../gen/world/clouds';
-import { cloudDrift, cloudMatrices, type CloudDrift } from './clouds';
+import { cloudDrift, cloudGlow, cloudMatrices, type CloudDrift } from './clouds';
+import { daylightAt } from './daylight';
 
 /** Two clouds: one in the middle of a 7 km square with two puffs, one 10 m short of its east edge with one. */
 const clouds: Clouds = {
@@ -39,6 +40,25 @@ describe('cloudDrift', () => {
     const blown = cloudDrift(config.render.water.wind, config.render.clouds.speed, config.render.clouds.edgeFade);
     expect(Math.hypot(blown.x, blown.z)).toBeCloseTo(config.render.clouds.speed, 6);
     expect(blown.x * config.render.water.wind[1]).toBeCloseTo(blown.z * config.render.water.wind[0], 6);
+  });
+});
+
+describe('cloudGlow', () => {
+  const daylight = config.render.daylight;
+  const midday = daylightAt(13, 0, daylight);
+  const evening = daylightAt(19.25, 0, daylight);
+
+  it('lights the shaded sides of the clouds with a share of the light from the sky', () => {
+    const glow = cloudGlow(midday, 0.5, daylight.skyStrength);
+    for (let c = 0; c < 3; c++) expect(glow[c]).toBeCloseTo(midday.skyLight[c]! * 0.5 * (midday.skyStrength / daylight.skyStrength), 6);
+    expect(cloudGlow(midday, 0, daylight.skyStrength)).toEqual([0, 0, 0]);
+  });
+
+  it('dims and warms with the evening', () => {
+    const day = cloudGlow(midday, config.render.clouds.glow, daylight.skyStrength);
+    const late = cloudGlow(evening, config.render.clouds.glow, daylight.skyStrength);
+    expect(late[0] + late[1] + late[2]).toBeLessThan(day[0] + day[1] + day[2]);
+    expect(late[0] / late[2]).toBeGreaterThan(day[0] / day[2]);
   });
 });
 

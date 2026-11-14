@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { WorldResult } from '../gen/types';
+import { createCloudView } from './cloudView';
+import { cloudDrift } from './clouds';
 import type { Daylight } from './daylight';
+import { createDecorView } from './decorView';
 import { TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
 import { createSkyDome } from './sky';
@@ -17,6 +20,12 @@ export interface ViewStats {
   /** Triangles and draw calls in the last frame. */
   triangles: number;
   calls: number;
+  /** Trees, rocks and cloud puffs being shown: none when they are hidden. */
+  trees: number;
+  rocks: number;
+  puffs: number;
+  /** Groups of trees or rocks close enough to the camera to be drawn with their full shapes. */
+  nearGroups: number;
 }
 
 /** A rough census of the last frame, used by tests to confirm something sensible was drawn. */
@@ -35,8 +44,12 @@ export interface PixelCounts {
   /** Pixels of the light green-blue of shallow water, and near-white like foam. */
   shallow: number;
   foam: number;
+  /** Near-white pixels in the top two fifths of the picture: clouds, when that part is sky. */
+  cloud: number;
   /** A fingerprint of every pixel, to tell whether two pictures are the same. */
   digest: number;
+  /** A fingerprint of the top two fifths of the picture alone: the sky, when the camera looks level. */
+  skyDigest: number;
   /** Mean colour (0 to 255 each) of the whole picture, and of five bands from top to bottom. */
   mean: [number, number, number];
   bands: Array<[number, number, number]>;
@@ -50,6 +63,10 @@ export interface WorldView {
   setDaylight(light: Daylight): void;
   /** Moves the sea's waves to this many seconds on their clock. */
   setWaveTime(seconds: number): void;
+  /** Moves the clouds to this many seconds on their clock. */
+  setCloudTime(seconds: number): void;
+  /** Shows or hides every tree, rock and cloud. */
+  setDecorShown(shown: boolean): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
   resize(width: number, height: number, pixelRatio: number): void;
@@ -102,6 +119,12 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   const road = new THREE.Group();
   scene.add(road);
 
+  // Trees, rocks and clouds: scenery on top of the ground and in the sky.
+  const decor = createDecorView(cfg.decor);
+  scene.add(decor.object);
+  const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength);
+  scene.add(clouds.object);
+
   const clearGround = (): void => {
     for (const group of [ground, road]) {
       for (const child of group.children) (child as THREE.Mesh).geometry.dispose();
@@ -133,6 +156,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       road.add(createRoadMesh(world.road.kerbs.mesh, roadMaterial));
       road.add(createRoadMesh(world.road.barriers, roadMaterial));
       road.add(createRoadMesh(world.road.gate, roadMaterial));
+      decor.load(world.decor);
+      clouds.load(world.clouds);
     },
 
     setDaylight(light) {
@@ -147,10 +172,20 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       sun.position.set(light.sun.x, light.sun.y, light.sun.z).multiplyScalar(1000);
       sky.update(light);
       water.setDaylight(light);
+      clouds.setDaylight(light);
     },
 
     setWaveTime(seconds) {
       water.setTime(seconds);
+    },
+
+    setCloudTime(seconds) {
+      clouds.setTime(seconds);
+    },
+
+    setDecorShown(shown) {
+      decor.object.visible = shown;
+      clouds.object.visible = shown;
     },
 
     setCamera(eye, look) {
@@ -167,16 +202,28 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
 
     render() {
       sky.mesh.position.copy(camera.position);
+      decor.update(camera.position);
       renderer.render(scene, camera);
     },
 
     stats() {
-      return { chunks: ground.children.length, triangles: renderer.info.render.triangles, calls: renderer.info.render.calls };
+      const shown = decor.object.visible;
+      const counts = decor.counts();
+      return {
+        chunks: ground.children.length,
+        triangles: renderer.info.render.triangles,
+        calls: renderer.info.render.calls,
+        trees: shown ? counts.trees : 0,
+        rocks: shown ? counts.rocks : 0,
+        puffs: shown ? clouds.count() : 0,
+        nearGroups: shown ? counts.nearGroups : 0,
+      };
     },
 
     pixelCounts() {
       // Draw and read back in one go: the picture is only guaranteed to be there until the browser shows it.
       sky.mesh.position.copy(camera.position);
+      decor.update(camera.position);
       renderer.render(scene, camera);
       const gl = renderer.getContext();
       const width = gl.drawingBufferWidth;
@@ -190,7 +237,11 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       let sun = 0;
       let shallow = 0;
       let foam = 0;
+      let cloud = 0;
       let digest = 0;
+      let skyDigest = 0;
+      // The rows come from the bottom of the picture up: the top two fifths start here.
+      const skyFrom = Math.floor(height * 0.6) * width * 4;
       const sums = [0, 0, 0];
       const bands = Array.from({ length: 5 }, () => [0, 0, 0, 0]);
       for (let p = 0; p < pixels.length; p += 4) {
@@ -207,6 +258,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         band[2] += b;
         band[3]++;
         digest = (Math.imul(digest, 31) + ((r << 16) | (g << 8) | b)) | 0;
+        if (p >= skyFrom) {
+          skyDigest = (Math.imul(skyDigest, 31) + ((r << 16) | (g << 8) | b)) | 0;
+          if (r > 185 && g > 185 && b > 185) cloud++;
+        }
         if (r > 245 && g > 190 && b > 120) sun++;
         if (r > 200 && g > 215 && b > 215) foam++;
         else if (g > 110 && b > 100 && r < 110 && Math.abs(g - b) < 45) shallow++;
@@ -217,7 +272,21 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       }
       const total = width * height;
       const mean = (sum: number[], count: number): [number, number, number] => [sum[0]! / count, sum[1]! / count, sum[2]! / count];
-      return { total, land, sea, road, kerb, sun, shallow, foam, digest, mean: mean(sums, total), bands: bands.map((band) => mean(band, Math.max(1, band[3]!))) };
+      return {
+        total,
+        land,
+        sea,
+        road,
+        kerb,
+        sun,
+        shallow,
+        foam,
+        cloud,
+        digest,
+        skyDigest,
+        mean: mean(sums, total),
+        bands: bands.map((band) => mean(band, Math.max(1, band[3]!))),
+      };
     },
 
     dispose() {
@@ -228,6 +297,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       water.dispose();
       floorMaterial.dispose();
       sky.dispose();
+      decor.dispose();
+      clouds.dispose();
       renderer.dispose();
     },
   };

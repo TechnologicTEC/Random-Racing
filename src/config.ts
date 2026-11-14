@@ -855,6 +855,8 @@ export interface CloudViewConfig {
   speed: number;
   /** A cloud within this many metres of the edge of the square the clouds wrap round is shrunk, down to nothing at the edge. */
   edgeFade: number;
+  /** Share of the sky's light the clouds give off themselves, so their shaded sides and undersides are not dark. */
+  glow: number;
 }
 
 /** One train of waves on the sea. It only tilts the surface's shading; the sea itself stays flat. */
@@ -1343,8 +1345,8 @@ export const config: GameConfig = {
     },
     clouds: {
       cover: { clear: 0.3, fair: 0.45, cloudy: 0.25 },
-      count: { clear: [3, 7], fair: [10, 18], cloudy: [24, 38] },
-      span: 7000,
+      count: { clear: [4, 9], fair: [14, 24], cloudy: [34, 52] },
+      span: 5600,
       floor: 320,
       aboveSummit: 60,
       layer: 180,
@@ -1433,7 +1435,7 @@ export const config: GameConfig = {
       stillTime: 0,
     },
     decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: 0.4, shade: [0.8, 1.12] },
-    clouds: { speed: 10, edgeFade: 400 },
+    clouds: { speed: 10, edgeFade: 400, glow: 0.7 },
   },
   camera: {
     orbit: {

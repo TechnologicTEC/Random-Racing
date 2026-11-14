@@ -4,7 +4,7 @@ import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
 import { lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
-import type { FitReport, WorldResult } from '../gen';
+import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
@@ -23,6 +23,8 @@ export interface ViewHandle {
   camera(): { mode: CameraMode; distance: number; lapLength: number; playing: boolean; speed: number };
   /** The fit report of the world being shown, once there is one. */
   report(): FitReport | null;
+  /** What the world being shown has for scenery, whether or not it is drawn. */
+  decor(): { woods: WoodsKind; trees: number; rocks: number; sky: CloudCover; clouds: number; puffs: number } | null;
 }
 
 const TEMPLATE = `
@@ -63,7 +65,8 @@ const HINTS: Record<CameraMode, string> = {
  * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
  * close, water, hairpin, start, summit, climb, sun) or `at=x,z` for a close view of one place;
- * `time=17:45` to open at that time of day instead of the seed's own (held to daylight).
+ * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
+ * `decor=off` to leave out the trees, rocks and clouds.
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -85,6 +88,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const fly = config.camera.fly;
 
   const view = createWorldView(canvas, config.render);
+  view.setDecorShown(params.get('decor') !== 'off');
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
   let mode: CameraMode = params.get('cam') === 'orbit' ? 'orbit' : 'fly';
   let flight: FlyPath | null = null;
@@ -95,7 +99,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let playing = !still;
   // The waves keep moving unless the picture is held still: then they stand at a set moment, so screenshots repeat exactly.
   let waveClock = config.render.water.stillTime;
+  view.setCloudTime(waveClock);
   let report: FitReport | null = null;
+  let shown: WorldResult | null = null;
   let dirty = true;
   /** The time of day shown, and the bearing of the sun's path of the world shown. */
   let hour = 12;
@@ -162,8 +168,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       dirty = true;
     }
     if (!still) {
+      // The clouds drift on the same clock as the waves, down the same wind.
       waveClock += seconds;
       view.setWaveTime(waveClock);
+      view.setCloudTime(waveClock);
       dirty = true;
     }
     if (dirty && !building) {
@@ -250,6 +258,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       building = false;
       view.load(result);
       report = result.report;
+      shown = result;
       // Only the page's first island honours the address's time; a new island has its own.
       bearing = result.sky.bearing;
       seedHour = result.sky.hour;
@@ -335,5 +344,14 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     orbit: () => orbit,
     camera: () => ({ mode, distance, lapLength: flight?.length ?? 0, playing, speed }),
     report: () => report,
+    decor: () =>
+      shown && {
+        woods: shown.decor.woods,
+        trees: shown.decor.trees.count,
+        rocks: shown.decor.rocks.count,
+        sky: shown.clouds.cover,
+        clouds: shown.clouds.count,
+        puffs: shown.clouds.puffCount,
+      },
   };
 }

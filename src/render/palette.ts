@@ -73,10 +73,9 @@ export const ROCKS = {
   boulder: [0.525, 0.5, 0.48] as Rgb,
 };
 
-/** Clouds: white, with a faint light of their own so their shaded sides are never black. */
+/** Clouds: white. Their shaded sides are lit by the sky (see `cloudGlow`). */
 export const CLOUDS = {
   puff: [1, 1, 1] as Rgb,
-  glow: [0.1, 0.115, 0.135] as Rgb,
 };
 
 /**
