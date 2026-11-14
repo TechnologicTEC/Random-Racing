@@ -905,8 +905,18 @@ export interface GrassConfig {
   sink: number;
   /** No blade stands with its foot lower than this above the sea: none in the water at the foot of a steep shore. */
   dry: number;
-  /** How dark a blade is at its foot and how light at its tip, as multiples of the ground s grass colour. */
+  /**
+   * No blade stands where the grass cover (0 to 1) is at or below the first value, so none are scattered over
+   * ground that is mostly sand, rock or bare earth; every blade stands from the second value up.
+   */
+  thin: Range;
+  /**
+   * How dark a blade is at its foot and how light at its tip, as multiples of the ground s grass colour.
+   * Over a whole blade they should average about 1, so a field of blades is as light as the ground it stands on.
+   */
   shade: Range;
+  /** How much darker than that the shortest blades are, and how much lighter the tallest, so no two blades look quite alike. */
+  tint: Range;
   /** No blades are drawn when the camera is more than this far above the ground below it. */
   ceiling: number;
 }
@@ -1515,21 +1525,23 @@ export const config: GameConfig = {
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
-        { half: 20, blades: 24000, width: 0.07, triangles: 3 },
-        { half: 40, blades: 24000, width: 0.16, triangles: 3 },
-        { half: 80, blades: 32000, width: 0.38, triangles: 1 },
+        { half: 20, blades: 24000, width: 0.12, triangles: 3 },
+        { half: 40, blades: 24000, width: 0.22, triangles: 3 },
+        { half: 80, blades: 32000, width: 0.5, triangles: 1 },
       ],
       ahead: 0.5,
       edgeFade: 0.3,
-      turf: [0.14, 0.26],
+      turf: [0.18, 0.32],
       meadow: [0.5, 0.95],
-      meadowBlend: [0.35, 0.6],
-      mown: { height: 0.12, width: 12, ease: 10 },
-      flowers: { share: 0.05, patches: 0.25, scale: 45, cell: 9, soft: 0.08, minLength: 0.45, tip: 0.3, widen: 2.2 },
+      meadowBlend: [0.4, 0.65],
+      mown: { height: 0.16, width: 9, ease: 6 },
+      flowers: { share: 0.08, patches: 0.25, scale: 45, cell: 9, soft: 0.08, minLength: 0.45, tip: 0.35, widen: 3 },
       sway: { gust: 0.4, flutter: 0.16, gustLength: 180, gustSpeed: 20, flutterSpeed: 2.1 },
       sink: 0.05,
       dry: 0.3,
-      shade: [0.42, 1.15],
+      thin: [0.5, 0.95],
+      shade: [0.7, 1.55],
+      tint: [0.86, 1.16],
       ceiling: 150,
     },
   },

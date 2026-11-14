@@ -184,9 +184,38 @@ export function groundHeightAt(ground: HeightField, x: number, z: number): numbe
   return fx + fz <= 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
 }
 
-/** Whether a blade stands: only where the grass cover (0 to 1) is greater than the number it lives by. */
-export function bladeLives(rank: number, grass: number): boolean {
-  return rank < grass;
+/**
+ * Which way the drawn ground faces at a point, as a unit vector: the facing of
+ * the ground mesh's triangle there. A blade takes the light its ground takes,
+ * so a field of blades is no lighter or darker than the hillside it stands on.
+ */
+export function groundNormalAt(ground: HeightField, x: number, z: number): { x: number; y: number; z: number } {
+  const last = ground.size - 1;
+  const gx = Math.min(last, Math.max(0, (x - ground.origin) / ground.cell));
+  const gz = Math.min(last, Math.max(0, (z - ground.origin) / ground.cell));
+  const ix = Math.min(last - 1, Math.floor(gx));
+  const iz = Math.min(last - 1, Math.floor(gz));
+  const i = iz * ground.size + ix;
+  const a = ground.height[i]!;
+  const b = ground.height[i + 1]!;
+  const c = ground.height[i + ground.size]!;
+  const d = ground.height[i + ground.size + 1]!;
+  const first = gx - ix + (gz - iz) <= 1;
+  const nx = first ? a - b : c - d;
+  const nz = first ? a - c : b - d;
+  const length = Math.hypot(nx, ground.cell, nz);
+  return { x: nx / length, y: ground.cell / length, z: nz / length };
+}
+
+/**
+ * Whether a blade stands, by the number it lives by (0 to 1) and the grass cover there (0 to 1).
+ * Where the cover is thin nothing stands, so no green blades are scattered over ground that is
+ * mostly sand, rock or bare earth; as the cover thickens more and more blades stand, and all of them where it is full.
+ *
+ * @param thin the cover at and below which no blade stands, and the cover from which every blade does
+ */
+export function bladeLives(rank: number, grass: number, thin: readonly [number, number]): boolean {
+  return rank < smooth(thin[0], thin[1], grass);
 }
 
 /**
@@ -282,7 +311,7 @@ export function bladeAt(
 
   const here = grassAt(grid, x, z);
   const foot = groundHeightAt(ground, x, z);
-  const lives = bladeLives(rank, here.grass) && foot > cfg.dry;
+  const lives = bladeLives(rank, here.grass, cfg.thin) && foot > cfg.dry;
   const length = bladeLength(here.variation, here.roadside, share, cfg);
   const height = lives ? length * fade : 0;
   const width = height >= SHORTEST ? tier.width * (0.6 + 0.4 * share) : 0;
@@ -310,13 +339,14 @@ const float = (value: number): string => (Number.isInteger(value) ? `${value}.0`
 
 /**
  * The shader's version of `bladeAt`. It defines
- * `vec3 grassVertex(vec2 corner, vec2 offset, vec4 trait, vec3 tier, float flowerKind, out float along, out float variation, out float flowering)`:
+ * `vec3 grassVertex(vec2 corner, vec2 offset, vec4 trait, vec4 tier, float flowerKind, out float along, out float variation, out float flowering, out vec3 facing)`:
  * where one corner of a blade is in the world. `corner` is a vertex of
  * `bladeShape` (x across, y up the blade); `offset`, `trait` and `flowerKind`
  * are the blade's numbers from `grassBlades`; `tier` is its field's half-width,
- * the half-width of the field inside it, and its blade width. It hands back how
- * far up the blade the corner is, the ground's variation there, and the colour
- * of flower the blade carries now (0 for none).
+ * the half-width of the field inside it, its blade width, and 1 if its blades are
+ * plain spikes of one triangle (0 if they taper). It hands back how
+ * far up the blade the corner is, the ground's variation there, the colour
+ * of flower the blade carries now (0 for none), and which way the ground under the blade faces.
  *
  * It needs `groundAt` and its uniforms from `DEPTH_GLSL` (`waterDepth.ts`) written before it, and these uniforms set:
  * `uGrass` (the grid from `grassGrid`, as a four-channel texture read with blending), `uGrassReach` (the grid's `reach`),
@@ -346,7 +376,7 @@ export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): st
     float grassEdgeFade(float away, float halfWidth) {
       return 1.0 - smoothstep(halfWidth * ${float(1 - cfg.edgeFade)}, halfWidth, away);
     }
-    float grassGround(vec2 world) {
+    float grassGround(vec2 world, out vec3 facing) {
       float last = uGroundSize - 1.0;
       vec2 g = clamp((world - uGroundOrigin) / uGroundCell, 0.0, last);
       vec2 i = min(vec2(last - 1.0), floor(g));
@@ -355,7 +385,9 @@ export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): st
       float b = groundAt(i + vec2(1.0, 0.0));
       float c = groundAt(i + vec2(0.0, 1.0));
       float d = groundAt(i + vec2(1.0, 1.0));
-      return f.x + f.y <= 1.0 ? a + (b - a) * f.x + (c - a) * f.y : d + (c - d) * (1.0 - f.x) + (b - d) * (1.0 - f.y);
+      bool first = f.x + f.y <= 1.0;
+      facing = normalize(first ? vec3(a - b, uGroundCell, a - c) : vec3(c - d, uGroundCell, b - d));
+      return first ? a + (b - a) * f.x + (c - a) * f.y : d + (c - d) * (1.0 - f.x) + (b - d) * (1.0 - f.y);
     }
     float grassLength(float variation, float roadside, float share) {
       float meadow = 1.0 - smoothstep(${float(cfg.meadowBlend[0])}, ${float(cfg.meadowBlend[1])}, variation);
@@ -371,7 +403,7 @@ export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): st
       float flutter = sin(${float(s.flutterSpeed)} * uGrassTime + phase + 0.21 * p.x + 0.13 * p.y);
       return ${float(s.gust)} * gust + ${float(s.flutter)} * flutter;
     }
-    vec3 grassVertex(vec2 corner, vec2 offset, vec4 trait, vec3 tier, float flowerKind, out float along, out float variation, out float flowering) {
+    vec3 grassVertex(vec2 corner, vec2 offset, vec4 trait, vec4 tier, float flowerKind, out float along, out float variation, out float flowering, out vec3 facing) {
       float halfWidth = tier.x;
       vec2 centre = grassCentre(halfWidth);
       vec2 p = vec2(grassWrap(offset.x, centre.x, halfWidth), grassWrap(offset.y, centre.y, halfWidth));
@@ -379,8 +411,8 @@ export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): st
       if (tier.y > 0.0) fade *= 1.0 - grassEdgeFade(distance(p, grassCentre(tier.y)), tier.y);
 
       vec4 here = texture2D(uGrass, ((p - uGroundOrigin) / uGroundCell + 0.5) / uGroundSize);
-      float foot = grassGround(p);
-      float lives = (here.r > trait.w && foot > ${float(cfg.dry)}) ? 1.0 : 0.0;
+      float foot = grassGround(p, facing);
+      float lives = (smoothstep(${float(cfg.thin[0])}, ${float(cfg.thin[1])}, here.r) > trait.w && foot > ${float(cfg.dry)}) ? 1.0 : 0.0;
       float len = grassLength(here.g, here.b * uGrassReach, trait.y);
       float tall = len * fade * lives;
       float wide = tall >= ${float(SHORTEST)} ? tier.z * 0.5 * (0.6 + 0.4 * trait.y) : 0.0;
@@ -388,18 +420,20 @@ export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): st
 
       float up = corner.y;
       float side = corner.x;
-      if (flowering > 0.5 && up > 0.0 && up < 1.0) {
+      // A tapered blade carries its flower above its two middle corners, spread wide. A spike has no middle:
+      // it is only ever seen from far off, so its whole triangle is raised to be the flower.
+      if (flowering > 0.5 && up < 1.0 && (up > 0.0 || tier.w > 0.5)) {
         up = ${float(1 - flowers.tip)};
-        side = sign(corner.x) * ${float(flowers.widen)};
+        side = sign(corner.x) * (tier.w > 0.5 ? 1.0 : ${float(flowers.widen)});
       }
-      vec2 facing = vec2(cos(trait.x), sin(trait.x));
+      vec2 turned = vec2(cos(trait.x), sin(trait.x));
       float bend = grassSway(p, trait.z) * up * up * tall;
       along = up;
       variation = here.g;
       return vec3(
-        p.x + facing.x * side * wide + ${float(wx)} * bend,
+        p.x + turned.x * side * wide + ${float(wx)} * bend,
         foot - ${float(cfg.sink)} + up * tall - bend * 0.25 * up,
-        p.y + facing.y * side * wide + ${float(wz)} * bend
+        p.y + turned.y * side * wide + ${float(wz)} * bend
       );
     }
   `;

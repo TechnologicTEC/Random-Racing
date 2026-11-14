@@ -16,6 +16,7 @@ import {
   grassEye,
   grassGlsl,
   groundHeightAt,
+  groundNormalAt,
   sway,
   wrapAround,
   type Blade,
@@ -298,14 +299,31 @@ describe('bladeLength: long meadow, short turf, and a mown strip beside the road
   });
 });
 
-describe('bladeLives: a blade stands where its number is under the grass cover', () => {
-  it('never stands where there is no grass, always where the cover is full, and by its number in between', () => {
+describe('bladeLives: a blade stands where the grass cover is thick enough for the number it lives by', () => {
+  const [none, all] = cfg.thin;
+
+  it('never stands where the cover is thin (no green blades scattered over sand or rock), and always where it is full', () => {
     for (const rank of [0, 0.2, 0.5, 0.999]) {
-      expect(bladeLives(rank, 0)).toBe(false);
-      expect(bladeLives(rank, 1)).toBe(true);
+      expect(bladeLives(rank, 0, cfg.thin)).toBe(false);
+      expect(bladeLives(rank, none, cfg.thin)).toBe(false);
+      expect(bladeLives(rank, none * 0.5, cfg.thin)).toBe(false);
+      expect(bladeLives(rank, all, cfg.thin)).toBe(true);
+      expect(bladeLives(rank, 1, cfg.thin)).toBe(true);
     }
-    expect(bladeLives(0.3, 0.5)).toBe(true);
-    expect(bladeLives(0.7, 0.5)).toBe(false);
+  });
+
+  it('stands by its number in between: more blades the thicker the cover', () => {
+    const middle = (none + all) / 2;
+    expect(bladeLives(0.3, middle, cfg.thin)).toBe(true);
+    expect(bladeLives(0.7, middle, cfg.thin)).toBe(false);
+    let before = 0;
+    for (let grass = 0; grass <= 1.0001; grass += 0.05) {
+      let standing = 0;
+      for (let rank = 0.005; rank < 1; rank += 0.01) if (bladeLives(rank, grass, cfg.thin)) standing++;
+      expect(standing).toBeGreaterThanOrEqual(before);
+      before = standing;
+    }
+    expect(before).toBe(100);
   });
 });
 
@@ -588,6 +606,38 @@ describe('the grass on a real island (seed 7)', () => {
     }
   });
 
+  it('knows which way the ground under a blade faces: the same as the ground mesh s triangle, so both take the same light', () => {
+    const chunks = buildTerrainChunks(ground, cover, { chunkCells: config.render.chunkCells, skipBelow: -Infinity });
+    const next = numbers(6);
+    let steep = 0;
+    for (let checked = 0; checked < 500; checked++) {
+      const chunk = chunks[Math.floor(next() * chunks.length)]!;
+      const t = Math.floor(next() * (chunk.indices.length / 3)) * 3;
+      const corner = (k: number): [number, number, number] => {
+        const v = chunk.indices[t + k]! * 3;
+        return [chunk.positions[v]!, chunk.positions[v + 1]!, chunk.positions[v + 2]!];
+      };
+      const [a, b, c] = [corner(0), corner(1), corner(2)];
+      // The triangle's own facing: across two of its edges, pointing up.
+      const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      let n = [e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!];
+      if (n[1]! < 0) n = n.map((value) => -value);
+      const length = Math.hypot(n[0]!, n[1]!, n[2]!);
+      // A point well inside the triangle.
+      const x = (a[0] + b[0] + c[0]) / 3;
+      const z = (a[2] + b[2] + c[2]) / 3;
+      const facing = groundNormalAt(ground, x, z);
+      expect(facing.x).toBeCloseTo(n[0]! / length, 5);
+      expect(facing.y).toBeCloseTo(n[1]! / length, 5);
+      expect(facing.z).toBeCloseTo(n[2]! / length, 5);
+      expect(Math.hypot(facing.x, facing.y, facing.z)).toBeCloseTo(1, 6);
+      if (facing.y < 0.95) steep++;
+    }
+    // The island has slopes, so this is not only testing flat ground.
+    expect(steep).toBeGreaterThan(5);
+  });
+
   it('grows nothing on the road, in the sea, on bare sand, rock or snow, wherever the camera is', () => {
     let standing = 0;
     let onRoad = 0;
@@ -607,7 +657,8 @@ describe('the grass on a real island (seed 7)', () => {
         // A foot is sunk a little; none stands lower than the shore s limit.
         if (blade.y < cfg.dry - cfg.sink) wet++;
         const covered = (values: Uint8Array): number => sampleGrid(ground, values, blade.x, blade.z, 0) / 255;
-        if (covered(cover.grass) <= 0 || covered(cover.sand) >= 0.999 || covered(cover.rock) >= 0.999 || covered(cover.snow) >= 0.999) barren++;
+        // Nothing where the cover is thin: no blades scattered over ground that is mostly sand, rock, snow or bare earth.
+        if (covered(cover.grass) <= cfg.thin[0] || covered(cover.sand) >= 0.7 || covered(cover.rock) >= 0.7 || covered(cover.snow) >= 0.7) barren++;
       }
     }
     expect(standing).toBeGreaterThan(20_000);
@@ -624,18 +675,19 @@ describe('the grass on a real island (seed 7)', () => {
     let part = 0;
     let partLiving = 0;
     let none = 0;
-    for (let k = 0; k < 60_000; k++) {
+    const middle = (cfg.thin[0] + cfg.thin[1]) / 2;
+    for (let k = 0; k < 120_000; k++) {
       const x = (next() - 0.5) * 2000;
       const z = (next() - 0.5) * 2000;
       const covered = sampleGrid(ground, cover.grass, x, z, 0) / 255;
-      const lives = bladeLives(blades.trait[(k % blades.count) * 4 + 3]!, covered);
+      const lives = bladeLives(blades.trait[(k % blades.count) * 4 + 3]!, covered, cfg.thin);
       if (covered >= 0.999) {
         full++;
         if (lives) fullLiving++;
-      } else if (covered > 0.3 && covered < 0.7) {
+      } else if (Math.abs(covered - middle) < 0.1) {
         part++;
         if (lives) partLiving++;
-      } else if (covered <= 0 && lives) none++;
+      } else if (covered <= cfg.thin[0] && lives) none++;
     }
     expect(eye.y).toBe(500);
     expect(full).toBeGreaterThan(1000);
@@ -688,8 +740,15 @@ describe('grassGlsl: the same sums for the shader', () => {
   /** The shader text without its comments. */
   const code = text.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
-  it('defines the one function the grass material calls', () => {
+  it('defines the one function the grass material calls, which also hands back which way the ground faces', () => {
     expect(code).toMatch(/vec3\s+grassVertex\s*\(/);
+    expect(code).toMatch(/grassVertex\s*\([^)]*out\s+vec3\s+facing\s*\)/);
+  });
+
+  it('is told which blades are plain spikes, whose whole triangle becomes the flower when they flower', () => {
+    // A tapered blade carries its flower above its middle corners; a spike has none, so its foot corners are raised instead.
+    expect(code).toMatch(/grassVertex\s*\([^)]*vec4\s+tier\b/);
+    expect(code).toMatch(/tier\.w/);
   });
 
   it('uses no word the shader language keeps for itself (a shader that fails to compile draws nothing)', () => {
@@ -707,7 +766,7 @@ describe('grassGlsl: the same sums for the shader', () => {
     for (const value of [
       cfg.ahead, cfg.turf[0], cfg.turf[1], cfg.meadow[0], cfg.meadow[1], cfg.meadowBlend[0], cfg.meadowBlend[1],
       cfg.mown.height, cfg.mown.width, cfg.flowers.minLength, cfg.sway.gust, cfg.sway.flutter, cfg.sway.gustSpeed,
-      cfg.sway.flutterSpeed, cfg.sink, cfg.dry,
+      cfg.sway.flutterSpeed, cfg.sink, cfg.dry, cfg.thin[0], cfg.thin[1],
     ]) {
       expect(code).toContain(number(value));
     }

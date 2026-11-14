@@ -68,6 +68,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunLight: { value: new THREE.Vector3(1, 1, 1) },
       uAmbient: { value: new THREE.Vector3(0.4, 0.4, 0.4) },
+      uBounce: { value: new THREE.Vector3(0.2, 0.2, 0.2) },
       uLush: { value: new THREE.Vector3() },
       uDry: { value: new THREE.Vector3() },
       uFlowers: { value: FLOWERS.slice(0, FLOWER_KINDS).map(() => new THREE.Vector3()) },
@@ -90,13 +91,16 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       ${grassGlsl(cfg, wind)}
       attribute vec2 aOffset;
       attribute vec4 aTrait;
-      attribute vec3 aTier;
+      attribute vec4 aTier;
       attribute float aFlower;
       varying float vAlong;
       varying float vVariation;
       varying float vFlower;
+      varying vec3 vFacing;
+      varying float vTint;
       void main() {
-        vec3 world = grassVertex(position.xy, aOffset, aTrait, aTier, aFlower, vAlong, vVariation, vFlower);
+        vec3 world = grassVertex(position.xy, aOffset, aTrait, aTier, aFlower, vAlong, vVariation, vFlower, vFacing);
+        vTint = mix(${float(cfg.tint[0])}, ${float(cfg.tint[1])}, aTrait.y);
         vec4 mvPosition = viewMatrix * vec4(world, 1.0);
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
@@ -104,20 +108,23 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
     `,
     fragmentShader: /* glsl */ `
       #include <fog_pars_fragment>
-      uniform vec3 uSunDir, uSunLight, uAmbient, uLush, uDry;
+      uniform vec3 uSunDir, uSunLight, uAmbient, uBounce, uLush, uDry;
       uniform vec3 uFlowers[${FLOWER_KINDS}];
       varying float vAlong;
       varying float vVariation;
       varying float vFlower;
+      varying vec3 vFacing;
+      varying float vTint;
       void main() {
-        // The ground's own greens, darker at the foot of a blade and lighter at its tip.
-        vec3 col = mix(uLush, uDry, vVariation) * mix(${float(cfg.shade[0])}, ${float(cfg.shade[1])}, vAlong);
+        // The ground's own greens, darker at the foot of a blade and lighter at its tip, and a little different from blade to blade.
+        vec3 col = mix(uLush, uDry, vVariation) * mix(${float(cfg.shade[0])}, ${float(cfg.shade[1])}, vAlong) * vTint;
         if (vFlower > 0.5 && vAlong > ${float(1 - cfg.flowers.tip)}) {
           col = uFlowers[int(vFlower + 0.5) - 1];
         }
-        // A blade stands upright, so it catches a low sun better than the ground does, and its tip more than its foot.
-        float sunUp = clamp(uSunDir.y * 1.6, 0.0, 1.0);
-        vec3 light = uAmbient + uSunLight * (0.3 + 0.6 * vAlong) * (0.45 + 0.55 * sunUp);
+        // A blade takes the light of the ground it stands on (the sky above, the bounce from below, the sun by how
+        // the ground faces it), so a field of blades is no lighter or darker than its hillside and its far edge melts in.
+        vec3 n = normalize(vFacing);
+        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) + uSunLight * max(dot(n, uSunDir), 0.0);
         gl_FragColor = vec4(col * light, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -134,16 +141,17 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
     if (count === 0) continue;
     const offset = new Float32Array(count * 2);
     const trait = new Float32Array(count * 4);
-    const tierOf = new Float32Array(count * 3);
+    const tierOf = new Float32Array(count * 4);
     const flower = new Float32Array(count);
     let at = 0;
     for (const tier of tiers) {
       offset.set(blades.offset.subarray(tier.start * 2, (tier.start + tier.count) * 2), at * 2);
       trait.set(blades.trait.subarray(tier.start * 4, (tier.start + tier.count) * 4), at * 4);
       for (let n = 0; n < tier.count; n++) {
-        tierOf[(at + n) * 3] = tier.half;
-        tierOf[(at + n) * 3 + 1] = tier.inner;
-        tierOf[(at + n) * 3 + 2] = tier.width;
+        tierOf[(at + n) * 4] = tier.half;
+        tierOf[(at + n) * 4 + 1] = tier.inner;
+        tierOf[(at + n) * 4 + 2] = tier.width;
+        tierOf[(at + n) * 4 + 3] = triangles === 1 ? 1 : 0;
         flower[at + n] = blades.flower[tier.start + n]!;
       }
       at += tier.count;
@@ -154,7 +162,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
     geometry.setIndex(new THREE.BufferAttribute(shape.indices, 1));
     geometry.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offset, 2));
     geometry.setAttribute('aTrait', new THREE.InstancedBufferAttribute(trait, 4));
-    geometry.setAttribute('aTier', new THREE.InstancedBufferAttribute(tierOf, 3));
+    geometry.setAttribute('aTier', new THREE.InstancedBufferAttribute(tierOf, 4));
     geometry.setAttribute('aFlower', new THREE.InstancedBufferAttribute(flower, 1));
     geometry.instanceCount = count;
     const mesh = new THREE.Mesh(geometry, material);
@@ -192,6 +200,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       // Three's lights reach a surface divided by pi; the grass takes its light the same way as the ground.
       linear(uniforms.uSunLight!.value, light.sunColour, light.sunStrength / Math.PI);
       linear(uniforms.uAmbient!.value, light.skyLight, light.skyStrength / Math.PI);
+      linear(uniforms.uBounce!.value, light.groundLight, light.skyStrength / Math.PI);
       uniforms.uSunDir!.value.set(light.sun.x, light.sun.y, light.sun.z);
     },
 
