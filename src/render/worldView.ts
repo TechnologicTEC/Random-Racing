@@ -122,7 +122,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   // Trees, rocks and clouds: scenery on top of the ground and in the sky.
   const decor = createDecorView(cfg.decor);
   scene.add(decor.object);
-  const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength);
+  const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength, cfg.clouds.thin);
   scene.add(clouds.object);
 
   const clearGround = (): void => {
@@ -203,6 +203,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     render() {
       sky.mesh.position.copy(camera.position);
       decor.update(camera.position);
+      clouds.lookFrom(camera.position);
       renderer.render(scene, camera);
     },
 
@@ -224,6 +225,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       // Draw and read back in one go: the picture is only guaranteed to be there until the browser shows it.
       sky.mesh.position.copy(camera.position);
       decor.update(camera.position);
+      clouds.lookFrom(camera.position);
       renderer.render(scene, camera);
       const gl = renderer.getContext();
       const width = gl.drawingBufferWidth;

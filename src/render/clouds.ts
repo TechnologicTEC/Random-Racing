@@ -10,6 +10,15 @@ export interface CloudDrift {
   fade: number;
 }
 
+/** Where the camera is, and how near it a puff starts to thin away and is gone altogether, in metres. */
+export interface CloudEye {
+  x: number;
+  y: number;
+  z: number;
+  /** A puff whose middle is nearer than the first distance is not drawn; from the second it is full size. */
+  thin: readonly [number, number];
+}
+
 /**
  * The clouds' drift for a wind: they travel the way the wind blows (the same
  * wind that drives the waves), at `speed` metres per second.
@@ -40,11 +49,14 @@ export function cloudGlow(light: Daylight, share: number, fullSkyStrength: numbe
  * Each cloud drifts as one piece. When its middle leaves the square the clouds
  * live in, it comes back in at the opposite edge; it shrinks to nothing as it
  * nears an edge and grows again on the other side, so it never pops in or out.
+ * A puff also thins away as the camera comes close, so a camera flying at the
+ * height of the clouds never sits inside one.
  *
  * @param seconds time on the clouds' clock
  * @param out filled and returned if given; otherwise a new list is made
+ * @param eye where the camera is; left out, no puff is thinned
  */
-export function cloudMatrices(clouds: Clouds, seconds: number, drift: CloudDrift, out?: Float32Array): Float32Array {
+export function cloudMatrices(clouds: Clouds, seconds: number, drift: CloudDrift, out?: Float32Array, eye?: CloudEye): Float32Array {
   const matrices = out ?? new Float32Array(clouds.puffCount * 16);
   const { span } = clouds;
   const half = span / 2;
@@ -64,14 +76,23 @@ export function cloudMatrices(clouds: Clouds, seconds: number, drift: CloudDrift
       const t = drift.fade > 0 ? Math.min(1, Math.max(0, toEdge / drift.fade)) : 1;
       grown = t * t * (3 - 2 * t);
     }
+    const x = cx + clouds.puffX[p]!;
+    const y = clouds.puffY[p]!;
+    const z = cz + clouds.puffZ[p]!;
+    let size = grown;
+    if (eye) {
+      const away = Math.hypot(x - eye.x, y - eye.y, z - eye.z);
+      const t = Math.min(1, Math.max(0, (away - eye.thin[0]) / (eye.thin[1] - eye.thin[0])));
+      size *= t * t * (3 - 2 * t);
+    }
     const m = p * 16;
     matrices.fill(0, m, m + 16);
-    matrices[m] = clouds.puffSize[p]! * grown;
-    matrices[m + 5] = clouds.puffThick[p]! * grown;
-    matrices[m + 10] = clouds.puffSize[p]! * grown;
-    matrices[m + 12] = cx + clouds.puffX[p]!;
-    matrices[m + 13] = clouds.puffY[p]!;
-    matrices[m + 14] = cz + clouds.puffZ[p]!;
+    matrices[m] = clouds.puffSize[p]! * size;
+    matrices[m + 5] = clouds.puffThick[p]! * size;
+    matrices[m + 10] = clouds.puffSize[p]! * size;
+    matrices[m + 12] = x;
+    matrices[m + 13] = y;
+    matrices[m + 14] = z;
     matrices[m + 15] = 1;
   }
   return matrices;

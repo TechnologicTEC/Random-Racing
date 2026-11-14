@@ -857,6 +857,8 @@ export interface CloudViewConfig {
   edgeFade: number;
   /** Share of the sky's light the clouds give off themselves, so their shaded sides and undersides are not dark. */
   glow: number;
+  /** A puff nearer the camera than the first distance is not drawn, and from the second it is full size, in metres: the circling camera flies at the height of the clouds. */
+  thin: Range;
 }
 
 /** One train of waves on the sea. It only tilts the surface's shading; the sea itself stays flat. */
@@ -1435,7 +1437,7 @@ export const config: GameConfig = {
       stillTime: 0,
     },
     decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: 0.4, shade: [0.8, 1.12] },
-    clouds: { speed: 10, edgeFade: 400, glow: 0.7 },
+    clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
   },
   camera: {
     orbit: {

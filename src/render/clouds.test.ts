@@ -122,6 +122,22 @@ describe('cloudMatrices', () => {
     expect(puff(after, 2).wide).toBeLessThan(40 * 0.01);
   });
 
+  it('thins a cloud away as the camera comes close, so the camera never sits inside one', () => {
+    const thin: [number, number] = [80, 220];
+    // The first puff is at (60, 400, -190).
+    const far = cloudMatrices(clouds, 0, drift, undefined, { x: 60, y: 0, z: -190, thin });
+    expect(puff(far, 0)).toMatchObject({ wide: 50, thick: 30 });
+    const inside = cloudMatrices(clouds, 0, drift, undefined, { x: 60, y: 380, z: -190, thin });
+    expect(puff(inside, 0).wide).toBe(0);
+    // Half way between the two distances it is half grown, and keeps its shape.
+    const between = cloudMatrices(clouds, 0, drift, undefined, { x: 60, y: 400 - 150, z: -190, thin });
+    expect(puff(between, 0).wide).toBeCloseTo(25, 3);
+    expect(puff(between, 0).thick).toBeCloseTo(15, 3);
+    // A puff the camera is far from is left alone, and no puff moves.
+    expect(puff(inside, 2)).toEqual(puff(cloudMatrices(clouds, 0, drift), 2));
+    expect(puff(inside, 0)).toMatchObject({ x: 60, y: 400, z: -190 });
+  });
+
   it('shows the same sky at the same moment', () => {
     expect(cloudMatrices(clouds, 123.4, drift)).toEqual(cloudMatrices(clouds, 123.4, drift));
     expect(cloudMatrices(clouds, 123.4, drift)).not.toEqual(cloudMatrices(clouds, 124.4, drift));

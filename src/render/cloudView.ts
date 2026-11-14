@@ -13,6 +13,8 @@ export interface CloudView {
   load(clouds: Clouds): void;
   /** Moves the clouds to this many seconds on their clock. */
   setTime(seconds: number): void;
+  /** Tells the clouds where the camera is, so those close to it thin away. Call before drawing. */
+  lookFrom(camera: THREE.Vector3): void;
   /** Lights their shaded sides for a moment of the day. */
   setDaylight(light: Daylight): void;
   /** How many puffs are loaded. */
@@ -26,8 +28,9 @@ export interface CloudView {
  *
  * @param glow share of the sky's light the clouds give off themselves, so their shaded sides are not dark
  * @param fullSkyStrength the strength of the sky's light in full day
+ * @param thin how near the camera a puff is gone altogether, and from how far it is full size, in metres
  */
-export function createCloudView(drift: CloudDrift, glow: number, fullSkyStrength: number): CloudView {
+export function createCloudView(drift: CloudDrift, glow: number, fullSkyStrength: number, thin: readonly [number, number]): CloudView {
   const object = new THREE.Group();
   const shape = puffShape();
   const geometry = new THREE.BufferGeometry();
@@ -39,10 +42,11 @@ export function createCloudView(drift: CloudDrift, glow: number, fullSkyStrength
   let loaded: Clouds | null = null;
   let mesh: THREE.InstancedMesh | null = null;
   let seconds = 0;
+  const eye = { x: 0, y: 0, z: 0, thin };
 
   const place = (): void => {
     if (!loaded || !mesh) return;
-    cloudMatrices(loaded, seconds, drift, mesh.instanceMatrix.array as Float32Array);
+    cloudMatrices(loaded, seconds, drift, mesh.instanceMatrix.array as Float32Array, eye);
     mesh.instanceMatrix.needsUpdate = true;
   };
 
@@ -69,6 +73,14 @@ export function createCloudView(drift: CloudDrift, glow: number, fullSkyStrength
 
     setTime(next) {
       seconds = next;
+      place();
+    },
+
+    lookFrom(camera) {
+      if (camera.x === eye.x && camera.y === eye.y && camera.z === eye.z) return;
+      eye.x = camera.x;
+      eye.y = camera.y;
+      eye.z = camera.z;
       place();
     },
 
