@@ -6,7 +6,7 @@ import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
 import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
-import { formatClock, lightName, parseClock, shortCharacter } from '../debug/trackLab/format';
+import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
 import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
 import { genClient } from '../worker/client';
@@ -34,6 +34,7 @@ const TEMPLATE = `
       <h1 data-ref="name" data-testid="world-name">Seed Circuit</h1>
       <p data-ref="code" data-testid="world-code"></p>
       <p class="world-character" data-ref="character" data-testid="world-character"></p>
+      <p class="world-character" data-ref="scenery" data-testid="world-scenery"></p>
       <p data-ref="time" data-testid="world-time"></p>
       <p class="world-hint" data-ref="hint"></p>
     </div>
@@ -293,6 +294,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       ref('name').textContent = result.track.name;
       ref('code').textContent = `Seed ${result.seed} · ${formatSeedCode(result.seed, result.generatorVersion)}`;
       ref('character').textContent = shortCharacter(result.track.character);
+      ref('scenery').textContent = shortScenery(result.decor.woods, result.clouds.cover);
       document.title = `${result.track.name} · Seed Circuit`;
       document.body.dataset.worldSeed = String(result.seed);
       document.body.dataset.worldMs = ms.toFixed(0);

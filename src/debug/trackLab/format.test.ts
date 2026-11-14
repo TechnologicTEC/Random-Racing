@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeCharacter, describeFit, describeSky, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, parseClock, shortCharacter, summariseTracks } from './format';
+import { describeCharacter, describeClouds, describeDecor, describeFit, describeSky, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, parseClock, shortCharacter, shortScenery, summariseTracks } from './format';
 
 describe('describeCharacter', () => {
   it('lists the traits of a seed in plain words', () => {
@@ -247,6 +247,34 @@ describe('lightName', () => {
     expect(lightName(12)).toBe('midday light');
     expect(lightName(15.5)).toBe('afternoon light');
     expect(lightName(18.75)).toBe('evening light');
+  });
+});
+
+describe('describeDecor', () => {
+  it('names the woods and counts the trees and rocks, with thousands marked', () => {
+    expect(describeDecor('wooded', 3039, 576)).toBe('Woods and clearings: 3,039 trees, 576 rocks');
+    expect(describeDecor('open', 946, 1570)).toBe('Open grassland: 946 trees, 1,570 rocks');
+    expect(describeDecor('forest', 15523, 903)).toBe('Mostly forest: 15,523 trees, 903 rocks');
+  });
+
+  it('counts one of a thing as one', () => {
+    expect(describeDecor('open', 1, 1)).toBe('Open grassland: 1 tree, 1 rock');
+  });
+});
+
+describe('describeClouds', () => {
+  it('names the amount of cloud and counts the clouds', () => {
+    expect(describeClouds('clear', 5)).toBe('Mostly clear: 5 clouds');
+    expect(describeClouds('fair', 16)).toBe('Fair: 16 clouds');
+    expect(describeClouds('cloudy', 41)).toBe('Cloudy: 41 clouds');
+  });
+});
+
+describe('shortScenery', () => {
+  it('gives the woods and the sky in a few words, for a title card', () => {
+    expect(shortScenery('open', 'clear')).toBe('open grassland · clear sky');
+    expect(shortScenery('wooded', 'fair')).toBe('wooded · fair sky');
+    expect(shortScenery('forest', 'cloudy')).toBe('forest · cloudy sky');
   });
 });
 

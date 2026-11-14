@@ -1,6 +1,6 @@
 import type { TrackConfig } from '../../config';
 import type { Vec2 } from '../../core/vec2';
-import type { Candidate, CenterLine, CornerKind, Section, Violation } from '../../gen/types';
+import type { Candidate, CenterLine, CornerKind, Decor, Scatter, Section, Violation } from '../../gen/types';
 import { screenToWorld, worldToScreen, type View } from './view';
 
 /** What the lab draws for one seed. */
@@ -15,6 +15,8 @@ export interface LabScene {
   terrain?: TerrainPicture | null;
   /** The road's width at each sample of the selected candidate, when it has been worked out (the winner only). */
   width?: Float64Array | null;
+  /** The island's trees and rocks to mark on it, if any. */
+  decor?: Decor | null;
 }
 
 /** A top-down picture of the island and where it sits in the world. */
@@ -55,6 +57,13 @@ const COLORS = {
   bad: '#ff7a70',
 };
 
+/** Dots for trees by kind (broadleaf, pine, palm), darker than any grass so woods stand out, and for rocks. */
+const TREE_DOTS = ['#1f4a1c', '#143a26', '#2f6b2a'];
+const ROCK_DOT = '#8d8983';
+/** A tree's crown is about this many metres across for each unit of its size; a rock about this many. */
+const CROWN = 4.4;
+const BOULDER = 2;
+
 const LABEL_FONT = '11px ui-monospace, "Cascadia Mono", Consolas, monospace';
 
 /** Draws the whole lab view. The context is expected to be scaled so one unit is one CSS pixel. */
@@ -63,6 +72,10 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
   ctx.fillRect(0, 0, view.width, view.height);
 
   if (scene?.terrain) drawTerrain(ctx, view, scene.terrain);
+  if (scene?.decor) {
+    drawScatter(ctx, view, scene.decor.rocks, () => ROCK_DOT, BOULDER);
+    drawScatter(ctx, view, scene.decor.trees, (kind) => TREE_DOTS[kind] ?? TREE_DOTS[0]!, CROWN);
+  }
   drawGrid(ctx, view);
   drawBounds(ctx, view, cfg.buildableRadius);
   if (scene) {
@@ -106,6 +119,25 @@ function drawTerrain(ctx: CanvasRenderingContext2D, view: View, terrain: Terrain
   const side = terrain.size * terrain.cell * view.scale;
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(terrain.image, topLeft.sx, topLeft.sy, side, side);
+}
+
+/**
+ * Marks each thing of a scatter with a square dot of about its real size, never smaller than two pixels.
+ * Dots sit on whole pixels, so their colour is not blurred into the ground.
+ */
+function drawScatter(ctx: CanvasRenderingContext2D, view: View, scatter: Scatter, colourOf: (kind: number) => string, across: number): void {
+  const kinds = new Set<number>();
+  for (let i = 0; i < scatter.count; i++) kinds.add(scatter.kind[i]!);
+  for (const kind of kinds) {
+    ctx.fillStyle = colourOf(kind);
+    for (let i = 0; i < scatter.count; i++) {
+      if (scatter.kind[i] !== kind) continue;
+      const { sx, sy } = worldToScreen(view, scatter.x[i]!, scatter.z[i]!);
+      const side = Math.max(2, Math.round(scatter.size[i]! * across * view.scale));
+      if (sx < -side || sy < -side || sx > view.width + side || sy > view.height + side) continue;
+      ctx.fillRect(Math.round(sx - side / 2), Math.round(sy - side / 2), side, side);
+    }
+  }
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {

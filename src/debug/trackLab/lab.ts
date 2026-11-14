@@ -5,7 +5,7 @@ import { hashTrack, measureProfile, trackRulesFor, widestTrackArea, type Candida
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
-import { describeCharacter, describeFit, describeProfile, describeScorePart, describeSky, describeViolation, describeWidth } from './format';
+import { describeCharacter, describeClouds, describeDecor, describeFit, describeProfile, describeScorePart, describeSky, describeViolation, describeWidth } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -78,12 +78,16 @@ const TEMPLATE = `
           Show the island under the winning track
         </label>
         <label class="lab-check">
+          <input type="checkbox" data-ref="decor" data-testid="decor-toggle" checked />
+          Mark trees and rocks on the island
+        </label>
+        <label class="lab-check">
           <input type="checkbox" data-ref="tint" data-testid="tint-toggle" checked />
           Tint cuttings red and embankments blue
         </label>
       </section>
 
-      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts, I shows or hides the island.</p>
+      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts, I shows or hides the island, T its trees and rocks.</p>
     </aside>
     <main class="lab-stage">
       <canvas data-ref="canvas" data-testid="track-canvas"></canvas>
@@ -136,6 +140,7 @@ export function mountTrackLab(root: HTMLElement): void {
   const input = ref<HTMLInputElement>('input');
   const ghostsBox = ref<HTMLInputElement>('ghosts');
   const islandBox = ref<HTMLInputElement>('island');
+  const decorBox = ref<HTMLInputElement>('decor');
   const tintBox = ref<HTMLInputElement>('tint');
   const errorEl = ref('error');
   const factsEl = ref('facts');
@@ -190,8 +195,10 @@ export function mountTrackLab(root: HTMLElement): void {
     const terrain = isWinner && islandBox.checked ? islandPicture(tintBox.checked) : null;
     // Only the winner has had its width worked out; other candidates are drawn at the usual width.
     const width = isWinner && world ? world.road.width : null;
+    // Trees and rocks stand on the island, so they are only marked when it is shown.
+    const decor = terrain && world && decorBox.checked ? world.decor : null;
     // The seed's own track area: mountain seeds have a wider one.
-    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width }, trackRulesFor(cfg, result.character.relief));
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width, decor }, trackRulesFor(cfg, result.character.relief));
   }
 
   function resize(): void {
@@ -293,6 +300,8 @@ export function mountTrackLab(root: HTMLElement): void {
       addFact(label, label === 'Road width' && world ? describeWidth(world.road.width) : value);
     }
     if (world) addFact('Time of day', describeSky(world.sky));
+    if (world) addFact('Woods', describeDecor(world.decor.woods, world.decor.trees.count, world.decor.rocks.count));
+    if (world) addFact('Sky', describeClouds(world.clouds.cover, world.clouds.count));
     addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);
@@ -423,6 +432,7 @@ export function mountTrackLab(root: HTMLElement): void {
   ref('random').addEventListener('click', () => void setSeed(randomSeed()));
   ghostsBox.addEventListener('change', render);
   islandBox.addEventListener('change', render);
+  decorBox.addEventListener('change', render);
   tintBox.addEventListener('change', render);
 
   window.addEventListener('keydown', (event) => {
@@ -437,6 +447,9 @@ export function mountTrackLab(root: HTMLElement): void {
       render();
     } else if (key === 'i') {
       islandBox.checked = !islandBox.checked;
+      render();
+    } else if (key === 't') {
+      decorBox.checked = !decorBox.checked;
       render();
     } else return;
     event.preventDefault();

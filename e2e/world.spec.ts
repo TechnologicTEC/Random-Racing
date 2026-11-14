@@ -161,6 +161,14 @@ test('names the kind of island under its seed', async ({ page }) => {
   await expect(page.getByTestId('world-character')).toContainText('3 mountains, ridged range');
 });
 
+test('names the woods and the sky under the kind of island', async ({ page }) => {
+  // Seed 7 is a wooded island under a fair sky; seed 2 is wooded under a cloudy one.
+  await openWorld(page, 'seed=7&still=1');
+  await expect(page.getByTestId('world-scenery')).toHaveText('wooded · fair sky');
+  await openWorld(page, 'seed=2&still=1');
+  await expect(page.getByTestId('world-scenery')).toHaveText('wooded · cloudy sky');
+});
+
 test('opens on the lap s highest point, facing the summit, when asked', async ({ page }) => {
   await openWorld(page, 'seed=3&look=summit&time=13:00');
   await expect(page.locator('body')).toHaveAttribute('data-world-look', 'summit');

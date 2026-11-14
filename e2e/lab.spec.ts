@@ -129,6 +129,46 @@ test('reports how the road sits in the island', async ({ page }) => {
   await expect(fit).toHaveAttribute('data-clean', 'true');
 });
 
+/** Counts map pixels of the dark green the lab draws trees in: darker than any grass. */
+async function treeDotPixels(page: Page): Promise<number> {
+  return page.getByTestId('track-canvas').evaluate((canvas: HTMLCanvasElement) => {
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let dots = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 1]! < 80 && data[i + 1]! > data[i]! + 20 && data[i + 1]! > data[i + 2]! + 10) dots++;
+    }
+    return dots;
+  });
+}
+
+test('names the woods and the sky of the seed', async ({ page }) => {
+  // Seed 7 is a wooded island under a fair sky.
+  await openLab(page, '?seed=7');
+  const facts = page.getByTestId('facts');
+  await expect(facts).toContainText('Woods');
+  await expect(facts).toContainText(/Woods and clearings: [\d,]+ trees, [\d,]+ rocks/);
+  await expect(facts).toContainText('Sky');
+  await expect(facts).toContainText(/Fair: \d+ clouds/);
+});
+
+test('marks trees and rocks on the island, and hides them with the T key or the tick box', async ({ page }) => {
+  await openLab(page, '?seed=7');
+  await expect(page.getByTestId('decor-toggle')).toBeChecked();
+  const shown = await treeDotPixels(page);
+  expect(shown).toBeGreaterThan(1500);
+
+  await page.keyboard.press('t');
+  await expect(page.getByTestId('decor-toggle')).not.toBeChecked();
+  expect(await treeDotPixels(page)).toBeLessThan(shown / 10);
+
+  await page.getByTestId('decor-toggle').check();
+  expect(await treeDotPixels(page)).toBe(shown);
+
+  // Trees stand on the island: with the island hidden, they are hidden too.
+  await page.getByTestId('island-toggle').uncheck();
+  expect(await treeDotPixels(page)).toBeLessThan(shown / 10);
+});
+
 /** Counts map pixels that look like sea (clearly blue) and like land (clearly green). */
 async function seaAndLand(page: Page): Promise<{ sea: number; land: number }> {
   return page.getByTestId('track-canvas').evaluate((canvas: HTMLCanvasElement) => {

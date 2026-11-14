@@ -1,4 +1,4 @@
-import type { Character, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, Sky, TrackResult, Violation } from '../../gen/types';
+import type { Character, CloudCover, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, Sky, TrackResult, Violation, WoodsKind } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -225,6 +225,29 @@ const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-we
 export function describeSky(sky: Sky): string {
   const eighth = Math.round(sky.bearing / (Math.PI / 4)) % 8;
   return `${formatClock(sky.hour)}, sun rises in the ${COMPASS[eighth]}`;
+}
+
+const WOODS_LABEL: Record<WoodsKind, string> = { open: 'Open grassland', wooded: 'Woods and clearings', forest: 'Mostly forest' };
+const WOODS_SHORT: Record<WoodsKind, string> = { open: 'open grassland', wooded: 'wooded', forest: 'forest' };
+const CLOUD_LABEL: Record<CloudCover, string> = { clear: 'Mostly clear', fair: 'Fair', cloudy: 'Cloudy' };
+
+/** A whole number with its thousands marked: 15523 is "15,523". */
+const grouped = (count: number): string => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const counted = (count: number, word: string): string => `${grouped(count)} ${word}${count === 1 ? '' : 's'}`;
+
+/** How wooded the island is and how many trees and rocks it has, for the lab. */
+export function describeDecor(woods: WoodsKind, trees: number, rocks: number): string {
+  return `${WOODS_LABEL[woods]}: ${counted(trees, 'tree')}, ${counted(rocks, 'rock')}`;
+}
+
+/** How much cloud the seed's sky has, for the lab. */
+export function describeClouds(cover: CloudCover, clouds: number): string {
+  return `${CLOUD_LABEL[cover]}: ${counted(clouds, 'cloud')}`;
+}
+
+/** The woods and the sky in a few words, for the 3D title card. */
+export function shortScenery(woods: WoodsKind, cover: CloudCover): string {
+  return `${WOODS_SHORT[woods]} · ${cover} sky`;
 }
 
 /** Reads a 24-hour clock such as "17:45" as hours since midnight (17.75), or null if it is not one. */
