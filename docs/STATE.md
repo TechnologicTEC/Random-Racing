@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** 13, trees, rocks and clouds (see "Step 13" below)
-- **Next step:** step 14, grass: planned and approved, 14a to 14e done (see "Step 14" below); 14f is next. Then steps 15 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** 14, grass (see "Step 14" below)
+- **Next step:** step 15, shadows, far-terrain detail levels, a low quality option and performance numbers. Then steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -33,7 +33,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
-| 14 | Grass | In progress (14a to 14e done, see "Step 14") |
+| 14 | Grass | Done (14a to 14f, see "Step 14") |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | To do |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
@@ -450,11 +450,42 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-
 | 14c | `grass.ts`: blades, shape, the sums, the shader text | Done |
 | 14d | `grassView.ts`, shared ground texture, the 3D page; `grass=off` | Done |
 | 14e | Look pass from pictures: tier numbers, lengths, mown strip, flowers, colours | Done |
-| 14f | Screenshots of seeds 1 to 20 and a time strip, triangle counts, this file | To do |
+| 14f | Screenshots of seeds 1 to 20 and a time strip, triangle counts, this file | Done |
 
 **Budgets:** grass adds at most about 250k triangles and 3 draw calls to a flying or close view, and nothing to the far circling view. The browser suite is timed before and after 14d; if it grows by more than about a quarter, the tiers shrink.
 
 **Risks:** a visible ring where the blades end; shimmer from blades thinner than a pixel when moving; blade feet a little off the mesh on far ground drawn at quarter detail (only a circling camera zoomed in there would show it); Milestone 3's chase camera will be lower than today's 4 m (reach, tiers and lengths are config values); a shader mistake draws nothing and only logs to the console.
+
+**As built.**
+- *Fields* (`render.grass.tiers`): 24,000 blades 12 cm wide within 20 m, 24,000 blades 22 cm wide within 40 m, and 32,000 single-triangle blades 50 cm wide within 80 m: 80,000 blades, 176,000 triangles, 2 draw calls (one for each shape of blade). About 15, 4 and 1 blades to the square metre. Each field's middle sits half its half-width ahead of the camera, so the grass reaches 120 m ahead, 80 m to the sides and 40 m behind. A blade shrinks to nothing over the last 30% of its field, and an outer field stands down where the field inside it stands at full height.
+- *A blade's place* is its fixed place in its field's square plus a whole number of the square's widths, so it stands exactly still as the camera moves and only ever jumps (a whole width, from the edge behind to the edge ahead) when it has shrunk to nothing.
+- *Feet* are on the ground mesh's own triangles (`groundHeightAt`), sunk 5 cm. No blade stands lower than 0.3 m above the sea.
+- *Where it grows* (`bladeLives`): no blade where the grass cover is a half or less, every blade from 95% cover; in between, by the number each blade lives by.
+- *Length* (`bladeLength`): turf 18 to 32 cm, meadow 50 to 95 cm; meadow where the cover's variation is under 0.4, turf above 0.65. Within 9 m of the road edge (5 m past the verge) no blade is over 16 cm; over the next 6 m the grass grows back.
+- *Flowers:* 8% of blades can flower, in white, yellow or red (`FLOWERS` in the palette). A quarter of every island is flower patch, about 40 m across, from the seed (`decor` stream, `grass/flowers`), worked out on a 9 m grid. Only blades of 45 cm or more flower. The flower is the top 35% of the blade, three times as wide; a far field's blade becomes all flower.
+- *Wind* (`sway`): a gust every 180 m, travelling down the sea's wind at 20 m/s, pushes tips over by up to 40% of the blade's length; each blade flutters another 16% either way. It runs on the wave clock and stands still with `still=1` or reduced motion.
+- *Light:* a blade takes the light of the ground triangle it stands on (`groundNormalAt`), in the ground's own lush and dry greens, 0.7 times as light at its foot and 1.55 times at its tip, and 0.86 to 1.16 times from the shortest blade to the tallest.
+- *What the shader reads:* the ground's heights (the water's texture, shared) and `grassGrid`: four bytes to a cell (grass cover, variation, distance from the road edge up to 15 m, flower patches), built on the page in 26 to 33 ms.
+- *Left out* when the camera is more than 150 m above the ground under it, and with `grass=off` in the address. `stats().blades` says how many are drawn; `pixelCounts().lowDigest` is a fingerprint of the bottom two fifths of the picture.
+- *Files:* `render/grassMaps.ts`, `render/grass.ts` (`bladeAt` does the sums for the tests, `grassGlsl` writes the same sums for the shader), `render/grassView.ts`. No generation code changed.
+
+**Changed from the plan after looking at pictures (14e).**
+- With the demo's own lighting the grassed ground was darker than bare ground, and the round edge of the far field showed on hillsides. Blades now take their ground's light, and their shading from foot to tip averages about the ground's brightness. The edge cannot be seen.
+- Green blades stood scattered over sand and rock wherever the grass cover was partial (seed 2's dunes, seed 7's rocky slope). Thin cover now grows no blades.
+- The mown strip was planned as the first 12 m, growing back over 10 m, at 12 cm. From the road that looked like bare ground. It is now 9 m and 6 m, at 16 cm.
+- Blades were widened (7, 16 and 38 cm at first), turf made taller (it was 14 to 26 cm) and meadow a little commoner.
+- Flowers could hardly be seen: 5% of blades became 8%, flowers were made three times a blade's width (2.2 at first), and a far blade's whole triangle became its flower (only a sliver of its tip was coloured).
+- The foot and tip shades are settings (`render.grass.shade`), not palette colours as the plan said.
+- A blade whose foot would be under 0.3 m above the sea does not stand (added in 14c: a steep shore's blend could put a few in the water).
+
+**Results (2026-11-15).**
+- *Screenshots checked by eye,* as contact sheets: seeds 1 to 20 at their own times (view from above, four flying views and eight close views each, 260 pictures); a time strip of seeds 1, 7 and 20 at 07:00, 13:00 and 19:30, facing the sun; and close-ups from 30 m of start lines, hairpins, an embankment, a flower patch (seed 42) and grass on far ground (seed 42). No blades on any road, verge, beach, rock face or in the sea; no edge to the field; the mown strip reads as short grass beside the barriers; flowers show as dabs of colour in some views and not others; at 07:00 and 19:30 the blades are as dark as their ground.
+- *Triangles and draw calls per frame* (Chromium, 1280 by 720, 13:00; seeds 1, 3, 7, 12, 44, 53, 2024, 8, 18, 20). Grass adds 176,000 triangles and 2 calls wherever it is drawn, and nothing to the view from above (budget: 250,000 and 3). Circling view 197k to 589k in 46 to 169 calls, as in step 13; flying view 259k to 508k in 15 to 87 calls at 0.3 of the lap, 297k to 579k in 26 to 105 at 0.8; summit view 322k to 653k in 32 to 132; start view 255k to 468k in 19 to 105.
+- *Browser suite:* 375 s before the grass was drawn, 428 s after, with 12 more tests (14% longer; the limit was a quarter). Both 3-second budget tests pass.
+- *Fingerprints:* unchanged, since no generation code changed; Chromium, Firefox and Node still agree.
+- *Far ground* (drawn at quarter detail beyond 250 m from the road): blade feet are 4 to 6 cm from the drawn ground on average, 1.4 to 1.7 m at worst on steep ground (seeds 7, 16 and 42). Not visible in the close-up taken; only the `at=` address puts a camera there.
+- 1,043 unit tests and 224 browser tests pass (406 with the screenshots of 20 seeds).
+- *Not done as the plan said:* the grid's build time is checked against a loose 1 s limit, not about 30 ms (it took 190 ms once with every test file running, and failed the first limit of 150 ms). One shader-text test (a far blade's flower) was written together with its change and not seen failing first. The grass was judged from still pictures only: nobody has watched it move yet.
 
 ### Rework risks
 
@@ -688,6 +719,16 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-14 | The pixel counts report near-white pixels and a fingerprint of the top two fifths of the picture alone (`cloud`, `skyDigest`) | To test that clouds are drawn and that they move, apart from the waves |
 | 2026-11-14 | **Step 14, Tane's choices:** grass varies in patches on every island (long meadow, short turf, following the lush-to-dry map); blades reach about 120 m, thinning with distance; a mown strip beside the road; wildflowers in some patches | Asked in plan mode before the plan was written |
 | 2026-11-14 | Grass is drawing only: no generation code changes, so no fingerprint changes. `grass=off` leaves the blades out; `decor=off` does not touch them | Where grass grows is already world data (`cover.grass`). Approved with the plan |
+| 2026-11-15 | **The grass is three square fields of blades that follow the camera** (`render/grass.ts`, `render.grass.tiers`): 20, 40 and 80 m to each side, each sitting half its half-width ahead of the camera, each fading at its edge and standing down where the field inside it stands | Tane chose blades to about 120 m, thinning. One even field that size would need several times the blades for the same look close by |
+| 2026-11-15 | A blade stands at its fixed place plus a whole number of its field's widths, worked out so that it never depends on where the field's middle is | So blades stand exactly still as the camera moves; working it out from the middle each time would make them tremble by rounding |
+| 2026-11-15 | **The grass is placed by the graphics card**, from the ground's heights (the water's texture, shared) and one four-byte grid (`grassGrid`); `bladeAt` does the same sums in TypeScript for the tests | Nothing is rebuilt from frame to frame. The pattern of `waves.ts`: the shader cannot be unit tested |
+| 2026-11-15 | The distance from the road edge (for the mown strip) and the flower patches are worked out on the page when a world is shown (`render/grassMaps.ts`), not in generation | The plan: no generation code changes, so no fingerprint changes. It takes about 30 ms |
+| 2026-11-15 | **Blades take the light of the ground triangle they stand on**, and their foot-to-tip shading averages about 1 | With the demo's lighting the grassed ground was darker than bare ground and the far field's round edge showed |
+| 2026-11-15 | **No blade where the grass cover is a half or less**, every blade from 95% (`render.grass.thin`); none with its foot under 0.3 m above the sea (`dry`) | By the cover alone, green blades stood scattered over sand and rock, and a few in the water under steep shores |
+| 2026-11-15 | **Mown strip: 16 cm within 9 m of the road edge, growing back over 6 m** (planned: 12 cm, 12 m, 10 m) | The wider, shorter strip looked like bare ground from the road |
+| 2026-11-15 | A far field's flowering blade becomes all flower | Its blades are single triangles seen from 60 m and more; a coloured tip was under a pixel |
+| 2026-11-15 | No blades are drawn when the camera is more than 150 m above the ground under it (`render.grass.ceiling`) | From there no blade can be told from the ground; the view from above costs nothing extra |
+| 2026-11-15 | Tests of how long something takes get a loose limit that only catches a blunder; the real time is measured and written here | A 150 ms limit on a 30 ms job failed with every test file running at once. The same lesson as the 20 s test timeout |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -729,7 +770,13 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **From far above, open and wooded islands still look fairly bare**: a tree is 6 to 10 m tall on an island 1 to 2 km across, so woods read as patches of dark dots. `world.decor.trees.level` sets how much is wooded and `spacing` how close the trees stand. For Tane to judge.
 - **Clouds are dark grey-brown at 07:00 and 19:30**, seen against the pink sky. `render.clouds.glow` is the setting.
 - **The circling camera can look down through the clouds at the island**: one sometimes hides part of it (seed 3's summit). They thin away only within 360 m of the camera.
-- **Trees and clouds cast no shadows yet** (step 15), so trees look a little pasted on in midday light.
+- **Nobody has watched the grass move yet.** The sway, and whether thin blades shimmer as the camera flies, were tested by numbers and judged from still pictures (headless browsers). For Tane to fly a lap: `render.grass.sway` sets the wind, and wider blades or fewer of them are the levers for shimmer.
+- **From the flying camera the grass is a fine texture beside the road**, not bold blades: the camera is 4 m up and the nearest long grass is about 15 m away, past the verge and the mown strip. It reads best within 30 m. Blade widths and counts are in `render.grass.tiers`, lengths in `turf` and `meadow`. For Tane to judge; Milestone 3's chase camera will be lower and closer.
+- **The grass costs 176,000 triangles in every view from the road**, and each blade corner reads the ground five times. Step 15 measures the frame rate on a real graphics card; a low quality setting can use fewer blades or drop the near fields. The summit view now reaches 653k triangles in 132 calls on the most wooded seed.
+- **Blade feet are a little off the drawn ground far from the road** (beyond 250 m, where the ground is drawn at quarter detail): 4 to 6 cm on average, up to 1.7 m on steep ground. Only the `at=` address puts a camera there. Not growing blades on that ground, or reading its coarser heights, would fix it.
+- **Far flower patches are small dabs of colour**, a few pixels each beyond 60 m. `render.grass.flowers` has the share, size and patch settings.
+- **The mown strip is the same width everywhere**, and trees stand in long grass and flowers with nothing cleared round them.
+- **Trees, clouds and grass cast no shadows yet** (step 15), so trees look a little pasted on in midday light.
 - **A close camera (`look=`) only checks the ground, not trees.** None of the 160 close views of seeds 1 to 20 is hidden by one, but a tree crown can sit at the edge of the picture (seed 10 `cut`).
 - **Near and far tree shapes swap a whole 450 m square at a time**, at 350 m. Not seen in still pictures; watch for popping when flying, and in step 15's frame-rate pass.
 - **The most wooded islands draw up to 589k triangles in 169 calls from above** (seed 8, wooded, 9,480 trees). Step 15 measures the frame rate on a real graphics card; the far shapes and the tree cap are the levers.
@@ -793,3 +840,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-14 (Milestone 2):** Step 13 planned in plan mode and approved (Tane chose woods that vary by seed, three kinds of tree with a palm by the beach, trees close to the road in patches, and a cloud amount picked by the seed). Step 13a done: the plan is recorded under "Step 13". No code changed.
 - **2026-11-14 (Milestone 2):** Step 13 done in seven commits (13a to 13g): the woods trait, trees and rocks (`gen/world/decor.ts`), the seed's clouds (`gen/world/clouds.ts`), `WorldResult.decor` and `.clouds` in the world fingerprint, the shapes and groups as plain numbers, the instanced 3D drawing with near and far shapes, drifting clouds, `decor=off`, and the lab's dots and lines. Changed after looking at pictures: more clouds over a smaller square, clouds lit underneath by the sky, and clouds that thin away near the camera. On this machine long bash heredocs fail (code files were written with the Write tool), and Vitest hides `console.log` from passing tests (throwaway measurements write a file instead). 971 unit tests and 212 browser tests pass. Next: step 14, grass.
 - **2026-11-14 (Milestone 2):** Step 14 planned in plan mode and approved (Tane chose grass in patches of long and short on every island, blades to about 120 m thinning with distance, a mown strip beside the road, and wildflowers). Step 14a done: the plan is recorded under "Step 14". No code changed.
+- **2026-11-15 (Milestone 2):** Step 14 done in six commits (14a to 14f): the grass settings and maps (`render/grassMaps.ts`), the blades and their sums with the same sums as shader text (`render/grass.ts`), the drawing (`render/grassView.ts`, `grass=off`, `stats().blades`), a look pass from pictures, and screenshots of seeds 1 to 20 plus a time strip. Changed after looking at pictures: blades take their ground's light, no blades on thin cover, a narrower and taller mown strip, wider blades, more and bigger flowers. No generation code changed. Found on the way: a wall-clock test limit failed under load and was loosened; a page made in memory cannot load pictures from disk (contact sheets are written as files); an `out` name in a shader clashed with a local of the same name, caught by the console-error check. 1,043 unit tests and 224 browser tests pass. Next: step 15.
