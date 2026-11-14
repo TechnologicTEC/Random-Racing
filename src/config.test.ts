@@ -79,4 +79,73 @@ describe('config', () => {
     expect(config.render.farStride).toBe(2);
     expect(config.render.detailDistance).toBeGreaterThan(config.world.scenery.mountains.clearance);
   });
+
+  describe('grass', () => {
+    const grass = config.render.grass;
+
+    it('has three fields of blades, each twice as wide as the one inside it or more, with fewer blades to the square metre', () => {
+      expect(grass.tiers).toHaveLength(3);
+      const density = grass.tiers.map((tier) => tier.blades / (4 * tier.half * tier.half));
+      for (let k = 1; k < grass.tiers.length; k++) {
+        expect(grass.tiers[k]!.half).toBeGreaterThanOrEqual(grass.tiers[k - 1]!.half * 2);
+        expect(density[k]!).toBeLessThan(density[k - 1]! / 2);
+        // Wider blades make up for there being fewer of them.
+        expect(grass.tiers[k]!.width).toBeGreaterThan(grass.tiers[k - 1]!.width);
+      }
+      // Close by, about ten blades to the square metre or more, counting every field; under one at the far edge.
+      expect(density[0]! + density[1]! + density[2]!).toBeGreaterThan(8);
+      expect(density[2]!).toBeLessThan(2);
+    });
+
+    it('reaches about 120 m ahead of the camera', () => {
+      const far = grass.tiers[grass.tiers.length - 1]!;
+      const reach = far.half * (1 + grass.ahead);
+      expect(reach).toBeGreaterThanOrEqual(100);
+      expect(reach).toBeLessThanOrEqual(140);
+      // The field stays round the camera however it turns: its middle is never further ahead than its own half-width.
+      expect(grass.ahead).toBeGreaterThanOrEqual(0);
+      expect(grass.ahead).toBeLessThan(1);
+    });
+
+    it('stays inside its budget of 250,000 triangles', () => {
+      const triangles = grass.tiers.reduce((sum, tier) => sum + tier.blades * tier.triangles, 0);
+      expect(triangles).toBeLessThanOrEqual(250_000);
+      expect(triangles).toBeGreaterThan(80_000);
+      // The far field's blades are single triangles.
+      expect(grass.tiers[grass.tiers.length - 1]!.triangles).toBe(1);
+    });
+
+    it('fades every blade out before the edge of its field, where it wraps round', () => {
+      expect(grass.edgeFade).toBeGreaterThan(0.1);
+      expect(grass.edgeFade).toBeLessThan(0.6);
+    });
+
+    it('grows long meadow and short turf, and mows a strip beside the road shorter than either', () => {
+      expect(grass.turf[0]).toBeLessThan(grass.turf[1]);
+      expect(grass.meadow[0]).toBeLessThan(grass.meadow[1]);
+      expect(grass.turf[1]).toBeLessThan(grass.meadow[0]);
+      expect(grass.mown.height).toBeLessThanOrEqual(grass.turf[0]);
+      // The strip starts at the road edge, so it must be wider than the bare verge to show at all.
+      expect(grass.mown.width).toBeGreaterThan(config.road.verge + config.world.cover.roadsideFade);
+      expect(grass.mown.ease).toBeGreaterThan(0);
+      // Mown grass is well under the barrier's top, so it never hides it.
+      expect(grass.mown.height).toBeLessThan(config.road.barrierHeight / 2);
+    });
+
+    it('lets a small share of blades flower, in patches a few tens of metres across, and only in long grass', () => {
+      expect(grass.flowers.share).toBeGreaterThan(0.01);
+      expect(grass.flowers.share).toBeLessThan(0.1);
+      expect(grass.flowers.patches).toBeGreaterThan(0.1);
+      expect(grass.flowers.patches).toBeLessThan(0.5);
+      expect(grass.flowers.scale).toBeGreaterThanOrEqual(25);
+      expect(grass.flowers.scale).toBeLessThanOrEqual(80);
+      expect(grass.flowers.minLength).toBeGreaterThan(grass.turf[1]);
+      expect(grass.flowers.minLength).toBeLessThan(grass.meadow[1]);
+    });
+
+    it('is left out when the camera is too high to see a blade, such as the view from above', () => {
+      expect(grass.ceiling).toBeGreaterThan(config.camera.spot.distance);
+      expect(grass.ceiling).toBeLessThan(config.camera.orbit.start.distance * 0.5);
+    });
+  });
 });

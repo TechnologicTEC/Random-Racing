@@ -834,6 +834,76 @@ export interface RenderConfig {
   water: WaterConfig;
   decor: DecorViewConfig;
   clouds: CloudViewConfig;
+  grass: GrassConfig;
+}
+
+/**
+ * One of the square fields of grass blades that follow the camera. Each blade has a fixed place in
+ * its field's square and comes round again on the far side as the camera moves on.
+ */
+export interface GrassTier {
+  /** Half the width of its square, in metres. Its blades are drawn out to this far from the square's middle. */
+  half: number;
+  /** How many blades it has, over the whole square. */
+  blades: number;
+  /** How wide a blade is at its foot, in metres. */
+  width: number;
+  /** Triangles in each blade: 3 for a blade that tapers to a point, 1 for a plain spike. */
+  triangles: 1 | 3;
+}
+
+/**
+ * The grass blades. Drawing only: where grass grows is the world's cover map. Lengths and distances in metres.
+ * The wind is the sea's (`water.wind`).
+ */
+export interface GrassConfig {
+  /** The fields of blades, the nearest first. Each lies inside the next and gives way to it at its edge. */
+  tiers: GrassTier[];
+  /** Each field's middle sits this share of its half-width ahead of the camera, the way the camera looks, so most blades are in view. */
+  ahead: number;
+  /** A blade shrinks to nothing over this last share of its field's half-width, so it is gone before it comes round again. */
+  edgeFade: number;
+  /** How tall the blades of short turf are, shortest to tallest, and those of long meadow grass. */
+  turf: Range;
+  meadow: Range;
+  /** Meadow gives way to turf between these values of the cover's lush-to-dry variation (0 lush, 1 dry). */
+  meadowBlend: Range;
+  /**
+   * The mown strip beside the road: within `width` of the road edge no blade is taller than `height`;
+   * over the next `ease` metres the grass grows back to its full length.
+   */
+  mown: { height: number; width: number; ease: number };
+  flowers: {
+    /** Share of blades that can flower. */
+    share: number;
+    /** Share of the island that lies in a flower patch, and about how far across a patch is. */
+    patches: number;
+    scale: number;
+    /** The patches are worked out on a grid this coarse, and their edges are this soft (as a share of the pattern's whole range). */
+    cell: number;
+    soft: number;
+    /** Only a blade at least this tall flowers. */
+    minLength: number;
+    /** Share of a flowering blade, from its tip down, that is the flower s colour, and how many times wider than a blade the flower is. */
+    tip: number;
+    widen: number;
+  };
+  sway: {
+    /** How far a blade s tip is pushed down the wind by a gust, and how far it flutters either way, as shares of its length. */
+    gust: number;
+    flutter: number;
+    /** Metres from one gust to the next, and how fast gusts travel down the wind, in metres per second. */
+    gustLength: number;
+    gustSpeed: number;
+    /** How fast a blade flutters, in radians per second. */
+    flutterSpeed: number;
+  };
+  /** A blade s foot is sunk this far into the ground. */
+  sink: number;
+  /** How dark a blade is at its foot and how light at its tip, as multiples of the ground s grass colour. */
+  shade: Range;
+  /** No blades are drawn when the camera is more than this far above the ground below it. */
+  ceiling: number;
 }
 
 /** How trees and rocks are drawn. Distances in metres. */
@@ -1438,6 +1508,24 @@ export const config: GameConfig = {
     },
     decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: 0.4, shade: [0.8, 1.12] },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
+    grass: {
+      tiers: [
+        { half: 20, blades: 24000, width: 0.07, triangles: 3 },
+        { half: 40, blades: 24000, width: 0.16, triangles: 3 },
+        { half: 80, blades: 32000, width: 0.38, triangles: 1 },
+      ],
+      ahead: 0.5,
+      edgeFade: 0.3,
+      turf: [0.14, 0.26],
+      meadow: [0.5, 0.95],
+      meadowBlend: [0.35, 0.6],
+      mown: { height: 0.12, width: 12, ease: 10 },
+      flowers: { share: 0.05, patches: 0.25, scale: 45, cell: 9, soft: 0.08, minLength: 0.45, tip: 0.3, widen: 2.2 },
+      sway: { gust: 0.4, flutter: 0.16, gustLength: 180, gustSpeed: 20, flutterSpeed: 2.1 },
+      sink: 0.05,
+      shade: [0.42, 1.15],
+      ceiling: 150,
+    },
   },
   camera: {
     orbit: {

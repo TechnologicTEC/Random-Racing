@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 13, trees, rocks and clouds (see "Step 13" below)
-- **Next step:** step 14, grass: planned and approved, 14a done (see "Step 14" below); 14b is next. Then steps 15 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 14, grass: planned and approved, 14a and 14b done (see "Step 14" below); 14c is next. Then steps 15 to 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -33,7 +33,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
-| 14 | Grass | In progress (14a done, see "Step 14") |
+| 14 | Grass | In progress (14a and 14b done, see "Step 14") |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | To do |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
@@ -446,7 +446,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-
 | # | Step | Status |
 | --- | --- | --- |
 | 14a | Record the plan and Tane's choices here | Done |
-| 14b | `render.grass` config; `grassMaps.ts` | To do |
+| 14b | `render.grass` config; `grassMaps.ts` | Done |
 | 14c | `grass.ts`: blades, shape, the sums, the shader text | To do |
 | 14d | `grassView.ts`, shared ground texture, the 3D page; `grass=off` | To do |
 | 14e | Look pass from pictures: tier numbers, lengths, mown strip, flowers, colours | To do |
