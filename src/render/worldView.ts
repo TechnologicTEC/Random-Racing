@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
-import type { WorldResult } from '../gen/types';
+import type { HeightField, WorldResult } from '../gen/types';
+import { sampleField } from '../gen/world/heightfield';
 import { createCloudView } from './cloudView';
 import { cloudDrift } from './clouds';
 import type { Daylight } from './daylight';
 import { createDecorView } from './decorView';
+import { grassEye } from './grass';
+import { grassGrid } from './grassMaps';
+import { createGrassView } from './grassView';
 import { TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
 import { createSkyDome } from './sky';
@@ -26,6 +30,8 @@ export interface ViewStats {
   puffs: number;
   /** Groups of trees or rocks close enough to the camera to be drawn with their full shapes. */
   nearGroups: number;
+  /** Grass blades in the fields round the camera: none when they are hidden, or the camera is too high to see one. */
+  blades: number;
 }
 
 /** A rough census of the last frame, used by tests to confirm something sensible was drawn. */
@@ -50,6 +56,8 @@ export interface PixelCounts {
   digest: number;
   /** A fingerprint of the top two fifths of the picture alone: the sky, when the camera looks level. */
   skyDigest: number;
+  /** A fingerprint of the bottom two fifths of the picture alone: the ground in front of the camera. */
+  lowDigest: number;
   /** Mean colour (0 to 255 each) of the whole picture, and of five bands from top to bottom. */
   mean: [number, number, number];
   bands: Array<[number, number, number]>;
@@ -67,6 +75,10 @@ export interface WorldView {
   setCloudTime(seconds: number): void;
   /** Shows or hides every tree, rock and cloud. */
   setDecorShown(shown: boolean): void;
+  /** Moves the wind in the grass to this many seconds on its clock. */
+  setGrassTime(seconds: number): void;
+  /** Shows or hides the grass blades. */
+  setGrassShown(shown: boolean): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
   resize(width: number, height: number, pixelRatio: number): void;
@@ -125,6 +137,26 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength, cfg.clouds.thin);
   scene.add(clouds.object);
 
+  // Grass blades in fields that follow the camera, swayed by the sea's wind.
+  const grass = createGrassView(cfg.grass, cfg.water.wind);
+  scene.add(grass.object);
+  let grassShown = true;
+  /** The ground of the world shown, to tell how high the camera is above it. */
+  let land: HeightField | null = null;
+  /** The point the camera was last aimed at. */
+  const aim = new THREE.Vector3();
+
+  /** Everything that follows the camera, moved to it. Called before every picture. */
+  const follow = (): void => {
+    sky.mesh.position.copy(camera.position);
+    decor.update(camera.position);
+    clouds.lookFrom(camera.position);
+    // From high above no blade could be told from the ground, so the fields are left out altogether.
+    const below = land ? Math.max(0, sampleField(land, camera.position.x, camera.position.z, 0)) : 0;
+    grass.object.visible = grassShown && land !== null && camera.position.y - below <= cfg.grass.ceiling;
+    if (grass.object.visible) grass.lookFrom(grassEye(camera.position, aim));
+  };
+
   const clearGround = (): void => {
     for (const group of [ground, road]) {
       for (const child of group.children) (child as THREE.Mesh).geometry.dispose();
@@ -135,7 +167,11 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   return {
     load(world) {
       clearGround();
-      water.setDepths(waterDepthGrid(world.ground, cfg.seaFloorDepth));
+      const depths = waterDepthGrid(world.ground, cfg.seaFloorDepth);
+      water.setDepths(depths);
+      // The grass stands on the same heights the water measures its depth from.
+      grass.load(water.depthTexture(), depths, grassGrid(world, cfg.grass));
+      land = world.ground;
       const winner = world.track.candidates[world.track.winnerIndex]!;
       const chunks = buildTerrainChunks(world.ground, world.cover, {
         chunkCells: cfg.chunkCells,
@@ -173,6 +209,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       sky.update(light);
       water.setDaylight(light);
       clouds.setDaylight(light);
+      grass.setDaylight(light);
     },
 
     setWaveTime(seconds) {
@@ -188,9 +225,18 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       clouds.object.visible = shown;
     },
 
+    setGrassTime(seconds) {
+      grass.setTime(seconds);
+    },
+
+    setGrassShown(shown) {
+      grassShown = shown;
+    },
+
     setCamera(eye, look) {
       camera.position.set(eye.x, eye.y, eye.z);
       camera.lookAt(look.x, look.y, look.z);
+      aim.set(look.x, look.y, look.z);
     },
 
     resize(width, height, pixelRatio) {
@@ -201,9 +247,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     },
 
     render() {
-      sky.mesh.position.copy(camera.position);
-      decor.update(camera.position);
-      clouds.lookFrom(camera.position);
+      follow();
       renderer.render(scene, camera);
     },
 
@@ -218,14 +262,13 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         rocks: shown ? counts.rocks : 0,
         puffs: shown ? clouds.count() : 0,
         nearGroups: shown ? counts.nearGroups : 0,
+        blades: grass.object.visible ? grass.count() : 0,
       };
     },
 
     pixelCounts() {
       // Draw and read back in one go: the picture is only guaranteed to be there until the browser shows it.
-      sky.mesh.position.copy(camera.position);
-      decor.update(camera.position);
-      clouds.lookFrom(camera.position);
+      follow();
       renderer.render(scene, camera);
       const gl = renderer.getContext();
       const width = gl.drawingBufferWidth;
@@ -242,8 +285,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       let cloud = 0;
       let digest = 0;
       let skyDigest = 0;
-      // The rows come from the bottom of the picture up: the top two fifths start here.
+      let lowDigest = 0;
+      // The rows come from the bottom of the picture up: the top two fifths start here, and the bottom two fifths end here.
       const skyFrom = Math.floor(height * 0.6) * width * 4;
+      const lowTo = Math.floor(height * 0.4) * width * 4;
       const sums = [0, 0, 0];
       const bands = Array.from({ length: 5 }, () => [0, 0, 0, 0]);
       for (let p = 0; p < pixels.length; p += 4) {
@@ -260,6 +305,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         band[2] += b;
         band[3]++;
         digest = (Math.imul(digest, 31) + ((r << 16) | (g << 8) | b)) | 0;
+        if (p < lowTo) lowDigest = (Math.imul(lowDigest, 31) + ((r << 16) | (g << 8) | b)) | 0;
         if (p >= skyFrom) {
           skyDigest = (Math.imul(skyDigest, 31) + ((r << 16) | (g << 8) | b)) | 0;
           if (r > 185 && g > 185 && b > 185) cloud++;
@@ -286,6 +332,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         cloud,
         digest,
         skyDigest,
+        lowDigest,
         mean: mean(sums, total),
         bands: bands.map((band) => mean(band, Math.max(1, band[3]!))),
       };
@@ -301,6 +348,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       sky.dispose();
       decor.dispose();
       clouds.dispose();
+      grass.dispose();
       renderer.dispose();
     },
   };

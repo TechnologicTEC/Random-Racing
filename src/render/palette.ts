@@ -68,6 +68,13 @@ export const TREES = {
   ] as Rgb[],
 };
 
+/** Wildflowers among the long grass: white, yellow and red, in the order of a blade's flower number. */
+export const FLOWERS: Rgb[] = [
+  [0.97, 0.96, 0.9],
+  [0.96, 0.8, 0.18],
+  [0.86, 0.2, 0.2],
+];
+
 /** Boulders and shore rocks. */
 export const ROCKS = {
   boulder: [0.525, 0.5, 0.48] as Rgb,

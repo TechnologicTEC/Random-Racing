@@ -243,7 +243,8 @@ describe('grassGrid: everything the grass needs to know about the ground, for a 
       grassGrid(world, cfg);
       times.push(performance.now() - start);
     }
-    // Aimed at about 30 ms; the limit here is loose so a busy machine does not fail the test.
-    expect(Math.min(...times)).toBeLessThan(150);
+    // It takes about 30 ms (measured in 14b). The limit here only catches a blunder: with every test file
+    // running at once on a busy machine it has taken 190 ms, and a tight limit would fail commits at random.
+    expect(Math.min(...times)).toBeLessThan(1000);
   });
 });

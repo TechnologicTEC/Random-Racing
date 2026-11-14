@@ -10,6 +10,8 @@ export interface Water {
   mesh: THREE.Mesh;
   /** Sets the depths from an island's ground. */
   setDepths(grid: WaterDepthGrid): void;
+  /** The ground's heights as a texture, for whatever else reads them (the grass). A new one is made each time the depths are set. */
+  depthTexture(): THREE.Texture;
   /** Lights the water for a moment of the day. */
   setDaylight(light: Daylight): void;
   /** Moves the waves to this many seconds on their clock. */
@@ -147,6 +149,9 @@ export function createWater(size: number, cfg: WaterConfig): Water {
       uniforms.uGroundOrigin.value = grid.origin;
       uniforms.uGroundCell.value = grid.cell;
       uniforms.uOpenSea.value = grid.openSea;
+    },
+    depthTexture() {
+      return uniforms.uGround.value as THREE.Texture;
     },
     setDaylight(light) {
       // Three's lights reach a surface divided by pi; the water takes its light the same way as the ground.

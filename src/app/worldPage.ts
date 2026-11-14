@@ -67,7 +67,7 @@ const HINTS: Record<CameraMode, string> = {
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
  * close, water, hairpin, start, summit, climb, sun) or `at=x,z` for a close view of one place;
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
- * `decor=off` to leave out the trees, rocks and clouds.
+ * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades.
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -90,6 +90,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
 
   const view = createWorldView(canvas, config.render);
   view.setDecorShown(params.get('decor') !== 'off');
+  view.setGrassShown(params.get('grass') !== 'off');
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
   let mode: CameraMode = params.get('cam') === 'orbit' ? 'orbit' : 'fly';
   let flight: FlyPath | null = null;
@@ -101,6 +102,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   // The waves keep moving unless the picture is held still: then they stand at a set moment, so screenshots repeat exactly.
   let waveClock = config.render.water.stillTime;
   view.setCloudTime(waveClock);
+  view.setGrassTime(waveClock);
   let report: FitReport | null = null;
   let shown: WorldResult | null = null;
   let dirty = true;
@@ -169,10 +171,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       dirty = true;
     }
     if (!still) {
-      // The clouds drift on the same clock as the waves, down the same wind.
+      // The clouds drift on the same clock as the waves, down the same wind, and the grass sways in it.
       waveClock += seconds;
       view.setWaveTime(waveClock);
       view.setCloudTime(waveClock);
+      view.setGrassTime(waveClock);
       dirty = true;
     }
     if (dirty && !building) {

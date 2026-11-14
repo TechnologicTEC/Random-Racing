@@ -402,6 +402,96 @@ test.describe('trees, rocks and clouds', () => {
   });
 });
 
+test.describe('grass', () => {
+  test('draws blades of grass round a camera on the road, inside its budget, with no errors', async ({ page }) => {
+    // A shader that fails to compile draws nothing and only logs an error.
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00');
+    const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&grass=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
+
+    expect(stats.blades).toBeGreaterThan(50_000);
+    expect(bare.blades).toBe(0);
+    // Every blade is one to three triangles, in a draw for each shape of blade.
+    const added = stats.triangles - bare.triangles;
+    expect(added).toBeGreaterThan(stats.blades);
+    expect(added).toBeLessThanOrEqual(250_000);
+    expect(stats.calls - bare.calls).toBeGreaterThanOrEqual(1);
+    expect(stats.calls - bare.calls).toBeLessThanOrEqual(3);
+    expect(errors).toEqual([]);
+  });
+
+  test('changes the picture of the ground beside the road, and leaves the road itself clear', async ({ page }) => {
+    await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&decor=off');
+    const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&decor=off&grass=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(seen.digest).not.toBe(bare.digest);
+    expect(seen.lowDigest).not.toBe(bare.lowDigest);
+    // No blade stands on the asphalt: as much of the picture is road as without the grass.
+    expect(seen.road).toBeGreaterThan(bare.road * 0.97);
+    expect(seen.road).toBeLessThan(bare.road * 1.03);
+    expect(seen.kerb).toBeGreaterThan(bare.kerb * 0.9 - 20);
+  });
+
+  test('leaves the blades out when the camera is high above the island', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
+    const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&grass=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
+    expect(stats.blades).toBe(0);
+    expect(stats.triangles).toBe(bare.triangles);
+    expect(stats.calls).toBe(bare.calls);
+  });
+
+  test('sways in the wind, and stands still in a still picture', async ({ page }) => {
+    // A close view of the start line, with no clouds: the bottom of the picture is ground, and only the grass can move in it.
+    await openWorld(page, 'seed=7&look=start&time=13:00&decor=off&grass=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().lowDigest);
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().lowDigest)).toBe(bare);
+
+    await openWorld(page, 'seed=7&look=start&time=13:00&decor=off');
+    expect((await page.evaluate(() => window.seedCircuit.view!.stats())).blades).toBeGreaterThan(50_000);
+    const first = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().lowDigest);
+    expect(first).not.toBe(bare);
+    await page.waitForTimeout(1500);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().lowDigest)).not.toBe(first);
+
+    await openWorld(page, 'seed=7&still=1&look=start&time=13:00&decor=off');
+    const still = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().lowDigest);
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => window.seedCircuit.view!.pixelCounts().lowDigest)).toBe(still);
+  });
+
+  test('hides the blades when the address says grass=off, and keeps the trees', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&grass=off');
+    const { decor, stats } = await page.evaluate(() => ({ decor: window.seedCircuit.view!.decor()!, stats: window.seedCircuit.view!.stats() }));
+    expect(stats.blades).toBe(0);
+    expect(stats.trees).toBe(decor.trees);
+    // And the other way round: decor=off leaves the grass.
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off');
+    const noDecor = await page.evaluate(() => window.seedCircuit.view!.stats());
+    expect(noDecor.trees).toBe(0);
+    expect(noDecor.blades).toBeGreaterThan(50_000);
+  });
+
+  test('gives a new island its grass too', async ({ page }) => {
+    await openWorld(page, 'seed=7&still=1');
+    await page.getByTestId('world-new').click();
+    await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '7');
+    await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
+    const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
+    expect(stats.blades).toBeGreaterThan(50_000);
+  });
+});
+
 test.describe('3D screenshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Screenshots are taken in Chromium only');
 
