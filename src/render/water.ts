@@ -88,7 +88,7 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade):
     fragmentShader: /* glsl */ `
       #include <fog_pars_fragment>
       ${DEPTH_GLSL}
-      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; }'}
+      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; } float skyShade(float sunLit) { return 1.0; }'}
       uniform float uTime;
       uniform vec3 uSunDir, uSunLight, uAmbient, uSky, uGlint, uDeep, uShallow, uFoam;
       varying vec3 vWorld;
@@ -111,7 +111,7 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade):
         vec3 face = normalize(vec3(-g.x * ${float(cfg.shade)}, 1.0, -g.y * ${float(cfg.shade)}));
         // The land and the clouds keep the sun off the water, as they do off the ground.
         float sunLit = sunShade(vWorld);
-        vec3 light = uAmbient + uSunLight * sunLit * (0.35 + 0.65 * max(dot(face, uSunDir), 0.0));
+        vec3 light = uAmbient * skyShade(sunLit) + uSunLight * sunLit * (0.35 + 0.65 * max(dot(face, uSunDir), 0.0));
         vec3 col = water * light;
 
         float fres = pow(1.0 - max(dot(n, V), 0.0), ${float(cfg.fresnel)});

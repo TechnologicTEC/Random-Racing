@@ -100,7 +100,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       #include <fog_pars_vertex>
       #include <shadowmap_pars_vertex>
       ${DEPTH_GLSL}
-      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; }'}
+      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; } float skyShade(float sunLit) { return 1.0; }'}
       ${grassGlsl(cfg, wind)}
       attribute vec2 aOffset;
       attribute vec4 aTrait;
@@ -127,6 +127,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
     fragmentShader: /* glsl */ `
       #include <common>
       #include <fog_pars_fragment>
+      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; } float skyShade(float sunLit) { return 1.0; }'}
       #include <packing>
       #include <shadowmap_pars_fragment>
       uniform vec3 uSunDir, uSunLight, uAmbient, uBounce, uLush, uDry;
@@ -151,7 +152,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
         #if defined( USE_SHADOWMAP ) && NUM_SUN_LIGHT_SHADOWS > 0
           nearLit = getSunShadow( sunShadowMap[ 0 ], sunLightShadows[ 0 ], 0 );
         #endif
-        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) + uSunLight * vSunLit * nearLit * max(dot(n, uSunDir), 0.0);
+        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) * skyShade(vSunLit * nearLit) + uSunLight * vSunLit * nearLit * max(dot(n, uSunDir), 0.0);
         gl_FragColor = vec4(col * light, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

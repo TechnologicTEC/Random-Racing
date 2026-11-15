@@ -46,6 +46,10 @@ export function shadeGlsl(cfg: ShadowConfig): string {
       float cover = texture2D(uCloudShade, (at - uCloudShift + mid) / uCloudSpan).r;
       return 1.0 - ${float(cfg.clouds.strength)} * cover * grown * uCloudOn;
     }
+    // The light from the sky left in a shadow: a shadow that keeps the sun off a point keeps this share of the sky off it too.
+    float skyShade(float sunLit) {
+      return 1.0 - ${float(cfg.skyShare)} * (1.0 - sunLit);
+    }
     float sunShade(vec3 world) {
       if (uShadeOn < 0.5) return 1.0;
       return landLight(world) * cloudLight(world);

@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15h (step 15 is planned and recorded under "Step 15" below; 15a to 15g done): the look pass. Shadows are faint; the plan is a setting for how much of the sky's light a shadow also takes, with pictures for Tane to judge. Then steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** 15, shadows, far-ground detail, High and Low quality, frame times (see "Step 15" below)
+- **Next step:** step 16, the 3D view becomes the default page, with the lab on the L key and `?lab=1`. Then step 17 (20-seed check and the pull request). Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15g done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | Done (15a to 15h, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -529,7 +529,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | Done (below) |
 | 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | Done (below) |
 | 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | Done (below) |
-| 15h | Look pass from pictures; final frame times for High and Low; this file | To do |
+| 15h | Look pass from pictures; final frame times for High and Low; this file | Done (below) |
 
 **Budgets.** High holds a median of 16.7 ms or less (95th percentile under about 20 ms) in every measured view at 1080p on the Arc laptop; Low is at least about a third faster. If the baseline is already over, or near shadows push High over and the levers do not bring it back, report to Tane before going on. Near shadows add at most about 200k triangles and 90 draw calls to a view from the road. The browser suite takes 428 s now; if it grows by more than about a quarter, tests that are not about shadows open with `shadows=off`.
 
@@ -646,6 +646,29 @@ High holds 60 frames per second at 1080p in every view, inside the goal (median 
 - **Why Low gains little from above:** with every shadow off, Low's circling view still takes about 8.9 ms, as High's did before shadows (8.0), though Low draws 40% fewer pixels; with scenery off as well, half the draw calls, about the same. On this graphics card that view has a fixed cost of about 8 ms that neither pixels nor draw calls explain. Low's cuts should do more on a card that is short of pixels. For Milestone 6's performance pass.
 - **Frame times, clean run:** High at 1080p as in 15f (fly 6.2 to 9.4 ms, circling 12.1 to 12.6, summit 7.3 to 9.5); on the full laptop screen High is now drawn at 2116 by 1322 (fly 8.6 to 9.8, circling 14.3 to 17.3, seed 8 just over 16.7). Low at 1080p (drawn at 1460 by 821): fly 6.2 to 6.5, circling 9.6 to 11.7, summit 6.0 to 8.6. **Low is 10% to 50% faster, short of the planned third when circling from above.** Fewer pixels and fewer draw calls (Low's shorter shadow reach cut 100) barely change that view; what holds it up was not found.
 - **The laptop then throttled:** frame times jumped between about 7 ms and 60 to 115 ms from view to view on the same settings, unit tests ran about 60 times slower, and the processor stayed at 1,400 MHz (of 3,800) under load. Measurements were stopped. Earlier that afternoon the laptop also went into standby when the lid was closed (4:12 pm).
+
+**15h, the look pass.**
+- **Shadows were faint**: a shadow only took the sun's light away, and the sky lights the ground almost as strongly. A new setting, `render.shadows.skyShare` (0.6), is the share of the sky's light a full shadow takes too. It applies to everything the sun lights: the ground, road, trees and rocks through the patch of Three.js's lighting (which now also catches the near shadow where Three.js reads its maps), and the grass and water in their own shaders (`skyShade` in `shade.ts`). `shadowSky=0.3` in the address tries another value without changing the code.
+- **Judged from pictures:** 0, 0.45 and 0.8 side by side on four views (seed 20's forest at 10:00, seed 8 flying at 16:30, seed 12 from above at 08:00, seed 1's summit at 18:30). At 0 only the cloud shadows read; mountain shadows show from about 0.45 and are strong but not black at 0.8. 0.6 was taken. Measured in the forest view: 4.4% darker over the whole picture than with no shadows (2.9% with the sun's light alone), the shadows themselves being a small part of it.
+- **Screenshots checked by eye** as contact sheets: seeds 1 to 20 from above, flying at 0.3 of the lap, at the start line and the summit; a time strip of seeds 1, 7, 12 and 20 at 07:00, 13:00 and 19:30 from above and facing the sun, and flying at 0.8. Mountains' shadowed sides and deep cuttings read darker; at 07:00 and 19:30 trees and the start gate throw long shadows across the road and grass; no stripes, gaps or hard edges.
+- The cloud-shadow tests sample the clock every 60 s, not 30, and have two minutes: drawing and reading back the pictures in software went over a minute with other tests running.
+
+**Final frame times** (Intel Arc, 13:00, `npm run perf`, seeds 1, 7, 8, 20 and 2024; median ms; slow spells left out, see below):
+
+| Quality | Pixels drawn | Flying | Circling | Summit |
+| --- | --- | --- | --- | --- |
+| High, 1080p window | 1920 by 1080 | 5.5 to 10.2 | 7.6 to 15.8 | 6.3 to 10.0 |
+| High, full laptop screen | 2116 by 1322 | 7.0 to 10.3 | 10.0 to 14.8 | 9.7 to 10.5 |
+| Low, 1080p window | 1460 by 821 | 4.1 to 6.9 | 9.8 to 11.2 | 4.2 to 8.3 |
+| Low, full laptop screen | 1385 by 866 | 4.1 to 6.7 | 11.2 to 12.5 | 4.1 to 8.3 |
+
+High holds 60 frames per second in every view, at 1080p and on the full screen (seed 8 from above is the closest, at 15.8 ms with its 95th percentile 16.4). Low is about a third faster flying and at the summit, about a fifth when circling.
+
+**Slow spells:** in every timing run that evening, two or three views in a row ran at 40 to 115 ms and the next ones were normal again; which views varied from run to run, so it is the laptop, not an island. Asking Windows to keep the display awake did not stop them. Their cause is not known (heat, power saving or another program). Take the middle of several runs when timing.
+
+**Step 15 done.** 1,095 unit tests pass. On this laptop the evening's browser runs slowed to half speed and timed out (18, then 20, tests whose worlds never loaded, in areas 15h does not touch). After the long-running dev server was closed, Tane ran the suite by hand: 259 passed and one timed out (pausing and resuming the flight, which needs several software-drawn frames of a second or more after the pause); it now has two minutes, and it and both budget tests pass.
+
+**Tane's verdict (2026-11-15):** the shadows look good. `skyShare` stays at 0.6.
 
 ### Rework risks
 
@@ -930,22 +953,24 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
 - In 3D the sea cliffs read well as rock faces. The peak is craggy and a bit lumpy from the ridge texture on its sides; worth a look once lighting and shadows are in.
 - **The sun's glare on the sea, seen from the circling camera, is a wide pale patch with wave stripes in it** (seed 7 at 10:00). Softer than it was; `render.water.glint*` are the settings.
-- **The water shader does more work per pixel than the demo's** (eight wave trains, each with a noise lookup). Step 15 measures the frame rate on a real graphics card; fewer trains is the lever.
+- **The water shader does more work per pixel than the demo's** (eight wave trains, each with a noise lookup). Measured in step 15: the sea surface costs about 0.5 ms a frame at 1080p on the Arc graphics; Low keeps the four longest of the eight trains.
 - **From far above, open and wooded islands still look fairly bare**: a tree is 6 to 10 m tall on an island 1 to 2 km across, so woods read as patches of dark dots. `world.decor.trees.level` sets how much is wooded and `spacing` how close the trees stand. For Tane to judge.
 - **Clouds are dark grey-brown at 07:00 and 19:30**, seen against the pink sky. `render.clouds.glow` is the setting.
 - **The circling camera can look down through the clouds at the island**: one sometimes hides part of it (seed 3's summit). They thin away only within 360 m of the camera.
 - **Nobody has watched the grass move yet.** The sway, and whether thin blades shimmer as the camera flies, were tested by numbers and judged from still pictures (headless browsers). For Tane to fly a lap: `render.grass.sway` sets the wind, and wider blades or fewer of them are the levers for shimmer.
 - **From the flying camera the grass is a fine texture beside the road**, not bold blades: the camera is 4 m up and the nearest long grass is about 15 m away, past the verge and the mown strip. It reads best within 30 m. Blade widths and counts are in `render.grass.tiers`, lengths in `turf` and `meadow`. For Tane to judge; Milestone 3's chase camera will be lower and closer.
-- **The grass costs 176,000 triangles in every view from the road**, and each blade corner reads the ground five times. Step 15 measures the frame rate on a real graphics card; a low quality setting can use fewer blades or drop the near fields. The summit view now reaches 653k triangles in 132 calls on the most wooded seed.
+- **The grass costs 176,000 triangles in every view from the road**, and each blade corner reads the ground five times. Measured in step 15: the grass costs about 0.6 ms a frame at 1080p on the Arc graphics; Low keeps 35% of the blades. The summit view now reaches 653k triangles in 132 calls on the most wooded seed.
 - **Far flower patches are small dabs of colour**, a few pixels each beyond 60 m. `render.grass.flowers` has the share, size and patch settings.
 - **The mown strip is the same width everywhere**, and trees stand in long grass and flowers with nothing cleared round them.
-- **Trees, clouds and grass cast no shadows yet** (step 15), so trees look a little pasted on in midday light.
+- Tree shadows are small from the flying camera at midday. Shadow strength (`render.shadows.skyShare`, 0.6) was approved by Tane on 2026-11-15; `shadowSky=` in the address tries others.
+- **Low gains least when circling from above** (about a fifth): that view has a fixed cost of about 8 ms on the Arc graphics that neither pixels nor draw calls explain. For Milestone 6's performance pass.
+- **Timing on the laptop is unreliable for spells**: views run four to ten times slower for half a minute or so, then recover (see "Step 15").
 - **A close camera (`look=`) only checks the ground, not trees.** None of the 160 close views of seeds 1 to 20 is hidden by one, but a tree crown can sit at the edge of the picture (seed 10 `cut`).
 - **Near and far tree shapes swap a whole 450 m square at a time**, at 350 m. Not seen in still pictures; watch for popping when flying, and in step 15's frame-rate pass.
-- **The most wooded islands draw up to 589k triangles in 169 calls from above** (seed 8, wooded, 9,480 trees). Step 15 measures the frame rate on a real graphics card; the far shapes and the tree cap are the levers.
+- **The most wooded islands draw up to 589k triangles in 169 calls from above** (seed 8, wooded, 9,480 trees). Measured in step 15: seed 8 from above is the slowest view on High at 1080p, 15.8 ms with every shadow on; trees cast with their far shapes.
 - The wind blows the same way on every island. It could come from the seed.
 - **07:00 and 19:30 are quite dark**, with pink skies (see the step 12 time strip). Sunrise, sunset and the blends are config values; for Tane to judge.
-- **The page now draws every frame** while the waves move. Step 15 measures the frame rate on a real graphics card; reduced motion and `still=1` stop it.
+- **The page now draws every frame** while the waves move. Measured in step 15: 5 to 16 ms a frame on High at 1080p on the Arc graphics.
 - 10:00 is called "midday light" on the title card (morning ends at 10:00 in `lightName`).
 - A whole world (track, island, fit, cover, report) takes 430 to 640 ms in Node and about the same in a Chromium worker. Budget is 3 s.
 - For two test files (`cover.test.ts`, `report.test.ts`) the tests were written first but only run once the code existed, so they were never seen failing for a reason other than the missing module.
@@ -1011,3 +1036,5 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 15e done: the land's and the clouds' shadows drawn on the ground, road, trees, rocks, grass and sea (`render/shadeView.ts`), worked out again when the time moves; `shadows=off`. Cloud shadows show clearly; mountain shadows at low sun are faint, for the look pass. The browser suite now runs three browsers at a time: four at once timed out worlds.
 - **2026-11-15 (Milestone 2):** Step 15f done: trees, rocks, barriers and the gate cast shadows near the camera (Three.js's `SunLight`, two maps; `render/nearShadows.ts`), trees by their far shapes to keep inside the budget; the grass takes them too. At 1080p every view still holds 60 frames per second (median at most 12.9 ms); the full laptop screen from above does not. Shadows are faint, for the look pass.
 - **2026-11-15 (Milestone 2):** Step 15g done: High and Low quality, the pixel budget, the Quality button and Q key, remembered in the browser. Low measured 10% to 50% faster than High at 1080p, least when circling from above. The laptop throttled for a while (processor held at 1,400 MHz, frame times jumping to 60 ms and more, the browser suite at half speed with 19 timeouts), so Tane ran the browser suite by hand.
+- **2026-11-15 (Milestone 2):** Tane closed the dev server that had run since 14 November; the next browser run passed but for one timeout, now given longer. Tane: the shadows look good.
+- **2026-11-15 (Milestone 2):** Step 15h done: shadows take a share of the sky's light as well (`render.shadows.skyShare` 0.6, chosen from pictures; `shadowSky=` in the address), screenshots of seeds 1 to 20 and a time strip checked, final frame times for High and Low. **Step 15 done.** High holds 60 frames per second in every measured view at 1080p and on the full laptop screen; Low is a fifth to a third faster. Next: step 16.

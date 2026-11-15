@@ -37,6 +37,10 @@ function swap(text: string, line: string, by: string): string {
   return text.replace(line, by);
 }
 
+/** Where Three.js's lighting multiplies the sun's light by its shadow maps, and the lookup it makes there. */
+const NEAR_LOOKUP = '( directLight.visible && receiveShadow ) ? getSunShadow( sunShadowMap[ i ], sunLightShadow, UNROLLED_LOOP_INDEX ) : 1.0';
+const NEAR_LINE = `directLight.color *= ${NEAR_LOOKUP};`;
+
 /** The lines of Three.js's lighting where a directional light (and, from step 15f, its sun light) is read. */
 const SUN_LINES = ['getDirectionalLightInfo( directionalLight, directLight );', 'getSunLightInfo( sunLight, directLight );'];
 
@@ -171,14 +175,18 @@ export function createShadeView(cfg: ShadowConfig, drift: CloudDrift): ShadeView
           vShadeWorld = ( modelMatrix * shadeWorld ).xyz;`,
         );
         shader.fragmentShader = swap(shader.fragmentShader, '#include <common>', `#include <common>\nvarying vec3 vShadeWorld;\n${glsl}`);
-        let lights = THREE.ShaderChunk.lights_fragment_begin;
+        // The land's and clouds' shade, worked out once; the near shadow is caught where Three.js reads its shadow maps.
+        let lights = `float shadeLand = sunShade( vShadeWorld );\nfloat shadeNear = 1.0;\n${THREE.ShaderChunk.lights_fragment_begin}`;
         let found = 0;
         for (const line of SUN_LINES) {
           if (!lights.includes(line)) continue;
-          lights = lights.replace(line, `${line}\n\t\tdirectLight.color *= sunShade( vShadeWorld );`);
+          lights = lights.replace(line, `${line}\n\t\tdirectLight.color *= shadeLand;`);
           found++;
         }
         if (found === 0) throw new Error('Shadows: Three.js no longer reads a directional light where expected');
+        lights = swap(lights, NEAR_LINE, `shadeNear = ${NEAR_LOOKUP};\n\t\tdirectLight.color *= shadeNear;`);
+        // The sky's light, added up above, loses its share in shadow.
+        lights += `\n#if defined( RE_IndirectDiffuse )\n\tirradiance *= skyShade( shadeLand * shadeNear );\n#endif\n`;
         shader.fragmentShader = swap(shader.fragmentShader, '#include <lights_fragment_begin>', lights);
       };
       // Every patched material shares this text; Three.js tells programs apart by this key and the material's own settings.

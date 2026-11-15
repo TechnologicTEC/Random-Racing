@@ -106,6 +106,9 @@ test('opens flying the lap, and keeps moving', async ({ page }) => {
 });
 
 test('pauses and resumes the flight with the button and with Space', async ({ page }) => {
+  // A flying page draws in software at a second or more a frame, and each frame moves the camera at most 0.05 s of flight,
+  // so seeing it move again after the pause can take longer than the usual minute.
+  test.setTimeout(120_000);
   await openWorld(page, 'seed=42');
   await page.getByTestId('world-play').click();
   const paused = await page.evaluate(() => window.seedCircuit.view!.camera());
@@ -115,7 +118,7 @@ test('pauses and resumes the flight with the button and with Space', async ({ pa
 
   await page.keyboard.press('Space');
   expect((await page.evaluate(() => window.seedCircuit.view!.camera())).playing).toBe(true);
-  await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.camera())).distance).toBeGreaterThan(paused.distance + 2);
+  await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.camera())).distance, { timeout: 45_000 }).toBeGreaterThan(paused.distance + 2);
 });
 
 test('switches between flying the lap and circling the island', async ({ page }) => {
@@ -510,6 +513,9 @@ test.describe('grass', () => {
 });
 
 test.describe('shadows of the land and the clouds', () => {
+  // Two of these draw and read back sixteen pictures in software, twice: more than the usual minute under load.
+  test.describe.configure({ timeout: 120_000 });
+
   /** The mean brightness of the bottom three fifths of the picture, 0 to 255: the ground, when looking down at the island. */
   const ground = (seen: { bands: Array<[number, number, number]> }): number =>
     seen.bands.slice(2).reduce((sum, [r, g, b]) => sum + (r + g + b) / 3, 0) / 3;
@@ -554,7 +560,7 @@ test.describe('shadows of the land and the clouds', () => {
     const digests = async (): Promise<number> =>
       page.evaluate(() => {
         const seen = new Set<number>();
-        for (let seconds = 0; seconds <= 900; seconds += 30) {
+        for (let seconds = 0; seconds <= 900; seconds += 60) {
           window.seedCircuit.view!.setClock(seconds);
           seen.add(window.seedCircuit.view!.pixelCounts().lowDigest);
         }
@@ -570,7 +576,7 @@ test.describe('shadows of the land and the clouds', () => {
     const digests = async (): Promise<number> =>
       page.evaluate(() => {
         const seen = new Set<number>();
-        for (let seconds = 0; seconds <= 900; seconds += 30) {
+        for (let seconds = 0; seconds <= 900; seconds += 60) {
           window.seedCircuit.view!.setClock(seconds);
           seen.add(window.seedCircuit.view!.pixelCounts().lowDigest);
         }
@@ -598,7 +604,8 @@ test.describe('shadows of trees, rocks and barriers', () => {
     const shaded = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
     await openWorld(page, 'seed=20&still=1&look=start&time=10:00&shadows=off');
     const bare = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
-    expect(ground(shaded.seen)).toBeLessThan(ground(bare.seen) * 0.985);
+    // A shadow takes some of the sky's light as well as the sun's, so it reads clearly (measured in 15h: 4.4% darker).
+    expect(ground(shaded.seen)).toBeLessThan(ground(bare.seen) * 0.97);
     // Drawing the shadow maps costs something, but no more than the budget.
     const triangles = shaded.stats.triangles - bare.stats.triangles;
     const calls = shaded.stats.calls - bare.stats.calls;
@@ -607,6 +614,15 @@ test.describe('shadows of trees, rocks and barriers', () => {
     expect(calls).toBeGreaterThan(0);
     expect(calls).toBeLessThan(90);
     expect(errors).toEqual([]);
+  });
+
+  test('darkens shadows by the share of the sky s light the address asks for', async ({ page }) => {
+    await openWorld(page, 'seed=20&still=1&look=start&time=10:00&shadowSky=0');
+    const sunOnly = ground(await page.evaluate(() => window.seedCircuit.view!.pixelCounts()));
+    await openWorld(page, 'seed=20&still=1&look=start&time=10:00&shadowSky=0.6');
+    const darker = ground(await page.evaluate(() => window.seedCircuit.view!.pixelCounts()));
+    // Measured in 15h: 1.5% darker over the whole view, the shadows themselves being a small part of it.
+    expect(darker).toBeLessThan(sunOnly * 0.99);
   });
 
   test('reaches a few hundred metres from a camera on the road, and further from high above', async ({ page }) => {

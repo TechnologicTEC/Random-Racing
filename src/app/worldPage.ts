@@ -84,7 +84,7 @@ const HINTS: Record<CameraMode, string> = {
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
- * `shadows=off` to leave out every shadow; `quality=low` (or high) to open at that quality, which the page otherwise
+ * `shadows=off` to leave out every shadow; `shadowSky=0.5` for a shadow to take that share of the sky's light (0 to 1); `quality=low` (or high) to open at that quality, which the page otherwise
  * remembers from last time (the Quality button and the Q key switch it);
  * `sync=1` to wait for the graphics card to finish each frame before the next, so frame times are what frames cost (for `npm run perf`).
  */
@@ -123,8 +123,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     shadows: params.get('shadows') !== 'off',
   };
   /** Builds the 3D view for a quality level, with the parts the address asked for. */
+  // `shadowSky=0.5` tries another share of the sky's light for shadows to take, for judging by eye.
+  const askedSky = Number(params.get('shadowSky'));
+  const render = params.has('shadowSky') && Number.isFinite(askedSky)
+    ? { ...config.render, shadows: { ...config.render.shadows, skyShare: Math.min(1, Math.max(0, askedSky)) } }
+    : config.render;
   const makeView = (level: QualityLevel): WorldView => {
-    const settings = qualitySettings(config.render, level);
+    const settings = qualitySettings(render, level);
     const made = createWorldView(canvas, settings.render, settings.pixels);
     made.setDecorShown(shownParts.decor);
     made.setGrassShown(shownParts.grass);

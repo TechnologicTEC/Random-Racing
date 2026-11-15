@@ -845,6 +845,11 @@ export interface RenderConfig {
  * The land and the clouds each keep the sun off by a map worked out on the page (`terrainShade.ts`, `cloudShade.ts`).
  */
 export interface ShadowConfig {
+  /**
+   * The share of the sky's light that a full shadow takes away as well as the sun's. With none, shadows are faint:
+   * the sky lights the ground almost as strongly as the sun. Judged from pictures (15h); try `shadowSky=0.5` in the address.
+   */
+  skyShare: number;
   /** Crisp shadows of trees, rocks, barriers and the start gate, near the camera: Three.js's sun light with two shadow maps. */
   near: {
     /** Cells along each side of each of the two maps. */
@@ -1639,6 +1644,7 @@ export const config: GameConfig = {
       ceiling: 150,
     },
     shadows: {
+      skyShare: 0.6,
       near: { mapSize: 2048, reach: [350, 2500], from: 20, perMetre: 6, bias: -0.0004, normalBias: 0.4, radius: 2 },
       land: { edge: 6, bias: 0.3, lowest: 0.05 },
       clouds: { size: 512, strength: 0.55, solid: 0.5 },

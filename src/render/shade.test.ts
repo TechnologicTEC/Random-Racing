@@ -18,6 +18,13 @@ describe('shadeGlsl: the shadows of the land and the clouds, as shader text ever
     }
   });
 
+  it('gives a share of the sky s light to take away in shadow, from the setting', () => {
+    expect(code).toMatch(/float\s+skyShade\s*\(\s*float\s+\w+\s*\)/);
+    const number = (value: number): string => (Number.isInteger(value) ? `${value}.0` : String(value));
+    expect(code).toContain(number(cfg.skyShare));
+    expect(shadeGlsl({ ...cfg, skyShare: 0.271 })).toContain('0.271');
+  });
+
   it('carries the settings it was written from', () => {
     const number = (value: number): string => (Number.isInteger(value) ? `${value}.0` : String(value));
     expect(code).toContain(number(cfg.land.bias));
