@@ -1,6 +1,6 @@
 /**
- * Test helper: checks one source file from a pure layer (src/core or src/gen)
- * against the brief's architecture rules. Used by src/architecture.test.ts.
+ * Test helper: checks one source file from a pure layer (src/core, src/gen or
+ * src/sim) against the brief's architecture rules. Used by src/architecture.test.ts.
  */
 
 const FORBIDDEN_CODE: Array<[RegExp, string]> = [
@@ -19,12 +19,17 @@ const EXACT_MATH = new Set([
   'random', // reported by its own rule above
 ]);
 
-const FORBIDDEN_PACKAGES =[/^three(\/|$)/, /^@dimforge\//];
+const THREE_PACKAGE = /^three(\/|$)/;
+const RAPIER_PACKAGE = /^@dimforge\//;
+
+/** The one folder that may import the physics engine, as a path under src. */
+const PHYSICS_FOLDER = 'sim/physics/';
 
 /** Which top-level folders each pure layer may import from. */
 const ALLOWED_LAYERS: Record<string, string[]> = {
   core: ['core'],
   gen: ['core', 'gen'],
+  sim: ['core', 'gen', 'sim'],
 };
 
 interface ImportStatement {
@@ -52,21 +57,24 @@ export function findViolations(path: string, source: string): string[] {
     violations.push(`uses Math.${name}, which can differ between browsers (see core/dmath.ts)`);
   }
 
-  const segments = path.replace(/^\.\//, '').split('/');
+  const relative = path.replace(/^\.\//, '');
+  const segments = relative.split('/');
   const layer = segments[0] ?? '';
   const allowed = ALLOWED_LAYERS[layer] ?? [];
+  // The physics engine is the same on every computer (its deterministic build), but only its own folder may touch it.
+  const mayUseRapier = relative.startsWith(PHYSICS_FOLDER);
 
   for (const { specifier, typeOnly } of findImports(code)) {
     if (!specifier.startsWith('.')) {
-      if (FORBIDDEN_PACKAGES.some((pattern) => pattern.test(specifier))) {
+      if (THREE_PACKAGE.test(specifier) || (RAPIER_PACKAGE.test(specifier) && !mayUseRapier)) {
         violations.push(`imports the package "${specifier}"`);
       }
       continue;
     }
     const target = resolve(segments.slice(0, -1), specifier)[0] ?? '';
     if (allowed.includes(target)) continue;
-    // Generation may know the shape of the config, but values must be passed in.
-    if (layer === 'gen' && target === 'config' && typeOnly) continue;
+    // Generation and the simulation may know the shape of the config, but values must be passed in.
+    if ((layer === 'gen' || layer === 'sim') && target === 'config' && typeOnly) continue;
     violations.push(`imports "${specifier}" from outside its layer (${target})`);
   }
 
@@ -75,7 +83,12 @@ export function findViolations(path: string, source: string): string[] {
 
 /** True if the source imports Three.js in any way. Only src/render may. */
 export function importsThree(source: string): boolean {
-  return findImports(stripComments(source)).some(({ specifier }) => /^three(\/|$)/.test(specifier));
+  return findImports(stripComments(source)).some(({ specifier }) => THREE_PACKAGE.test(specifier));
+}
+
+/** True if the source imports the physics engine in any way. Only src/sim/physics may. */
+export function importsRapier(source: string): boolean {
+  return findImports(stripComments(source)).some(({ specifier }) => RAPIER_PACKAGE.test(specifier));
 }
 
 function stripComments(source: string): string {
