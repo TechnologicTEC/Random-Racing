@@ -835,6 +835,30 @@ export interface RenderConfig {
   decor: DecorViewConfig;
   clouds: CloudViewConfig;
   grass: GrassConfig;
+  shadows: ShadowConfig;
+}
+
+/**
+ * Shadows. They only ever take away the sun's light, never the sky's, so shade is blue-grey, not black.
+ * The land and the clouds each keep the sun off by a map worked out on the page (`terrainShade.ts`, `cloudShade.ts`).
+ */
+export interface ShadowConfig {
+  land: {
+    /** How wide the soft edge of a shadow is on level ground, in metres. */
+    edge: number;
+    /** A point is only in shadow once it is this far below the shadow's top, in metres, so ground never shades itself. */
+    bias: number;
+    /** The sun is taken as no lower than this, in radians above the horizon, so shadows never run off for ever. */
+    lowest: number;
+  };
+  clouds: {
+    /** The clouds' shadows are drawn on a map this many cells across, covering the square the clouds wrap round. */
+    size: number;
+    /** The share of the sun's light under the thick of a cloud that the cloud keeps off. */
+    strength: number;
+    /** The share of a puff's radius, from its middle, under which its shadow is at full strength; it fades out beyond. */
+    solid: number;
+  };
 }
 
 /** How coarsely ground away from the road is drawn. Strides must divide `chunkCells`. */
@@ -1570,6 +1594,10 @@ export const config: GameConfig = {
       shade: [0.7, 1.55],
       tint: [0.86, 1.16],
       ceiling: 150,
+    },
+    shadows: {
+      land: { edge: 6, bias: 0.3, lowest: 0.05 },
+      clouds: { size: 512, strength: 0.55, solid: 0.5 },
     },
   },
   camera: {

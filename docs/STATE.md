@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15d (step 15 is planned and recorded under "Step 15" below; 15a to 15c done): the shadow settings and the land and cloud shade as plain numbers (`terrainShade.ts`, `cloudShade.ts`, `shade.ts`). Then 15e to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15e (step 15 is planned and recorded under "Step 15" below; 15a to 15d done): land and cloud shade in the picture, `shadows=off`. Then 15f to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15c done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15d done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -525,7 +525,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | 15a | Record the plan and Tane's choices here | Done |
 | 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | Done (results below) |
 | 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | Done (below) |
-| 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | To do |
+| 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | Done (below) |
 | 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | To do |
 | 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | To do |
 | 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | To do |
@@ -580,6 +580,26 @@ Parts switched off, flying at 1080p (seeds 1, 7, 8): whole 5.2 to 5.9 ms; no gra
 Deeper sea-bed limits (6 m) saved up to 4 points less; 3 m saved nothing more. Seed 12's island fills most of the tile, so at 700 m it kept 90%.
 
 **Results.** Screenshots of seeds 1, 3, 7, 8, 12, 20, 44 and 2024 from above, flying at 0.3 and 0.8 of the lap and the summit and climb views, checked as contact sheets: no cracks or seams where levels meet, mountains keep their shape, the sea bed shows no steps through the shallows. Frame times hardly change on this card (15b found triangles cheap here); the saving is for weaker cards. 1,057 unit tests and 240 browser tests pass. **The browser suite took 598 s** (428 s at 14f, 556 s at 15b): the 16 tests added since 14f open about 32 more worlds, which does not explain all of it. 15f compares against 598 s, and the cause is looked at if it keeps growing.
+
+**15d as built.** Plain numbers and shader text only; nothing is drawn differently yet.
+- `render.shadows`: `land` (soft edge 6 m on level ground, bias 0.3 m, sun taken as no lower than 0.05 rad) and `clouds` (a 512-cell map, a cloud keeps off 55% of the sun, full strength over the middle half of a puff's radius).
+- `landShade(ground, sun, cfg)` (`render/terrainShade.ts`): for every point of the ground's grid, the height of the shadow's top over it. One sweep from the side nearest the sun, along whichever grid direction is closer to the sun's; each point takes the higher of the ground (or the sea's surface, at 0) and the shadow one step back towards the sun, lowered by the sun's slope over the step. `landLightAt` gives the share of the sun reaching any point by its own height, so trees, barriers and the sea are lit by where they stand.
+- `cloudShadeMap(clouds, cfg)` (`render/cloudShade.ts`): a soft disc under every puff on a map of the clouds' square that wraps round, built once per world (7 ms at most). `cloudLightAt` follows the sun's ray up to the clouds' layer (the middle of their heights), slides the map down the wind by the clock, and fades a shadow as its cloud shrinks near the square's edge.
+- `shadeGlsl(cfg)` (`render/shade.ts`): `sunShade(world)`, the same sums as shader text for every material: land times clouds, and 1 when shadows are off.
+
+**Changed from the plan:** the soft edge lies wholly below the shadow's top, not either side of it. Level ground and the sea are their own neighbour's casters, so an edge centred on the top dimmed them slightly at a high sun (the sea 80 m off a cliff read 0.987). The shadow's end moves at most a soft edge (6 m) towards the caster.
+
+**Measured** (Node; land with its sea surface, a point counted as shaded below half the sun):
+
+| Seed | 07:00 | 10:00 | 13:00 | 16:30 | 19:30 |
+| --- | --- | --- | --- | --- | --- |
+| 1 (mountain) | 47% | 0% | 0% | 1% | 28% |
+| 3 (mountain) | 47% | 1% | 0% | 0% | 35% |
+| 7 (hilly) | 30% | 0% | 0% | 0% | 35% |
+| 12 (mountain) | 42% | 0% | 0% | 0% | 31% |
+| 2024 (rolling) | 13% | 1% | 0% | 1% | 11% |
+
+The land shade takes 16 to 26 ms. Cloud shadows over the island, sun overhead, seeds 1 to 60: clear 0.3%, fair 1.1%, cloudy 2.7% of the ground (clouds are scattered puffs, not a lid). 1,080 unit tests pass.
 
 ### Rework risks
 
@@ -938,3 +958,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 15 planned in plan mode and approved (Tane chose steady speed over full sharpness on High, a Low setting that keeps tree and barrier shadows, and a quality button that is remembered). Step 15a done: the plan is recorded under "Step 15". No code changed.
 - **2026-11-15 (Milestone 2):** Step 15b done: a frame meter (`render/frameMeter.ts`), a readout on the page (`fps=1`, F key), `water=off`, `sync=1`, and `npm run perf`, which times views in a real browser window on the laptop's Intel Arc graphics. Baseline before shadows: 5 to 9 ms a frame at 1080p in every view; 9 to 19 ms on the full 2880 by 1800 screen, where the circling view goes over 16.7 ms. Pixels cost far more than triangles. Found on the way: with only the frame limit off, frame times read as under a millisecond because the page ran ahead of the graphics card; the page now waits for each frame when timing.
 - **2026-11-15 (Milestone 2):** Step 15c done: a third level of ground detail (a sixteenth of the triangles beyond 500 m from the road and for sea bed 4 m under), reported per chunk and in `stats().levels`; no grass on ground drawn coarse. Ground triangles fall to 74% to 88% of R8's on eight seeds. Screenshots of eight seeds checked: no seams, mountains keep their shape.
+- **2026-11-15 (Milestone 2):** Step 15d done: the land's and the clouds' shadows as plain numbers (`render/terrainShade.ts`, `render/cloudShade.ts`) and as shader text (`render/shade.ts`), settings in `render.shadows`. At 07:00 a mountain island is 42% to 47% in its own shadow, at midday none of it; the land shade takes about 20 ms. Nothing drawn yet.
