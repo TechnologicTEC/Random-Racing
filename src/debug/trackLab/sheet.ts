@@ -1,9 +1,11 @@
 import './lab.css';
-import { config, GENERATOR_VERSION } from '../../config';
+import { config, GENERATOR_VERSION, type GameConfig } from '../../config';
 import { MAX_SEED } from '../../core/seedCode';
-import { generateTrack, type TrackResult } from '../../gen';
+import { trackRulesFor, type TrackResult, type WorldResult } from '../../gen';
+import { genClient } from '../../worker/client';
 import { drawThumbnail } from './draw';
-import { summariseTracks } from './format';
+import { shortCharacter, summariseTracks } from './format';
+import { terrainPicture } from './terrainImage';
 import { fitView } from './view';
 
 const THUMB = 232;
@@ -49,25 +51,19 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
   if (!run) ref('nav').remove();
 
   const dpr = window.devicePixelRatio || 1;
-  const view = fitView(THUMB, THUMB, cfg.buildableRadius, 6);
-  let done = 0;
-  const results: TrackResult[] = [];
+  // Framed to hold the whole tile, so the whole island shows: a mountain seed's massif can reach well beyond the hinterland.
+  const islandRadius = config.world.tile.extent / 2;
+  const view = fitView(THUMB, THUMB, islandRadius, 6);
+  // Thumbnails are small, so their islands are built on a coarse grid: 16 times fewer heights, and as many times quicker.
+  const sheetConfig: GameConfig = { ...config, world: { ...config.world, tile: { ...config.world.tile, cell: 8 } } };
 
-  // One track per frame keeps the page responsive while the sheet fills in.
-  const addNext = (): void => {
-    if (done >= count) {
-      ref('summary').textContent = summariseTracks(results);
-      document.body.dataset.labReady = 'true';
-      return;
-    }
-    const seed = seeds[done]!;
-    const result = generateTrack(seed, cfg);
-    results.push(result);
+  const addCard = (seed: number, world: WorldResult): void => {
+    const result = world.track;
     const winner = result.candidates[result.winnerIndex]!;
 
     const card = document.createElement('a');
     card.className = 'sheet-card';
-    card.href = `?seed=${seed}`;
+    card.href = `?lab=1&seed=${seed}`;
     card.dataset.testid = 'sheet-card';
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(THUMB * dpr);
@@ -75,17 +71,30 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawThumbnail(ctx, view, winner, cfg);
+      // Four pixels per sample of the coarse grid, so coastlines are smooth even at this size.
+      drawThumbnail(ctx, view, winner, trackRulesFor(cfg, result.character.relief), terrainPicture(world.ground, null, 4), world.road.width);
     }
     const caption = document.createElement('span');
     caption.className = 'sheet-caption';
     const score = winner.score ? Math.round(winner.score.total * 100) : 0;
-    caption.textContent = `${seed} · ${result.name} · ${result.style} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
+    caption.textContent = `${seed} · ${result.name} · ${result.style} · ${shortCharacter(result.character)} · ${Math.round(winner.line.length)} m · ${score}${result.fallback ? ' · fallback' : ''}`;
     card.append(canvas, caption);
     grid.append(card);
-
-    done++;
-    requestAnimationFrame(addNext);
   };
-  requestAnimationFrame(addNext);
+
+  // Tracks are generated in the worker, so the page stays responsive while the sheet fills in.
+  const fill = async (): Promise<void> => {
+    const results: TrackResult[] = [];
+    const pending = seeds.map((seed) => genClient().world(seed, sheetConfig));
+    for (let i = 0; i < count; i++) {
+      const { result } = await pending[i]!;
+      results.push(result.track);
+      addCard(seeds[i]!, result);
+    }
+    ref('summary').textContent = summariseTracks(results);
+    document.body.dataset.labReady = 'true';
+  };
+  void fill().catch((error: unknown) => {
+    ref('summary').textContent = error instanceof Error ? error.message : String(error);
+  });
 }

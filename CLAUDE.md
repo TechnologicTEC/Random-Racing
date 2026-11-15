@@ -27,6 +27,10 @@ Run from the repo folder in PowerShell.
 - `npm test`: run the Vitest unit tests once. `npm run test:watch` reruns them on save.
 - `npm run typecheck`: type-check everything, then check `src/core` and `src/gen` again without browser types.
 - `npm run e2e`: run the Playwright smoke tests and screenshots (starts the dev server itself).
+- `npm run perf`: measure frame times on the real graphics card. Opens a real browser window for about 8 minutes; leave it in front, plugged in, with little else open. Not part of `npm run e2e`. Fewer runs: `$env:SEEDS = "7"; $env:PARTS = "0"; npm run perf`.
 - `npm run build`: type-check and build to `dist/`.
-- Screenshots land in `test-results/screens/`. To choose what is captured: `$env:SEEDS = "5,6,7"; $env:SHEETS = "1,21"; npm run e2e` (clear them afterwards with `Remove-Item Env:SEEDS, Env:SHEETS`).
-- Lab addresses: `/?seed=48213` (one seed), `/?sheet=20&from=1` (contact sheet), `/?seeds=5,99` (chosen seeds), `&candidate=7` (one candidate), `&minRadius=30` or `&gapWidths=4` (what-if rules).
+- Screenshots land in `test-results/screens/`. To choose what is captured: `$env:SEEDS = "5,6,7"; $env:SHEETS = "1,21"; npm run e2e` (clear them afterwards with `Remove-Item Env:SEEDS, Env:SHEETS`). `LOOKS` (close views, for example `"cut,water"`), `LAPS` (points of the lap, `"0.1,0.6"`), `TIMES` (`"07:00,19:30"`) and `CANDIDATE` (one lab candidate) choose more. Screenshots only: `npx playwright test --project=chromium -g "screenshots"`.
+- Every Playwright run empties `test-results/`, so copy `test-results/screens/` elsewhere before the next run. Take long screenshot runs in batches of about 10 seeds (13 3D pictures a seed).
+- Milestone 2 was checked on seeds 1 to 20 and 20 fresh seeds (`src/testing/checkSeeds.ts`); `src/gen/seeds1to20.test.ts` and `src/gen/freshSeeds.test.ts` keep them clean.
+- 3D addresses: `/` (random island), `/?seed=48213` (one seed); options are listed in `src/app/worldPage.ts`. L switches to the lab on the same seed and back.
+- Lab addresses: `/?lab=1&seed=48213` (one seed), `/?sheet=20&from=1` (contact sheet), `/?seeds=5,99` (chosen seeds), `&candidate=7` (one candidate), `&minRadius=30` or `&gapWidths=4` (what-if rules; these three open the lab even without `lab=1`).

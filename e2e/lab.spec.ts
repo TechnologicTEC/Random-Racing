@@ -1,9 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Opens the lab (with lab=1, as the 3D view is the default page) or a contact sheet. */
 async function openLab(page: Page, query: string): Promise<void> {
-  await page.goto(`/${query}`);
-  // A contact sheet generates 20 tracks before it is ready, which can take a while on a busy machine.
-  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 20_000 });
+  const sheet = /[?&](sheet|seeds)=/.test(query);
+  await page.goto(sheet ? `/${query}` : `/?lab=1${query.replace(/^\?/, '&')}`);
+  // A contact sheet generates 20 worlds before it is ready, which can take a while on a busy machine: mountain and
+  // hilly seeds try each layout at several turns. On its own it takes about 6 s in Chromium and 12 s in Firefox.
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
 }
 
 /** Counts canvas pixels that are clearly brighter than the dark background. */
@@ -32,6 +35,32 @@ test('opens on the seed from the URL and draws a track', async ({ page }) => {
   await expect(page.getByTestId('facts')).toContainText('v0-48213');
   expect(await brightPixelCount(page)).toBeGreaterThan(2000);
   expect(errors).toEqual([]);
+});
+
+test('opens on candidate 7 from an old lab link without lab=1', async ({ page }) => {
+  await page.goto('/?seed=48213&candidate=7');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
+  await expect(page.getByTestId('facts')).toContainText('Candidate 7');
+});
+
+test('L goes to the 3D view on the seed shown, leaving the lab s own options behind', async ({ page }) => {
+  await openLab(page, '?seed=100&candidate=3');
+  await expect(page.getByTestId('world-link')).toHaveAttribute('href', /seed=100/);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '101');
+  await expect(page.getByTestId('world-link')).toHaveAttribute('href', /seed=101/);
+  // Typing an L in the seed box is typing, not a shortcut.
+  await page.getByTestId('seed-input').press('l');
+  await page.waitForTimeout(500);
+  expect(new URL(page.url()).searchParams.get('lab')).toBe('1');
+  await expect(page.getByTestId('seed-input')).toHaveValue(/l/);
+  await page.getByTestId('track-canvas').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('l');
+  await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-world-seed', '101');
+  const params = new URL(page.url()).searchParams;
+  expect(params.has('lab')).toBe(false);
+  expect(params.has('candidate')).toBe(false);
 });
 
 test('picks a random seed when the URL has none, and records it in the URL', async ({ page }) => {
@@ -85,7 +114,114 @@ test('shows a valid winner with a score and its breakdown', async ({ page }) => 
   await expect(page.getByTestId('score-bars')).toContainText('Corner mix');
   await expect(page.getByTestId('score-bars')).toContainText('Drift corners');
   await expect(page.getByTestId('score-bars')).toContainText('Flow');
-  await expect(page.getByTestId('score-bars')).toContainText('needs terrain');
+  await expect(page.getByTestId('score-bars')).toContainText('Elevation');
+  await expect(page.getByTestId('score-bars')).toContainText('of climbing');
+});
+
+test('shows the character of the seed: relief, coast, mountains, their shape and road width', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const facts = page.getByTestId('facts');
+  await expect(facts).toContainText('Relief');
+  await expect(facts).toContainText('Coast');
+  await expect(facts).toContainText('Mountains');
+  await expect(facts).toContainText('Mountain shape');
+  await expect(facts).toContainText('Road width');
+});
+
+test('says whether a mountain seed climbs its mountain or circles it', async ({ page }) => {
+  // Seed 1 is a mountain seed.
+  await openLab(page, '?seed=1');
+  await expect(page.getByTestId('facts')).toContainText(/Climbs high onto its mountain|Circles its mountain/);
+});
+
+test('shows the road height along the lap as a chart with its facts', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  await expect(page.getByTestId('elevation-facts')).toContainText('Height range');
+  await expect(page.getByTestId('elevation-facts')).toContainText('Total climb');
+  await expect(page.getByTestId('elevation-facts')).toContainText('Steepest gradient');
+  const drawn = await page.getByTestId('elevation-chart').evaluate((canvas: HTMLCanvasElement) => {
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let bright = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i]! + data[i + 1]! + data[i + 2]! > 400) bright++;
+    return bright;
+  });
+  expect(drawn).toBeGreaterThan(200);
+});
+
+test('reports how the road sits in the island', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const fit = page.getByTestId('fit-facts');
+  await expect(fit).toContainText('Deepest cutting');
+  await expect(fit).toContainText('Tallest embankment');
+  await expect(fit).toContainText('Sea nearest the road');
+  await expect(fit).toHaveAttribute('data-clean', 'true');
+});
+
+/** Counts map pixels of the dark green the lab draws trees in: darker than any grass. */
+async function treeDotPixels(page: Page): Promise<number> {
+  return page.getByTestId('track-canvas').evaluate((canvas: HTMLCanvasElement) => {
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let dots = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 1]! < 80 && data[i + 1]! > data[i]! + 20 && data[i + 1]! > data[i + 2]! + 10) dots++;
+    }
+    return dots;
+  });
+}
+
+test('names the woods and the sky of the seed', async ({ page }) => {
+  // Seed 7 is a wooded island under a fair sky.
+  await openLab(page, '?seed=7');
+  const facts = page.getByTestId('facts');
+  await expect(facts).toContainText('Woods');
+  await expect(facts).toContainText(/Woods and clearings: [\d,]+ trees, [\d,]+ rocks/);
+  await expect(facts).toContainText('Sky');
+  await expect(facts).toContainText(/Fair: \d+ clouds/);
+});
+
+test('marks trees and rocks on the island, and hides them with the T key or the tick box', async ({ page }) => {
+  await openLab(page, '?seed=7');
+  await expect(page.getByTestId('decor-toggle')).toBeChecked();
+  const shown = await treeDotPixels(page);
+  expect(shown).toBeGreaterThan(1500);
+
+  await page.keyboard.press('t');
+  await expect(page.getByTestId('decor-toggle')).not.toBeChecked();
+  expect(await treeDotPixels(page)).toBeLessThan(shown / 10);
+
+  await page.getByTestId('decor-toggle').check();
+  expect(await treeDotPixels(page)).toBe(shown);
+
+  // Trees stand on the island: with the island hidden, they are hidden too.
+  await page.getByTestId('island-toggle').uncheck();
+  expect(await treeDotPixels(page)).toBeLessThan(shown / 10);
+});
+
+/** Counts map pixels that look like sea (clearly blue) and like land (clearly green). */
+async function seaAndLand(page: Page): Promise<{ sea: number; land: number }> {
+  return page.getByTestId('track-canvas').evaluate((canvas: HTMLCanvasElement) => {
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let sea = 0;
+    let land = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 2]! > data[i]! + 40 && data[i + 2]! > 90) sea++;
+      else if (data[i + 1]! > data[i + 2]! + 25 && data[i + 1]! > 90) land++;
+    }
+    return { sea, land };
+  });
+}
+
+test('draws the island under the winning track, and hides it on request', async ({ page }) => {
+  await openLab(page, '?seed=48213');
+  const shown = await seaAndLand(page);
+  expect(shown.sea).toBeGreaterThan(20_000);
+  expect(shown.land).toBeGreaterThan(10_000);
+
+  await page.getByTestId('island-toggle').uncheck();
+  const hidden = await seaAndLand(page);
+  // What is left is the track's own colouring (sweepers are marked in blue).
+  expect(hidden.sea).toBeLessThan(shown.sea / 10);
+  expect(hidden.land).toBeLessThan(shown.land / 4);
 });
 
 test('lists all 30 candidates with exactly one winner', async ({ page }) => {
@@ -128,10 +264,40 @@ test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) 
   const cards = page.getByTestId('sheet-card');
   await expect(cards).toHaveCount(20);
   await expect(cards.nth(2)).toContainText(/^3 /);
+  // Each card says what kind of island it is.
+  await expect(cards.nth(2)).toContainText(/flat|rolling|hilly|mountain/);
+  await expect(cards.nth(2)).toContainText(/inland|touches|coastal/);
   await expect(page.getByTestId('sheet-summary')).toContainText('20 tracks');
   await expect(page.getByTestId('sheet-summary')).toContainText('with a hairpin');
+  await expect(cards.nth(2)).toHaveAttribute('href', '?lab=1&seed=3');
   await cards.nth(2).click();
   await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '3');
+});
+
+test('contact sheet shows each whole island, with open sea all round its edge', async ({ page }) => {
+  await openLab(page, '?sheet=20&from=1');
+  const landAtEdges = await page.locator('[data-testid="sheet-card"] canvas').evaluateAll((canvases: HTMLCanvasElement[]) =>
+    canvases.map((canvas) => {
+      const { data, width, height } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+      let land = 0;
+      const look = (x: number, y: number): void => {
+        const p = (y * width + x) * 4;
+        // Land is green or sandy: red or green clearly above blue.
+        if (Math.max(data[p]!, data[p + 1]!) > data[p + 2]! + 20) land++;
+      };
+      for (let k = 0; k < width; k += 2) {
+        look(k, 1);
+        look(k, height - 2);
+      }
+      for (let k = 0; k < height; k += 2) {
+        look(1, k);
+        look(width - 2, k);
+      }
+      return land;
+    }),
+  );
+  expect(landAtEdges).toHaveLength(20);
+  for (const land of landAtEdges) expect(land).toBe(0);
 });
 
 test('contact sheet accepts a chosen list of seeds', async ({ page }) => {

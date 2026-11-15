@@ -1,6 +1,6 @@
 import type { EllipseBaseConfig, LayoutConfig, Range, StyleConfig, TrackConfig } from '../../config';
 import { dcos, dsin, length2, TAU } from '../../core/dmath';
-import type { Rng } from '../../core/rng';
+import { pickWeighted, type Rng } from '../../core/rng';
 import type { Vec2 } from '../../core/vec2';
 import type { Corner, LayoutStyle } from '../types';
 import { roundCorners } from './fillet';
@@ -393,20 +393,4 @@ function wantedRadius(rng: Rng, kind: VertexKind, turnCos: number, rules: Layout
       }
       return between(rng, radius.slight);
   }
-}
-
-/** Picks an index with probability proportional to its weight, or -1 if every weight is zero. */
-function pickWeighted(rng: Rng, weights: readonly number[]): number {
-  let total = 0;
-  for (const weight of weights) total += weight;
-  if (total <= 0) return -1;
-  let roll = rng.next() * total;
-  let last = -1;
-  for (let i = 0; i < weights.length; i++) {
-    if (weights[i]! <= 0) continue;
-    last = i;
-    roll -= weights[i]!;
-    if (roll < 0) return i;
-  }
-  return last;
 }

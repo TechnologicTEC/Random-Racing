@@ -1,9 +1,13 @@
 import './lab.css';
-import { config, GENERATOR_VERSION, type TrackConfig } from '../../config';
+import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
-import { generateTrack, hashTrack, type Candidate, type TrackResult } from '../../gen';
-import { drawLab, SECTION_COLORS } from './draw';
-import { describeScorePart, describeViolation } from './format';
+import { hashTrack, measureProfile, trackRulesFor, widestTrackArea, type Candidate, type FitReport, type TrackResult, type WorldResult } from '../../gen';
+import { switchAddress } from '../../app/route';
+import { genClient } from '../../worker/client';
+import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
+import { drawElevationChart } from './elevationChart';
+import { describeCharacter, describeClouds, describeDecor, describeFit, describeProfile, describeScorePart, describeSky, describeViolation, describeWidth } from './format';
+import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
 const TEMPLATE = `
@@ -11,7 +15,7 @@ const TEMPLATE = `
     <aside class="lab-side">
       <header>
         <h1 class="lab-title">Seed Circuit track lab</h1>
-        <p class="lab-sub">Generator v${GENERATOR_VERSION} · <a href="?sheet=20" data-ref="sheetLink" data-testid="sheet-link">Contact sheet of 20 seeds</a></p>
+        <p class="lab-sub">Generator v${GENERATOR_VERSION} · <a href="?sheet=20" data-ref="sheetLink" data-testid="sheet-link">Contact sheet of 20 seeds</a> · <a href="/" data-ref="worldLink" data-testid="world-link">3D view (L)</a></p>
       </header>
 
       <section class="lab-section">
@@ -38,6 +42,25 @@ const TEMPLATE = `
       </section>
 
       <section class="lab-section">
+        <h2>Elevation</h2>
+        <canvas class="lab-elevation" data-ref="elevation" data-testid="elevation-chart"
+          aria-label="Road height along the lap, from the start line"></canvas>
+        <p class="lab-note lab-legend">
+          <span class="lab-swatch" style="background:#ffffff"></span>road
+          <span class="lab-swatch" style="background:#7d8894"></span>ground
+          <span class="lab-swatch" style="background:#ff7a70"></span>cutting
+          <span class="lab-swatch" style="background:#5ab0ff"></span>embankment
+        </p>
+        <dl class="lab-facts" data-ref="elevationFacts" data-testid="elevation-facts"></dl>
+      </section>
+
+      <section class="lab-section">
+        <h2>Road fit</h2>
+        <dl class="lab-facts" data-ref="fitFacts" data-testid="fit-facts"></dl>
+        <p class="lab-note" data-ref="fitVerdict"></p>
+      </section>
+
+      <section class="lab-section">
         <h2>Fun score</h2>
         <div class="lab-total"><span data-ref="totalLabel"></span><strong data-ref="total" data-testid="score-total"></strong></div>
         <div class="lab-bars" data-ref="bars" data-testid="score-bars"></div>
@@ -51,15 +74,30 @@ const TEMPLATE = `
           <input type="checkbox" data-ref="ghosts" data-testid="rejected-toggle" />
           Show rejected layouts on the map
         </label>
+        <label class="lab-check">
+          <input type="checkbox" data-ref="island" data-testid="island-toggle" checked />
+          Show the island under the winning track
+        </label>
+        <label class="lab-check">
+          <input type="checkbox" data-ref="decor" data-testid="decor-toggle" checked />
+          Mark trees and rocks on the island
+        </label>
+        <label class="lab-check">
+          <input type="checkbox" data-ref="tint" data-testid="tint-toggle" checked />
+          Tint cuttings red and embankments blue
+        </label>
       </section>
 
-      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts.</p>
+      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts, I shows or hides the island, T its trees and rocks. L returns to the 3D view.</p>
     </aside>
     <main class="lab-stage">
       <canvas data-ref="canvas" data-testid="track-canvas"></canvas>
     </main>
   </div>
 `;
+
+/** Pixels drawn per height sample of the island, along each side. */
+const ISLAND_DETAIL = 2;
 
 const CORNER_LABELS = {
   hairpin: 'Hairpins',
@@ -91,9 +129,10 @@ function readRuleOverrides(params: URLSearchParams): { values: Partial<TrackConf
   return { values, notes };
 }
 
-/** Builds the track lab inside the given element. */
+/** Builds the track lab inside the given element. Opened with ?lab=1, or with L from the 3D view. */
 export function mountTrackLab(root: HTMLElement): void {
   root.innerHTML = TEMPLATE;
+  document.title = 'Seed Circuit: track lab';
   const ref = <T extends HTMLElement>(name: string): T => {
     const el = root.querySelector<T>(`[data-ref="${name}"]`);
     if (!el) throw new Error(`Track lab template is missing "${name}"`);
@@ -102,24 +141,46 @@ export function mountTrackLab(root: HTMLElement): void {
   const canvas = ref<HTMLCanvasElement>('canvas');
   const input = ref<HTMLInputElement>('input');
   const ghostsBox = ref<HTMLInputElement>('ghosts');
+  const islandBox = ref<HTMLInputElement>('island');
+  const decorBox = ref<HTMLInputElement>('decor');
+  const tintBox = ref<HTMLInputElement>('tint');
   const errorEl = ref('error');
   const factsEl = ref('facts');
   const verdictEl = ref('verdict');
   const barsEl = ref('bars');
   const chipsEl = ref('chips');
+  const elevationCanvas = ref<HTMLCanvasElement>('elevation');
+  const elevationFactsEl = ref('elevationFacts');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser cannot draw to a 2D canvas');
 
   const overrides = readRuleOverrides(new URL(window.location.href).searchParams);
   const cfg: TrackConfig = { ...config.track, ...overrides.values };
+  const gameConfig: GameConfig = { ...config, track: cfg };
   if (overrides.notes.length > 0) {
     const rulesEl = ref('rules');
     rulesEl.hidden = false;
     rulesEl.textContent = `What-if rules from the URL: ${overrides.notes.join(', ')}. Layouts are still built for the normal rules.`;
   }
   let result: TrackResult | null = null;
+  /**
+   * Pictures of the island built around the winner, plain and with cut and
+   * fill tinted. Each is made the first time it is needed. Other candidates
+   * have no island.
+   */
+  let world: WorldResult | null = null;
+  let island: TerrainPicture | null = null;
+  let islandTinted: TerrainPicture | null = null;
+  const islandPicture = (tinted: boolean): TerrainPicture | null => {
+    if (!world) return null;
+    // Two pixels per height sample, so the waterline is drawn as a smooth curve.
+    if (tinted) return (islandTinted ??= terrainPicture(world.ground, world.natural, ISLAND_DETAIL));
+    return (island ??= terrainPicture(world.ground, null, ISLAND_DETAIL));
+  };
+  /** The seed last asked for. Its track may still be on its way from the worker. */
+  let wantedSeed = 0;
   let selectedIndex = 0;
-  let view: View = fitView(1, 1, cfg.buildableRadius, 24);
+  let view: View = fitView(1, 1, widestTrackArea(cfg), 24);
   let fitted = true;
 
   function render(): void {
@@ -132,7 +193,14 @@ export function mountTrackLab(root: HTMLElement): void {
     const ghosts = ghostsBox.checked
       ? result.candidates.filter((c) => c.violations.length > 0 && c.index !== selectedIndex)
       : [];
-    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner: selectedIndex === result.winnerIndex, ghosts }, cfg);
+    const isWinner = selectedIndex === result.winnerIndex;
+    const terrain = isWinner && islandBox.checked ? islandPicture(tintBox.checked) : null;
+    // Only the winner has had its width worked out; other candidates are drawn at the usual width.
+    const width = isWinner && world ? world.road.width : null;
+    // Trees and rocks stand on the island, so they are only marked when it is shown.
+    const decor = terrain && world && decorBox.checked ? world.decor : null;
+    // The seed's own track area: mountain seeds have a wider one.
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width, decor }, trackRulesFor(cfg, result.character.relief));
   }
 
   function resize(): void {
@@ -141,15 +209,29 @@ export function mountTrackLab(root: HTMLElement): void {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
-    view = fitted ? fitView(width, height, cfg.buildableRadius, 24) : { ...view, width, height };
+    view = fitted ? fitView(width, height, widestTrackArea(cfg), 24) : { ...view, width, height };
     render();
   }
 
-  function setSeed(next: number): void {
+  /** Generates the seed's track in the worker and shows it. Resolves once it is on screen. */
+  async function setSeed(next: number): Promise<void> {
     const seed = Math.min(MAX_SEED, Math.max(0, Math.floor(next)));
-    const started = performance.now();
-    result = generateTrack(seed, cfg);
-    const elapsed = performance.now() - started;
+    wantedSeed = seed;
+    let generated;
+    try {
+      generated = await genClient().world(seed, gameConfig);
+    } catch (error) {
+      if (wantedSeed === seed) errorEl.textContent = error instanceof Error ? error.message : String(error);
+      return;
+    }
+    // A newer seed was asked for while this one was generating: drop this answer.
+    if (wantedSeed !== seed) return;
+    result = generated.result.track;
+    world = generated.result;
+    island = null;
+    islandTinted = null;
+    renderFit(generated.result.report);
+    const elapsed = generated.ms;
     selectedIndex = result.winnerIndex;
 
     input.value = String(seed);
@@ -163,6 +245,7 @@ export function mountTrackLab(root: HTMLElement): void {
     document.body.dataset.labHash = hashTrack(result);
     document.body.dataset.labMs = elapsed.toFixed(1);
     ref<HTMLAnchorElement>('sheetLink').href = `?sheet=20&from=${seed}`;
+    ref<HTMLAnchorElement>('worldLink').href = switchAddress(url.toString(), 'world');
 
     renderChips();
     renderSelected();
@@ -215,10 +298,18 @@ export function mountTrackLab(root: HTMLElement): void {
     factsEl.innerHTML = '';
     addFact('Share code', formatSeedCode(result.seed, result.generatorVersion));
     addFact('Style', result.style[0]!.toUpperCase() + result.style.slice(1));
+    for (const [label, value] of describeCharacter(result.character)) {
+      // For the road's width, say what the winning road actually does.
+      addFact(label, label === 'Road width' && world ? describeWidth(world.road.width) : value);
+    }
+    if (world) addFact('Time of day', describeSky(world.sky));
+    if (world) addFact('Woods', describeDecor(world.decor.woods, world.decor.trees.count, world.decor.rocks.count));
+    if (world) addFact('Sky', describeClouds(world.clouds.cover, world.clouds.count));
     addFact('Showing', isWinner ? `Winner (no. ${selectedIndex + 1})` : `Candidate ${selectedIndex + 1}`);
     addFact('Lap length', `${Math.round(candidate.line.length)} m`);
     addFact('Generated in', `${document.body.dataset.labMs} ms`);
     addFact('Build attempts', String(candidate.buildAttempts));
+    addFact('Turned', `${candidate.turn}°`);
 
     const straights = candidate.sections.filter((s) => s.type === 'straight');
     const corners = candidate.sections.filter((s) => s.type === 'corner');
@@ -226,6 +317,8 @@ export function mountTrackLab(root: HTMLElement): void {
     for (const kind of ['hairpin', 'sweeper', 'chicane', 'corner', 'kink'] as const) {
       addFact(CORNER_LABELS[kind], String(corners.filter((c) => c.kind === kind).length), SECTION_COLORS[kind]);
     }
+
+    renderElevation(candidate);
 
     verdictEl.innerHTML = '';
     const valid = candidate.violations.length === 0;
@@ -260,6 +353,48 @@ export function mountTrackLab(root: HTMLElement): void {
     render();
   }
 
+  /** Lists how the winning road sits in its island. */
+  function renderFit(report: FitReport): void {
+    const fitEl = ref('fitFacts');
+    const { clean, facts } = describeFit(report, gameConfig.road.coupleDistance);
+    fitEl.innerHTML = '';
+    fitEl.dataset.clean = String(clean);
+    for (const [label, value] of facts) {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      fitEl.append(dt, dd);
+    }
+    ref('fitVerdict').textContent = clean
+      ? 'For the winning track. The road sits cleanly in the island.'
+      : 'For the winning track. The road does not sit cleanly: see the last two lines.';
+  }
+
+  /** Draws the road height chart and lists its facts for the candidate being shown. */
+  function renderElevation(candidate: Candidate): void {
+    const width = Math.max(1, elevationCanvas.clientWidth);
+    const height = Math.max(1, elevationCanvas.clientHeight);
+    const dpr = window.devicePixelRatio || 1;
+    elevationCanvas.width = Math.round(width * dpr);
+    elevationCanvas.height = Math.round(height * dpr);
+    const chart = elevationCanvas.getContext('2d');
+    if (chart) {
+      chart.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawElevationChart(chart, width, height, candidate.profile);
+    }
+
+    elevationFactsEl.innerHTML = '';
+    const stats = measureProfile(candidate.line, candidate.profile, gameConfig.road, cfg.roadWidth);
+    for (const [label, value] of describeProfile(stats)) {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      elevationFactsEl.append(dt, dd);
+    }
+  }
+
   function addFact(label: string, value: string, swatch?: string): void {
     const dt = document.createElement('dt');
     dt.textContent = label;
@@ -278,7 +413,7 @@ export function mountTrackLab(root: HTMLElement): void {
   function randomSeed(): number {
     return 1 + Math.floor(Math.random() * 99999);
   }
-  const currentSeed = (): number => result?.seed ?? 0;
+  const currentSeed = (): number => wantedSeed;
   const previousSeed = (): number => (currentSeed() === 0 ? MAX_SEED : currentSeed() - 1);
   const nextSeed = (): number => (currentSeed() === MAX_SEED ? 0 : currentSeed() + 1);
 
@@ -289,25 +424,37 @@ export function mountTrackLab(root: HTMLElement): void {
       errorEl.textContent = `Type a whole number from 0 to ${MAX_SEED}, or a code like v${GENERATOR_VERSION}-48213.`;
       return;
     }
-    setSeed(parsed.seed);
-    if (parsed.version !== null && parsed.version !== GENERATOR_VERSION) {
-      errorEl.textContent = `That code is from generator v${parsed.version}. Showing the seed with v${GENERATOR_VERSION}; the track may differ.`;
-    }
+    void setSeed(parsed.seed).then(() => {
+      if (parsed.version !== null && parsed.version !== GENERATOR_VERSION) {
+        errorEl.textContent = `That code is from generator v${parsed.version}. Showing the seed with v${GENERATOR_VERSION}; the track may differ.`;
+      }
+    });
   });
-  ref('prev').addEventListener('click', () => setSeed(previousSeed()));
-  ref('next').addEventListener('click', () => setSeed(nextSeed()));
-  ref('random').addEventListener('click', () => setSeed(randomSeed()));
+  ref('prev').addEventListener('click', () => void setSeed(previousSeed()));
+  ref('next').addEventListener('click', () => void setSeed(nextSeed()));
+  ref('random').addEventListener('click', () => void setSeed(randomSeed()));
   ghostsBox.addEventListener('change', render);
+  islandBox.addEventListener('change', render);
+  decorBox.addEventListener('change', render);
+  tintBox.addEventListener('change', render);
 
   window.addEventListener('keydown', (event) => {
     // Typing in the seed box must not trigger shortcuts; other controls should not block them.
     if (event.target === input || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.toLowerCase();
-    if (key === 'arrowleft') setSeed(previousSeed());
-    else if (key === 'arrowright') setSeed(nextSeed());
-    else if (key === 'n') setSeed(randomSeed());
+    if (key === 'arrowleft') void setSeed(previousSeed());
+    else if (key === 'arrowright') void setSeed(nextSeed());
+    else if (key === 'n') void setSeed(randomSeed());
+    // The address holds the seed asked for last, so the 3D view opens on it.
+    else if (key === 'l') window.location.assign(switchAddress(window.location.href, 'world'));
     else if (key === 'r') {
       ghostsBox.checked = !ghostsBox.checked;
+      render();
+    } else if (key === 'i') {
+      islandBox.checked = !islandBox.checked;
+      render();
+    } else if (key === 't') {
+      decorBox.checked = !decorBox.checked;
       render();
     } else return;
     event.preventDefault();
@@ -351,11 +498,12 @@ export function mountTrackLab(root: HTMLElement): void {
 
   const fromUrl = parseSeedInput(new URL(window.location.href).searchParams.get('seed') ?? '');
   resize();
-  setSeed(fromUrl ? fromUrl.seed : randomSeed());
-  // ?candidate=7 opens that candidate instead of the winner, for linking to a rejected layout.
-  const wanted = Number(new URL(window.location.href).searchParams.get('candidate'));
-  if (result && Number.isInteger(wanted) && wanted >= 1 && wanted <= (result as TrackResult).candidates.length) {
-    select(wanted - 1);
-  }
-  document.body.dataset.labReady = 'true';
+  void setSeed(fromUrl ? fromUrl.seed : randomSeed()).then(() => {
+    // ?candidate=7 opens that candidate instead of the winner, for linking to a rejected layout.
+    const wanted = Number(new URL(window.location.href).searchParams.get('candidate'));
+    if (result && Number.isInteger(wanted) && wanted >= 1 && wanted <= result.candidates.length) {
+      select(wanted - 1);
+    }
+    document.body.dataset.labReady = 'true';
+  });
 }

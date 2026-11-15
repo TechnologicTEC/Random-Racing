@@ -2,8 +2,16 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'e2e',
+  // Frame times on a real graphics card have their own run (`npm run perf`, playwright.perf.config.ts).
+  testIgnore: /perf\.spec\.ts/,
   outputDir: 'test-results',
   fullyParallel: true,
+  // Each page generates whole islands and draws in software (a flying page takes about a second a frame since the grass, 14d).
+  // More browsers than this at once and every core is busy: worlds stop loading in time (four at once failed six tests in 15e).
+  workers: 3,
+  timeout: 60_000,
+  // Waiting for a new seed means waiting for a whole world, which can take a few seconds in Firefox on a busy machine.
+  expect: { timeout: 15_000 },
   reporter: [['list']],
   use: {
     baseURL: 'http://127.0.0.1:5173',
@@ -15,7 +23,12 @@ export default defineConfig({
     reuseExistingServer: true,
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, grepInvert: /@budget/ },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, grepInvert: /@budget/ },
+    // Timings against the brief's budgets run on their own once everything else has finished: while four
+    // browsers draw islands in software at once, every core is busy and a world takes three or four times as long.
+    // The two run one after the other too: side by side, Chromium's world took 3.2 to 4.3 s instead of 1.1 to 2.2 s.
+    { name: 'chromium-budget', use: { ...devices['Desktop Chrome'] }, grep: /@budget/, dependencies: ['chromium', 'firefox'] },
+    { name: 'firefox-budget', use: { ...devices['Desktop Firefox'] }, grep: /@budget/, dependencies: ['chromium-budget'] },
   ],
 });

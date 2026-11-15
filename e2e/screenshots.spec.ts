@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Captures the lab for a fixed set of seeds so a person can look through them.
+ * Captures the lab (?lab=1) for a fixed set of seeds so a person can look through them.
  * Images land in test-results/screens/. Override the seeds with the SEEDS
  * environment variable, for example: $env:SEEDS = "5,6,7"; npm run e2e
  */
@@ -33,12 +33,16 @@ test.describe('screenshots', () => {
 
   for (const seed of seeds) {
     test(`seed ${seed}`, async ({ page }) => {
-      await page.goto(`/?seed=${seed}${process.env.CANDIDATE ? `&candidate=${process.env.CANDIDATE}` : ''}`);
+      // Tall enough to show the whole sidebar, including the elevation chart and score bars.
+      await page.setViewportSize({ width: 1280, height: 1250 });
+      await page.goto(`/?lab=1&seed=${seed}${process.env.CANDIDATE ? `&candidate=${process.env.CANDIDATE}` : ''}`);
       await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
       // Every seed must end up with a valid winner that did not need the fallback oval.
       if (!process.env.CANDIDATE) {
         await expect(page.getByTestId('verdict')).toHaveAttribute('data-valid', 'true');
         await expect(page.getByTestId('candidate-tally')).not.toContainText('plain oval');
+        // The road must sit cleanly in the island: no ground through it, none of it hanging.
+        await expect(page.getByTestId('fit-facts')).toHaveAttribute('data-clean', 'true');
       }
       await page.screenshot({ path: `test-results/screens/seed-${String(seed).padStart(5, '0')}.png` });
     });

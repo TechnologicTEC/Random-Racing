@@ -73,6 +73,11 @@ export function findViolations(path: string, source: string): string[] {
   return violations;
 }
 
+/** True if the source imports Three.js in any way. Only src/render may. */
+export function importsThree(source: string): boolean {
+  return findImports(stripComments(source)).some(({ specifier }) => /^three(\/|$)/.test(specifier));
+}
+
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }

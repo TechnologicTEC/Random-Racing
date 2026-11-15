@@ -1,6 +1,6 @@
 import type { TrackConfig } from '../../config';
 import type { Vec2 } from '../../core/vec2';
-import type { Candidate, CenterLine, CornerKind, Section, Violation } from '../../gen/types';
+import type { Candidate, CenterLine, CornerKind, Decor, Scatter, Section, Violation } from '../../gen/types';
 import { screenToWorld, worldToScreen, type View } from './view';
 
 /** What the lab draws for one seed. */
@@ -11,6 +11,23 @@ export interface LabScene {
   isWinner: boolean;
   /** Other candidates drawn faintly underneath (the rejected ones, when that option is on). */
   ghosts: readonly Candidate[];
+  /** The island to draw under the track, if any. */
+  terrain?: TerrainPicture | null;
+  /** The road's width at each sample of the selected candidate, when it has been worked out (the winner only). */
+  width?: Float64Array | null;
+  /** The island's trees and rocks to mark on it, if any. */
+  decor?: Decor | null;
+}
+
+/** A top-down picture of the island and where it sits in the world. */
+export interface TerrainPicture {
+  /** One pixel per height sample. */
+  image: CanvasImageSource;
+  /** World position of the picture's top left pixel centre, and the distance between pixel centres, in metres. */
+  origin: number;
+  cell: number;
+  /** Pixels along each side. */
+  size: number;
 }
 
 /** Colours shared by the map and the sidebar legend. */
@@ -40,6 +57,13 @@ const COLORS = {
   bad: '#ff7a70',
 };
 
+/** Dots for trees by kind (broadleaf, pine, palm), darker than any grass so woods stand out, and for rocks. */
+const TREE_DOTS = ['#1f4a1c', '#143a26', '#2f6b2a'];
+const ROCK_DOT = '#8d8983';
+/** A tree's crown is about this many metres across for each unit of its size; a rock about this many. */
+const CROWN = 4.4;
+const BOULDER = 2;
+
 const LABEL_FONT = '11px ui-monospace, "Cascadia Mono", Consolas, monospace';
 
 /** Draws the whole lab view. The context is expected to be scaled so one unit is one CSS pixel. */
@@ -47,15 +71,20 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, view.width, view.height);
 
+  if (scene?.terrain) drawTerrain(ctx, view, scene.terrain);
+  if (scene?.decor) {
+    drawScatter(ctx, view, scene.decor.rocks, () => ROCK_DOT, BOULDER);
+    drawScatter(ctx, view, scene.decor.trees, (kind) => TREE_DOTS[kind] ?? TREE_DOTS[0]!, CROWN);
+  }
   drawGrid(ctx, view);
   drawBounds(ctx, view, cfg.buildableRadius);
   if (scene) {
     drawGhosts(ctx, view, scene.ghosts);
     const { line, sections, controlPoints, violations } = scene.selected;
-    drawRoad(ctx, view, line, cfg.roadWidth);
+    drawRoad(ctx, view, line, scene.width ?? cfg.roadWidth);
     drawSections(ctx, view, line, sections);
     drawControlPoints(ctx, view, controlPoints);
-    if (scene.isWinner) drawStart(ctx, view, line, cfg.roadWidth);
+    if (scene.isWinner) drawStart(ctx, view, line, scene.width ? scene.width[0]! : cfg.roadWidth);
     drawViolations(ctx, view, violations);
   }
   drawScaleBar(ctx, view);
@@ -65,13 +94,50 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
  * Draws one track small, with no labels, for the contact sheet. The view
  * should already be sized to the thumbnail.
  */
-export function drawThumbnail(ctx: CanvasRenderingContext2D, view: View, candidate: Candidate, cfg: TrackConfig): void {
+export function drawThumbnail(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  candidate: Candidate,
+  cfg: TrackConfig,
+  terrain: TerrainPicture | null = null,
+  width: Float64Array | null = null,
+): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, view.width, view.height);
+  if (terrain) drawTerrain(ctx, view, terrain);
   drawBounds(ctx, view, cfg.buildableRadius);
-  drawRoad(ctx, view, candidate.line, cfg.roadWidth);
+  drawRoad(ctx, view, candidate.line, width ?? cfg.roadWidth);
   drawSectionLines(ctx, view, candidate.line, candidate.sections, 2);
-  drawStart(ctx, view, candidate.line, cfg.roadWidth);
+  drawStart(ctx, view, candidate.line, width ? width[0]! : cfg.roadWidth);
+}
+
+/** Stretches the island picture over the part of the map it covers. */
+function drawTerrain(ctx: CanvasRenderingContext2D, view: View, terrain: TerrainPicture): void {
+  // Each pixel is centred on its sample, so the picture reaches half a cell beyond the first and last samples.
+  const first = terrain.origin - terrain.cell / 2;
+  const topLeft = worldToScreen(view, first, first);
+  const side = terrain.size * terrain.cell * view.scale;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(terrain.image, topLeft.sx, topLeft.sy, side, side);
+}
+
+/**
+ * Marks each thing of a scatter with a square dot of about its real size, never smaller than two pixels.
+ * Dots sit on whole pixels, so their colour is not blurred into the ground.
+ */
+function drawScatter(ctx: CanvasRenderingContext2D, view: View, scatter: Scatter, colourOf: (kind: number) => string, across: number): void {
+  const kinds = new Set<number>();
+  for (let i = 0; i < scatter.count; i++) kinds.add(scatter.kind[i]!);
+  for (const kind of kinds) {
+    ctx.fillStyle = colourOf(kind);
+    for (let i = 0; i < scatter.count; i++) {
+      if (scatter.kind[i] !== kind) continue;
+      const { sx, sy } = worldToScreen(view, scatter.x[i]!, scatter.z[i]!);
+      const side = Math.max(2, Math.round(scatter.size[i]! * across * view.scale));
+      if (sx < -side || sy < -side || sx > view.width + side || sy > view.height + side) continue;
+      ctx.fillRect(Math.round(sx - side / 2), Math.round(sy - side / 2), side, side);
+    }
+  }
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {
@@ -132,9 +198,43 @@ function drawGhosts(ctx: CanvasRenderingContext2D, view: View, ghosts: readonly 
   ctx.globalAlpha = 1;
 }
 
-function drawRoad(ctx: CanvasRenderingContext2D, view: View, line: CenterLine, roadWidth: number): void {
+/**
+ * Draws the road as a dark-edged grey band.
+ *
+ * @param roadWidth one width for the whole lap, or the width at each sample
+ */
+function drawRoad(ctx: CanvasRenderingContext2D, view: View, line: CenterLine, roadWidth: number | Float64Array): void {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+
+  if (typeof roadWidth !== 'number') {
+    // A band between the two edges of the road: both edge loops in one path, filled where they do not overlap.
+    const band = (extra: number): void => {
+      ctx.beginPath();
+      for (const side of [1, -1]) {
+        for (let i = 0; i < line.count; i++) {
+          const offset = side * (roadWidth[i]! / 2 + extra);
+          // Right of the direction of travel is (-tz, tx) on the map.
+          const { sx, sy } = worldToScreen(view, line.x[i]! - line.tz[i]! * offset, line.z[i]! + line.tx[i]! * offset);
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+      }
+    };
+    band(1 + 1 / view.scale);
+    ctx.fillStyle = COLORS.roadEdge;
+    ctx.fill('evenodd');
+    band(0);
+    ctx.fillStyle = COLORS.road;
+    ctx.fill('evenodd');
+    // At thumbnail size the band can be thinner than a pixel, so a hairline keeps it visible.
+    tracePath(ctx, view, line);
+    ctx.strokeStyle = COLORS.road;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    return;
+  }
 
   tracePath(ctx, view, line);
   ctx.strokeStyle = COLORS.roadEdge;

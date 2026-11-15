@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findViolations } from './testing/architectureRules';
+import { findViolations, importsThree } from './testing/architectureRules';
 
 // Every non-test source file in the pure layers, loaded as text by Vite.
 const allPureFiles = import.meta.glob<string>(['./core/**/*.ts', './gen/**/*.ts'], {
@@ -18,6 +18,34 @@ describe('architecture rules for src/core and src/gen', () => {
 
   it.each(Object.entries(pureSources))('%s follows the rules', (path, source) => {
     expect(findViolations(path, source)).toEqual([]);
+  });
+});
+
+// Every non-test source file, to check where Three.js is used.
+const allFiles = import.meta.glob<string>('./**/*.ts', { query: '?raw', import: 'default', eager: true });
+
+describe('Three.js stays in src/render', () => {
+  const outsideRender = Object.entries(allFiles).filter(
+    ([path]) => !path.startsWith('./render/') && !path.endsWith('.test.ts') && !path.startsWith('./testing/'),
+  );
+
+  it('finds source files to check', () => {
+    expect(outsideRender.length).toBeGreaterThan(20);
+  });
+
+  it.each(outsideRender)('%s does not import three', (_path, source) => {
+    expect(importsThree(source)).toBe(false);
+  });
+
+  it('recognises every way of importing three', () => {
+    expect(importsThree(`import * as THREE from 'three';`)).toBe(true);
+    expect(importsThree(`import { Vector3 } from "three";`)).toBe(true);
+    expect(importsThree(`import type { Mesh } from 'three';`)).toBe(true);
+    expect(importsThree(`import { OrbitControls } from 'three/addons/controls/OrbitControls.js';`)).toBe(true);
+    expect(importsThree(`const three = await import('three');`)).toBe(true);
+    expect(importsThree(`// import * as THREE from 'three';
+export const x = 1;`)).toBe(false);
+    expect(importsThree(`import { thing } from './three-quarters';`)).toBe(false);
   });
 });
 

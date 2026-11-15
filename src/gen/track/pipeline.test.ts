@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { config, type TrackConfig } from '../../config';
+import { config, type GenConfig, type TrackConfig } from '../../config';
+import { withCharacter } from '../../testing/characters';
 import type { Candidate, CornerSection, StraightSection, TrackResult } from '../types';
 import { hashTrack } from './hash';
 import { generateTrack } from './pipeline';
+import { trackRulesFor } from './rules';
 import { validateLayout } from './validate';
 
 const cfg = config.track;
+/** The full config with a different set of track rules. */
+const withTrack = (track: TrackConfig): GenConfig => ({ ...config, track });
 const winnerOf = (result: TrackResult): Candidate => result.candidates[result.winnerIndex]!;
 const cornersOf = (result: TrackResult): CornerSection[] =>
   winnerOf(result).sections.filter((s): s is CornerSection => s.type === 'corner');
@@ -14,7 +18,7 @@ const netTurn = (result: TrackResult): number =>
   cornersOf(result).reduce((sum, c) => sum + (c.direction === 'right' ? c.turnDegrees : -c.turnDegrees), 0);
 
 describe('generateTrack', () => {
-  const result = generateTrack(48213, cfg);
+  const result = generateTrack(48213, config);
 
   it('records the seed and generator version', () => {
     expect(result.seed).toBe(48213);
@@ -42,7 +46,7 @@ describe('generateTrack', () => {
   });
 
   it('returns a winner that still passes validation after the start line is placed', () => {
-    expect(validateLayout(winnerOf(result).line, cfg)).toEqual([]);
+    expect(validateLayout(winnerOf(result).line, trackRulesFor(cfg, result.character.relief))).toEqual([]);
   });
 
   it('puts the start line part way along the longest straight', () => {
@@ -68,18 +72,18 @@ describe('generateTrack', () => {
 
 describe('generateTrack determinism', () => {
   it('produces identical data for the same seed', () => {
-    expect(generateTrack(777, cfg)).toEqual(generateTrack(777, cfg));
-    expect(hashTrack(generateTrack(777, cfg))).toBe(hashTrack(generateTrack(777, cfg)));
+    expect(generateTrack(777, config)).toEqual(generateTrack(777, config));
+    expect(hashTrack(generateTrack(777, config))).toBe(hashTrack(generateTrack(777, config)));
   });
 
   it('produces different tracks for different seeds', () => {
-    const hashes = new Set(Array.from({ length: 20 }, (_, i) => hashTrack(generateTrack(i + 1, cfg))));
+    const hashes = new Set(Array.from({ length: 20 }, (_, i) => hashTrack(generateTrack(i + 1, config))));
     expect(hashes.size).toBe(20);
   });
 
   it('keeps each candidate the same when the number of candidates changes', () => {
-    const few = generateTrack(777, { ...cfg, candidatesPerRound: 5 });
-    const many = generateTrack(777, cfg);
+    const few = generateTrack(777, withTrack({ ...cfg, candidatesPerRound: 5 }));
+    const many = generateTrack(777, config);
     for (let i = 0; i < 5; i++) {
       expect(few.candidates[i]!.controlPoints).toEqual(many.candidates[i]!.controlPoints);
     }
@@ -88,7 +92,7 @@ describe('generateTrack determinism', () => {
 
 describe('generateTrack across many seeds', () => {
   const seeds = Array.from({ length: 200 }, (_, i) => i + 1);
-  const results = seeds.map((seed) => generateTrack(seed, cfg));
+  const results = seeds.map((seed) => generateTrack(seed, config));
 
   it('finds a valid winner for every seed from 1 to 200 without the fallback', () => {
     for (const r of results) {
@@ -139,8 +143,61 @@ describe('generateTrack across many seeds', () => {
   });
 });
 
+describe('generateTrack turning candidates to fit the ground', () => {
+  const EARTHWORKS = ['cut-too-deep', 'fill-too-high', 'bank-too-steep'];
+  const mountain = Array.from({ length: 12 }, (_, i) => generateTrack(i + 1, withCharacter(config, { relief: 'mountain' })));
+  const others = Array.from({ length: 12 }, (_, i) => generateTrack(i + 1, withCharacter(config, { relief: 'rolling' })));
+
+  it('tries mountain candidates at eight turns and keeps one of them', () => {
+    const turns = new Set<number>();
+    for (const r of mountain) for (const c of r.candidates) turns.add(c.turn);
+    for (const turn of turns) expect(turn % 45).toBe(0);
+    // Different candidates fit the ground best at different turns.
+    expect(turns.size).toBeGreaterThanOrEqual(4);
+    expect(new Set(mountain.map((r) => winnerOf(r).turn)).size).toBeGreaterThan(1);
+  });
+
+  it('never turns candidates on other ground', () => {
+    for (const r of others) for (const c of r.candidates) expect(c.turn).toBe(0);
+  });
+
+  it('keeps mountain laps within 3 km and a 600 m track area, and the others within 2.4 km and 500 m', () => {
+    for (const r of mountain) {
+      const winner = winnerOf(r);
+      expect(winner.line.length, `seed ${r.seed}`).toBeLessThanOrEqual(3000);
+      expect(validateLayout(winner.line, trackRulesFor(cfg, 'mountain')), `seed ${r.seed}`).toEqual([]);
+    }
+    expect(Math.max(...mountain.map((r) => winnerOf(r).line.length))).toBeGreaterThan(2400);
+    for (const r of others) {
+      expect(winnerOf(r).line.length, `seed ${r.seed}`).toBeLessThanOrEqual(2400);
+      expect(validateLayout(winnerOf(r).line, cfg), `seed ${r.seed}`).toEqual([]);
+    }
+  });
+
+  it('turns the control points with the line', () => {
+    for (const r of mountain.slice(0, 3)) {
+      const winner = winnerOf(r);
+      // Every control point is near the lap it shapes.
+      for (const p of winner.controlPoints) {
+        let nearest = Infinity;
+        for (let i = 0; i < winner.line.count; i += 2) nearest = Math.min(nearest, Math.hypot(winner.line.x[i]! - p.x, winner.line.z[i]! - p.z));
+        expect(nearest, `seed ${r.seed}`).toBeLessThan(120);
+      }
+    }
+  });
+
+  it('rejects a candidate whose every turn needs too much earthworks, saying why, and never picks it', () => {
+    for (const r of mountain) {
+      expect(winnerOf(r).violations).toEqual([]);
+      for (const c of r.candidates) {
+        if (c.violations.some((v) => EARTHWORKS.includes(v.kind))) expect(c.score).toBeNull();
+      }
+    }
+  });
+});
+
 describe('variety across 20 seeds', () => {
-  const twenty = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, cfg));
+  const twenty = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, config));
 
   it('spreads lap lengths over at least 400 m', () => {
     const laps = twenty.map((r) => winnerOf(r).line.length);
@@ -165,7 +222,7 @@ describe('variety across 20 seeds', () => {
 
 describe('generateTrack when nothing is valid', () => {
   const impossible: TrackConfig = { ...cfg, minCornerRadius: 5000 };
-  const result = generateTrack(5, impossible);
+  const result = generateTrack(5, withTrack(impossible));
 
   it('tries more rounds, then falls back to a plain oval and says so', () => {
     expect(result.fallback).toBe(true);
@@ -181,7 +238,7 @@ describe('generateTrack when nothing is valid', () => {
 describe('generateTrack speed', () => {
   it('generates a track in well under the 3 second budget', () => {
     const start = performance.now();
-    for (let seed = 1000; seed < 1010; seed++) generateTrack(seed, cfg);
+    for (let seed = 1000; seed < 1010; seed++) generateTrack(seed, config);
     const perSeed = (performance.now() - start) / 10;
     expect(perSeed).toBeLessThan(400);
   });

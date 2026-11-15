@@ -1,0 +1,153 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+.world {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: #9ec7e6;
+  color: #15302b;
+  font: 14px/1.4 system-ui, "Segoe UI", sans-serif;
+}
+
+.world-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.world-canvas:active {
+  cursor: grabbing;
+}
+
+.world-card {
+  background: rgba(246, 250, 247, 0.86);
+  border: 1px solid rgba(22, 52, 47, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(10, 30, 28, 0.18);
+  padding: 12px 16px;
+}
+
+.world-title {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: 19rem;
+  pointer-events: none;
+}
+
+.world-title h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.world-title p {
+  margin: 2px 0 0;
+  color: #4c665f;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-title .world-hint {
+  margin-top: 8px;
+}
+
+.world-frames {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.world-frames[hidden] {
+  display: none;
+}
+
+.world-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 20, 22, 0.3);
+  font-weight: 600;
+}
+
+.world-loading[hidden] {
+  display: none;
+}
+
+.world-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.world-controls button {
+  font: inherit;
+  font-weight: 600;
+  color: #1a7d77;
+  background: transparent;
+  border: 1.5px solid #1a7d77;
+  border-radius: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.world-controls button.primary {
+  background: #1a7d77;
+  color: #ffffff;
+}
+
+.world-controls button:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}
+
+.world-controls button[hidden] {
+  display: none;
+}
+
+.world-time-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(22, 52, 47, 0.15);
+}
+
+.world-time-control output {
+  min-width: 3.2em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.world-time-control input[type="range"] {
+  width: 140px;
+  accent-color: #1a7d77;
+}
+
+.world-time-control input[type="range"]:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}
