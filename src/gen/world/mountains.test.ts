@@ -278,7 +278,8 @@ describe('snow', () => {
       }
     }
     expect(snowy).toBeGreaterThan(100);
-  });
+    // One check for every cell of every island here. It passes alone, but took 20.8 and 22.4 s, over the usual 20 s, when every test file ran at once.
+  }, 60_000);
 
   it('leaves hill country green: no snow and no rock for height alone', () => {
     const hills = [...mountainSeeds, ...rollingSeeds].filter((b) => b.character.landform === 'hills');

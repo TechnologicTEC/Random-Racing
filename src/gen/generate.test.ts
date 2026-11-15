@@ -181,7 +181,13 @@ describe('hashWorld', () => {
     const afterGate = hashWorld(world);
     expect(afterGate).not.toBe(afterBarriers);
     world.road.width[10] = world.road.width[10]! + 0.5;
-    expect(hashWorld(world)).not.toBe(afterGate);
+    const afterWidth = hashWorld(world);
+    expect(afterWidth).not.toBe(afterGate);
+    world.road.walls[0]!.pieceCount += 1;
+    const afterWall = hashWorld(world);
+    expect(afterWall).not.toBe(afterWidth);
+    world.road.walls[0]!.side = world.road.walls[0]!.side === 1 ? -1 : 1;
+    expect(hashWorld(world)).not.toBe(afterWall);
   });
 });
 

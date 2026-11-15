@@ -314,6 +314,8 @@ export interface RoadConfig {
   barrierHeight: number;
   /** On the outside of corners the barrier is painted in red and white blocks this long, in metres. */
   barrierBlock: number;
+  /** Where the walls stand. Everywhere else the roadside is open. */
+  walls: WallConfig;
   /** The start line is chequered in squares this size, in metres, two rows deep. */
   startSquare: number;
   /** The gate over the start: clear height under its beam, the beam's depth, and the thickness of its posts, in metres. */
@@ -334,6 +336,36 @@ export interface RoadConfig {
   maxFill: number;
   /** The road may sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). A layout that needs more is rejected. */
   maxCut: number;
+}
+
+/**
+ * Where the walls beside the road stand (see gen/road/walls.ts). A wall is kept
+ * on the outside of corners, beside another part of the lap, beside steep
+ * ground and at the start gate; the rest of the roadside is open. Distances in metres.
+ */
+export interface WallConfig {
+  /** On the outside of a real corner the wall starts this far before the corner... */
+  cornerLead: number;
+  /** ...and runs this far past its end, where a car that has run wide is still drifting out. */
+  cornerTrail: number;
+  /** A wall stands wherever another part of the lap is within this distance on that side, centre to centre. */
+  closeDistance: number;
+  /** The ground beside the road is looked at from the outer edge of the verge out to this distance... */
+  probeReach: number;
+  /** ...at steps of this. */
+  probeStep: number;
+  /** A wall stands where that ground has risen or fallen from the verge by more than this slope on average, as a fraction (0.25 is 25%)... */
+  maxSlope: number;
+  /** ...and by more than this height, so small bumps beside the road do not count. */
+  minRise: number;
+  /** Walls run this far each way from the start gate, whose posts stand outside them. */
+  gate: number;
+  /** An opening shorter than this is closed. */
+  minGap: number;
+  /** A wall shorter than this is lengthened. */
+  minWall: number;
+  /** A wall's end slopes down to the ground over this length. */
+  taper: number;
 }
 
 /**
@@ -1357,6 +1389,19 @@ export const config: GameConfig = {
     barrierWidth: 0.3,
     barrierHeight: 0.8,
     barrierBlock: 4,
+    walls: {
+      cornerLead: 15,
+      cornerTrail: 30,
+      closeDistance: 80,
+      probeReach: 16,
+      probeStep: 4,
+      maxSlope: 0.25,
+      minRise: 0.6,
+      gate: 14,
+      minGap: 40,
+      minWall: 24,
+      taper: 6,
+    },
     startSquare: 1,
     gateClearance: 6,
     gateBeam: 1.2,
