@@ -13,7 +13,8 @@ const SEEDS = [0, 1, 2, 3, 7, 42, 100, 999, 1234, 2024, 4096, 9001, 12345, 31337
 test('this browser generates exactly the same tracks as Node', async ({ page, browserName }) => {
   const expected = SEEDS.map((seed) => hashTrack(generateTrack(seed, config)));
 
-  await page.goto('/?seed=1');
+  // In the lab, which needs no 3D drawing, so three browsers at a time stay quick.
+  await page.goto('/?lab=1&seed=1');
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
   const actual = await page.evaluate((seeds) => Promise.all(seeds.map((seed) => window.seedCircuit.hashFor(seed))), SEEDS);
 
@@ -24,7 +25,7 @@ test('this browser generates exactly the same islands as Node', async ({ page, b
   const seeds = [1, 42, 48213, 4294967295];
   const expected = seeds.map((seed) => hashWorld(generateWorld(seed, config)));
 
-  await page.goto('/?seed=1');
+  await page.goto('/?lab=1&seed=1');
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
   const actual = await page.evaluate((list) => Promise.all(list.map((seed) => window.seedCircuit.worldHashFor(seed))), seeds);
 
@@ -32,7 +33,7 @@ test('this browser generates exactly the same islands as Node', async ({ page, b
 });
 
 test('generation runs in a Web Worker, not on the page', async ({ page }) => {
-  await page.goto('/?seed=1');
+  await page.goto('/?lab=1&seed=1');
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
   const workers = page.workers();
   expect(workers).toHaveLength(1);

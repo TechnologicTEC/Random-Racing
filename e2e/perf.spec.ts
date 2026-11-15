@@ -43,7 +43,7 @@ let card = '';
 /** Opens a view, lets it settle, then times three spells of three seconds and keeps the middle one. */
 async function measure(page: Page, seed: number, view: string, options: string, query: string): Promise<void> {
   // sync=1: the page waits for the graphics card to finish each frame, so the time between frames is what a frame costs.
-  await page.goto(`/?view=3d&seed=${seed}&time=13:00&sync=1&${query}${extra}`);
+  await page.goto(`/?seed=${seed}&time=13:00&sync=1&${query}${extra}`);
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   card = await page.evaluate(() => window.seedCircuit.view!.graphics());
   // A headless or software-drawn browser would give numbers that mean nothing.

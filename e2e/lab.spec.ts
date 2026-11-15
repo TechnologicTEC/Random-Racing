@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Opens the lab (with lab=1, as the 3D view is the default page) or a contact sheet. */
 async function openLab(page: Page, query: string): Promise<void> {
-  await page.goto(`/${query}`);
+  const sheet = /[?&](sheet|seeds)=/.test(query);
+  await page.goto(sheet ? `/${query}` : `/?lab=1${query.replace(/^\?/, '&')}`);
   // A contact sheet generates 20 worlds before it is ready, which can take a while on a busy machine: mountain and
   // hilly seeds try each layout at several turns. On its own it takes about 6 s in Chromium and 12 s in Firefox.
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
@@ -33,6 +35,32 @@ test('opens on the seed from the URL and draws a track', async ({ page }) => {
   await expect(page.getByTestId('facts')).toContainText('v0-48213');
   expect(await brightPixelCount(page)).toBeGreaterThan(2000);
   expect(errors).toEqual([]);
+});
+
+test('opens on candidate 7 from an old lab link without lab=1', async ({ page }) => {
+  await page.goto('/?seed=48213&candidate=7');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
+  await expect(page.getByTestId('facts')).toContainText('Candidate 7');
+});
+
+test('L goes to the 3D view on the seed shown, leaving the lab s own options behind', async ({ page }) => {
+  await openLab(page, '?seed=100&candidate=3');
+  await expect(page.getByTestId('world-link')).toHaveAttribute('href', /seed=100/);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '101');
+  await expect(page.getByTestId('world-link')).toHaveAttribute('href', /seed=101/);
+  // Typing an L in the seed box is typing, not a shortcut.
+  await page.getByTestId('seed-input').press('l');
+  await page.waitForTimeout(500);
+  expect(new URL(page.url()).searchParams.get('lab')).toBe('1');
+  await expect(page.getByTestId('seed-input')).toHaveValue(/l/);
+  await page.getByTestId('track-canvas').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('l');
+  await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-world-seed', '101');
+  const params = new URL(page.url()).searchParams;
+  expect(params.has('lab')).toBe(false);
+  expect(params.has('candidate')).toBe(false);
 });
 
 test('picks a random seed when the URL has none, and records it in the URL', async ({ page }) => {
@@ -241,6 +269,7 @@ test('contact sheet shows 20 tracks and opens one in the lab', async ({ page }) 
   await expect(cards.nth(2)).toContainText(/inland|touches|coastal/);
   await expect(page.getByTestId('sheet-summary')).toContainText('20 tracks');
   await expect(page.getByTestId('sheet-summary')).toContainText('with a hairpin');
+  await expect(cards.nth(2)).toHaveAttribute('href', '?lab=1&seed=3');
   await cards.nth(2).click();
   await expect(page.locator('body')).toHaveAttribute('data-lab-seed', '3');
 });

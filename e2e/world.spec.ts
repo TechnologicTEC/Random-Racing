@@ -2,9 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 declare const process: { env: Record<string, string | undefined> };
 
-/** Opens the 3D view and waits until the island is built and drawn. */
+/** Opens the 3D view, the default page, and waits until the island is built and drawn. */
 async function openWorld(page: Page, query: string): Promise<void> {
-  await page.goto(`/?view=3d&${query}`);
+  await page.goto(`/?${query}`);
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
 }
 
@@ -69,12 +69,32 @@ test('generates the 3D world in the worker within the 3-second budget @budget', 
   expect(fastest).toBeLessThan(3000);
 });
 
-test('picks a random seed when the address has none, and records it', async ({ page }) => {
-  await openWorld(page, '');
+test('opens the 3D view at the plain address, on a random seed that it records', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+  await expect(page.getByTestId('world-canvas')).toBeVisible();
   const seed = await page.locator('body').getAttribute('data-world-seed');
   expect(Number(seed)).toBeGreaterThanOrEqual(1);
+  expect(Number(seed)).toBeLessThanOrEqual(99999);
   expect(new URL(page.url()).searchParams.get('seed')).toBe(seed);
-  expect(new URL(page.url()).searchParams.get('view')).toBe('3d');
+});
+
+test('still opens the 3D view from an old view=3d address', async ({ page }) => {
+  await openWorld(page, 'view=3d&seed=42&still=1&decor=off');
+  await expect(page.locator('body')).toHaveAttribute('data-world-seed', '42');
+  await expect(page.getByTestId('world-name')).toHaveText('Thalgard Circuit');
+});
+
+test('L opens the lab on the seed shown, and the hint says so', async ({ page }) => {
+  await openWorld(page, 'view=3d&seed=48213&still=1&decor=off&cam=orbit');
+  await expect(page.getByTestId('world-hint')).toContainText('L opens the lab');
+  await page.keyboard.press('l');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
+  await expect(page.getByTestId('seed-input')).toHaveValue('48213');
+  const params = new URL(page.url()).searchParams;
+  expect(params.get('lab')).toBe('1');
+  expect(params.get('cam')).toBe('orbit');
+  expect(params.has('view')).toBe(false);
 });
 
 test('turns the camera when the view is dragged and zooms with the wheel', async ({ page }) => {

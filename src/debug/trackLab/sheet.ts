@@ -63,7 +63,7 @@ export function mountContactSheet(root: HTMLElement, seeds: readonly number[], r
 
     const card = document.createElement('a');
     card.className = 'sheet-card';
-    card.href = `?seed=${seed}`;
+    card.href = `?lab=1&seed=${seed}`;
     card.dataset.testid = 'sheet-card';
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(THUMB * dpr);

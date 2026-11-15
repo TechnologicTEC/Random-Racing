@@ -12,6 +12,7 @@ import { parseQuality, qualitySettings, type QualityLevel } from '../render/qual
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
 import { genClient } from '../worker/client';
+import { switchAddress } from './route';
 
 /** Which camera is in use: flying the lap, or circling a point. */
 export type CameraMode = 'fly' | 'orbit';
@@ -46,7 +47,7 @@ const TEMPLATE = `
       <p class="world-character" data-ref="character" data-testid="world-character"></p>
       <p class="world-character" data-ref="scenery" data-testid="world-scenery"></p>
       <p data-ref="time" data-testid="world-time"></p>
-      <p class="world-hint" data-ref="hint"></p>
+      <p class="world-hint" data-ref="hint" data-testid="world-hint"></p>
     </div>
     <div class="world-card world-controls">
       <button type="button" data-ref="play" data-testid="world-play"></button>
@@ -70,13 +71,15 @@ const TEMPLATE = `
 const QUALITY_KEY = 'seedCircuit.quality';
 
 const HINTS: Record<CameraMode, string> = {
-  fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one.',
-  orbit: 'Drag to turn, scroll to zoom. C flies the lap, N makes a new island.',
+  fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one. L opens the lab.',
+  orbit: 'Drag to turn, scroll to zoom. C flies the lap, N makes a new island. L opens the lab.',
 };
 
 /**
  * The 3D view of a seed's world: builds it in the worker, then flies a camera
  * round the lap. The camera can be switched to one that circles the island.
+ *
+ * The default page. `L` opens the track lab on the same seed (see `app/route.ts`).
  *
  * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
@@ -429,6 +432,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     else if (key === 'c') setMode(mode === 'fly' ? 'orbit' : 'fly');
     else if (key === 'n') void show(randomSeed(), false);
     else if (key === 'q') setQuality(quality === 'high' ? 'low' : 'high');
+    // The address already holds the seed being shown, so the lab opens on it.
+    else if (key === 'l') window.location.assign(switchAddress(window.location.href, 'lab'));
     else if (key === 'f') {
       readout.hidden = !readout.hidden;
       if (!readout.hidden) renderReadout();

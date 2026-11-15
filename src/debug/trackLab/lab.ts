@@ -2,6 +2,7 @@ import './lab.css';
 import { config, GENERATOR_VERSION, type GameConfig, type TrackConfig } from '../../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../../core/seedCode';
 import { hashTrack, measureProfile, trackRulesFor, widestTrackArea, type Candidate, type FitReport, type TrackResult, type WorldResult } from '../../gen';
+import { switchAddress } from '../../app/route';
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
@@ -14,7 +15,7 @@ const TEMPLATE = `
     <aside class="lab-side">
       <header>
         <h1 class="lab-title">Seed Circuit track lab</h1>
-        <p class="lab-sub">Generator v${GENERATOR_VERSION} · <a href="?sheet=20" data-ref="sheetLink" data-testid="sheet-link">Contact sheet of 20 seeds</a></p>
+        <p class="lab-sub">Generator v${GENERATOR_VERSION} · <a href="?sheet=20" data-ref="sheetLink" data-testid="sheet-link">Contact sheet of 20 seeds</a> · <a href="/" data-ref="worldLink" data-testid="world-link">3D view (L)</a></p>
       </header>
 
       <section class="lab-section">
@@ -87,7 +88,7 @@ const TEMPLATE = `
         </label>
       </section>
 
-      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts, I shows or hides the island, T its trees and rocks.</p>
+      <p class="lab-hint">Drag to pan, scroll to zoom, double-click to fit. Arrow keys step through seeds, N picks a random one, R shows rejected layouts, I shows or hides the island, T its trees and rocks. L returns to the 3D view.</p>
     </aside>
     <main class="lab-stage">
       <canvas data-ref="canvas" data-testid="track-canvas"></canvas>
@@ -128,9 +129,10 @@ function readRuleOverrides(params: URLSearchParams): { values: Partial<TrackConf
   return { values, notes };
 }
 
-/** Builds the track lab inside the given element. */
+/** Builds the track lab inside the given element. Opened with ?lab=1, or with L from the 3D view. */
 export function mountTrackLab(root: HTMLElement): void {
   root.innerHTML = TEMPLATE;
+  document.title = 'Seed Circuit: track lab';
   const ref = <T extends HTMLElement>(name: string): T => {
     const el = root.querySelector<T>(`[data-ref="${name}"]`);
     if (!el) throw new Error(`Track lab template is missing "${name}"`);
@@ -243,6 +245,7 @@ export function mountTrackLab(root: HTMLElement): void {
     document.body.dataset.labHash = hashTrack(result);
     document.body.dataset.labMs = elapsed.toFixed(1);
     ref<HTMLAnchorElement>('sheetLink').href = `?sheet=20&from=${seed}`;
+    ref<HTMLAnchorElement>('worldLink').href = switchAddress(url.toString(), 'world');
 
     renderChips();
     renderSelected();
@@ -442,6 +445,8 @@ export function mountTrackLab(root: HTMLElement): void {
     if (key === 'arrowleft') void setSeed(previousSeed());
     else if (key === 'arrowright') void setSeed(nextSeed());
     else if (key === 'n') void setSeed(randomSeed());
+    // The address holds the seed asked for last, so the 3D view opens on it.
+    else if (key === 'l') window.location.assign(switchAddress(window.location.href, 'world'));
     else if (key === 'r') {
       ghostsBox.checked = !ghostsBox.checked;
       render();

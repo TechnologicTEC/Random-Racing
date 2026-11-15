@@ -30,4 +30,5 @@ Run from the repo folder in PowerShell.
 - `npm run perf`: measure frame times on the real graphics card. Opens a real browser window for about 8 minutes; leave it in front, plugged in, with little else open. Not part of `npm run e2e`. Fewer runs: `$env:SEEDS = "7"; $env:PARTS = "0"; npm run perf`.
 - `npm run build`: type-check and build to `dist/`.
 - Screenshots land in `test-results/screens/`. To choose what is captured: `$env:SEEDS = "5,6,7"; $env:SHEETS = "1,21"; npm run e2e` (clear them afterwards with `Remove-Item Env:SEEDS, Env:SHEETS`).
-- Lab addresses: `/?seed=48213` (one seed), `/?sheet=20&from=1` (contact sheet), `/?seeds=5,99` (chosen seeds), `&candidate=7` (one candidate), `&minRadius=30` or `&gapWidths=4` (what-if rules).
+- 3D addresses: `/` (random island), `/?seed=48213` (one seed); options are listed in `src/app/worldPage.ts`. L switches to the lab on the same seed and back.
+- Lab addresses: `/?lab=1&seed=48213` (one seed), `/?sheet=20&from=1` (contact sheet), `/?seeds=5,99` (chosen seeds), `&candidate=7` (one candidate), `&minRadius=30` or `&gapWidths=4` (what-if rules; these three open the lab even without `lab=1`).

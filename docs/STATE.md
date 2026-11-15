@@ -6,8 +6,8 @@ Updated at the end of every work session. A new session should read this first, 
 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** 15, shadows, far-ground detail, High and Low quality, frame times (see "Step 15" below)
-- **Next step:** step 16, the 3D view becomes the default page, with the lab on the L key and `?lab=1`. Then step 17 (20-seed check and the pull request). Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** 16, the 3D view is the default page; the lab is on the L key and `?lab=1` (see "Step 16" below)
+- **Next step:** step 17, the 20-seed check with screenshot sheets and fit reports, then the pull request. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -35,7 +35,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | Done (15a to 15h, see "Step 15") |
-| 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
+| 16 | 3D becomes the default page; lab on the L key and `?lab=1` | Done (see "Step 16") |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
 ## Milestone 2 rework (agreed at check-in 2, 2026-11-12)
@@ -679,6 +679,33 @@ High holds 60 frames per second in every view, at 1080p and on the full screen (
 
 The full plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-9c3b-read-claude-md-playful-sutton.md`.
 
+## Step 16: the 3D view becomes the default page (2026-11-15)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-content-id-ac8d-random-racing-prancy-firefly.md`.
+
+**Which page an address opens** (`src/app/route.ts`, `choosePage`; first match wins):
+
+| Address | Page |
+| --- | --- |
+| `view=3d` | 3D (kept, so old links still work) |
+| `seeds=5,99` (at least one valid seed) | contact sheet of chosen seeds |
+| `sheet=20` (`&from=1`) | contact sheet of a run |
+| `lab=1` | lab |
+| `candidate=`, `minRadius=` or `gapWidths=` | lab (only the lab understands them, so old lab links still work) |
+| anything else, including `/` and `/?seed=48213` | 3D |
+
+Only a bare `/?seed=N` changed meaning: it now opens that seed in 3D.
+
+**The L key** (`switchAddress`) loads the other page on the same seed: to the lab it adds `lab=1`; back to 3D it drops `lab`, `candidate`, `minRadius` and `gapWidths`. Both ways it drops `view`, and the 3D options are kept, so coming back finds them again. It is a full page load, not an overlay: neither page can shut itself down (WebGL, frame loop and key handlers on one side, key handlers using the same N and arrow keys on the other), and one world build (under 3 s) is fine for a debug view.
+
+**Visible changes:** the 3D hint ends "L opens the lab."; the lab header has a "3D view (L)" link that follows the seed, and its hint mentions L; contact sheet cards open `?lab=1&seed=N`; the page title is "Seed Circuit" (the lab sets "Seed Circuit: track lab"). The 3D page is still loaded only when shown, so the lab and sheets do not download Three.js.
+
+**Tests:** `src/app/route.test.ts` (12, watched failing first); browser tests for the plain address, an old `view=3d` address, an old `candidate=` link, L both ways (and not while typing in the seed box), and the sheet card links (four failed before the code, two already passed as guards for old links). The lab, determinism and screenshot tests now open the lab with `lab=1`; the world and frame-time tests no longer add `view=3d`.
+
+**Also:** `README.md` converted from UTF-16 to UTF-8 (agreed on 2026-11-11 but never done) and brought up to date: what the page is now, the addresses and the keys. `CLAUDE.md` lists the 3D and lab addresses.
+
+**Step 16 done.** 1,107 unit tests and 270 browser tests pass (Chromium and Firefox, both budget tests included). Screenshots checked by eye: 3D at seeds 1, 7, 42, 100, 2024 and 48213 (circling, flying and close views), the lab at 20 seeds, both contact sheets.
+
 ## Milestone 2 design
 
 *Steps 0 to 11 as built. Where the rework above differs (coast distance, the single peak, fixed road width, tile and grid size, 8% gradient everywhere), the rework wins.*
@@ -916,6 +943,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-15 | A far field's flowering blade becomes all flower | Its blades are single triangles seen from 60 m and more; a coloured tip was under a pixel |
 | 2026-11-15 | No blades are drawn when the camera is more than 150 m above the ground under it (`render.grass.ceiling`) | From there no blade can be told from the ground; the view from above costs nothing extra |
 | 2026-11-15 | Tests of how long something takes get a loose limit that only catches a blunder; the real time is measured and written here | A 150 ms limit on a 30 ms job failed with every test file running at once. The same lesson as the 20 s test timeout |
+| 2026-11-15 | **The 3D view is the default page** (step 16). `?lab=1` or L opens the lab; `candidate=`, `minRadius=` and `gapWidths=` open it too, and `view=3d` still opens 3D; contact sheet cards open the lab. L reloads the page at the other address | As agreed on 2026-11-11. Old links keep working. A reload is simpler and safer than an overlay, since neither page can shut itself down |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
 
@@ -1038,3 +1066,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 15g done: High and Low quality, the pixel budget, the Quality button and Q key, remembered in the browser. Low measured 10% to 50% faster than High at 1080p, least when circling from above. The laptop throttled for a while (processor held at 1,400 MHz, frame times jumping to 60 ms and more, the browser suite at half speed with 19 timeouts), so Tane ran the browser suite by hand.
 - **2026-11-15 (Milestone 2):** Tane closed the dev server that had run since 14 November; the next browser run passed but for one timeout, now given longer. Tane: the shadows look good.
 - **2026-11-15 (Milestone 2):** Step 15h done: shadows take a share of the sky's light as well (`render.shadows.skyShare` 0.6, chosen from pictures; `shadowSky=` in the address), screenshots of seeds 1 to 20 and a time strip checked, final frame times for High and Low. **Step 15 done.** High holds 60 frames per second in every measured view at 1080p and on the full laptop screen; Low is a fifth to a third faster. Next: step 16.
+- **2026-11-15 (Milestone 2):** Step 16 done: the 3D view is the default page; the lab is on L and `?lab=1`, and old lab links, `view=3d` and the contact sheets still work. README converted to UTF-8 and updated. 1,107 unit tests and 270 browser tests pass. Next: step 17, the 20-seed check and the pull request.
