@@ -7,7 +7,7 @@ A procedural kart racer for desktop browsers. Every race happens on a world and 
 
 ## Where it is now
 
-Milestone 2, **world and track in 3D**, nearly done. The page builds an island and its track from a seed and flies a camera round the lap, with water, sky, trees, grass and shadows. There is no driving yet. The **track lab** from Milestone 1, a 2D top-down view that shows how each track was chosen, is kept as a debug view.
+Milestone 2, **world and track in 3D**, is finished and waiting for sign-off. The page builds an island and its track from a seed and flies a camera round the lap, with water, sky, trees, grass and shadows. There is no driving yet; that is Milestone 3. The **track lab** from Milestone 1, a 2D top-down view that shows how each track was chosen, is kept as a debug view.
 
 ## Running it
 
@@ -42,15 +42,22 @@ In the lab: drag to pan, scroll to zoom, double-click to fit. Arrow keys step th
 npx playwright install chromium firefox   # first time only
 npm test            # unit tests
 npm run typecheck   # type checks
+npm run build       # type checks, then a build in dist/
 npm run e2e         # browser tests and screenshots (saved in test-results/screens)
+npm run perf        # frame times on the real graphics card (about 8 minutes, opens a browser window)
 ```
 
-## How a track is generated
+Screenshots can be chosen with environment variables, for example `$env:SEEDS = "5,6,7"; $env:SHEETS = "1,21"; npm run e2e`. `LOOKS`, `LAPS` and `TIMES` choose the close views, the points of the lap and the times of day of the 3D pictures (see `e2e/world.spec.ts`).
 
-1. The seed picks a style: folded, stretched or round.
-2. Thirty candidate layouts are built. Each is a skeleton of 10 to 18 corners: a base shape, folded in and out to make hairpins and parallel straights, with chicanes and long curves added.
-3. Every corner is rounded with an arc; the rest stays straight.
-4. Layouts that break a rule are rejected: crossing itself, a corner under 15 m radius, sections too close together, a lap outside 1.4 to 2.4 km, or leaving the buildable area.
-5. The rest are scored for fun (long straights, a mix of corner types, corners that suit drifting, flow) and the best one wins.
+## How a world is generated
 
-The same seed always gives exactly the same track, in every browser.
+1. The seed picks a character, one trait at a time: the layout style (folded, stretched or round), the relief (flat, rolling, hilly or mountain), the coast (inland, touching the sea, or coastal), the shape of its mountains (a ridged range, rolling hill country or a lone peak) and how many there are (0 to 4), and whether the road is 12 m wide all round or widens to 22 m in places. A mountain lap either climbs onto its mountain or circles it.
+2. The ground's relief comes from the seed alone. On hilly and mountain seeds it holds the main mountain.
+3. Thirty candidate layouts are built. Each is a skeleton of 10 to 18 corners: a base shape, folded in and out to make hairpins and parallel straights, with chicanes and long curves added. Every corner is rounded with an arc; the rest stays straight. On mountain and hilly seeds each layout is also tried turned to face the mountain.
+4. Each layout gets road heights that follow the ground, with gradients up to 8% (15% on mountain seeds) and no sharp crests.
+5. Layouts that break a rule are rejected: crossing itself, a corner under 15 m radius, sections too close together, a lap outside 1.4 to 2.4 km (up to 3 km on mountain seeds), leaving the buildable area, or needing a cutting deeper than 8 m or an embankment taller than 6 m.
+6. The rest are scored for fun (long straights, a mix of corner types, corners that suit drifting, flow, and use of the hills) and the best one wins.
+7. The island is built round the winner: land beyond the track, a coast with beaches, cliffs, bays and headlands where the road is by the sea, the other mountains and foothills, then the ground cut and filled to the road. Kerbs, barriers and a start gate follow the road's edge.
+8. Last come sand, grass, rock and snow, trees, rocks, clouds and the time of day. A fit report measures how cleanly the road sits in the ground.
+
+The same seed always gives exactly the same world, in every browser.

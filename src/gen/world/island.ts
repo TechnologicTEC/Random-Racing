@@ -617,8 +617,10 @@ function outlineOf(form: Landform, x: number, z: number): Float64Array {
  * seed's landform. The main one comes first. On a mountain seed it is the massif already in the relief;
  * on a hilly seed it goes on the highland the track climbs towards if it can.
  *
- * Every part of a mountain's foot stays clear of the road, inside the tile and off the other mountains'
- * feet. Its foot must reach the land the road is on, or come close enough that the land round it meets
+ * A mountain's foot stays clear of the road, inside the tile and off the other mountains' feet, judged
+ * at `DIRECTIONS` points round its outline. A range a kilometre across can still reach the road between
+ * those points (about 1 seed in 40); the road then runs through it in a gorge. Tane chose to keep those
+ * gorges (step 17), so this is not to be tightened without asking. Its foot must reach the land the road is on, or come close enough that the land round it meets
  * the land beside the road, so no mountain stands on an island of its own. Where its whole foot does not
  * fit, it is built lower, and so smaller; a mountain with nowhere to go is left out. Of the places it fits,
  * the best lets it stand tallest, then has most of its foot on land already there, then is nearest the

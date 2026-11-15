@@ -4,10 +4,10 @@ Updated at the end of every work session. A new session should read this first, 
 
 ## Where we are
 
-- **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
+- **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), **finished; waiting for Tane to sign off and merge the pull request**. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** 16, the 3D view is the default page; the lab is on the L key and `?lab=1` (see "Step 16" below)
-- **Next step:** step 17, the 20-seed check with screenshot sheets and fit reports, then the pull request. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Last finished step:** 17, the 20-seed check and the Milestone 2 pull request (see "Step 17" below)
+- **Next step:** once Tane has merged the pull request, Milestone 3 (Driving) in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan it in plan mode. Read "Notes for later milestones" first (Rapier determinism, 3 km laps with 15% climbs, the start on a slope). Where "Milestone 2 rework" and "Check-in 3 response" differ from "Milestone 2 design", they win
 
 ## Milestone 2 steps
 
@@ -36,7 +36,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
 | 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | Done (15a to 15h, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | Done (see "Step 16") |
-| 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
+| 17 | 20-seed check with screenshot sheets and fit reports; pull request | Done (see "Step 17") |
 
 ## Milestone 2 rework (agreed at check-in 2, 2026-11-12)
 
@@ -706,6 +706,75 @@ Only a bare `/?seed=N` changed meaning: it now opens that seed in 3D.
 
 **Step 16 done.** 1,107 unit tests and 270 browser tests pass (Chromium and Firefox, both budget tests included). Screenshots checked by eye: 3D at seeds 1, 7, 42, 100, 2024 and 48213 (circling, flying and close views), the lab at 20 seeds, both contact sheets.
 
+## Step 17: the 20-seed check and the pull request (2026-11-15)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\abstract-swimming-karp.md`.
+
+**Seeds.** Seeds 1 to 20, and 20 fresh seeds drawn at random from 1 to 99,999 (as the N key draws them), leaving out every seed used in a test or a check before: 42625, 23982, 49123, 71138, 59679, 39898, 52035, 1256, 1905, 37884, 88647, 28496, 32534, 7421, 56198, 67454, 62658, 6322, 66025, 36062. Both lists are in `src/testing/checkSeeds.ts`.
+
+**Tests** (written first; they failed until the seed list and the helper existed). The fit checks that ran on six seeds in `generate.test.ts` moved into a helper, `src/testing/fitChecks.ts` (`describeCleanFit`), which builds each world on the full grid, checks it, and lets it go before the next. `src/gen/seeds1to20.test.ts` and `src/gen/freshSeeds.test.ts` run it on the 40 seeds, side by side (about 22 s each). Each seed is checked for: a valid winner without the fallback, no ground through the road, no road hanging, cut and fill within the limits, banks within their limit, sea at least 10 m away, the coast carved without touching the road, no embankment in the sea, the ground tilted with the banking, barrier footing, no grass on the road.
+
+**What the first run found** (20 of 524 checks failed; every seed had a valid winner, no fallback, no ground through the road and no road hanging):
+
+1. *Two gorges.* On seeds 28496 and 39898 (rolling) a ridged range stands over the road: the road runs through it in a gorge, 85 m and 27 m deep, with sides up to 619% and 215%. Mountains are meant to stay 60 m from the road, but `placeMountains` checks a foot at only 32 points round its outline, and a range a kilometre across can reach the road between them (gaps of nearly 200 m). Seeds 1 to 200 on a 5 m grid: 5 have a range foot reaching the road or within 44 m of it (41, 42, 103, 182, 192). **Tane saw them and chose to keep the gorges**: it is a kind of track Tane wanted. The two seeds are listed as `GORGE_SEEDS`, whose check expects the cut to be over the limit; a comment in `placeMountains` says not to tighten the rule without asking.
+2. *Cuttings on mountain seeds.* Seeds 11 to 14 (circling) have cuts of up to 13.1 m and fills of up to 6.7 m at the road's edge, where the road runs across a mountainside; on the centre line they are within 8 m and 6 m. These are the rock cuttings Tane allowed in C4, so on mountain seeds the check now measures the centre line, as the earthworks rule does.
+3. *Bays.* On 12 flat and rolling seeds the sea never comes within 13 m of the road (nearest 13.8 to 28.2 m on eleven of them and 226 m on seed 39898; never under 10 m). The old check expected a bay to bring it in to 10 m beside low road, but since the rework a seed may touch the sea along only a stretch or two, and a bay goes only where the road faces open sea. **Tane chose to relax the check**: only the 10 m minimum is checked now.
+
+After these, all 524 checks pass.
+
+**Fit reports** of the 40 winners (full grid, Node; cut and fill across the whole width of the road, banks over the whole island after the fit; "-" for closest sections means none within the coupling distance):
+
+| Seed | Character | Style | Lap | Height range | Steepest | Deepest cut (m) | Tallest fill (m) | Steepest bank | Nearest sea (m) | Closest sections (m) | Ground through | Hanging | Fallback | Score | Build in Node |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | mountain, touches, peak, circle, constant | round | 2.36 km | 83 m | 15.0% | 4.1 | 2.5 | 119% | 32.3 | - | 0 | 0 | no | 83 | 1.10 s |
+| 2 | flat, touches, range, constant | stretched | 1.81 km | 4 m | 2.9% | 0.9 | 0.9 | 26% | 18.9 | - | 0 | 0 | no | 95 | 0.95 s |
+| 3 | mountain, touches, range, climb, constant | folded | 2.75 km | 102 m | 15.0% | 4.4 | 2.4 | 145% | 37.7 | - | 0 | 0 | no | 85 | 1.20 s |
+| 4 | rolling, coastal, peak, varied | stretched | 2.26 km | 20 m | 8.0% | 1.8 | 2.4 | 54% | 10.0 | 54 | 0 | 0 | no | 92 | 1.08 s |
+| 5 | hilly, coastal, hills, varied | folded | 1.84 km | 48 m | 8.0% | 3.0 | 3.6 | 58% | 11.8 | - | 0 | 0 | no | 94 | 0.83 s |
+| 6 | hilly, touches, peak, varied | folded | 1.93 km | 51 m | 8.0% | 1.3 | 1.6 | 39% | 24.0 | - | 0 | 0 | no | 93 | 0.88 s |
+| 7 | hilly, touches, hills, varied | folded | 1.89 km | 47 m | 8.0% | 2.9 | 3.2 | 53% | 16.5 | - | 0 | 0 | no | 92 | 0.91 s |
+| 8 | rolling, touches, hills, varied | round | 2.23 km | 23 m | 8.0% | 3.2 | 3.3 | 59% | 10.2 | - | 0 | 0 | no | 98 | 1.15 s |
+| 9 | flat, coastal, -, constant | stretched | 1.92 km | 5 m | 3.0% | 0.9 | 0.9 | 23% | 10.3 | - | 0 | 0 | no | 94 | 0.84 s |
+| 10 | hilly, touches, peak, varied | stretched | 1.70 km | 45 m | 8.0% | 0.8 | 1.0 | 35% | 32.2 | - | 0 | 0 | no | 91 | 1.16 s |
+| 11 | mountain, touches, peak, circle, constant | folded | 1.81 km | 58 m | 15.0% | 8.2 | 5.8 | 101% | 152.6 | - | 0 | 0 | no | 84 | 1.06 s |
+| 12 | mountain, inland, peak, circle, constant | round | 2.02 km | 75 m | 15.0% | 7.2 | 6.7 | 119% | 142.3 | - | 0 | 0 | no | 81 | 1.15 s |
+| 13 | mountain, coastal, range, circle, varied | round | 2.60 km | 105 m | 15.0% | 12.8 | 6.5 | 173% | 11.9 | - | 0 | 0 | no | 81 | 1.20 s |
+| 14 | mountain, coastal, peak, circle, varied | folded | 2.75 km | 81 m | 15.0% | 13.1 | 6.7 | 209% | 23.4 | - | 0 | 0 | no | 83 | 0.98 s |
+| 15 | flat, coastal, range, varied | folded | 1.85 km | 3 m | 1.7% | 0.9 | 0.9 | 29% | 10.1 | - | 0 | 0 | no | 97 | 0.94 s |
+| 16 | rolling, inland, peak, varied | folded | 1.59 km | 16 m | 8.0% | 2.0 | 1.2 | 47% | 95.5 | - | 0 | 0 | no | 93 | 0.90 s |
+| 17 | rolling, inland, hills, constant | stretched | 2.15 km | 15 m | 8.0% | 1.8 | 1.2 | 34% | 168.8 | - | 0 | 0 | no | 93 | 0.85 s |
+| 18 | flat, coastal, hills, varied | folded | 2.08 km | 5 m | 2.3% | 0.8 | 0.9 | 25% | 15.2 | 47 | 0 | 0 | no | 93 | 0.86 s |
+| 19 | rolling, coastal, hills, constant | stretched | 2.09 km | 20 m | 8.0% | 1.1 | 1.9 | 51% | 14.9 | - | 0 | 0 | no | 95 | 0.95 s |
+| 20 | rolling, coastal, range, constant | folded | 1.62 km | 14 m | 8.0% | 1.1 | 1.7 | 35% | 10.2 | - | 0 | 0 | no | 89 | 1.02 s |
+| 42625 | hilly, touches, peak, constant | round | 1.97 km | 47 m | 8.0% | 1.5 | 1.9 | 44% | 16.5 | 51 | 0 | 0 | no | 91 | 0.75 s |
+| 23982 | rolling, inland, range, constant | round | 2.07 km | 23 m | 8.0% | 1.2 | 1.3 | 39% | 146.7 | - | 0 | 0 | no | 97 | 1.12 s |
+| 49123 | flat, coastal, -, varied | folded | 1.64 km | 4 m | 2.3% | 0.9 | 0.9 | 29% | 10.0 | - | 0 | 0 | no | 94 | 0.72 s |
+| 71138 | rolling, touches, peak, varied | stretched | 1.78 km | 21 m | 8.0% | 1.0 | 1.1 | 36% | 15.1 | 54 | 0 | 0 | no | 90 | 1.01 s |
+| 59679 | rolling, touches, hills, varied | stretched | 1.85 km | 23 m | 8.0% | 1.8 | 2.2 | 50% | 14.6 | - | 0 | 0 | no | 92 | 0.83 s |
+| 39898 | rolling, touches, range, varied | folded | 1.81 km | 17 m | 8.0% | 26.9 | 2.6 | 215% | 225.9 | - | 0 | 0 | no | 95 | 1.17 s |
+| 52035 | hilly, touches, hills, constant | folded | 1.83 km | 48 m | 8.0% | 2.3 | 2.8 | 54% | 21.7 | 48 | 0 | 0 | no | 89 | 0.72 s |
+| 1256 | flat, coastal, hills, constant | round | 2.31 km | 5 m | 2.0% | 0.9 | 0.9 | 30% | 10.2 | - | 0 | 0 | no | 96 | 0.83 s |
+| 1905 | hilly, touches, peak, varied | round | 1.80 km | 43 m | 8.0% | 1.4 | 1.5 | 45% | 20.8 | - | 0 | 0 | no | 91 | 0.76 s |
+| 37884 | rolling, touches, range, varied | folded | 1.50 km | 15 m | 6.6% | 1.0 | 1.0 | 35% | 19.5 | 47 | 0 | 0 | no | 88 | 0.87 s |
+| 88647 | rolling, touches, range, varied | folded | 1.95 km | 27 m | 8.0% | 2.3 | 3.2 | 60% | 15.6 | - | 0 | 0 | no | 98 | 1.18 s |
+| 28496 | rolling, coastal, range, varied | stretched | 1.95 km | 26 m | 8.0% | 85.5 | 1.0 | 619% | 14.7 | - | 0 | 0 | no | 94 | 1.15 s |
+| 32534 | hilly, inland, hills, constant | stretched | 1.86 km | 53 m | 8.0% | 3.8 | 3.5 | 52% | 393.7 | - | 0 | 0 | no | 92 | 1.09 s |
+| 7421 | mountain, touches, peak, circle, varied | round | 2.66 km | 72 m | 15.0% | 4.4 | 3.1 | 120% | 20.4 | 54 | 0 | 0 | no | 82 | 0.90 s |
+| 56198 | rolling, touches, range, constant | folded | 1.80 km | 18 m | 8.0% | 1.1 | 1.9 | 40% | 14.9 | - | 0 | 0 | no | 95 | 1.17 s |
+| 67454 | rolling, inland, hills, constant | folded | 2.07 km | 18 m | 7.9% | 1.1 | 1.2 | 39% | 157.4 | 54 | 0 | 0 | no | 92 | 0.72 s |
+| 62658 | rolling, touches, hills, varied | stretched | 2.15 km | 22 m | 8.0% | 3.3 | 3.7 | 56% | 28.2 | 51 | 0 | 0 | no | 96 | 0.88 s |
+| 6322 | mountain, touches, peak, circle, varied | folded | 1.88 km | 66 m | 15.0% | 5.4 | 4.6 | 92% | 28.5 | - | 0 | 0 | no | 80 | 0.88 s |
+| 66025 | rolling, touches, range, varied | stretched | 2.20 km | 17 m | 8.0% | 2.0 | 2.0 | 43% | 13.8 | - | 0 | 0 | no | 93 | 0.75 s |
+| 36062 | flat, coastal, -, varied | folded | 1.61 km | 4 m | 3.1% | 0.9 | 0.9 | 28% | 10.2 | - | 0 | 0 | no | 98 | 0.70 s |
+
+Laps 1.50 to 2.75 km; scores 80 to 98; every world built in 0.70 to 1.20 s in Node. Of the 40: 7 flat, 17 rolling, 8 hilly, 8 mountain (1 climbing, 7 circling); 19 folded, 12 stretched, 9 round.
+
+**Screenshots looked at** (Chromium, in four batches of ten seeds, copied out after each): for every one of the 40 seeds, the view from above, four flying views (2, 30, 55 and 80% of the lap) and eight close views (cut, fill, bank, water, hairpin, start, summit, climb), tiled thirteen to a page; the lab page of every seed, which the screenshot test also checks for a valid winner, no fallback and a clean fit; contact sheets of seeds 1 to 20 and of the 20 fresh seeds (sheets from 21, 41 and 61 were taken too). All 573 screenshot tests passed. Nothing new was wrong: the road sits on the ground everywhere, kerbs, barriers and gates stand at the road's edge, and water, sky, trees, grass and shadows are in every view. What shows is already known: rock trenches on climbing seed 3, saw-tooth sea cliffs (seeds 5, 56198), tall dark sea cliffs on mountain seeds (14, 7421), a tree crown at the edge of a close view (seed 10 `cut`), and the two gorges.
+
+**Done when (from the brief): "the track sits cleanly in the terrain on 20 seeds, checked with Playwright screenshots."** Met on 20 fresh seeds and on seeds 1 to 20: every winner valid without the fallback, no ground through the road, no road hanging, cut and fill within the limits apart from the mountain rock cuttings and the two gorges Tane chose to keep.
+
+**Step 17 done.** 1,603 unit tests and 270 browser tests pass (Chromium and Firefox, both budget tests included); the type checks and the build pass.
+
 ## Milestone 2 design
 
 *Steps 0 to 11 as built. Where the rework above differs (coast distance, the single peak, fixed road width, tile and grid size, 8% gradient everywhere), the rework wins.*
@@ -943,6 +1012,8 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-15 | A far field's flowering blade becomes all flower | Its blades are single triangles seen from 60 m and more; a coloured tip was under a pixel |
 | 2026-11-15 | No blades are drawn when the camera is more than 150 m above the ground under it (`render.grass.ceiling`) | From there no blade can be told from the ground; the view from above costs nothing extra |
 | 2026-11-15 | Tests of how long something takes get a loose limit that only catches a blunder; the real time is measured and written here | A 150 ms limit on a 30 ms job failed with every test file running at once. The same lesson as the 20 s test timeout |
+| 2026-11-15 | **Gorges stay** (step 17): where a ridged range stands over the road, the road runs through it in a gorge deeper than the cut limit | Tane saw seeds 28496 and 39898 and chose to keep them; it is a kind of track Tane wanted |
+| 2026-11-15 | The fit tests check only the 10 m minimum to the sea, no longer that a bay brings it in to 10 m beside low road (step 17) | Since the rework many seeds touch the sea along only a stretch or two; Tane chose to relax the check |
 | 2026-11-15 | **The 3D view is the default page** (step 16). `?lab=1` or L opens the lab; `candidate=`, `minRadius=` and `gapWidths=` open it too, and `view=3d` still opens 3D; contact sheet cards open the lab. L reloads the page at the other address | As agreed on 2026-11-11. Old links keep working. A reload is simpler and safer than an overlay, since neither page can shut itself down |
 | 2026-11-12 | Unit tests may take up to 20 s each (`vite.config.ts`) | A test that builds four real worlds brushed the default 5 s when every test file ran at once, which would block commits at random |
 | 2026-11-11 | Defaults for Milestone 2: 3D becomes the default page at step 16 (lab on L and `?lab=1`); start line and gate now, checkpoints in Milestone 4; seeds pick a time of day from 07:00 to 19:30; only trees and rocks as decoration; road width fixed at 13 m; README converted from UTF-16 to UTF-8 | Listed in the plan; Tane approved without changes |
@@ -977,7 +1048,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **Firefox builds worlds about 1.6 times more slowly than Chromium** (measured in R1: about 0.6 s against 0.37 s per world in the worker; 0.85 s at the new tile size). Both are well inside the 3-second budget. Playwright waits up to 15 s for a new seed to appear, which covers a busy machine.
 
 - **Not every island gets a peak.** Narrow tracks have no infield point far enough from the road (4 of 24 seeds surveyed: 2, 1234, 77777, 43950). Tane asked for one interior peak at least 60 m from the track; those two wishes cannot both be met there.
-- **A bay only reaches 10 m beside low road.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%.
+- **A bay only reaches 10 m beside low road facing the open sea.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%. Since the rework many seeds touch the sea along only a stretch or two: on 12 of the 40 seeds checked in step 17 the sea comes no nearer than 13.8 m (up to 28.2 m, and 226 m on seed 39898). Tane chose to check only the 10 m minimum.
+- **A ridged range can stand over the road, which then runs through it in a gorge** (seeds 28496 and 39898; about 1 seed in 40). Mountain placement checks a foot at 32 points round its outline. Tane chose to keep the gorges (step 17); the start gate can stand in one (seed 28496).
+- **The circling camera frames only part of the lap on the biggest islands** (seed 10 from above).
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
 - In 3D the sea cliffs read well as rock faces. The peak is craggy and a bit lumpy from the ridge texture on its sides; worth a look once lighting and shadows are in.
 - **The sun's glare on the sea, seen from the circling camera, is a wide pale patch with wave stripes in it** (seed 7 at 10:00). Softer than it was; `render.water.glint*` are the settings.
@@ -1067,3 +1140,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Tane closed the dev server that had run since 14 November; the next browser run passed but for one timeout, now given longer. Tane: the shadows look good.
 - **2026-11-15 (Milestone 2):** Step 15h done: shadows take a share of the sky's light as well (`render.shadows.skyShare` 0.6, chosen from pictures; `shadowSky=` in the address), screenshots of seeds 1 to 20 and a time strip checked, final frame times for High and Low. **Step 15 done.** High holds 60 frames per second in every measured view at 1080p and on the full laptop screen; Low is a fifth to a third faster. Next: step 16.
 - **2026-11-15 (Milestone 2):** Step 16 done: the 3D view is the default page; the lab is on L and `?lab=1`, and old lab links, `view=3d` and the contact sheets still work. README converted to UTF-8 and updated. 1,107 unit tests and 270 browser tests pass. Next: step 17, the 20-seed check and the pull request.
+- **2026-11-15 (Milestone 2):** Step 17 done: 20 fresh seeds and seeds 1 to 20 checked by unit tests (`describeCleanFit`, 524 checks) and by 573 screenshot tests. Found two gorges where a range stands over the road (kept, Tane's choice) and a bay check too strict since the rework (relaxed, Tane's choice). Fit table, README and CLAUDE.md updated; Milestone 2 pull request opened. Next: Tane's sign-off, then Milestone 3 in a fresh session.

@@ -5,6 +5,7 @@ import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
 import { pickWoods } from './world/decor';
 import { sampleField } from './world/heightfield';
+import { describeCleanFit } from '../testing/fitChecks';
 
 /** A coarse grid keeps these quick; the island tests cover the full grid. */
 const coarse: GenConfig = { ...config, world: { ...config.world, tile: { extent: 1400, cell: 8 } } };
@@ -184,122 +185,5 @@ describe('hashWorld', () => {
   });
 });
 
-describe('the road sits cleanly in the island on real seeds', () => {
-  // The full 2 m grid, as the game uses.
-  const worlds = [1, 7, 42, 99, 2024, 48213].map((seed) => generateWorld(seed, config));
-
-  it('never lets the ground show through the road', () => {
-    for (const world of worlds) expect(world.report.groundThroughRoad, `seed ${world.seed}`).toBe(0);
-  });
-
-  it('never leaves the road hanging in the air', () => {
-    for (const world of worlds) expect(world.report.roadFloating, `seed ${world.seed}`).toBe(0);
-  });
-
-  it('needs no bridge or tunnel: cuttings and embankments stay within the limits', () => {
-    for (const world of worlds) {
-      expect(world.report.deepestCut.value, `seed ${world.seed}`).toBeLessThanOrEqual(config.road.maxCut);
-      expect(world.report.tallestFill.value, `seed ${world.seed}`).toBeLessThanOrEqual(config.road.maxFill);
-    }
-  });
-
-  it('keeps every bank beside the road gentle enough to stand, or on a mountain seed no steeper than a rock cutting', () => {
-    for (const world of worlds) {
-      // A road across a mountainside 50 to 90% steep is cut into it; the blend beside it is at most 25 m wide,
-      // so there the cutting can be as steep as about 65 degrees.
-      const limit = world.track.character.relief === 'mountain' ? 2.2 : 0.9;
-      expect(world.report.steepestBank.value, `seed ${world.seed}`).toBeLessThan(limit);
-    }
-  });
-
-  it('keeps the surf at least 10 m from the road, and brings it that close somewhere beside low road', () => {
-    for (const world of worlds) {
-      // A metre either way allows for measuring on a 2 m grid.
-      expect(world.report.nearestWater.value, `seed ${world.seed}`).toBeGreaterThan(config.world.coast.minMargin - 1);
-      // Hilly and mountain seeds may have no low road by the sea, and a high road keeps the water further out.
-      const { relief } = world.track.character;
-      if (relief === 'flat' || relief === 'rolling') {
-        expect(world.report.nearestWater.value, `seed ${world.seed}`).toBeLessThan(config.world.coast.minMargin + 3);
-      }
-    }
-  });
-
-  it('carves the coast after the road is built, without disturbing the road', () => {
-    for (const world of worlds) {
-      const winner = world.track.candidates[world.track.winnerIndex]!;
-      for (let i = 0; i < winner.line.count; i += 3) {
-        // On the centre line itself, where banking makes no difference to the height.
-        const below = winner.profile.height[i]! - sampleField(world.ground, winner.line.x[i]!, winner.line.z[i]!, 0);
-        expect(below, `seed ${world.seed} sample ${i}`).toBeGreaterThan(0.2);
-        expect(below, `seed ${world.seed} sample ${i}`).toBeLessThan(0.3);
-      }
-    }
-  });
-
-  it('never lets an embankment spill into the sea: the finished ground is never above the coast limit out on the banks', () => {
-    for (const world of worlds) {
-      // Beyond the strip kept clear beside the road, the natural coast and the finished coast must be the same water.
-      let moved = 0;
-      for (let c = 0; c < world.ground.height.length; c++) {
-        if (world.natural.height[c]! <= -0.5 && world.ground.height[c]! > 0) moved++;
-      }
-      expect(moved, `seed ${world.seed}`).toBe(0);
-    }
-  });
-
-  it('tilts the ground with the banking: under a banked corner the outside is higher than the inside', () => {
-    for (const world of worlds) {
-      const winner = world.track.candidates[world.track.winnerIndex]!;
-      const { line } = winner;
-      // The most steeply banked point of the lap.
-      let i = 0;
-      for (let k = 0; k < line.count; k++) if (Math.abs(world.road.cross[k]!) > Math.abs(world.road.cross[i]!)) i = k;
-      const tilt = world.road.cross[i]!;
-      expect(Math.abs(tilt), `seed ${world.seed}`).toBeGreaterThan(0.05);
-      const at = (lateral: number): number => {
-        // Right of the direction of travel is (-tz, tx) on the map.
-        const x = line.x[i]! - line.tz[i]! * lateral;
-        const z = line.z[i]! + line.tx[i]! * lateral;
-        return sampleField(world.ground, x, z, 0);
-      };
-      // 4 m either side of the centre the ground differs by 8 m of tilt, as the road does.
-      expect(at(4) - at(-4), `seed ${world.seed}`).toBeCloseTo(8 * tilt, 1);
-    }
-  });
-
-  it('stands every barrier on ground that follows the road: its foot is buried, its top well clear', () => {
-    for (const world of worlds) {
-      const { positions } = world.road.barriers;
-      let buried = 0;
-      let clear = 0;
-      for (let v = 0; v < positions.length; v += 3 * 7) {
-        const above = positions[v + 1]! - sampleField(world.ground, positions[v]!, positions[v + 2]!, 0);
-        // Every vertex is either at the foot (a little under the ground) or at the top (most of a metre over it).
-        if (above < 0) {
-          // The footing is 0.6 m; at least a third of it must still be in the ground everywhere.
-          expect(above, `seed ${world.seed}`).toBeLessThan(-0.2);
-          expect(above, `seed ${world.seed}`).toBeGreaterThan(-0.9);
-          buried++;
-        } else {
-          expect(above, `seed ${world.seed}`).toBeGreaterThan(0.7);
-          // At the top of a steep bank the ground on the wall's outer side has already begun to fall away.
-          expect(above, `seed ${world.seed}`).toBeLessThan(1.7);
-          clear++;
-        }
-      }
-      expect(buried).toBeGreaterThan(100);
-      expect(clear).toBeGreaterThan(100);
-    }
-  });
-
-  it('grows no grass on the road', () => {
-    for (const world of worlds) {
-      const winner = world.track.candidates[world.track.winnerIndex]!;
-      const { size, cell, origin } = world.ground;
-      for (let i = 0; i < winner.line.count; i += 3) {
-        const c = Math.round((winner.line.z[i]! - origin) / cell) * size + Math.round((winner.line.x[i]! - origin) / cell);
-        expect(world.cover.grass[c], `seed ${world.seed} sample ${i}`).toBe(0);
-      }
-    }
-  });
-});
+// The full grid, as the game uses, on seeds of every kind of relief. Seeds 1 to 20 and 20 fresh seeds have their own files.
+describeCleanFit('six seeds of every kind', [1, 7, 42, 99, 2024, 48213]);
