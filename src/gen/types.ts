@@ -343,7 +343,7 @@ export interface Scatter {
 /** The kinds of rock. A rock's `kind` number is its place in `ROCK_KINDS` (gen/world/decor.ts). */
 export type RockKind = 'boulder' | 'shore' | 'field';
 
-/** The island's trees and rocks. Scenery only: nothing collides with them. */
+/** The island's trees and rocks. The car can hit them: a tree on its trunk, a rock as a dome (sim/physics/colliders.ts). */
 export interface Decor {
   woods: WoodsKind;
   trees: Scatter;

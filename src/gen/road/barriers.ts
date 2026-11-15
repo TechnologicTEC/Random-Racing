@@ -9,7 +9,71 @@ import { ROAD_MATERIAL } from './ribbon';
  * gap shows under it. It needs to be generous: the wall stands at the outer
  * edge of the verge, where the ground already starts to fall away on a steep bank.
  */
-const FOOTING = 0.6;
+export const BARRIER_FOOTING = 0.6;
+
+/**
+ * How high a wall's top stands above the road's tilted plane at its k-th
+ * sample, in metres: its full height round a whole lap; otherwise rising from
+ * the road's level over `road.walls.taper` at each end.
+ */
+function wallRise(wall: WallSpan, k: number, line: CenterLine, cfg: Pick<GenConfig, 'road'>): number {
+  const road = cfg.road;
+  const pieces = Math.min(wall.pieceCount, line.count);
+  if (pieces === line.count) return road.barrierHeight;
+  const taperSamples = Math.max(1, Math.round(road.walls.taper / line.spacing));
+  return road.barrierHeight * smoothstep(0, taperSamples, Math.min(k, pieces - k));
+}
+
+/** One piece of a wall: the middle of its top at the sample it starts from and at the next one. */
+export interface WallPiece {
+  /** Which side of the road it is on: 1 for the right of the direction of travel, -1 for the left. */
+  side: 1 | -1;
+  from: Point;
+  to: Point;
+}
+
+/**
+ * The walls as numbers, for collisions: every piece of every wall, in the
+ * order the walls are given and then along each wall, as the line along the
+ * middle of its top. The wall is `road.barrierWidth` wide about that line and
+ * reaches down past the ground (`road.sink` and `BARRIER_FOOTING` below the
+ * road's level). These are the walls `buildBarriers` draws.
+ *
+ * @param width road width at each sample, in metres
+ */
+export function wallPieces(
+  line: CenterLine,
+  height: Float64Array,
+  cross: Float64Array | null,
+  width: Float64Array,
+  walls: readonly WallSpan[],
+  cfg: Pick<GenConfig, 'road'>,
+): WallPiece[] {
+  const road = cfg.road;
+  const n = line.count;
+  const beyond = road.barrierOffset + road.barrierWidth / 2;
+  const pieces: WallPiece[] = [];
+  for (const wall of walls) {
+    const top = (k: number): Point => {
+      const i = (wall.startIndex + k) % n;
+      const lateral = wall.side * (width[i]! / 2 + beyond);
+      return {
+        // Right of the direction of travel is (-tz, tx) on the map.
+        x: line.x[i]! - line.tz[i]! * lateral,
+        y: height[i]! + (cross ? cross[i]! * lateral : 0) + wallRise(wall, k, line, cfg),
+        z: line.z[i]! + line.tx[i]! * lateral,
+      };
+    };
+    const count = Math.min(wall.pieceCount, n);
+    let from = top(0);
+    for (let k = 0; k < count; k++) {
+      const to = top(k + 1);
+      pieces.push({ side: wall.side, from, to });
+      from = to;
+    }
+  }
+  return pieces;
+}
 
 /**
  * Builds the barriers as triangles: a low wall on the verge wherever
@@ -57,17 +121,15 @@ export function buildBarriers(
     };
   };
 
-  const foot = -road.sink - FOOTING;
+  const foot = -road.sink - BARRIER_FOOTING;
   const blockSamples = Math.max(1, Math.round(road.barrierBlock / line.spacing));
-  const taperSamples = Math.max(1, Math.round(road.walls.taper / line.spacing));
   const builder = new MeshBuilder();
   for (const wall of walls) {
     const { side } = wall;
     const pieces = Math.min(wall.pieceCount, n);
     const wholeLap = pieces === n;
     /** Height of the wall's top at its k-th sample: full round a whole lap; otherwise rising from the road's level at each end. */
-    const rise = (k: number): number =>
-      wholeLap ? road.barrierHeight : road.barrierHeight * smoothstep(0, taperSamples, Math.min(k, pieces - k));
+    const rise = (k: number): number => wallRise(wall, k, line, cfg);
 
     for (let k = 0; k < pieces; k++) {
       const i = (wall.startIndex + k) % n;

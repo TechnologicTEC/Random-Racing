@@ -3,9 +3,9 @@ import { config } from '../../config';
 import { roundedSquareLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import { analyseSections } from '../track/analysis';
 import type { CenterLine, MeshData, WallSpan } from '../types';
-import { buildBarriers } from './barriers';
+import { BARRIER_FOOTING, buildBarriers, wallPieces } from './barriers';
 import { ROAD_MATERIAL } from './ribbon';
-import { buildStartGate } from './startGate';
+import { buildStartGate, gateBoxes } from './startGate';
 
 const road = config.road;
 const HALF = config.track.roadWidth / 2;
@@ -325,5 +325,136 @@ describe('barriers and the start gate on a road whose width changes', () => {
       if (face.material !== ROAD_MATERIAL.gate) continue;
       expect(Math.abs(locate(line, face.x, face.z).lateral)).toBeGreaterThan(11 + road.barrierOffset + road.barrierWidth);
     }
+  });
+});
+
+describe('wallPieces: the walls as numbers, for collisions', () => {
+  const n = line.count;
+  const width = uniformWidth(line, config.track.roadWidth);
+  const leftWall: WallSpan = { startIndex: 20, pieceCount: 30, side: -1 };
+  const rightWall: WallSpan = { startIndex: n - 10, pieceCount: 25, side: 1 };
+  const pieces = wallPieces(line, height, cross, width, [rightWall, leftWall], config);
+  const taper = Math.round(road.walls.taper / line.spacing);
+  /** A point's height above the road's tilted plane, and how far it is from the centre line. */
+  const place = (point: { x: number; y: number; z: number }): { sample: number; lateral: number; above: number } => {
+    const { sample, lateral } = locate(line, point.x, point.z);
+    return { sample, lateral, above: point.y - (height[sample]! + lateral * cross[sample]!) };
+  };
+
+  it('gives one piece for each piece of each wall, in the order the walls are given, each from one sample to the next', () => {
+    expect(pieces).toHaveLength(rightWall.pieceCount + leftWall.pieceCount);
+    pieces.forEach((piece, index) => {
+      const wall = index < rightWall.pieceCount ? rightWall : leftWall;
+      const k = index < rightWall.pieceCount ? index : index - rightWall.pieceCount;
+      expect(piece.side).toBe(wall.side);
+      expect(place(piece.from).sample).toBe((wall.startIndex + k) % n);
+      expect(place(piece.to).sample).toBe((wall.startIndex + k + 1) % n);
+    });
+  });
+
+  it('runs along the middle of the wall as it is drawn', () => {
+    for (const piece of pieces) {
+      for (const end of [piece.from, piece.to]) {
+        expect(place(end).lateral * piece.side).toBeCloseTo(INNER + road.barrierWidth / 2, 3);
+      }
+    }
+  });
+
+  it('is at the full height of the wall between its ends, and slopes down to the road at each end', () => {
+    const left = pieces.slice(rightWall.pieceCount);
+    expect(place(left[0]!.from).above).toBeCloseTo(0, 3);
+    expect(place(left[left.length - 1]!.to).above).toBeCloseTo(0, 3);
+    for (let k = taper; k < left.length - taper; k++) {
+      expect(place(left[k]!.from).above).toBeCloseTo(road.barrierHeight, 3);
+      expect(place(left[k]!.to).above).toBeCloseTo(road.barrierHeight, 3);
+    }
+    for (let k = 0; k < taper; k++) expect(place(left[k]!.to).above).toBeGreaterThan(place(left[k]!.from).above);
+    // Each piece starts where the last one ended.
+    for (let k = 1; k < left.length; k++) expect(left[k]!.from).toEqual(left[k - 1]!.to);
+  });
+
+  it('has the same tops as the triangles that are drawn', () => {
+    const mesh = buildBarriers(line, height, cross, width, sections, [rightWall, leftWall], config);
+    const drawn = Array.from({ length: mesh.positions.length / 3 }, (_, v) => ({
+      x: mesh.positions[v * 3]!,
+      y: mesh.positions[v * 3 + 1]!,
+      z: mesh.positions[v * 3 + 2]!,
+    }));
+    for (const piece of pieces) {
+      // The drawn wall has a top corner half its width to each side of this point, at the same height on a level cross-section.
+      const nearest = drawn
+        .filter((vertex) => Math.abs(vertex.x - piece.from.x) + Math.abs(vertex.z - piece.from.z) < road.barrierWidth)
+        .map((vertex) => vertex.y);
+      expect(nearest.length).toBeGreaterThan(0);
+      expect(Math.max(...nearest)).toBeCloseTo(piece.from.y, 1);
+    }
+  });
+
+  it('gives a whole-lap wall its full height all the way round', () => {
+    const all = wallPieces(line, height, cross, width, wholeLap(line), config);
+    expect(all).toHaveLength(2 * n);
+    for (const piece of all) expect(place(piece.from).above).toBeCloseTo(road.barrierHeight, 3);
+  });
+
+  it('says how far the wall goes into the ground', () => {
+    expect(BARRIER_FOOTING).toBeGreaterThan(0.3);
+  });
+});
+
+describe('gateBoxes: the gate as numbers, for collisions', () => {
+  const width = uniformWidth(line, config.track.roadWidth);
+  const boxes = gateBoxes(line, height, cross, width, config);
+
+  it('gives the left post, the right post and the beam', () => {
+    expect(boxes).toHaveLength(3);
+    const [left, right, beam] = boxes;
+    expect(locate(line, left!.x, left!.z).lateral).toBeCloseTo(-(OUTER + 0.3 + road.gatePost / 2), 2);
+    expect(locate(line, right!.x, right!.z).lateral).toBeCloseTo(OUTER + 0.3 + road.gatePost / 2, 2);
+    expect(locate(line, beam!.x, beam!.z).lateral).toBeCloseTo(0, 2);
+    for (const post of [left!, right!]) {
+      expect(post.halfAcross).toBeCloseTo(road.gatePost / 2, 6);
+      expect(post.halfAlong).toBeCloseTo(road.gatePost / 2, 6);
+    }
+    expect(beam!.halfAcross).toBeCloseTo(OUTER + 0.3, 2);
+  });
+
+  it('stands the posts from under the ground to the top of the beam, and lifts the beam clear of the road', () => {
+    const [left, right, beam] = boxes;
+    for (const post of [left!, right!]) {
+      expect(post.y - post.halfUp).toBeLessThan(height[0]! - road.sink);
+      expect(post.y + post.halfUp).toBeCloseTo(beam!.y + beam!.halfUp, 6);
+    }
+    expect(beam!.y - beam!.halfUp).toBeGreaterThanOrEqual(height[0]! + road.gateClearance);
+    expect(beam!.halfUp).toBeCloseTo(road.gateBeam / 2, 6);
+  });
+
+  it('points along the road at the start line', () => {
+    for (const box of boxes) {
+      expect(box.tx).toBe(line.tx[0]);
+      expect(box.tz).toBe(line.tz[0]);
+    }
+  });
+
+  it('is the gate that is drawn: every corner of the drawn gate is a corner of a box', () => {
+    const mesh = buildStartGate(line, height, cross, width, config);
+    let checked = 0;
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const material = mesh.materials[v]!;
+      if (material !== ROAD_MATERIAL.gate && material !== ROAD_MATERIAL.gateBeam) continue;
+      const [x, y, z] = [mesh.positions[v * 3]!, mesh.positions[v * 3 + 1]!, mesh.positions[v * 3 + 2]!];
+      const onABox = boxes.some((box) => {
+        const dx = x - box.x, dz = z - box.z;
+        const along = dx * box.tx + dz * box.tz;
+        const across = dx * -box.tz + dz * box.tx;
+        return (
+          Math.abs(Math.abs(along) - box.halfAlong) < 1e-3 &&
+          Math.abs(Math.abs(across) - box.halfAcross) < 1e-3 &&
+          Math.abs(Math.abs(y - box.y) - box.halfUp) < 1e-3
+        );
+      });
+      expect(onABox).toBe(true);
+      checked++;
+    }
+    expect(checked).toBe(3 * 6 * 4);
   });
 });

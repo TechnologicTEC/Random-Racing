@@ -1237,16 +1237,45 @@ export interface FlyConfig {
   clearance: number;
 }
 
+/** The simulation: the car and everything it can hit. */
+export interface SimConfig {
+  colliders: ColliderConfig;
+}
+
+/**
+ * The shapes the car collides with that are not already in the world as
+ * numbers. Walls, the gate, the road and the ground are collided with exactly
+ * as they are drawn; trees and rocks are drawn as leafy, lumpy shapes and
+ * collided with as these simple ones. Distances in metres.
+ */
+export interface ColliderConfig {
+  /** A tree is hit only on its trunk: a post of this radius, by kind, for a tree of size 1. It grows with the tree. */
+  trunkRadius: Record<TreeKind, number>;
+  /** The trunk stands this high above the ground under it, for a tree of size 1 and usual height. Well over a car's roof; the leaves above are not hit. */
+  trunkHeight: number;
+  /** It runs this far into the ground, so nothing passes under a tree that stands on a slope. */
+  trunkRoot: number;
+  /** A rock's middle lies this share of its size under the ground. Must match how rocks are drawn (`render.decor.rockSink`). */
+  rockSink: number;
+}
+
 export interface GameConfig {
   track: TrackConfig;
   road: RoadConfig;
   world: WorldConfig;
+  sim: SimConfig;
   render: RenderConfig;
   camera: CameraConfig;
 }
 
 /** The parts of the config that generation needs. */
 export type GenConfig = Pick<GameConfig, 'track' | 'road' | 'world'>;
+
+/** The parts of the config that the physics world needs: the road's walls and gate, and the simulation's own settings. */
+export type PhysicsConfig = Pick<GameConfig, 'road' | 'sim'>;
+
+/** How far a rock is sunk into the ground, as a share of its size: one number for how it is drawn and how it is hit. */
+const ROCK_SINK = 0.4;
 
 export const config: GameConfig = {
   track: {
@@ -1578,6 +1607,15 @@ export const config: GameConfig = {
       scale: [0.7, 1.6],
     },
   },
+  sim: {
+    colliders: {
+      // The trunks as they are drawn at the ground (render/treeShapes.ts).
+      trunkRadius: { broadleaf: 0.38, pine: 0.32, palm: 0.28 },
+      trunkHeight: 2.5,
+      trunkRoot: 1,
+      rockSink: ROCK_SINK,
+    },
+  },
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,
@@ -1665,7 +1703,7 @@ export const config: GameConfig = {
       glintDim: 0.65,
       stillTime: 0,
     },
-    decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: 0.4, shade: [0.8, 1.12] },
+    decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: ROCK_SINK, shade: [0.8, 1.12] },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
