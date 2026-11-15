@@ -29,6 +29,8 @@ declare global {
     seedCircuit: {
       hashFor(seed: number): Promise<string>;
       worldHashFor(seed: number): Promise<string>;
+      /** The fingerprint of the physics drop proof on a seed (`sim/physics/proof.ts`), to confirm every browser's physics agrees. */
+      physicsHashFor(seed: number): Promise<string>;
       /** The 3D view, when that is the page being shown. */
       view?: ViewHandle;
     };
@@ -37,4 +39,13 @@ declare global {
 window.seedCircuit = {
   hashFor: async (seed) => hashTrack((await genClient().track(seed, config)).result),
   worldHashFor: async (seed) => hashWorld((await genClient().world(seed, config)).result),
+  physicsHashFor: async (seed) => {
+    // Loaded only when asked for, so the lab does not have to download the physics engine.
+    const [{ loadRapier }, { dropFingerprint }, { result }] = await Promise.all([
+      import('./sim/physics/rapier'),
+      import('./sim/physics/proof'),
+      genClient().world(seed, config),
+    ]);
+    return dropFingerprint(await loadRapier(), result);
+  },
 };

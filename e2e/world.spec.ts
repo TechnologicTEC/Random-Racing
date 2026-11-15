@@ -112,8 +112,8 @@ test('turns the camera when the view is dragged and zooms with the wheel', async
   expect(dragged.tilt).not.toBe(before.tilt);
 
   await page.mouse.wheel(0, -600);
-  const zoomed = await page.evaluate(() => window.seedCircuit.view!.orbit());
-  expect(zoomed.distance).toBeLessThan(dragged.distance);
+  // The wheel call returns before the browser has delivered the scroll (Firefox, about one run in six), so wait for it.
+  await expect.poll(() => page.evaluate(() => window.seedCircuit.view!.orbit().distance)).toBeLessThan(dragged.distance);
 });
 
 test('opens flying the lap, and keeps moving', async ({ page }) => {

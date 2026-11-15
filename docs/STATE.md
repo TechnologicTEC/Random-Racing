@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** 0, the plan and Tane's choices recorded here
-- **Next step:** 1, the Rapier proof (install the pinned package, measure, and prove the same result in Node, Chromium and Firefox). If the browsers disagree, stop and report to Tane
+- **Last finished step:** 1, the Rapier proof: the physics gives the same result, bit for bit, in Node, Chromium and Firefox (see "Step 1")
+- **Next step:** 2, open walls (generation only): `gen/road/walls.ts`, `Road.walls`, barriers drawn from spans with tapered ends. It is done in lettered parts, each committed: 2a wall spans as data (`findWalls`, config, `Road.walls`, fingerprint), 2b the barrier triangles from the spans, 2c the lab drawing, 2d measurements over seeds 1 to 200 and screenshots. Drafts of `src/gen/road/walls.ts` and `walls.test.ts` are in the working folder, untracked and not yet run
 
 ## Milestone 3 steps
 
@@ -18,7 +18,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | # | Step | Ends with | Status |
 | --- | --- | --- | --- |
 | 0 | Create `milestone-3-driving` from `main`. Record the plan and the choices here; move the Milestone 1 and 2 step-by-step detail to `docs/archive/STATE-milestone-1-2.md`. Note the Rapier choice on issue #3 | Pushed | Done |
-| 1 | **Rapier proof.** Install the pinned package. Throwaway measurements, then kept tests: it loads in Node and both browsers; a ray dropped on the heightfield meets the ground's own height at grid points (seeds 1 and 7); a box dropped and stepped 600 times gives the same fingerprint twice, after a restore, and in Node, Chromium and Firefox | Numbers here: load time, download size, collider build time (with every tree), step time, snapshot size. **If the browsers disagree, stop and report to Tane** | |
+| 1 | **Rapier proof.** Install the pinned package. Throwaway measurements, then kept tests: it loads in Node and both browsers; a ray dropped on the heightfield meets the ground's own height at grid points (seeds 1 and 7); a box dropped and stepped 600 times gives the same fingerprint twice, after a restore, and in Node, Chromium and Firefox | Numbers here: load time, download size, collider build time (with every tree), step time, snapshot size. **If the browsers disagree, stop and report to Tane** | Done (see "Step 1") |
 | 2 | **Open walls** (generation only). `gen/road/walls.ts`, `Road.walls`, barriers drawn from spans with tapered ends, world fingerprint, lab drawing, barrier and 20-seed tests updated | Share of each lap left open over seeds 1 to 200; screenshots of seeds 1 to 20 checked by eye | |
 | 3 | **Simulation skeleton.** Rules for `src/sim`; input record; colliders; the car body placed on the start line; `step`, `state`, `hash`, `snapshot`, `restore` | Tests: the car settles and stays put for 10 s on a sloped start (seed 42); same inputs, same fingerprint; restore carries on exactly | |
 | 4 | **Springs, engine, steering, grip** (no drift yet) | Tests on simple test grounds (flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank): top speed, time to top speed, braking, reverse, at most 10% slower up 15%, steady cornering, wheels stay down over the crest, never flips | |
@@ -110,6 +110,35 @@ The simulation runs on the page's main thread at a fixed 60 steps a second (step
 
 The plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-9e39-random-racing-playful-peach.md`.
 
+## Step 1: the Rapier proof (2026-11-15)
+
+`@dimforge/rapier3d-deterministic-compat` 0.21.0 installed (exact pin). New: `src/sim/physics/rapier.ts` (`loadRapier`), `colliders.ts` (`groundCollider`, `meshCollider`), `proof.ts` (the drop proof), their tests, and `window.seedCircuit.physicsHashFor(seed)` for the browser test.
+
+**The answer the step was for:** a car-sized box thrown spinning down the start straight of seeds 1 and 7, tumbling over road and ground for ten seconds, gives **the same fingerprint in Node, Chromium and Firefox** (`e2e/determinism.spec.ts`), twice in a row, and after carrying on from a snapshot. So the car can be built on it.
+
+Measured in Node on seeds 1, 3, 7 and 8 (throwaway code, deleted):
+
+| What | Measured |
+| --- | --- |
+| Engine load | 43 ms in Node; 23 ms in Chromium and 33 ms in Firefox once the file has arrived |
+| Download | 4.36 MB, **1.68 MB gzipped** (the engine's 3.1 MB of WebAssembly, carried as text inside the script). Its own file, fetched only when the physics is asked for. The 3D page's own script is 0.60 MB, 0.16 MB gzipped |
+| Ground heightfield (901 by 901) | 2 to 6 ms to build |
+| Road and kerbs as triangle meshes (14,000 to 20,000 triangles) | 6 to 12 ms |
+| A collider for every tree and rock (2,300 to 10,000 a seed) | 4 to 12 ms |
+| One step with a tumbling box | 0.18 to 0.24 ms; 0.67 ms on seed 8, the most wooded (10,000 trees and rocks). A frame has 16.7 ms |
+| One ray cast with its surface normal; one cast of a 5 cm ball | 2 to 3 millionths of a second each |
+| Whole-world snapshot | 6.7 to 8.7 MB; 3 to 11 ms to take, 4 to 23 ms to restore |
+
+**Rays can miss the ground.** A ray dropped exactly on a grid point of the heightfield slips between the triangles that meet there about half the time (47,900 of 90,000 points), and at arbitrary points 3 to 8 times in 200,000. On the road mesh no ray slipped through (0 of about 3,000 a seed, on and between the mesh's own cross-sections). A ball 5 cm in radius cast the same way never missed, on the same 200,000 points, at the same cost.
+
+**Decisions from the numbers:**
+- **Every tree and rock gets a collider** (they cost almost nothing); the fallback of only those near the road is not needed.
+- **The wheels will be cast as small balls, not bare rays** (step 4), so a wheel can never fall through the ground for a step.
+- **Snapshots are for saving and restoring a moment** (debugging, a later rewind), not for every step: 7 to 9 MB each. Ghosts replay from inputs.
+- The 1.68 MB download is fetched alongside world generation in step 5; whether it fits "racing within 10 seconds" on a slow connection is for Milestone 6's performance pass. The non-inlined build of the same engine would save about a quarter of it.
+
+Found on the way: a first measurement seemed to show rays slipping through the road one time in six. It was the measurement: the rays were too short to reach the low side of a banked road.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -127,6 +156,7 @@ The plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\
 - Milestone 1 pace: short report after each step; one mid-point check (done) and a sign-off at the end.
 - Milestone 2 pace: short report after each step; two check-ins (after step 6 and after step 11) and a sign-off at the end.
 - Milestone 3 pace: short report after each step; two check-ins (after step 5 and after step 9) and a playtest sign-off at the end.
+- **Stop at clean boundaries** (Tane, 2026-11-15): big steps are split into lettered parts that each end with passing tests, a commit, a push and this file saying what is next, so a usage-limit cut-off never lands in the middle of one. Do not start the next part's edits while a long test run for the last one is still going.
 - No linter or formatter for now. The architecture rules are enforced by a DOM-free type check of `src/core` and `src/gen` and by `src/architecture.test.ts`.
 - **Generator quality comes before viewer features.** If Milestone 1 runs long, trim the viewer, not the generator.
 - Tests are written before the code they cover.
@@ -323,6 +353,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-15 | Controller support is built in Milestone 3 | Tane's choice, so the handling is tuned for analogue steering too |
 | 2026-11-15 | The car is a Rapier rigid body with our own springs and arcade layer on top; Rapier's vehicle controller is not used | Claude's call. The brief's handling is rules, not tyre physics; our own sums are exact (`core/dmath.ts`) and every number is in the config |
 | 2026-11-15 | Driving off across the island is allowed; only water, the map's edge, landing upside down, being stuck or R respawn the car | Claude's call. Every seed is a new place; nothing is gained by fencing it |
+| 2026-11-15 | Wheels are cast as 5 cm balls, not bare rays; every tree and rock gets a collider (Milestone 3, step 1) | Measured: a bare ray misses the ground heightfield a few times in 200,000 and half the time on exact grid points, a ball never; 10,000 tree and rock colliders build in 12 ms |
 | 2026-11-15 | The step-by-step record of Milestones 1 and 2 moved from this file to `docs/archive/STATE-milestone-1-2.md` | This file had grown to 1,144 lines, more than a new session can read in one go |
 
 ## Notes for later milestones
@@ -397,3 +428,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md`.
 
 - **2026-11-15 (Milestone 3):** Planned in plan mode and approved. Tane chose Rapier's deterministic build, walls that open in places, a page that opens driving, and controller support now. Step 0 done: branch `milestone-3-driving`, the plan recorded here, Milestone 1 and 2 detail moved to the archive, the Rapier choice noted on issue #3. No code changed. Next: step 1, the Rapier proof.
+- **2026-11-15 (Milestone 3):** Step 1 done, the Rapier proof. The deterministic build (0.21.0) is installed; a tumbling box on seeds 1 and 7 gives the same fingerprint in Node, Chromium and Firefox, twice, and after a snapshot. Loading, colliders, steps and ray casts all cost very little (table under "Step 1"); the download is 1.68 MB gzipped. Bare rays can miss the ground, so wheels will be cast as small balls. Found on the way: the wheel-zoom browser test failed about one run in six in Firefox, because Playwright's wheel call returns before the scroll arrives; it now waits for the zoom. 1,635 unit tests and 272 browser tests pass. Next: step 2, open walls, in parts 2a to 2d.

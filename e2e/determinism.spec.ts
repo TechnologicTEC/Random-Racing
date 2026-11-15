@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { config } from '../src/config';
 import { generateTrack, generateWorld, hashTrack, hashWorld } from '../src/gen';
+import { dropFingerprint } from '../src/sim/physics/proof';
+import { loadRapier } from '../src/sim/physics/rapier';
 
 /**
  * Pillar 5, "same seed, same everything": the track a seed produces must be
@@ -30,6 +32,20 @@ test('this browser generates exactly the same islands as Node', async ({ page, b
   const actual = await page.evaluate((list) => Promise.all(list.map((seed) => window.seedCircuit.worldHashFor(seed))), seeds);
 
   expect(actual, `world fingerprints in ${browserName}`).toEqual(expected);
+});
+
+test('the physics in this browser gives exactly the same result as in Node', async ({ page, browserName }) => {
+  // A box thrown tumbling down the start straight of a mountain seed and a hilly one, for ten seconds each
+  // (sim/physics/proof.ts). It only matches if every contact, bounce and turn came out the same, bit for bit.
+  const seeds = [1, 7];
+  const rapier = await loadRapier();
+  const expected = seeds.map((seed) => dropFingerprint(rapier, generateWorld(seed, config)));
+
+  await page.goto('/?lab=1&seed=1');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+  const actual = await page.evaluate((list) => Promise.all(list.map((seed) => window.seedCircuit.physicsHashFor(seed))), seeds);
+
+  expect(actual, `physics fingerprints in ${browserName}`).toEqual(expected);
 });
 
 test('generation runs in a Web Worker, not on the page', async ({ page }) => {
