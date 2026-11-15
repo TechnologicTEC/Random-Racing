@@ -60,6 +60,8 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
 
   const uniforms = THREE.UniformsUtils.merge([
     THREE.UniformsLib.fog,
+    // The lights' uniforms, which Three.js fills in: the grass reads the sun's shadow maps from them.
+    THREE.UniformsLib.lights,
     {
       uGround: { value: null },
       uGroundSize: { value: 1 },
@@ -92,9 +94,11 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
   const material = new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     fog: true,
+    lights: true,
     uniforms,
     vertexShader: /* glsl */ `
       #include <fog_pars_vertex>
+      #include <shadowmap_pars_vertex>
       ${DEPTH_GLSL}
       ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; }'}
       ${grassGlsl(cfg, wind)}
@@ -113,13 +117,18 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
         vTint = mix(${float(cfg.tint[0])}, ${float(cfg.tint[1])}, aTrait.y);
         // Worked out at each corner, not each pixel: there are a great many blades, and a shadow's edge is metres wide.
         vSunLit = sunShade(world);
-        vec4 mvPosition = viewMatrix * vec4(world, 1.0);
+        vec4 worldPosition = vec4(world, 1.0);
+        vec4 mvPosition = viewMatrix * worldPosition;
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
+        #include <shadowmap_vertex>
       }
     `,
     fragmentShader: /* glsl */ `
+      #include <common>
       #include <fog_pars_fragment>
+      #include <packing>
+      #include <shadowmap_pars_fragment>
       uniform vec3 uSunDir, uSunLight, uAmbient, uBounce, uLush, uDry;
       uniform vec3 uFlowers[${FLOWER_KINDS}];
       varying float vAlong;
@@ -137,7 +146,12 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
         // A blade takes the light of the ground it stands on (the sky above, the bounce from below, the sun by how
         // the ground faces it), so a field of blades is no lighter or darker than its hillside and its far edge melts in.
         vec3 n = normalize(vFacing);
-        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) + uSunLight * vSunLit * max(dot(n, uSunDir), 0.0);
+        // The near shadows of trees, rocks and barriers, from the sun's shadow maps.
+        float nearLit = 1.0;
+        #if defined( USE_SHADOWMAP ) && NUM_SUN_LIGHT_SHADOWS > 0
+          nearLit = getSunShadow( sunShadowMap[ 0 ], sunLightShadows[ 0 ], 0 );
+        #endif
+        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) + uSunLight * vSunLit * nearLit * max(dot(n, uSunDir), 0.0);
         gl_FragColor = vec4(col * light, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -179,6 +193,8 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
     geometry.setAttribute('aFlower', new THREE.InstancedBufferAttribute(flower, 1));
     geometry.instanceCount = count;
     const mesh = new THREE.Mesh(geometry, material);
+    // Blades take shadows but cast none: they are too small and too many.
+    mesh.receiveShadow = true;
     // The blades are placed in the shader, wherever the camera is: there is nothing here to test against the view.
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;

@@ -340,8 +340,9 @@ test.describe('trees, rocks and clouds', () => {
       if (message.type() === 'error') errors.push(message.text());
     });
 
-    // Seed 7 is a wooded, hilly island under a fair sky.
-    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00');
+    // Seed 7 is a wooded, hilly island under a fair sky. Shadows are left out: the trees cast theirs again
+    // in the sun's shadow maps, which has its own test.
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&shadows=off');
     const { decor, stats } = await page.evaluate(() => ({ decor: window.seedCircuit.view!.decor()!, stats: window.seedCircuit.view!.stats() }));
     expect(decor.woods).toBe('wooded');
     expect(decor.trees).toBeGreaterThan(1000);
@@ -352,7 +353,7 @@ test.describe('trees, rocks and clouds', () => {
     expect(stats.puffs).toBe(decor.puffs);
 
     // The same island without them: fewer triangles. Seen from far off, every tree and rock is its simpler far shape.
-    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&decor=off');
+    await openWorld(page, 'seed=7&still=1&cam=orbit&time=13:00&decor=off&shadows=off');
     const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
     const added = stats.triangles - bare.triangles;
     expect(added).toBeGreaterThan(decor.trees * 4);
@@ -362,9 +363,10 @@ test.describe('trees, rocks and clouds', () => {
 
   test('draws nearby trees in full and far ones simply', async ({ page }) => {
     // Flying through the woods, the trees close by have several times the triangles of their far shapes.
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00');
+    // (Without shadows: the shadow maps draw the trees again, simply.)
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&shadows=off');
     const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off&shadows=off');
     const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
     expect(stats.nearGroups).toBeGreaterThan(0);
     expect(stats.triangles - bare.triangles).toBeGreaterThan(2000);
@@ -512,7 +514,7 @@ test.describe('shadows of the land and the clouds', () => {
   const ground = (seen: { bands: Array<[number, number, number]> }): number =>
     seen.bands.slice(2).reduce((sum, [r, g, b]) => sum + (r + g + b) / 3, 0) / 3;
 
-  test('darkens a mountain island in the early morning, with no errors and nothing more to draw', async ({ page }) => {
+  test('darkens a mountain island in the early morning, with no errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
@@ -526,8 +528,6 @@ test.describe('shadows of the land and the clouds', () => {
     expect(shaded.stats.shaded).toBeGreaterThan(0.2);
     expect(bare.stats.shaded).toBe(0);
     expect(ground(shaded.seen)).toBeLessThan(ground(bare.seen) * 0.97);
-    expect(shaded.stats.triangles).toBe(bare.stats.triangles);
-    expect(shaded.stats.calls).toBe(bare.stats.calls);
     expect(errors).toEqual([]);
   });
 
@@ -578,6 +578,47 @@ test.describe('shadows of the land and the clouds', () => {
       });
     await openWorld(page, 'seed=2&still=1&look=start&time=13:00&grass=off&water=off&decor=off');
     expect(await digests()).toBe(1);
+  });
+});
+
+test.describe('shadows of trees, rocks and barriers', () => {
+  /** The mean brightness of the bottom three fifths of the picture, 0 to 255. */
+  const ground = (seen: { bands: Array<[number, number, number]> }): number =>
+    seen.bands.slice(2).reduce((sum, [r, g, b]) => sum + (r + g + b) / 3, 0) / 3;
+
+  test('darkens the ground beside the road at midday, inside its budget, with no errors', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    // Seed 20 is a forest seed: from the start line, woods fill both sides of the view. At 10:00 the land casts
+    // no shadow there, so the trees, the barriers and the odd cloud darken the picture (measured: 3% darker).
+    await openWorld(page, 'seed=20&still=1&look=start&time=10:00');
+    const shaded = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    await openWorld(page, 'seed=20&still=1&look=start&time=10:00&shadows=off');
+    const bare = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    expect(ground(shaded.seen)).toBeLessThan(ground(bare.seen) * 0.985);
+    // Drawing the shadow maps costs something, but no more than the budget.
+    const triangles = shaded.stats.triangles - bare.stats.triangles;
+    const calls = shaded.stats.calls - bare.stats.calls;
+    expect(triangles).toBeGreaterThan(1000);
+    expect(triangles).toBeLessThan(200_000);
+    expect(calls).toBeGreaterThan(0);
+    expect(calls).toBeLessThan(90);
+    expect(errors).toEqual([]);
+  });
+
+  test('reaches a few hundred metres from a camera on the road, and further from high above', async ({ page }) => {
+    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00');
+    const flying = (await page.evaluate(() => window.seedCircuit.view!.stats())).shadowReach;
+    await openWorld(page, 'seed=8&still=1&cam=orbit&time=13:00');
+    const above = (await page.evaluate(() => window.seedCircuit.view!.stats())).shadowReach;
+    expect(flying).toBeGreaterThanOrEqual(200);
+    expect(flying).toBeLessThanOrEqual(500);
+    expect(above).toBeGreaterThan(flying * 2);
+    await openWorld(page, 'seed=8&still=1&cam=orbit&time=13:00&shadows=off');
+    expect((await page.evaluate(() => window.seedCircuit.view!.stats())).shadowReach).toBe(0);
   });
 });
 

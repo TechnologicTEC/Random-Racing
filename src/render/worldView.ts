@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SunLight } from 'three/addons/lights/SunLight.js';
 import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { HeightField, WorldResult } from '../gen/types';
@@ -6,12 +7,13 @@ import { sampleField } from '../gen/world/heightfield';
 import { createCloudView } from './cloudView';
 import { cloudDrift } from './clouds';
 import type { Daylight } from './daylight';
-import { createDecorView } from './decorView';
+import { CASTER_LAYER, createDecorView } from './decorView';
 import { grassEye } from './grass';
 import { grassGrid } from './grassMaps';
 import { createGrassView } from './grassView';
 import { TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
+import { shadowReach } from './nearShadows';
 import { createShadeView } from './shadeView';
 import { createSkyDome } from './sky';
 import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
@@ -37,6 +39,8 @@ export interface ViewStats {
   blades: number;
   /** The share of the island's land in the land's own shadow at the time of day shown (0 to 1); 0 with shadows off. */
   shaded: number;
+  /** How far from the camera trees, rocks and barriers cast shadows, in metres; 0 with shadows off. */
+  shadowReach: number;
 }
 
 /** A rough census of the last frame, used by tests to confirm something sensible was drawn. */
@@ -108,6 +112,8 @@ const colour = (rgb: Rgb): THREE.Color => new THREE.Color(toLinear(rgb[0]), toLi
 
 export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): WorldView {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
   // The haze and the background share the colour of the sky at the horizon, set with the daylight.
   const haze = new THREE.Color();
@@ -124,8 +130,20 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   // Light from the whole sky, and the sun. Their colours and strengths come with the daylight.
   const skyLight = new THREE.HemisphereLight();
   scene.add(skyLight);
-  const sun = new THREE.DirectionalLight();
+  // The sun casts crisp shadows from trees, rocks, barriers and the gate near the camera, on two shadow maps fitted to the view.
+  // The land's and the clouds' shadows reach much further and cost far less: they come from \`shade\` below.
+  const near = cfg.shadows.near;
+  const sun = new SunLight();
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(near.mapSize, near.mapSize);
+  sun.shadow.bias = near.bias;
+  sun.shadow.normalBias = near.normalBias;
+  sun.shadow.radius = near.radius;
+  sun.shadow.camera.far = near.reach[0];
+  // The shadow maps draw only what is on the casters' layer: trees' far shapes, rocks, barriers and the gate.
+  sun.shadow.camera.layers.set(CASTER_LAYER);
   scene.add(sun);
+  let shadowsShown = true;
 
   // The sea: see-through in the shallows, coloured by the depth of the ground under it.
   // The land's and the clouds' shadows, which every material the sun lights takes.
@@ -177,6 +195,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     // From high above no blade could be told from the ground, so the fields are left out altogether.
     const below = land ? Math.max(0, sampleField(land, camera.position.x, camera.position.z, 0)) : 0;
     grass.object.visible = grassShown && land !== null && camera.position.y - below <= cfg.grass.ceiling;
+    sun.shadow.camera.far = shadowReach(camera.position.y - below, near);
     if (grass.object.visible) grass.lookFrom(grassEye(camera.position, aim));
   };
 
@@ -208,12 +227,22 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         geometry.setIndex(new THREE.BufferAttribute(chunk.indices, 1));
         // Needed so chunks outside the view are skipped.
         geometry.computeBoundingSphere();
-        ground.add(new THREE.Mesh(geometry, groundMaterial));
+        const piece = new THREE.Mesh(geometry, groundMaterial);
+        // The ground takes the near shadows; its own shadows come from the land's shade map.
+        piece.receiveShadow = true;
+        ground.add(piece);
       }
-      road.add(createRoadMesh(world.road.mesh, roadMaterial));
-      road.add(createRoadMesh(world.road.kerbs.mesh, roadMaterial));
-      road.add(createRoadMesh(world.road.barriers, roadMaterial));
-      road.add(createRoadMesh(world.road.gate, roadMaterial));
+      const asphalt = createRoadMesh(world.road.mesh, roadMaterial);
+      const kerbs = createRoadMesh(world.road.kerbs.mesh, roadMaterial);
+      const barriers = createRoadMesh(world.road.barriers, roadMaterial);
+      const gate = createRoadMesh(world.road.gate, roadMaterial);
+      for (const mesh of [asphalt, kerbs, barriers, gate]) mesh.receiveShadow = true;
+      // Kerbs lie flat on the road; the barriers and the gate stand up and cast.
+      for (const mesh of [barriers, gate]) {
+        mesh.castShadow = true;
+        mesh.layers.enable(CASTER_LAYER);
+      }
+      road.add(asphalt, kerbs, barriers, gate);
       decor.load(world.decor);
       shade.setGround(world.ground);
       shade.setClouds(world.clouds);
@@ -263,6 +292,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
 
     setShadowsShown(shown) {
       shade.setOn(shown);
+      shadowsShown = shown;
+      sun.castShadow = shown;
     },
 
     setWaterShown(shown) {
@@ -307,6 +338,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         nearGroups: shown ? counts.nearGroups : 0,
         blades: grass.object.visible ? grass.count() : 0,
         shaded: shade.shaded(),
+        shadowReach: shadowsShown ? sun.shadow.camera.far : 0,
       };
     },
 

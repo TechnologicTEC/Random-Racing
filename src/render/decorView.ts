@@ -5,6 +5,12 @@ import { TREE_KINDS } from '../gen/world/decor';
 import { groupScatter, type ScatterGroup } from './scatter';
 import { rockShape, treeShape, type Detail, type Shape } from './treeShapes';
 
+/**
+ * The Three.js layer seen only by the sun's shadow maps. What casts a shadow is put on it, and the shadow
+ * camera looks at nothing else: the picture's camera sees only layer 0.
+ */
+export const CASTER_LAYER = 1;
+
 /** The trees and rocks of a world, drawn as many copies of a few shapes. */
 export interface DecorView {
   /** Everything it draws. Hide it to hide every tree and rock. */
@@ -31,6 +37,8 @@ interface Drawn {
   group: ScatterGroup;
   near: THREE.InstancedMesh;
   far: THREE.InstancedMesh;
+  /** The far shapes again, on the casters' layer: what the sun's shadow maps draw, whichever shape the picture shows. */
+  caster: THREE.InstancedMesh;
 }
 
 /**
@@ -60,9 +68,10 @@ export function createDecorView(cfg: DecorViewConfig, prepare?: (material: THREE
   let rocks = 0;
 
   const clear = (): void => {
-    for (const { near, far } of drawn) {
+    for (const { near, far, caster } of drawn) {
       near.dispose();
       far.dispose();
+      caster.dispose();
     }
     object.clear();
     drawn = [];
@@ -92,7 +101,17 @@ export function createDecorView(cfg: DecorViewConfig, prepare?: (material: THREE
         return mesh;
       });
       meshes[0]!.visible = false;
-      drawn.push({ group, near: meshes[0]!, far: meshes[1]! });
+      for (const mesh of meshes) mesh.receiveShadow = true;
+      // Shadows are cast by the far shapes: a third of the triangles, and too small a difference to see in a shadow.
+      const caster = new THREE.InstancedMesh(geometryOf(group.kind).far, material, 0);
+      caster.instanceMatrix = matrices;
+      caster.count = group.count;
+      caster.boundingSphere = sphere;
+      caster.matrixAutoUpdate = false;
+      caster.castShadow = true;
+      caster.layers.set(CASTER_LAYER);
+      object.add(caster);
+      drawn.push({ group, near: meshes[0]!, far: meshes[1]!, caster });
     }
   };
 

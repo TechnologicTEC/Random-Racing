@@ -843,6 +843,20 @@ export interface RenderConfig {
  * The land and the clouds each keep the sun off by a map worked out on the page (`terrainShade.ts`, `cloudShade.ts`).
  */
 export interface ShadowConfig {
+  /** Crisp shadows of trees, rocks, barriers and the start gate, near the camera: Three.js's sun light with two shadow maps. */
+  near: {
+    /** Cells along each side of each of the two maps. */
+    mapSize: number;
+    /** How far from the camera they reach, in metres: the first from a camera low over the ground, never more than the second. */
+    reach: Range;
+    /** The camera can be this high over the ground, in metres, before the reach grows; then it grows `perMetre` metres for each metre higher. */
+    from: number;
+    perMetre: number;
+    /** Three.js's settings against stripes and gaps where a shadow meets what casts it, and how soft its edge is (in map cells). */
+    bias: number;
+    normalBias: number;
+    radius: number;
+  };
   land: {
     /** How wide the soft edge of a shadow is on level ground, in metres. */
     edge: number;
@@ -1596,6 +1610,7 @@ export const config: GameConfig = {
       ceiling: 150,
     },
     shadows: {
+      near: { mapSize: 2048, reach: [350, 2500], from: 20, perMetre: 6, bias: -0.0004, normalBias: 0.4, radius: 2 },
       land: { edge: 6, bias: 0.3, lowest: 0.05 },
       clouds: { size: 512, strength: 0.55, solid: 0.5 },
     },

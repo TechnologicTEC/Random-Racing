@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15f (step 15 is planned and recorded under "Step 15" below; 15a to 15e done): near shadows from trees, rocks and barriers. Then 15g and 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15g (step 15 is planned and recorded under "Step 15" below; 15a to 15f done): High and Low quality, the pixel budget, the Quality button. Then 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15e done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15f done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -527,7 +527,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | Done (below) |
 | 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | Done (below) |
 | 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | Done (below) |
-| 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | To do |
+| 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | Done (below) |
 | 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | To do |
 | 15h | Look pass from pictures; final frame times for High and Low; this file | To do |
 
@@ -612,6 +612,33 @@ The land shade takes 16 to 26 ms. Cloud shadows over the island, sun overhead, s
 **Test machine:** the whole browser suite failed six tests in one run and one in another, all worlds that did not load in time while four headless browsers each flew a page. In software a flying frame takes about 950 ms with or without shadows (300 ms without grass), so the shadows are not the cause: four browsers drawing at once busy every core. Playwright now runs **three browsers at a time** (`playwright.config.ts`). The frame-count test asks for 3 frames within 30 s, not 6 within 15 s.
 - 1,080 unit tests and the browser suite pass; it took 682 s with three browsers.
 
+**15f as built.**
+- The sun is Three.js's `SunLight` (from `three/addons`, in the pinned package) with two shadow maps of 2048 by 2048 cells fitted to the view, softened (PCF, radius 2). Settings in `render.shadows.near`.
+- `shadowReach` (`render/nearShadows.ts`): how far from the camera the maps reach: 350 m from a camera up to 20 m over the ground, then 6 m further for each metre higher, up to 2500 m.
+- **What casts:** trees and rocks by their **far shapes**, from a third copy of each group that only the shadow maps see (Three.js layer 1, `CASTER_LAYER` in `decorView.ts`); the barriers and the start gate. **What receives:** ground, road, kerbs, barriers, gate, trees, rocks and grass. The grass reads the shadow maps in its own shader, at each pixel (Three.js's `getSunShadow`).
+- `stats().shadowReach`; `shadows=off` leaves these out too.
+
+**Changed from the plan:**
+- Trees cast with their far shapes. With their full shapes the shadow maps added 397,000 triangles to the forest view from the start line (seed 20), twice the budget; now it is inside 200,000.
+- The grass shader had to include Three.js's common definitions for the shadow lookup (it would not compile: `PI2` undeclared).
+- Two tree tests count the trees' own triangles with `shadows=off`, and the land-and-cloud test no longer says shadows add nothing to draw (the maps do).
+
+**Looked at:** pairs with `shadows=off` (seed 8 flying at 13:00, seed 20 from the start line at 10:00, seed 12 flying at 16:30) and a map of where they differ. Every tree has its shadow and the barriers shade the road's edges, but **shadows are faint**: about a quarter darker than sunlit ground, because the sky lights the ground almost as strongly as the sun (3% darker overall in the forest view). For the look pass.
+
+**Frame times with all three kinds of shadow** (Intel Arc, 13:00, `npm run perf`; median and 95th percentile in ms, before shadows in brackets):
+
+| View | 1920 by 1080 | 2880 by 1800 |
+| --- | --- | --- |
+| Flying the lap | 7.5 to 9.6, 95th 8.1 to 11.3 (5.2 to 5.9) | 12.1 to 13.3, 95th 15.3 to 15.9 (9.3 to 9.7) |
+| Circling from above | 10.1 to 12.9, 95th 11.0 to 14.2 (8.0 to 9.4) | 20.6 to 22.6, 60% to 99% of frames over 16.7 ms (15.1 to 18.8) |
+| Summit view | 7.2 to 9.7, 95th 7.7 to 13.1 (5.5 to 7.0) | 11.8 to 14.1, 95th 12.7 to 15.9 (8.8 to 10.1) |
+
+High holds 60 frames per second at 1080p in every view, inside the goal (median 16.7 ms, 95th under 20). The full laptop screen does not, from above; 15g's pixel budget is for that. Draw calls flying rise by up to 67 (budget 90); from above by up to 200, as every tree group near the view is drawn again for each map.
+
+- 1,083 unit tests pass. The browser suite took 685 s: 249 passed and 3 failed while the laptop went into standby at 4:12 pm (`ERR_NETWORK_IO_SUSPENDED`, and Windows' Kernel-Power events 506 and 507); the three pass on their own.
+
+**The flaky failures since 15e were the laptop going into standby.** Windows logged a dozen spells of Modern Standby that afternoon, three of them during 15e's runs (2:23 to 2:57, 3:15 and 3:29 pm). A page caught by one stays on "Raising a new island…". Neither the code nor the long-running dev server (up since 14 November) is to blame, as far as can be told. Three browsers at a time is kept (the suite takes about the same time). Keep the laptop awake while the suites run.
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -663,7 +690,8 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
 - Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
 - Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
-- Playwright runs three browsers at a time (four saturated the machine once grass made software frames take about a second; 15e).
+- Playwright runs three browsers at a time (15e; first thought to be load, but the failures then turned out to be the laptop going into standby).
+- Keep the laptop awake while the test suites or `npm run perf` run: Modern Standby stalls the browsers, and tests fail with worlds that never load or `ERR_NETWORK_IO_SUSPENDED` (found 2026-11-15).
 - Never let a failing test run be followed by a commit in the same command. On 2026-11-12 a Firefox failure was committed past because the test output was piped through a filter, which hid the exit code.
 - Throwaway measurements go in a temporary `src/explore.tmp.test.ts` (deleted before committing). One-off screenshots: copy a script into `test-results/` (ignored by git) so it can import Playwright, with `npm run dev` running. Every Playwright run empties `test-results/`, so keep the script's master copy in the scratchpad and copy it in again.
 - Run Vitest from PowerShell. From Git Bash every test file fails with "Vitest failed to find the current suite" (found 2026-11-14).
@@ -972,3 +1000,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 15c done: a third level of ground detail (a sixteenth of the triangles beyond 500 m from the road and for sea bed 4 m under), reported per chunk and in `stats().levels`; no grass on ground drawn coarse. Ground triangles fall to 74% to 88% of R8's on eight seeds. Screenshots of eight seeds checked: no seams, mountains keep their shape.
 - **2026-11-15 (Milestone 2):** Step 15d done: the land's and the clouds' shadows as plain numbers (`render/terrainShade.ts`, `render/cloudShade.ts`) and as shader text (`render/shade.ts`), settings in `render.shadows`. At 07:00 a mountain island is 42% to 47% in its own shadow, at midday none of it; the land shade takes about 20 ms. Nothing drawn yet.
 - **2026-11-15 (Milestone 2):** Step 15e done: the land's and the clouds' shadows drawn on the ground, road, trees, rocks, grass and sea (`render/shadeView.ts`), worked out again when the time moves; `shadows=off`. Cloud shadows show clearly; mountain shadows at low sun are faint, for the look pass. The browser suite now runs three browsers at a time: four at once timed out worlds.
+- **2026-11-15 (Milestone 2):** Step 15f done: trees, rocks, barriers and the gate cast shadows near the camera (Three.js's `SunLight`, two maps; `render/nearShadows.ts`), trees by their far shapes to keep inside the budget; the grass takes them too. At 1080p every view still holds 60 frames per second (median at most 12.9 ms); the full laptop screen from above does not. Shadows are faint, for the look pass.
