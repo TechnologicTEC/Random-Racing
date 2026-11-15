@@ -136,10 +136,11 @@ function describeSeed(seed: number): void {
           expect(above).toBeGreaterThan(-0.9);
           buried++;
         } else {
-          expect(above).toBeGreaterThan(0.7);
+          // A wall slopes down to the level of the road at each end, which is still a sink above the ground of the verge.
+          expect(above).toBeGreaterThan(0.1);
           // At the top of a steep bank the ground on the wall's outer side has already begun to fall away.
           expect(above).toBeLessThan(1.7);
-          clear++;
+          if (above > 0.7) clear++;
         }
       }
       expect(buried).toBeGreaterThan(100);

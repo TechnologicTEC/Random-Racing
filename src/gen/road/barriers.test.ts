@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { roundedSquareLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import { analyseSections } from '../track/analysis';
-import type { CenterLine, MeshData } from '../types';
+import type { CenterLine, MeshData, WallSpan } from '../types';
 import { buildBarriers } from './barriers';
 import { ROAD_MATERIAL } from './ribbon';
 import { buildStartGate } from './startGate';
@@ -17,6 +17,12 @@ const line = roundedSquareLine(300, 40);
 const sections = analyseSections(line, config.track);
 const height = Float64Array.from({ length: line.count }, (_, i) => 10 + Math.sin((i / line.count) * 2 * Math.PI));
 const cross = new Float64Array(line.count).fill(-0.05);
+
+/** A wall round the whole lap on both sides, as every lap had before the walls could open. */
+const wholeLap = (centre: CenterLine): WallSpan[] => [
+  { startIndex: 0, pieceCount: centre.count, side: 1 },
+  { startIndex: 0, pieceCount: centre.count, side: -1 },
+];
 
 function locate(centre: CenterLine, x: number, z: number): { sample: number; lateral: number; along: number } {
   let sample = 0;
@@ -55,8 +61,8 @@ function triangles(mesh: MeshData) {
   return out;
 }
 
-describe('buildBarriers', () => {
-  const mesh = buildBarriers(line, height, cross, uniformWidth(line, config.track.roadWidth), sections, config);
+describe('buildBarriers with a wall round the whole lap on both sides', () => {
+  const mesh = buildBarriers(line, height, cross, uniformWidth(line, config.track.roadWidth), sections, wholeLap(line), config);
   const count = mesh.positions.length / 3;
 
   it('runs a wall along both edges of the whole lap', () => {
@@ -139,6 +145,88 @@ describe('buildBarriers', () => {
   });
 });
 
+describe('buildBarriers with walls that open', () => {
+  const n = line.count;
+  // A 60 m wall on the left along the first straight, and a 50 m one on the right that runs past the end of the lap.
+  const leftWall: WallSpan = { startIndex: 20, pieceCount: 30, side: -1 };
+  const rightWall: WallSpan = { startIndex: n - 10, pieceCount: 25, side: 1 };
+  const mesh = buildBarriers(line, height, cross, uniformWidth(line, config.track.roadWidth), sections, [rightWall, leftWall], config);
+  const count = mesh.positions.length / 3;
+  /** How many pieces along its wall a sample is, or -1 if it is not on it. */
+  const along = (wall: WallSpan, sample: number): number => {
+    const k = (sample - wall.startIndex + n) % n;
+    return k <= wall.pieceCount ? k : -1;
+  };
+  /** Each vertex with the wall it belongs to, how far along it is, and its height above the road's tilted plane. */
+  const vertices = Array.from({ length: count }, (_, v) => {
+    const x = mesh.positions[v * 3]!, y = mesh.positions[v * 3 + 1]!, z = mesh.positions[v * 3 + 2]!;
+    const { sample, lateral } = locate(line, x, z);
+    const wall = lateral > 0 ? rightWall : leftWall;
+    return { wall, k: along(wall, sample), above: y - (height[sample]! + lateral * cross[sample]!) };
+  });
+  const taper = Math.round(road.walls.taper / line.spacing);
+
+  it('builds a wall only where there is one', () => {
+    for (const vertex of vertices) expect(vertex.k).toBeGreaterThanOrEqual(0);
+    // Two faces and a top for every piece, two triangles each, and a face closing each of the four ends.
+    expect(mesh.indices.length / 3).toBe((leftWall.pieceCount + rightWall.pieceCount) * 6 + 4 * 2);
+  });
+
+  it('stands at its full height between its ends', () => {
+    for (const wall of [leftWall, rightWall]) {
+      const tops = vertices.filter((vertex) => vertex.wall === wall && vertex.above > -road.sink && vertex.k >= taper && vertex.k <= wall.pieceCount - taper);
+      expect(tops.length).toBeGreaterThan(40);
+      for (const top of tops) expect(top.above).toBeCloseTo(road.barrierHeight, 2);
+    }
+  });
+
+  it('slopes down to the level of the road at each end, never stepping', () => {
+    expect(taper).toBeGreaterThanOrEqual(2);
+    for (const wall of [leftWall, rightWall]) {
+      /** The height of the wall's top at each sample along it. */
+      const topAt = Array.from({ length: wall.pieceCount + 1 }, (_, k) =>
+        Math.max(...vertices.filter((vertex) => vertex.wall === wall && vertex.k === k).map((vertex) => vertex.above)),
+      );
+      expect(topAt[0]).toBeCloseTo(0, 2);
+      expect(topAt[wall.pieceCount]).toBeCloseTo(0, 2);
+      for (let k = 0; k < taper; k++) {
+        expect(topAt[k + 1]!).toBeGreaterThan(topAt[k]!);
+        expect(topAt[wall.pieceCount - k - 1]!).toBeGreaterThan(topAt[wall.pieceCount - k]!);
+        // No step taller than half the wall from one sample to the next.
+        expect(topAt[k + 1]! - topAt[k]!).toBeLessThan(road.barrierHeight / 2 + 0.01);
+      }
+    }
+  });
+
+  it('closes each end with a face that looks along the lap, away from the wall', () => {
+    let backwards = 0;
+    let forwards = 0;
+    for (const face of triangles(mesh)) {
+      const { sample, lateral } = locate(line, face.x, face.z);
+      const ahead = face.nx * line.tx[sample]! + face.nz * line.tz[sample]!;
+      if (Math.abs(ahead) < 0.9) continue;
+      const wall = lateral > 0 ? rightWall : leftWall;
+      const k = along(wall, sample);
+      // A face at the wall's first sample looks back down the lap; one at its last looks on up it.
+      if (ahead < 0) {
+        expect(k).toBe(0);
+        backwards++;
+      } else {
+        expect(k).toBe(wall.pieceCount);
+        forwards++;
+      }
+    }
+    expect(backwards).toBe(4);
+    expect(forwards).toBe(4);
+  });
+
+  it('builds nothing for a lap with no walls', () => {
+    const none = buildBarriers(line, height, cross, uniformWidth(line, config.track.roadWidth), sections, [], config);
+    expect(none.indices).toHaveLength(0);
+    expect(none.positions).toHaveLength(0);
+  });
+});
+
 describe('buildStartGate', () => {
   const mesh = buildStartGate(line, height, cross, uniformWidth(line, config.track.roadWidth), config);
   const faces = triangles(mesh);
@@ -212,7 +300,7 @@ describe('barriers and the start gate on a road whose width changes', () => {
   const width = swellingWidth(line, 22, 12);
 
   it('keeps both walls the same distance outside the true edge all the way round', () => {
-    const mesh = buildBarriers(line, height, cross, width, sections, config);
+    const mesh = buildBarriers(line, height, cross, width, sections, wholeLap(line), config);
     let furthest = 0;
     let nearest = Infinity;
     for (let v = 0; v < mesh.positions.length / 3; v++) {

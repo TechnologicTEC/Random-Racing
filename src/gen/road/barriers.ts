@@ -1,5 +1,6 @@
 import type { GenConfig } from '../../config';
-import type { CenterLine, MeshData, Section } from '../types';
+import { smoothstep } from '../../core/scalar';
+import type { CenterLine, MeshData, Section, WallSpan } from '../types';
 import { MeshBuilder, type Point } from './meshBuilder';
 import { ROAD_MATERIAL } from './ribbon';
 
@@ -11,11 +12,14 @@ import { ROAD_MATERIAL } from './ribbon';
 const FOOTING = 0.6;
 
 /**
- * Builds the barriers as triangles: a low wall on the verge along both edges
- * of the whole lap. It is plain, except on the outside of real corners, where
- * it is painted in red and white blocks so the edge of the corner stands out.
+ * Builds the barriers as triangles: a low wall on the verge wherever
+ * `findWalls` put one (gen/road/walls.ts). It is plain, except on the outside
+ * of real corners, where it is painted in red and white blocks so the edge of
+ * the corner stands out. A wall that does not go round the whole lap slopes
+ * down to the level of the road at each end, and is closed there.
  *
  * @param width road width at each sample, in metres
+ * @param walls where the walls stand
  */
 export function buildBarriers(
   line: CenterLine,
@@ -23,6 +27,7 @@ export function buildBarriers(
   cross: Float64Array | null,
   width: Float64Array,
   sections: readonly Section[],
+  walls: readonly WallSpan[],
   cfg: GenConfig,
 ): MeshData {
   const road = cfg.road;
@@ -54,10 +59,19 @@ export function buildBarriers(
 
   const foot = -road.sink - FOOTING;
   const blockSamples = Math.max(1, Math.round(road.barrierBlock / line.spacing));
+  const taperSamples = Math.max(1, Math.round(road.walls.taper / line.spacing));
   const builder = new MeshBuilder();
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    for (const side of [1, -1]) {
+  for (const wall of walls) {
+    const { side } = wall;
+    const pieces = Math.min(wall.pieceCount, n);
+    const wholeLap = pieces === n;
+    /** Height of the wall's top at its k-th sample: full round a whole lap; otherwise rising from the road's level at each end. */
+    const rise = (k: number): number =>
+      wholeLap ? road.barrierHeight : road.barrierHeight * smoothstep(0, taperSamples, Math.min(k, pieces - k));
+
+    for (let k = 0; k < pieces; k++) {
+      const i = (wall.startIndex + k) % n;
+      const next = (i + 1) % n;
       // Painted only where both ends of this piece are on the outside of the same corner.
       const painted = outside[i] === side && outside[next] === side;
       const material = !painted
@@ -68,10 +82,10 @@ export function buildBarriers(
 
       const nearFootHere = point(i, side, inner, foot);
       const nearFootNext = point(next, side, inner, foot);
-      const nearTopHere = point(i, side, inner, road.barrierHeight);
-      const nearTopNext = point(next, side, inner, road.barrierHeight);
-      const farTopHere = point(i, side, outer, road.barrierHeight);
-      const farTopNext = point(next, side, outer, road.barrierHeight);
+      const nearTopHere = point(i, side, inner, rise(k));
+      const nearTopNext = point(next, side, inner, rise(k + 1));
+      const farTopHere = point(i, side, outer, rise(k));
+      const farTopNext = point(next, side, outer, rise(k + 1));
       const farFootHere = point(i, side, outer, foot);
       const farFootNext = point(next, side, outer, foot);
 
@@ -86,6 +100,21 @@ export function buildBarriers(
         builder.quad(farTopHere, nearTopHere, farTopNext, nearTopNext, material); // top
         builder.quad(farFootHere, farTopHere, farFootNext, farTopNext, material); // faces away
       }
+    }
+
+    if (wholeLap) continue;
+    // Close both ends, where the wall has come down to the road's level but still stands a sink above the verge.
+    for (const end of [0, pieces]) {
+      const i = (wall.startIndex + end) % n;
+      // The wall's two feet and two top corners here, the left-hand pair of the direction of travel first.
+      const [leftBeyond, rightBeyond] = side > 0 ? [inner, outer] : [outer, inner];
+      const leftFoot = point(i, side, leftBeyond, foot);
+      const rightFoot = point(i, side, rightBeyond, foot);
+      const leftTop = point(i, side, leftBeyond, rise(end));
+      const rightTop = point(i, side, rightBeyond, rise(end));
+      // The first end looks back down the lap, the last one on up it.
+      if (end === 0) builder.quad(leftFoot, rightFoot, leftTop, rightTop, ROAD_MATERIAL.barrier);
+      else builder.quad(rightFoot, leftFoot, rightTop, leftTop, ROAD_MATERIAL.barrier);
     }
   }
   return builder.build();

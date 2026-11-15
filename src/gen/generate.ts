@@ -62,7 +62,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
       mesh: buildRoadRibbon(line, profile.height, cross, width, config),
       kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, width, kerbSpans, config) },
       walls,
-      barriers: buildBarriers(line, profile.height, cross, width, winner.sections, config),
+      barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config),
       gate: buildStartGate(line, profile.height, cross, width, config),
     },
     report,
