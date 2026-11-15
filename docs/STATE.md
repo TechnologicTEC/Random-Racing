@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15e (step 15 is planned and recorded under "Step 15" below; 15a to 15d done): land and cloud shade in the picture, `shadows=off`. Then 15f to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15f (step 15 is planned and recorded under "Step 15" below; 15a to 15e done): near shadows from trees, rocks and barriers. Then 15g and 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15d done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15e done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -526,7 +526,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | Done (results below) |
 | 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | Done (below) |
 | 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | Done (below) |
-| 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | To do |
+| 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | Done (below) |
 | 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | To do |
 | 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | To do |
 | 15h | Look pass from pictures; final frame times for High and Low; this file | To do |
@@ -601,6 +601,17 @@ Deeper sea-bed limits (6 m) saved up to 4 points less; 3 m saved nothing more. S
 
 The land shade takes 16 to 26 ms. Cloud shadows over the island, sun overhead, seeds 1 to 60: clear 0.3%, fair 1.1%, cloudy 2.7% of the ground (clouds are scattered puffs, not a lid). 1,080 unit tests pass.
 
+**15e as built.**
+- `render/shadeView.ts` (`createShadeView`): the land's map as a float texture and the clouds' as a byte texture that wraps round, and the uniforms the shared shader text reads. It works the land's shadow out again whenever the sun moves (load, time slider), and slides the clouds' shadows on the clouds' clock.
+- The ground, road, trees and rocks (standard Three.js materials) take it through `patch`: Three.js's lighting is changed so the sun's light is multiplied by `sunShade` at each pixel. The patch throws if Three.js's text has changed, so an upgrade fails loudly.
+- The water multiplies its sun light, its glints and the light on its foam by `sunShade` where the surface is. The grass works it out at each corner of a blade, not each pixel (there are 80,000 blades; a shadow's edge is metres wide).
+- `shadows=off` leaves every shadow out; `decor=off` takes the clouds' shadows away with the clouds. `stats().shaded` is the share of the land in its own shadow; `ViewHandle.setClock(seconds)` sets the waves', clouds' and grass's clock for checks that compare moments.
+
+**Looked at:** a time strip of seeds 1, 2 (cloudy), 7, 12 and 20 at 07:00, 10:00, 13:00, 16:30 and 19:30, from above and facing the sun, and pairs with `shadows=off` (seed 12 from above at 07:00, seed 1's summit at 07:30, seed 3 flying at 18:30, seed 2 flying at 13:00). Cloud shadows read clearly as soft dark patches drifting over land and sea. **Mountain shadows are faint:** a low sun adds little light to level ground, so taking it away changes little, and most of the morning's shading already comes from slopes facing away from the sun. Left for the look pass (15h), with the tree shadows in.
+
+**Test machine:** the whole browser suite failed six tests in one run and one in another, all worlds that did not load in time while four headless browsers each flew a page. In software a flying frame takes about 950 ms with or without shadows (300 ms without grass), so the shadows are not the cause: four browsers drawing at once busy every core. Playwright now runs **three browsers at a time** (`playwright.config.ts`). The frame-count test asks for 3 frames within 30 s, not 6 within 15 s.
+- 1,080 unit tests and the browser suite pass; it took 682 s with three browsers.
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -652,6 +663,7 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
 - Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
 - Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
+- Playwright runs three browsers at a time (four saturated the machine once grass made software frames take about a second; 15e).
 - Never let a failing test run be followed by a commit in the same command. On 2026-11-12 a Firefox failure was committed past because the test output was piped through a filter, which hid the exit code.
 - Throwaway measurements go in a temporary `src/explore.tmp.test.ts` (deleted before committing). One-off screenshots: copy a script into `test-results/` (ignored by git) so it can import Playwright, with `npm run dev` running. Every Playwright run empties `test-results/`, so keep the script's master copy in the scratchpad and copy it in again.
 - Run Vitest from PowerShell. From Git Bash every test file fails with "Vitest failed to find the current suite" (found 2026-11-14).
@@ -959,3 +971,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 15b done: a frame meter (`render/frameMeter.ts`), a readout on the page (`fps=1`, F key), `water=off`, `sync=1`, and `npm run perf`, which times views in a real browser window on the laptop's Intel Arc graphics. Baseline before shadows: 5 to 9 ms a frame at 1080p in every view; 9 to 19 ms on the full 2880 by 1800 screen, where the circling view goes over 16.7 ms. Pixels cost far more than triangles. Found on the way: with only the frame limit off, frame times read as under a millisecond because the page ran ahead of the graphics card; the page now waits for each frame when timing.
 - **2026-11-15 (Milestone 2):** Step 15c done: a third level of ground detail (a sixteenth of the triangles beyond 500 m from the road and for sea bed 4 m under), reported per chunk and in `stats().levels`; no grass on ground drawn coarse. Ground triangles fall to 74% to 88% of R8's on eight seeds. Screenshots of eight seeds checked: no seams, mountains keep their shape.
 - **2026-11-15 (Milestone 2):** Step 15d done: the land's and the clouds' shadows as plain numbers (`render/terrainShade.ts`, `render/cloudShade.ts`) and as shader text (`render/shade.ts`), settings in `render.shadows`. At 07:00 a mountain island is 42% to 47% in its own shadow, at midday none of it; the land shade takes about 20 ms. Nothing drawn yet.
+- **2026-11-15 (Milestone 2):** Step 15e done: the land's and the clouds' shadows drawn on the ground, road, trees, rocks, grass and sea (`render/shadeView.ts`), worked out again when the time moves; `shadows=off`. Cloud shadows show clearly; mountain shadows at low sun are faint, for the look pass. The browser suite now runs three browsers at a time: four at once timed out worlds.

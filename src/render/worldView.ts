@@ -12,6 +12,7 @@ import { grassGrid } from './grassMaps';
 import { createGrassView } from './grassView';
 import { TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
+import { createShadeView } from './shadeView';
 import { createSkyDome } from './sky';
 import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
 import { createWater } from './water';
@@ -34,6 +35,8 @@ export interface ViewStats {
   nearGroups: number;
   /** Grass blades in the fields round the camera: none when they are hidden, or the camera is too high to see one. */
   blades: number;
+  /** The share of the island's land in the land's own shadow at the time of day shown (0 to 1); 0 with shadows off. */
+  shaded: number;
 }
 
 /** A rough census of the last frame, used by tests to confirm something sensible was drawn. */
@@ -81,6 +84,8 @@ export interface WorldView {
   setGrassTime(seconds: number): void;
   /** Shows or hides the grass blades. */
   setGrassShown(shown: boolean): void;
+  /** Shows or hides every shadow. */
+  setShadowsShown(shown: boolean): void;
   /** Shows or hides the surface of the sea. Hidden, the sea bed shows: for telling what the water costs. */
   setWaterShown(shown: boolean): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
@@ -123,7 +128,9 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   scene.add(sun);
 
   // The sea: see-through in the shallows, coloured by the depth of the ground under it.
-  const water = createWater(cfg.seaSize, cfg.water);
+  // The land's and the clouds' shadows, which every material the sun lights takes.
+  const shade = createShadeView(cfg.shadows, cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade));
+  const water = createWater(cfg.seaSize, cfg.water, shade);
   scene.add(water.mesh);
   const seaGeometry = new THREE.PlaneGeometry(cfg.seaSize, cfg.seaSize).rotateX(-Math.PI / 2);
 
@@ -135,21 +142,23 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   scene.add(floor);
 
   const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 });
+  shade.patch(groundMaterial);
   const ground = new THREE.Group();
   scene.add(ground);
 
   const roadMaterial = createRoadMaterial();
+  shade.patch(roadMaterial);
   const road = new THREE.Group();
   scene.add(road);
 
   // Trees, rocks and clouds: scenery on top of the ground and in the sky.
-  const decor = createDecorView(cfg.decor);
+  const decor = createDecorView(cfg.decor, (material) => shade.patch(material));
   scene.add(decor.object);
   const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength, cfg.clouds.thin);
   scene.add(clouds.object);
 
   // Grass blades in fields that follow the camera, swayed by the sea's wind.
-  const grass = createGrassView(cfg.grass, cfg.water.wind);
+  const grass = createGrassView(cfg.grass, cfg.water.wind, shade);
   scene.add(grass.object);
   let grassShown = true;
   /** How many pieces of ground are drawn at each level of detail. */
@@ -206,6 +215,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       road.add(createRoadMesh(world.road.barriers, roadMaterial));
       road.add(createRoadMesh(world.road.gate, roadMaterial));
       decor.load(world.decor);
+      shade.setGround(world.ground);
+      shade.setClouds(world.clouds);
       clouds.load(world.clouds);
     },
 
@@ -220,6 +231,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       sun.intensity = light.sunStrength;
       sun.position.set(light.sun.x, light.sun.y, light.sun.z).multiplyScalar(1000);
       sky.update(light);
+      shade.setSun(light.sun);
       water.setDaylight(light);
       clouds.setDaylight(light);
       grass.setDaylight(light);
@@ -230,10 +242,13 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     },
 
     setCloudTime(seconds) {
+      shade.setTime(seconds);
       clouds.setTime(seconds);
     },
 
     setDecorShown(shown) {
+      // No clouds, no clouds' shadows.
+      shade.setCloudsOn(shown);
       decor.object.visible = shown;
       clouds.object.visible = shown;
     },
@@ -244,6 +259,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
 
     setGrassShown(shown) {
       grassShown = shown;
+    },
+
+    setShadowsShown(shown) {
+      shade.setOn(shown);
     },
 
     setWaterShown(shown) {
@@ -287,6 +306,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         puffs: shown ? clouds.count() : 0,
         nearGroups: shown ? counts.nearGroups : 0,
         blades: grass.object.visible ? grass.count() : 0,
+        shaded: shade.shaded(),
       };
     },
 

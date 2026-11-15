@@ -41,11 +41,13 @@ interface Drawn {
  * cost nothing, and squares far from the camera use shapes with a fraction of
  * the triangles.
  */
-export function createDecorView(cfg: DecorViewConfig): DecorView {
+export function createDecorView(cfg: DecorViewConfig, prepare?: (material: THREE.Material) => void): DecorView {
   const object = new THREE.Group();
   // Trees are open underneath and their fronds are flat, so both sides of every triangle are drawn.
   const treeMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0, side: THREE.DoubleSide });
   const rockMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 });
+  prepare?.(treeMaterial);
+  prepare?.(rockMaterial);
 
   const details: readonly Detail[] = ['near', 'far'];
   const treeShapes = TREE_KINDS.map((kind) => ({ near: treeShape(kind, 'near'), far: treeShape(kind, 'far') }));

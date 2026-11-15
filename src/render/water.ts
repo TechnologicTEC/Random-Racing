@@ -33,7 +33,13 @@ const float = (value: number): string => (Number.isInteger(value) ? `${value}.0`
  *
  * @param size width of the plane, in metres
  */
-export function createWater(size: number, cfg: WaterConfig): Water {
+/** The shadows' shader text and the uniforms it reads (`ShadeView`), for a shader of our own to take them. */
+export interface WaterShade {
+  glsl: string;
+  uniforms: Record<string, THREE.IUniform>;
+}
+
+export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade): Water {
   /** The height of the sea when every train is at its usual height and all their crests meet. */
   const usualHeight = cfg.waves.reduce((sum, wave) => sum + wave.height, 0);
   const ground = new THREE.DataTexture(new Float32Array(1), 1, 1, THREE.RedFormat, THREE.FloatType);
@@ -58,6 +64,8 @@ export function createWater(size: number, cfg: WaterConfig): Water {
   ]);
   // `merge` copies values, so the texture is set again on the copy.
   uniforms.uGround.value = ground;
+  // Shared by reference, so the shadows' changes reach the water too.
+  if (shade) Object.assign(uniforms, shade.uniforms);
   linear(uniforms.uDeep.value, WATER.deep);
   linear(uniforms.uShallow.value, WATER.shallow);
   linear(uniforms.uFoam.value, WATER.foam);
@@ -80,6 +88,7 @@ export function createWater(size: number, cfg: WaterConfig): Water {
     fragmentShader: /* glsl */ `
       #include <fog_pars_fragment>
       ${DEPTH_GLSL}
+      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; }'}
       uniform float uTime;
       uniform vec3 uSunDir, uSunLight, uAmbient, uSky, uGlint, uDeep, uShallow, uFoam;
       varying vec3 vWorld;
@@ -100,7 +109,9 @@ export function createWater(size: number, cfg: WaterConfig): Water {
         water = mix(water, uShallow, top * ${float(cfg.crestLight[2])});
         // The sun lights the faces of the waves turned towards it and leaves their backs darker.
         vec3 face = normalize(vec3(-g.x * ${float(cfg.shade)}, 1.0, -g.y * ${float(cfg.shade)}));
-        vec3 light = uAmbient + uSunLight * (0.35 + 0.65 * max(dot(face, uSunDir), 0.0));
+        // The land and the clouds keep the sun off the water, as they do off the ground.
+        float sunLit = sunShade(vWorld);
+        vec3 light = uAmbient + uSunLight * sunLit * (0.35 + 0.65 * max(dot(face, uSunDir), 0.0));
         vec3 col = water * light;
 
         float fres = pow(1.0 - max(dot(n, V), 0.0), ${float(cfg.fresnel)});
@@ -109,13 +120,13 @@ export function createWater(size: number, cfg: WaterConfig): Water {
         // Where waves were left out, the sun's glints spread and soften, as light off unseen waves does.
         float sharp = ${float(cfg.glint)} / (1.0 + ${float(cfg.glint * cfg.glintSpread)} * lost);
         float glints = pow(sharp / ${float(cfg.glint)}, ${float(cfg.glintDim)});
-        col += uGlint * pow(max(dot(R, V), 0.0), sharp) * ${float(cfg.glintStrength)} * glints;
+        col += uGlint * pow(max(dot(R, V), 0.0), sharp) * ${float(cfg.glintStrength)} * glints * sunLit;
 
         float band = sin(depth * ${float(cfg.foamBands)} - uTime * ${float(cfg.foamSpeed)} + sin(p.x * 0.15 + p.y * 0.12) * 2.0) * 0.5 + 0.5;
         float foam = (1.0 - smoothstep(0.0, ${float(cfg.foamDepth)}, depth)) * smoothstep(0.55, 0.9, band);
         foam += 1.0 - smoothstep(0.0, ${float(cfg.edgeFoam)}, depth);
         foam = clamp(foam, 0.0, 1.0);
-        col = mix(col, uFoam * (uAmbient + uSunLight * 0.8), foam * 0.85);
+        col = mix(col, uFoam * (uAmbient + uSunLight * 0.8 * sunLit), foam * 0.85);
 
         float alpha = mix(${float(cfg.opacity[0])}, ${float(cfg.opacity[1])}, smoothstep(0.0, ${float(cfg.clearDepth)}, depth));
         alpha = max(alpha, foam * 0.9);

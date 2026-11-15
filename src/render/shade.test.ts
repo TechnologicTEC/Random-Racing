@@ -13,7 +13,7 @@ describe('shadeGlsl: the shadows of the land and the clouds, as shader text ever
   });
 
   it('reads the land s shadow and the clouds shadow from their own maps, and can be switched off', () => {
-    for (const name of ['uLandTop', 'uLandSize', 'uLandOrigin', 'uLandCell', 'uLandSoft', 'uCloudShade', 'uCloudSpan', 'uCloudLayer', 'uCloudShift', 'uCloudFade', 'uShadeSun', 'uShadeOn']) {
+    for (const name of ['uLandTop', 'uLandSize', 'uLandOrigin', 'uLandCell', 'uLandSoft', 'uCloudShade', 'uCloudSpan', 'uCloudLayer', 'uCloudShift', 'uCloudFade', 'uCloudOn', 'uShadeSun', 'uShadeOn']) {
       expect(code).toContain(name);
     }
   });

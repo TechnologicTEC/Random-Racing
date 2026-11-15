@@ -28,6 +28,8 @@ export interface ViewHandle {
   frames(): FrameStats;
   /** Forgets the frames counted so far. */
   resetFrames(): void;
+  /** Sets the waves', clouds' and grass's clock to this many seconds, for checks that compare moments. */
+  setClock(seconds: number): void;
   /** The name of the graphics card doing the drawing. */
   graphics(): string;
   /** What the world being shown has for scenery, whether or not it is drawn. */
@@ -77,6 +79,7 @@ const HINTS: Record<CameraMode, string> = {
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
+ * `shadows=off` to leave out every shadow;
  * `sync=1` to wait for the graphics card to finish each frame before the next, so frame times are what frames cost (for `npm run perf`).
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
@@ -102,6 +105,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   view.setDecorShown(params.get('decor') !== 'off');
   view.setGrassShown(params.get('grass') !== 'off');
   view.setWaterShown(params.get('water') !== 'off');
+  view.setShadowsShown(params.get('shadows') !== 'off');
   const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
   const readout = ref('frames');
   readout.hidden = params.get('fps') !== '1';
@@ -392,6 +396,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     report: () => report,
     frames: () => meter.stats(),
     resetFrames: () => meter.reset(),
+    setClock: (seconds) => {
+      waveClock = seconds;
+      view.setWaveTime(seconds);
+      view.setCloudTime(seconds);
+      view.setGrassTime(seconds);
+      dirty = true;
+    },
     graphics: () => view.graphics(),
     decor: () =>
       shown && {

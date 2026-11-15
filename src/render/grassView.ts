@@ -43,7 +43,13 @@ const float = (value: number): string => (Number.isInteger(value) ? `${value}.0`
  *
  * @param wind the way the wind blows across the map (x, z): the sea's wind
  */
-export function createGrassView(cfg: GrassConfig, wind: readonly [number, number]): GrassView {
+/** The shadows' shader text and the uniforms it reads (`ShadeView`), for a shader of our own to take them. */
+export interface GrassShade {
+  glsl: string;
+  uniforms: Record<string, THREE.IUniform>;
+}
+
+export function createGrassView(cfg: GrassConfig, wind: readonly [number, number], shade?: GrassShade): GrassView {
   const object = new THREE.Group();
   const blades = grassBlades(cfg);
 
@@ -77,6 +83,8 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
   // `merge` copies values, so the textures are set on the copy.
   uniforms.uGround!.value = noHeights;
   uniforms.uGrass!.value = blank;
+  // Shared by reference, so the shadows' changes reach the grass too.
+  if (shade) Object.assign(uniforms, shade.uniforms);
   linear(uniforms.uLush!.value, TERRAIN.grassLush);
   linear(uniforms.uDry!.value, TERRAIN.grassDry);
   (uniforms.uFlowers!.value as THREE.Vector3[]).forEach((colour, k) => linear(colour, FLOWERS[k]!));
@@ -88,6 +96,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
     vertexShader: /* glsl */ `
       #include <fog_pars_vertex>
       ${DEPTH_GLSL}
+      ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; }'}
       ${grassGlsl(cfg, wind)}
       attribute vec2 aOffset;
       attribute vec4 aTrait;
@@ -98,9 +107,12 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       varying float vFlower;
       varying vec3 vFacing;
       varying float vTint;
+      varying float vSunLit;
       void main() {
         vec3 world = grassVertex(position.xy, aOffset, aTrait, aTier, aFlower, vAlong, vVariation, vFlower, vFacing);
         vTint = mix(${float(cfg.tint[0])}, ${float(cfg.tint[1])}, aTrait.y);
+        // Worked out at each corner, not each pixel: there are a great many blades, and a shadow's edge is metres wide.
+        vSunLit = sunShade(world);
         vec4 mvPosition = viewMatrix * vec4(world, 1.0);
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
@@ -115,6 +127,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       varying float vFlower;
       varying vec3 vFacing;
       varying float vTint;
+      varying float vSunLit;
       void main() {
         // The ground's own greens, darker at the foot of a blade and lighter at its tip, and a little different from blade to blade.
         vec3 col = mix(uLush, uDry, vVariation) * mix(${float(cfg.shade[0])}, ${float(cfg.shade[1])}, vAlong) * vTint;
@@ -124,7 +137,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
         // A blade takes the light of the ground it stands on (the sky above, the bounce from below, the sun by how
         // the ground faces it), so a field of blades is no lighter or darker than its hillside and its far edge melts in.
         vec3 n = normalize(vFacing);
-        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) + uSunLight * max(dot(n, uSunDir), 0.0);
+        vec3 light = mix(uBounce, uAmbient, 0.5 * n.y + 0.5) + uSunLight * vSunLit * max(dot(n, uSunDir), 0.0);
         gl_FragColor = vec4(col * light, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

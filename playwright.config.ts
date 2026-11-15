@@ -6,8 +6,9 @@ export default defineConfig({
   testIgnore: /perf\.spec\.ts/,
   outputDir: 'test-results',
   fullyParallel: true,
-  // Each page now generates whole islands, which keeps a processor core busy. More browsers than this at once and the slow ones time out.
-  workers: 4,
+  // Each page generates whole islands and draws in software (a flying page takes about a second a frame since the grass, 14d).
+  // More browsers than this at once and every core is busy: worlds stop loading in time (four at once failed six tests in 15e).
+  workers: 3,
   timeout: 60_000,
   // Waiting for a new seed means waiting for a whole world, which can take a few seconds in Firefox on a busy machine.
   expect: { timeout: 15_000 },

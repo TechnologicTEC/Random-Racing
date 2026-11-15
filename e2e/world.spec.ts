@@ -507,10 +507,85 @@ test.describe('grass', () => {
   });
 });
 
+test.describe('shadows of the land and the clouds', () => {
+  /** The mean brightness of the bottom three fifths of the picture, 0 to 255: the ground, when looking down at the island. */
+  const ground = (seen: { bands: Array<[number, number, number]> }): number =>
+    seen.bands.slice(2).reduce((sum, [r, g, b]) => sum + (r + g + b) / 3, 0) / 3;
+
+  test('darkens a mountain island in the early morning, with no errors and nothing more to draw', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    // Seed 1 is a mountain seed; no clouds, so only the land casts shadows.
+    await openWorld(page, 'seed=1&still=1&cam=orbit&time=07:00&decor=off');
+    const shaded = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    await openWorld(page, 'seed=1&still=1&cam=orbit&time=07:00&decor=off&shadows=off');
+    const bare = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    expect(shaded.stats.shaded).toBeGreaterThan(0.2);
+    expect(bare.stats.shaded).toBe(0);
+    expect(ground(shaded.seen)).toBeLessThan(ground(bare.seen) * 0.97);
+    expect(shaded.stats.triangles).toBe(bare.stats.triangles);
+    expect(shaded.stats.calls).toBe(bare.stats.calls);
+    expect(errors).toEqual([]);
+  });
+
+  test('leaves the island much as it was at midday', async ({ page }) => {
+    await openWorld(page, 'seed=1&still=1&cam=orbit&time=13:00&decor=off');
+    const shaded = await page.evaluate(() => ({ stats: window.seedCircuit.view!.stats(), seen: window.seedCircuit.view!.pixelCounts() }));
+    await openWorld(page, 'seed=1&still=1&cam=orbit&time=13:00&decor=off&shadows=off');
+    const bare = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(shaded.stats.shaded).toBeLessThan(0.02);
+    expect(Math.abs(ground(shaded.seen) - ground(bare))).toBeLessThan(ground(bare) * 0.01);
+  });
+
+  test('works the shadows out again when the time of day moves', async ({ page }) => {
+    await openWorld(page, 'seed=1&still=1&cam=orbit&time=07:00');
+    expect((await page.evaluate(() => window.seedCircuit.view!.stats())).shaded).toBeGreaterThan(0.2);
+    await page.getByTestId('world-time-slider').fill(String(13 * 60));
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', '13:00');
+    expect((await page.evaluate(() => window.seedCircuit.view!.stats())).shaded).toBeLessThan(0.02);
+  });
+
+  test('moves the clouds shadows across the ground as the clouds drift, and only with shadows on', async ({ page }) => {
+    // Seed 2 has a cloudy sky. Looking along the road at the start, the bottom of the picture is ground; with no grass
+    // and no sea surface nothing else there moves with the clock.
+    const digests = async (): Promise<number> =>
+      page.evaluate(() => {
+        const seen = new Set<number>();
+        for (let seconds = 0; seconds <= 900; seconds += 30) {
+          window.seedCircuit.view!.setClock(seconds);
+          seen.add(window.seedCircuit.view!.pixelCounts().lowDigest);
+        }
+        return seen.size;
+      });
+    await openWorld(page, 'seed=2&still=1&look=start&time=13:00&grass=off&water=off');
+    expect(await digests()).toBeGreaterThan(1);
+    await openWorld(page, 'seed=2&still=1&look=start&time=13:00&grass=off&water=off&shadows=off');
+    expect(await digests()).toBe(1);
+  });
+
+  test('takes the clouds shadows away with the clouds when the address says decor=off', async ({ page }) => {
+    const digests = async (): Promise<number> =>
+      page.evaluate(() => {
+        const seen = new Set<number>();
+        for (let seconds = 0; seconds <= 900; seconds += 30) {
+          window.seedCircuit.view!.setClock(seconds);
+          seen.add(window.seedCircuit.view!.pixelCounts().lowDigest);
+        }
+        return seen.size;
+      });
+    await openWorld(page, 'seed=2&still=1&look=start&time=13:00&grass=off&water=off&decor=off');
+    expect(await digests()).toBe(1);
+  });
+});
+
 test.describe('frame times', () => {
   test('counts the frames it draws while flying, and starts again when asked', async ({ page }) => {
     await openWorld(page, 'seed=7');
-    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count).toBeGreaterThan(5);
+    // A headless browser draws in software: with every test running at once a frame can take seconds, so only a few are asked for.
+    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count, { timeout: 30_000 }).toBeGreaterThan(2);
     const frames = await page.evaluate(() => window.seedCircuit.view!.frames());
     expect(frames.median).toBeGreaterThan(0);
     expect(frames.worst).toBeGreaterThanOrEqual(frames.p95);

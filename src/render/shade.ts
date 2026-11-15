@@ -17,7 +17,7 @@ export function shadeGlsl(cfg: ShadowConfig): string {
     uniform sampler2D uLandTop;
     uniform float uLandSize, uLandOrigin, uLandCell, uLandSoft;
     uniform sampler2D uCloudShade;
-    uniform float uCloudSpan, uCloudLayer, uCloudFade;
+    uniform float uCloudSpan, uCloudLayer, uCloudFade, uCloudOn;
     uniform vec2 uCloudShift;
     uniform vec3 uShadeSun;
     uniform float uShadeOn;
@@ -44,7 +44,7 @@ export function shadeGlsl(cfg: ShadowConfig): string {
       float grown = smoothstep(0.0, 1.0, clamp((mid - max(abs(inSquare.x), abs(inSquare.y))) / uCloudFade, 0.0, 1.0));
       // uCloudShift is the drift so far, already brought back into the square.
       float cover = texture2D(uCloudShade, (at - uCloudShift + mid) / uCloudSpan).r;
-      return 1.0 - ${float(cfg.clouds.strength)} * cover * grown;
+      return 1.0 - ${float(cfg.clouds.strength)} * cover * grown * uCloudOn;
     }
     float sunShade(vec3 world) {
       if (uShadeOn < 0.5) return 1.0;
