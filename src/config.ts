@@ -1395,7 +1395,7 @@ export const config: GameConfig = {
       closeDistance: 80,
       probeReach: 16,
       probeStep: 4,
-      maxSlope: 0.25,
+      maxSlope: 0.4,
       minRise: 0.6,
       gate: 14,
       minGap: 40,

@@ -150,6 +150,14 @@ describe('findWalls beside steep ground', () => {
     expect(left[middle]).toBe(0);
   });
 
+  it('leaves a hillside open that a car can drive on, whether it rises or falls from the road', () => {
+    // 30% is a grassy hillside, not a cutting or a cliff: the car is tested on banks steeper than this.
+    for (const way of [1, -1]) {
+      const { left } = wallsOn(line, groundOf((x, z) => 10 - config.road.sink + (beside(x, z) ? way * (edge - z) * 0.3 : 0)));
+      expect(left[middle]).toBe(0);
+    }
+  });
+
   it('ignores small bumps close to the road', () => {
     const { left } = wallsOn(line, groundOf((x, z) => 10 - config.road.sink + (beside(x, z) && Math.floor((edge - z) / 3) % 2 === 0 ? 0.4 : 0)));
     expect(left[middle]).toBe(0);
@@ -263,6 +271,16 @@ describe('findWalls on real seeds', () => {
       const walled = walledPieces(world.road.walls, n, -1).reduce((sum, v) => sum + v, 0) + walledPieces(world.road.walls, n, 1).reduce((sum, v) => sum + v, 0);
       expect(walled).toBeGreaterThan(0);
       expect(walled).toBeLessThan(2 * n);
+    }
+  });
+
+  it('leaves at least a quarter of the roadside open on mountain laps, where the road crosses steep ground', () => {
+    // Seeds 1 and 13 circle their mountain; seed 3 climbs it.
+    for (const seed of [1, 3, 13]) {
+      const world = generateWorld(seed, config);
+      const n = world.track.candidates[world.track.winnerIndex]!.line.count;
+      const walled = walledPieces(world.road.walls, n, -1).reduce((sum, v) => sum + v, 0) + walledPieces(world.road.walls, n, 1).reduce((sum, v) => sum + v, 0);
+      expect(1 - walled / (2 * n)).toBeGreaterThan(0.25);
     }
   });
 });

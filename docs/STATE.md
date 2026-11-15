@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished step:** 2c, the lab draws the walls on its map as pale lines beside the road and has a "Walls" line in its Track panel (how many, and how much of the roadside is open). Tane asked to stop here for now (2026-11-16)
-- **Next step:** 2d, the last part of step 2: measure the share of each lap left open over seeds 1 to 200 (by relief and coast; throwaway `src/explore.tmp.test.ts`, numbers into a "Step 2" section here), take screenshots of seeds 1 to 20 in batches of about 10 and check them by eye, with close views of wall ends (`at=x,z`), then tune `road.walls` if the numbers or pictures ask for it. After that, step 3 (the simulation skeleton)
+- **Last finished step:** 2d, the end of step 2 (open walls): the share of each lap left open measured on seeds 1 to 200, seeds 1 to 20 looked at in screenshots, and the slope at which a wall is kept raised from 25% to 40% (see "Step 2")
+- **Next step:** 3, the simulation skeleton: rules for `src/sim` (`architectureRules.ts`, `tsconfig.pure.json`), the input record, colliders (ground, road, kerbs, a box per wall piece from `Road.walls`, gate posts, trees, rocks), the car body placed on the start line, and `step`, `state`, `hash`, `snapshot`, `restore`. Split it into lettered parts before starting
 
 ## Milestone 3 steps
 
@@ -19,7 +19,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | --- | --- | --- | --- |
 | 0 | Create `milestone-3-driving` from `main`. Record the plan and the choices here; move the Milestone 1 and 2 step-by-step detail to `docs/archive/STATE-milestone-1-2.md`. Note the Rapier choice on issue #3 | Pushed | Done |
 | 1 | **Rapier proof.** Install the pinned package. Throwaway measurements, then kept tests: it loads in Node and both browsers; a ray dropped on the heightfield meets the ground's own height at grid points (seeds 1 and 7); a box dropped and stepped 600 times gives the same fingerprint twice, after a restore, and in Node, Chromium and Firefox | Numbers here: load time, download size, collider build time (with every tree), step time, snapshot size. **If the browsers disagree, stop and report to Tane** | Done (see "Step 1") |
-| 2 | **Open walls** (generation only). `gen/road/walls.ts`, `Road.walls`, barriers drawn from spans with tapered ends, world fingerprint, lab drawing, barrier and 20-seed tests updated | Share of each lap left open over seeds 1 to 200; screenshots of seeds 1 to 20 checked by eye | 2a, 2b and 2c done; 2d next |
+| 2 | **Open walls** (generation only). `gen/road/walls.ts`, `Road.walls`, barriers drawn from spans with tapered ends, world fingerprint, lab drawing, barrier and 20-seed tests updated | Share of each lap left open over seeds 1 to 200; screenshots of seeds 1 to 20 checked by eye | Done (see "Step 2") |
 | 3 | **Simulation skeleton.** Rules for `src/sim`; input record; colliders; the car body placed on the start line; `step`, `state`, `hash`, `snapshot`, `restore` | Tests: the car settles and stays put for 10 s on a sloped start (seed 42); same inputs, same fingerprint; restore carries on exactly | |
 | 4 | **Springs, engine, steering, grip** (no drift yet) | Tests on simple test grounds (flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank): top speed, time to top speed, braking, reverse, at most 10% slower up 15%, steady cornering, wheels stay down over the crest, never flips | |
 | 5 | **Drive it.** Keyboard and controller, fixed-step loop, the car drawn (low-poly, built in code), chase camera, readout; the page opens driving | Browser tests: car on the start line, W moves it, C switches cameras, old addresses still work, no console errors. Screenshots of the car on several seeds checked by eye | |
@@ -138,6 +138,40 @@ Measured in Node on seeds 1, 3, 7 and 8 (throwaway code, deleted):
 - The 1.68 MB download is fetched alongside world generation in step 5; whether it fits "racing within 10 seconds" on a slow connection is for Milestone 6's performance pass. The non-inlined build of the same engine would save about a quarter of it.
 
 Found on the way: a first measurement seemed to show rays slipping through the road one time in six. It was the measurement: the rays were too short to reach the low side of a banked road.
+
+## Step 2: open walls (2026-11-15 and 16)
+
+`gen/road/walls.ts` decides where the walls stand (`Road.walls`, settings in `road.walls`), `buildBarriers` builds them with sloping ends, and the lab draws them. A wall is kept on the outside of every real corner (15 m before to 30 m after), where another part of the lap is within 80 m on that side, where the ground within 16 m of the verge rises or falls by more than **40%** on average, and for 14 m each way from the gate. Openings under 40 m are closed and walls under 24 m lengthened.
+
+**Share of the roadside left open, seeds 1 to 200** (both sides counted; throwaway code, deleted):
+
+| Seeds | How many | Least | 1 in 10 under | Middle | 1 in 10 over | Most |
+| --- | --- | --- | --- | --- | --- | --- |
+| All | 200 | 19% | 36% | 50% | 60% | 72% |
+| Flat | 44 | 35% | 42% | 51% | 61% | 71% |
+| Rolling | 68 | 19% | 35% | 51% | 61% | 72% |
+| Hilly | 50 | 31% | 37% | 52% | 61% | 69% |
+| Mountain | 38 | 22% | 29% | 41% | 56% | 63% |
+| Mountain, climbing | 14 | 22% | 32% | 46% | 60% | 63% |
+| Mountain, circling | 24 | 23% | 30% | 38% | 46% | 55% |
+| Inland | 56 | 32% | 44% | 55% | 63% | 72% |
+| Touches the sea | 80 | 23% | 39% | 51% | 60% | 71% |
+| Coastal | 64 | 19% | 32% | 41% | 53% | 62% |
+
+A lap has about 11 walls and as many openings. No seed is walled all the way round and none has no wall.
+
+**What was tuned: the slope at which a wall is kept, 25% to 40%** (`road.walls.maxSlope`). With 25%, mountain seeds were walled nearly all the way round: 20% open in the middle, 9% at the least, and 20 of the 200 seeds under 20% open. The pictures showed why: walls beside ordinary grass hillsides. On mountain seeds 28% of the roadside (away from corners and close sections) has ground rising at more than 25% but only 12% at more than 35% and 2% at more than 50%; ground that falls is either under about 50% or a cliff of 100% and more. So 40% opens the hillsides and keeps every cutting and cliff walled. It sits just under the 45% bank the car is tested on in step 4. Flat, rolling and hilly seeds barely change (their middle was 46% to 50%).
+
+Measured with the 25% rule, what each reason adds: without the corner rule the average lap would be 62% open instead of 42%, without the close-sections rule 49%, without the steep-ground rule 58% (mountain seeds 64% instead of 21%). Corners are the main reason for a wall everywhere but on mountains. Openings ran from 40 m to 1,271 m (middle 102 m), walls from 24 m to a whole side (middle 144 m).
+
+**The sea is mostly behind a wall, and that is the ground, not the rule.** Where the sea is within 40 m of the road edge, the road is 10 m above it in the middle case (4 m at the low end), so most of it is a cliff or a steep bank, and nearly half of it is the outside of a corner. Of that roadside 13% is open (8% with the 25% rule); within 20 m of the sea, 5% (was 0.3%). 68 of the 137 seeds with sea beside the road have an opening of 40 m or more facing it (was 51): 30 of 36 flat seeds, 29 of 48 rolling, 9 of 30 hilly, none of 23 mountain. So "falling in the water" will happen on some flat and rolling seeds and rarely elsewhere. For Tane at check-in 1.
+
+**Pictures looked at:** seeds 1 to 20 in two batches of ten (lab picture and 13 3D pictures a seed; all 286 screenshot tests passed), the four road-level views of each seed joined into one sheet; six mountain seeds again with the 40% rule; and close views of two wall ends on each of the 20 seeds (`at=x,z`, zoomed to about 38 m). Walls stand on the outside of corners, above cliffs, along cuttings and at the gate; straights across open ground have grass on both sides; low coast roads run down to grass and sand with no wall (seeds 7 and 9). Every wall end looked at slopes down to the ground with no gap under it.
+
+**Left for later:**
+- A wall's end is a ramp, 0.8 m up over 6 m. A car that meets it head on could ride up it. Step 3 gives each wall piece a box; step 7 (bumps) must check what a sloping end does to the car, and may want the end's boxes blunt.
+- A hillside of up to 40% beside a mountain road is now open. Whether the car can drive back up one, and whether a long slide down needs a respawn, is for steps 4 and 8.
+- In the lab the wall lines are thin when the whole island is in view.
 
 ## Working agreements
 
@@ -350,6 +384,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-15 | **Rapier's cross-platform deterministic build** (`@dimforge/rapier3d-deterministic-compat` 0.21.0), not the standard one the brief names | Tane's choice. Ghosts on one computer work with either; only this build promises the same lap on every computer and browser, which shared ghosts, leaderboards and multiplayer need. Same version, API and download size; a little slower per step, which does not matter for one car |
 | 2026-11-15 | **The walls open in places** (Milestone 3, step 2): they stay on the outside of corners, beside close sections and beside steep or dropping ground; elsewhere the roadside is open grass. Trees and rocks get collisions | Tane's choice. With a wall round the whole lap the car could only leave the road onto a 1.8 m verge, so the brief's off-road slowdown and falling in the water would never happen |
 | 2026-11-15 | Beaches stay open: no wall beside gentle sand down to the sea | Claude's call, for Tane to judge at check-in 1. It is where the car can fall in the water |
+| 2026-11-16 | **A wall is kept beside ground steeper than 40%** on average over up to 16 m (`road.walls.maxSlope`, was 25%) | Claude's call from step 2d's numbers and pictures, for Tane to judge at check-in 1: at 25% mountain laps were about 20% open, with walls beside grass hillsides a car can drive on. 40% keeps every cutting and cliff walled and is just under the 45% bank the car is tested on |
 | 2026-11-15 | The page opens driving, with the chase camera; C switches chase, flying and circling; old screenshot addresses keep their views | Tane's choice. Pillar 4, instant to play |
 | 2026-11-15 | Controller support is built in Milestone 3 | Tane's choice, so the handling is tuned for analogue steering too |
 | 2026-11-15 | The car is a Rapier rigid body with our own springs and arcade layer on top; Rapier's vehicle controller is not used | Claude's call. The brief's handling is rules, not tyre physics; our own sums are exact (`core/dmath.ts`) and every number is in the config |
@@ -366,6 +401,9 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **M2:** corner entries have no easing (the curvature steps from zero to 1/radius). Banking handles this by averaging its tilt over 30 m (done in step 8); kerbs should allow for it too.
 
 ## Known issues and risks
+
+- **Few roadsides open onto the sea** (step 2d): half the seeds with sea beside the road have an opening facing it, mostly flat and rolling ones, and no mountain seed has. Coast roads mostly run above a cliff or round the outside of a corner, and both keep their wall. Opening corner outsides above gentle beaches, or lower coast roads, would change it. For Tane at check-in 1.
+- **Wall ends are ramps** (0.8 m up over 6 m), and hillsides of up to 40% beside mountain roads are open: both wait for the car (steps 4, 7 and 8; see "Step 2").
 
 - **The verge still dips a little at its outer edge on steep banks** (about 0.3 m at worst, seed 1; was about 0.45 m before R5's 4 m verge). The road is unaffected and the barrier footing hides it; the barrier test asks for a third of the footing in the ground and passes. Holding the road's height one cell beyond the verge in `fit.ts` would remove the rest.
 - **Sea cliffs have a coarser saw-tooth edge on the 3 m grid** (visible in close views, for example seed 1 `look=bank` and seed 7 `look=water`). R6 left the coast beside the road unchanged. A finer grid near the coast, or smoothing the cliff's top edge, would help.
@@ -433,3 +471,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-15 (Milestone 3):** Step 2a done. `gen/road/walls.ts` (`findWalls`, `tidyWalls`, `walledPieces`), the `WallSpan` type, `road.walls` settings, `Road.walls`, and the walls in the world fingerprint (every seed's fingerprint changes). A wall is kept on the outside of real corners (15 m before to 30 m after), where another part of the lap is within 80 m on that side, where the ground within 16 m of the verge rises or falls by more than 25% on average (and more than 0.6 m), and for 14 m each way from the gate; openings under 40 m are closed and walls under 24 m lengthened. It costs about 1 ms a world. First look at five seeds: 14% to 40% of each side open on mountain seeds 1 and 3, up to 76% on hilly ones. The drawn barriers are unchanged until 2b. The snow test in `mountains.test.ts` was given 60 s: it sat on the 20 s limit and went over once more test files ran beside it. 1,659 unit tests and 272 browser tests pass. Next: 2b.
 - **2026-11-16 (Milestone 3):** Step 2b done. `buildBarriers` builds a wall only where `Road.walls` has one; a wall that does not go round the whole lap rises from the road's level over `road.walls.taper` (6 m) at each end and has a face closing each end. Tests for whole-lap walls kept, new ones for walls that open (only where there is one, full height between the ends, sloping ends with no step, end faces looking along the lap, nothing for no walls); the footing check in `testing/fitChecks.ts` allows the sloping ends. Screenshots of seeds 1, 7, 42, 100, 2024 and 48213 looked at: walls on the outside of corners, beside cliffs and cuttings and at the gate, open grass elsewhere, no gaps under a wall. 1,664 unit tests and 272 browser tests pass. Next: 2c.
 - **2026-11-16 (Milestone 3):** Step 2c done. The lab draws each wall as a pale line beside the winner's road (`debug/trackLab/wallPaths.ts`: `wallPath`; `drawWalls` in `draw.ts`) and its Track panel says, on seed 7, "10 walls; 35% of the roadside open (right 52%, left 19%)" (seed 1, a mountain seed: 7 walls, 17% open) (`describeWalls` in `format.ts`); `data-lab-walls` on the page for the browser test. Found on the way: editing a file with PowerShell's `Get-Content` and `Set-Content` damaged its accented characters and degree signs (restored from git; file edits go through Python or the editing tools). Lab pictures of seeds 1 and 7 looked at: the lines are right but thin when the whole island is in view, clearer zoomed in. 1,672 unit tests and 274 browser tests pass. Tane asked to stop after 2c. Next: 2d.
+- **2026-11-16 (Milestone 3):** Step 2d done, which ends step 2. Measured on seeds 1 to 200: with the 25% slope rule the middle lap was 45% open but mountain laps only 20% (9% at the least), walled beside ordinary grass hillsides. `road.walls.maxSlope` raised to 40%: the middle lap is now 50% open, mountain laps 41%, none under 19% (table under "Step 2"). The sea is mostly behind a wall because coast roads mostly run above cliffs or round the outside of corners; half the seeds with sea beside the road have an opening facing it. Screenshots of seeds 1 to 20 looked at in two batches, six mountain seeds again after the change, and close views of 40 wall ends: walls where expected, clean ends. Two tests added first and seen failing (a 30% hillside stays open; mountain seeds 1, 3 and 13 are more than a quarter open). Every seed's world fingerprint changes again (walls only). 1,674 unit tests and 274 browser tests pass. Next: step 3, the simulation skeleton.
