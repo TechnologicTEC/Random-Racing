@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScorePart } from '../../gen/types';
 import { config } from '../../config';
 import { generateTrack } from '../../gen';
-import { describeCharacter, describeClouds, describeDecor, describeFit, describeSky, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, parseClock, shortCharacter, shortScenery, summariseTracks } from './format';
+import { describeCharacter, describeClouds, describeDecor, describeFit, describeSky, describeWalls, describeWidth, describeProfile, describeScorePart, describeViolation, formatClock, lightName, parseClock, shortCharacter, shortScenery, summariseTracks } from './format';
 
 describe('describeCharacter', () => {
   it('lists the traits of a seed in plain words', () => {
@@ -44,6 +44,31 @@ describe('describeWidth', () => {
   it('gives the narrowest and widest for a road that does, and how much of the lap is wider', () => {
     // Four samples, two of them clearly wider than the narrowest.
     expect(describeWidth(new Float64Array([12, 12, 17.4, 21.6]))).toBe('12 to 22 m (wider on 50% of the lap)');
+  });
+});
+
+describe('describeWalls', () => {
+  it('says how many walls there are and how much of each side of the road is open', () => {
+    // A lap of 200 pieces: 50 walled on the right, 120 on the left in two walls.
+    const walls = [
+      { startIndex: 0, pieceCount: 50, side: 1 as const },
+      { startIndex: 10, pieceCount: 40, side: -1 as const },
+      { startIndex: 100, pieceCount: 80, side: -1 as const },
+    ];
+    expect(describeWalls(walls, 200)).toBe('3 walls; 58% of the roadside open (right 75%, left 40%)');
+  });
+
+  it('says so when the walls go all the way round, and when there are none', () => {
+    const round = [
+      { startIndex: 0, pieceCount: 200, side: 1 as const },
+      { startIndex: 0, pieceCount: 200, side: -1 as const },
+    ];
+    expect(describeWalls(round, 200)).toBe('2 walls; none of the roadside open');
+    expect(describeWalls([], 200)).toBe('No walls; all of the roadside open');
+  });
+
+  it('counts one wall as one wall', () => {
+    expect(describeWalls([{ startIndex: 5, pieceCount: 100, side: 1 }], 200)).toBe('1 wall; 75% of the roadside open (right 50%, left 100%)');
   });
 });
 

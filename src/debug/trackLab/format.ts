@@ -1,4 +1,4 @@
-import type { Character, CloudCover, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, Sky, TrackResult, Violation, WoodsKind } from '../../gen/types';
+import type { Character, CloudCover, FitReport, LandformKind, ProfileStats, RouteKind, ScorePart, Sky, TrackResult, Violation, WallSpan, WoodsKind } from '../../gen/types';
 
 /** Trims a number to at most one decimal place, dropping a trailing ".0". */
 function short(value: number): string {
@@ -122,6 +122,23 @@ export function describeWidth(width: ArrayLike<number>): string {
   let wider = 0;
   for (let i = 0; i < width.length; i++) if (width[i]! > narrowest + 0.5) wider++;
   return `${Math.round(narrowest)} to ${Math.round(widest)} m (wider on ${Math.round((100 * wider) / width.length)}% of the lap)`;
+}
+
+/**
+ * How many walls stand beside the road, and how much of the roadside they leave open.
+ *
+ * @param pieces how many pieces the lap has: the number of samples of its centre line
+ */
+export function describeWalls(walls: readonly WallSpan[], pieces: number): string {
+  const walled = { right: 0, left: 0 };
+  for (const wall of walls) walled[wall.side > 0 ? 'right' : 'left'] += Math.min(wall.pieceCount, pieces);
+  // Worked out from whole counts, so a share of exactly half a per cent rounds up as it should.
+  const open = (count: number, of: number): number => Math.round((100 * (of - count)) / of);
+  const both = open(walled.right + walled.left, 2 * pieces);
+  const count = walls.length === 0 ? 'No walls' : plural(walls.length, 'wall');
+  if (walled.right + walled.left === 0) return `${count}; all of the roadside open`;
+  if (walled.right + walled.left >= 2 * pieces) return `${count}; none of the roadside open`;
+  return `${count}; ${both}% of the roadside open (right ${open(walled.right, pieces)}%, left ${open(walled.left, pieces)}%)`;
 }
 
 /** The kind of island in a few words, for a contact sheet caption. */

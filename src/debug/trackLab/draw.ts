@@ -1,7 +1,8 @@
 import type { TrackConfig } from '../../config';
 import type { Vec2 } from '../../core/vec2';
-import type { Candidate, CenterLine, CornerKind, Decor, Scatter, Section, Violation } from '../../gen/types';
+import type { Candidate, CenterLine, CornerKind, Decor, Scatter, Section, Violation, WallSpan } from '../../gen/types';
 import { screenToWorld, worldToScreen, type View } from './view';
+import { wallPath } from './wallPaths';
 
 /** What the lab draws for one seed. */
 export interface LabScene {
@@ -17,6 +18,8 @@ export interface LabScene {
   width?: Float64Array | null;
   /** The island's trees and rocks to mark on it, if any. */
   decor?: Decor | null;
+  /** The walls beside the selected candidate's road, when they have been worked out (the winner only). */
+  walls?: readonly WallSpan[] | null;
 }
 
 /** A top-down picture of the island and where it sits in the world. */
@@ -55,7 +58,11 @@ const COLORS = {
   start: '#ffffff',
   label: '#9aa7b4',
   bad: '#ff7a70',
+  wall: '#f1e9d2',
 };
+
+/** Walls are drawn this far outside the road edge, in metres: about where they stand (`road.barrierOffset`). */
+const WALL_BEYOND = 2;
 
 /** Dots for trees by kind (broadleaf, pine, palm), darker than any grass so woods stand out, and for rocks. */
 const TREE_DOTS = ['#1f4a1c', '#143a26', '#2f6b2a'];
@@ -82,6 +89,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabSce
     drawGhosts(ctx, view, scene.ghosts);
     const { line, sections, controlPoints, violations } = scene.selected;
     drawRoad(ctx, view, line, scene.width ?? cfg.roadWidth);
+    if (scene.walls && scene.width) drawWalls(ctx, view, line, scene.width, scene.walls);
     drawSections(ctx, view, line, sections);
     drawControlPoints(ctx, view, controlPoints);
     if (scene.isWinner) drawStart(ctx, view, line, scene.width ? scene.width[0]! : cfg.roadWidth);
@@ -244,6 +252,23 @@ function drawRoad(ctx: CanvasRenderingContext2D, view: View, line: CenterLine, r
   ctx.strokeStyle = COLORS.road;
   ctx.lineWidth = Math.max(1.5, roadWidth * view.scale);
   ctx.stroke();
+}
+
+/** Draws each wall as a pale line beside the road. Where there is no line, the roadside is open. */
+function drawWalls(ctx: CanvasRenderingContext2D, view: View, line: CenterLine, width: Float64Array, walls: readonly WallSpan[]): void {
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'butt';
+  ctx.strokeStyle = COLORS.wall;
+  ctx.lineWidth = Math.max(1.25, 0.8 * view.scale);
+  for (const wall of walls) {
+    ctx.beginPath();
+    wallPath(line, width, wall, WALL_BEYOND).forEach((point, k) => {
+      const { sx, sy } = worldToScreen(view, point.x, point.z);
+      if (k === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.stroke();
+  }
 }
 
 /** Colours the centre line by section. */
