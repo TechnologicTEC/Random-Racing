@@ -4,6 +4,7 @@ import { generateWorld } from '../gen/generate';
 import { createField, sampleGrid, worldX, worldZ } from '../gen/world/heightfield';
 import { stadiumLine, swellingWidth, uniformWidth } from '../testing/trackFixtures';
 import { flowerMap, grassAt, grassGrid, roadsideMap } from './grassMaps';
+import { chunkStrides, detailOptions } from './terrainChunks';
 
 const cfg = config.render.grass;
 /** How far from the road edge the roadside map measures: the mown strip and the stretch over which the grass grows back. */
@@ -234,6 +235,29 @@ describe('grassGrid: everything the grass needs to know about the ground, for a 
     expect(outside.grass).toBe(0);
     expect(outside.flowers).toBe(0);
     expect(outside.roadside).toBe(reach);
+  });
+
+  it('grows no grass on ground drawn coarse, where blades would stand off the drawn ground, and keeps the rest', () => {
+    const detail = chunkStrides(ground, detailOptions(config.render, winner.line));
+    const kept = grassGrid(world, cfg, detail);
+    let coarse = 0;
+    let fine = 0;
+    for (let iz = 0; iz < ground.size; iz++) {
+      for (let ix = 0; ix < ground.size; ix++) {
+        const c = iz * ground.size + ix;
+        const chunk = Math.min(detail.across - 1, Math.floor(iz / detail.step)) * detail.across + Math.min(detail.across - 1, Math.floor(ix / detail.step));
+        if (detail.strides[chunk]! > 1) {
+          expect(kept.data[c * 4]).toBe(0);
+          if (cover.grass[c]! > 0) coarse++;
+        } else {
+          expect(kept.data[c * 4]).toBe(cover.grass[c]);
+          fine++;
+        }
+      }
+    }
+    // Seed 7 has grass on its far ground, and ground near the road.
+    expect(coarse).toBeGreaterThan(1000);
+    expect(fine).toBeGreaterThan(1000);
   });
 
   it('is quick to build: it is made on the page, not in the worker', () => {

@@ -13,7 +13,7 @@ import { createGrassView } from './grassView';
 import { TERRAIN, toLinear, type Rgb } from './palette';
 import { createRoadMaterial, createRoadMesh } from './road';
 import { createSkyDome } from './sky';
-import { buildTerrainChunks } from './terrainChunks';
+import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
 import { createWater } from './water';
 import { waterDepthGrid } from './waterDepth';
 
@@ -21,6 +21,8 @@ import { waterDepthGrid } from './waterDepth';
 export interface ViewStats {
   /** Pieces of ground in the scene. */
   chunks: number;
+  /** How many of those are drawn in full, at a quarter of the triangles and at a sixteenth. */
+  levels: [number, number, number];
   /** Triangles and draw calls in the last frame. */
   triangles: number;
   calls: number;
@@ -150,6 +152,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   const grass = createGrassView(cfg.grass, cfg.water.wind);
   scene.add(grass.object);
   let grassShown = true;
+  /** How many pieces of ground are drawn at each level of detail. */
+  let levels: [number, number, number] = [0, 0, 0];
   /** The ground of the world shown, to tell how high the camera is above it. */
   let land: HeightField | null = null;
   /** The point the camera was last aimed at. */
@@ -177,19 +181,18 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
   return {
     load(world) {
       clearGround();
+      const winner = world.track.candidates[world.track.winnerIndex]!;
+      // Ground far from the road is only ever seen from a distance, so it is drawn with fewer triangles; so is deep sea bed.
+      const options = detailOptions(cfg, winner.line);
       const depths = waterDepthGrid(world.ground, cfg.seaFloorDepth);
       water.setDepths(depths);
-      // The grass stands on the same heights the water measures its depth from.
-      grass.load(water.depthTexture(), depths, grassGrid(world, cfg.grass));
+      // The grass stands on the same heights the water measures its depth from, and only where the ground is drawn in full.
+      grass.load(water.depthTexture(), depths, grassGrid(world, cfg.grass, chunkStrides(world.ground, options)));
       land = world.ground;
-      const winner = world.track.candidates[world.track.winnerIndex]!;
-      const chunks = buildTerrainChunks(world.ground, world.cover, {
-        chunkCells: cfg.chunkCells,
-        skipBelow: cfg.skipSeaBedBelow,
-        // Ground far from the road is only ever seen from a distance, so it is drawn with a quarter of the triangles.
-        far: { x: winner.line.x, z: winner.line.z, distance: cfg.detailDistance, stride: cfg.farStride },
-      });
+      const chunks = buildTerrainChunks(world.ground, world.cover, options);
+      levels = [0, 0, 0];
       for (const chunk of chunks) {
+        levels[chunk.stride >= 4 ? 2 : chunk.stride >= 2 ? 1 : 0]++;
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(chunk.colors, 3));
@@ -276,6 +279,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
       const counts = decor.counts();
       return {
         chunks: ground.children.length,
+        levels: [...levels],
         triangles: renderer.info.render.triangles,
         calls: renderer.info.render.calls,
         trees: shown ? counts.trees : 0,

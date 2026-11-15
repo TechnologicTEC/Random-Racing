@@ -35,6 +35,21 @@ test('builds the island in 3D and draws land and sea', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('draws the ground at three levels of detail on a big island, and still shows land, sea and road from above', async ({ page }) => {
+  // Seed 1 is a mountain seed with land far from the road.
+  await openWorld(page, 'seed=1&still=1&cam=orbit&time=13:00&decor=off');
+  const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
+  const [full, quarter, sixteenth] = stats.levels;
+  expect(full).toBeGreaterThan(5);
+  expect(quarter).toBeGreaterThan(5);
+  expect(sixteenth).toBeGreaterThan(5);
+  expect(full + quarter + sixteenth).toBe(stats.chunks);
+  const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+  expect(seen.land / seen.total).toBeGreaterThan(0.02);
+  expect(seen.sea / seen.total).toBeGreaterThan(0.1);
+  expect(seen.road / seen.total).toBeGreaterThan(0.002);
+});
+
 test('generates the 3D world in the worker within the 3-second budget @budget', async ({ page }) => {
   // Held still, as the page is behind its loading screen while a new world is built: the builds below
   // bypass that screen, and a headless browser drawing in software would take time from the worker.

@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15c (step 15 is planned and recorded under "Step 15" below; 15a and 15b done, baseline frame times there): far-ground detail levels. Then 15d to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15d (step 15 is planned and recorded under "Step 15" below; 15a to 15c done): the shadow settings and the land and cloud shade as plain numbers (`terrainShade.ts`, `cloudShade.ts`, `shade.ts`). Then 15e to 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a and 15b done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15c done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -524,7 +524,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | --- | --- | --- |
 | 15a | Record the plan and Tane's choices here | Done |
 | 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | Done (results below) |
-| 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | To do |
+| 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | Done (below) |
 | 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | To do |
 | 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | To do |
 | 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | To do |
@@ -562,6 +562,24 @@ Parts switched off, flying at 1080p (seeds 1, 7, 8): whole 5.2 to 5.9 ms; no gra
 - Pixels matter most. The laptop's full screen has 2.5 times the pixels of 1080p and takes 1.6 to 2 times as long; the circling view, where the sea fills the picture, goes over 16.7 ms there. This is what Tane's choice of steady speed on High is for.
 - So High's pixel budget does the most for speed; a third level of far-ground detail does little for it here (it still cuts the triangles a weaker card has to draw).
 - Provisional pixel budget for High: about 2.8 million pixels (1080p is 2.1 million, the full screen 5.2 million), to be settled in 15g once shadows are in.
+
+**15c as built.**
+- `render.detail` replaces `detailDistance` and `farStride`: ground none of which comes within 250 m of the road's centre line is drawn with every second height each way (a quarter of the triangles, as since R8); beyond **500 m**, every fourth (a sixteenth). A piece of sea bed lying entirely 4 m or more under the sea is drawn at a sixteenth wherever it is.
+- `chunkStrides` (`render/terrainChunks.ts`) works out each piece's step; `buildTerrainChunks` uses it and reports `stride` on every chunk; `detailOptions` builds the options from the config. The old way of joining a fine piece to a coarse one works for any two steps, so no crack opens where any two levels meet (tested on every shared edge).
+- No grass grows on ground drawn coarse (`grassGrid` takes the steps), which removes the known issue of blade feet up to 1.7 m off far ground.
+- `stats().levels`: how many pieces are drawn at each level.
+
+**Why 500 m and 4 m.** Ground triangles of eight seeds, as a share of what R8 drew (quarter detail only):
+
+| Sixteenth from | 4 m deep sea bed | Range over seeds 1, 3, 7, 8, 12, 20, 44, 2024 |
+| --- | --- | --- |
+| 700 m | yes | 77% to 92% |
+| 600 m | yes | 76% to 90% |
+| **500 m** | **yes** | **74% to 88%** |
+
+Deeper sea-bed limits (6 m) saved up to 4 points less; 3 m saved nothing more. Seed 12's island fills most of the tile, so at 700 m it kept 90%.
+
+**Results.** Screenshots of seeds 1, 3, 7, 8, 12, 20, 44 and 2024 from above, flying at 0.3 and 0.8 of the lap and the summit and climb views, checked as contact sheets: no cracks or seams where levels meet, mountains keep their shape, the sea bed shows no steps through the shallows. Frame times hardly change on this card (15b found triangles cheap here); the saving is for weaker cards. 1,057 unit tests and 240 browser tests pass. **The browser suite took 598 s** (428 s at 14f, 556 s at 15b): the 16 tests added since 14f open about 32 more worlds, which does not explain all of it. 15f compares against 598 s, and the cause is looked at if it keeps growing.
 
 ### Rework risks
 
@@ -733,6 +751,7 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 | 2026-11-13 | The hinterland's coast (and land filled in where sea was cut off) climbs to the height of the land there, not of the nearest road | The nearest road's height jumps where the nearest part of the track changes; on a mountain seed that carved straight creases across the land (seed 12) |
 | 2026-11-13 | Snow is a fifth cover map (`Cover.snow`), from 180 m to full at 200 m, lying over rock and grass; white in 3D | The plan |
 | 2026-11-13 | **Far ground at quarter detail**: a chunk none of whose square comes within 250 m of the road uses every second height each way (`render.detailDistance`, `render.farStride`). Where a full chunk meets a coarse one, the full chunk's edge heights are laid on the coarse chunk's edge, so no crack opens | Pulled forward from step 15, as the plan says. Fixed when the world loads, not by camera distance: the flying camera is always on the road. 400 m saved only 18% to 27% |
+| 2026-11-15 | **A third level of ground detail**: a sixteenth of the triangles beyond 500 m from the road, and for sea bed 4 m or more under the sea (`render.detail`); no grass on ground drawn coarse | 74% to 88% of R8's ground triangles on eight seeds; on the Arc laptop triangles are cheap, so this is for weaker cards. Blades on coarse ground stood up to 1.7 m off it |
 | 2026-11-13 | Haze from 1,500 m to 6,600 m (was 900 to 4,200), sea 16 km across (was 9 km), orbit camera out to 3,600 m (was 2,400) | The plan: scaled for the 2,700 m tile. A test checks the far side of the tile stays inside the haze from the furthest orbit |
 | 2026-11-13 | The 3-second budget test runs in its own Playwright projects (`chromium-budget`, `firefox-budget`), after all the other tests, and takes the fastest of three builds | Headless browsers draw WebGL in software. With four of them drawing islands at once, a world took 3.1 to 4.8 s; alone it takes 0.7 to 1.2 s |
 | 2026-11-13 | **Check-in 3 response approved.** Mountain-relief seeds may have laps up to 3 km (departs from the brief's 1.4 to 2.4 km); the gradient stays 15% | Tane's choice: a 15% road on a 2.4 km lap can rise only about 150 m, short of a 200 to 250 m mountain. 3 km allows about 180 m |
@@ -849,7 +868,6 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **Nobody has watched the grass move yet.** The sway, and whether thin blades shimmer as the camera flies, were tested by numbers and judged from still pictures (headless browsers). For Tane to fly a lap: `render.grass.sway` sets the wind, and wider blades or fewer of them are the levers for shimmer.
 - **From the flying camera the grass is a fine texture beside the road**, not bold blades: the camera is 4 m up and the nearest long grass is about 15 m away, past the verge and the mown strip. It reads best within 30 m. Blade widths and counts are in `render.grass.tiers`, lengths in `turf` and `meadow`. For Tane to judge; Milestone 3's chase camera will be lower and closer.
 - **The grass costs 176,000 triangles in every view from the road**, and each blade corner reads the ground five times. Step 15 measures the frame rate on a real graphics card; a low quality setting can use fewer blades or drop the near fields. The summit view now reaches 653k triangles in 132 calls on the most wooded seed.
-- **Blade feet are a little off the drawn ground far from the road** (beyond 250 m, where the ground is drawn at quarter detail): 4 to 6 cm on average, up to 1.7 m on steep ground. Only the `at=` address puts a camera there. Not growing blades on that ground, or reading its coarser heights, would fix it.
 - **Far flower patches are small dabs of colour**, a few pixels each beyond 60 m. `render.grass.flowers` has the share, size and patch settings.
 - **The mown strip is the same width everywhere**, and trees stand in long grass and flowers with nothing cleared round them.
 - **Trees, clouds and grass cast no shadows yet** (step 15), so trees look a little pasted on in midday light.
@@ -919,3 +937,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 14 done in six commits (14a to 14f): the grass settings and maps (`render/grassMaps.ts`), the blades and their sums with the same sums as shader text (`render/grass.ts`), the drawing (`render/grassView.ts`, `grass=off`, `stats().blades`), a look pass from pictures, and screenshots of seeds 1 to 20 plus a time strip. Changed after looking at pictures: blades take their ground's light, no blades on thin cover, a narrower and taller mown strip, wider blades, more and bigger flowers. No generation code changed. Found on the way: a wall-clock test limit failed under load and was loosened; a page made in memory cannot load pictures from disk (contact sheets are written as files); an `out` name in a shader clashed with a local of the same name, caught by the console-error check. 1,043 unit tests and 224 browser tests pass. Next: step 15.
 - **2026-11-15 (Milestone 2):** Step 15 planned in plan mode and approved (Tane chose steady speed over full sharpness on High, a Low setting that keeps tree and barrier shadows, and a quality button that is remembered). Step 15a done: the plan is recorded under "Step 15". No code changed.
 - **2026-11-15 (Milestone 2):** Step 15b done: a frame meter (`render/frameMeter.ts`), a readout on the page (`fps=1`, F key), `water=off`, `sync=1`, and `npm run perf`, which times views in a real browser window on the laptop's Intel Arc graphics. Baseline before shadows: 5 to 9 ms a frame at 1080p in every view; 9 to 19 ms on the full 2880 by 1800 screen, where the circling view goes over 16.7 ms. Pixels cost far more than triangles. Found on the way: with only the frame limit off, frame times read as under a millisecond because the page ran ahead of the graphics card; the page now waits for each frame when timing.
+- **2026-11-15 (Milestone 2):** Step 15c done: a third level of ground detail (a sixteenth of the triangles beyond 500 m from the road and for sea bed 4 m under), reported per chunk and in `stats().levels`; no grass on ground drawn coarse. Ground triangles fall to 74% to 88% of R8's on eight seeds. Screenshots of eight seeds checked: no seams, mountains keep their shape.

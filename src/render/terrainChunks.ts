@@ -1,3 +1,4 @@
+import type { RenderConfig } from '../config';
 import type { Cover, HeightField } from '../gen/types';
 import { terrainColour, toLinear } from './palette';
 
@@ -15,6 +16,14 @@ export interface TerrainChunk {
   /** Lowest and highest vertex, in metres above the sea. */
   minY: number;
   maxY: number;
+  /** How many samples it steps over each way: 1 in full detail, 2 for a quarter of the triangles, 4 for a sixteenth. */
+  stride: number;
+}
+
+/** Ground whose nearest point is further than `distance` metres from the road is drawn using only every `stride`-th sample each way. */
+export interface DetailLevel {
+  distance: number;
+  stride: number;
 }
 
 export interface ChunkOptions {
@@ -24,10 +33,73 @@ export interface ChunkOptions {
   skipBelow: number;
   /**
    * Ground far from the road is drawn with fewer triangles. A chunk none of
-   * whose square comes within `distance` metres of any of these points (the
-   * road's centre line) uses only every `stride`-th sample each way.
+   * whose square comes within a level's distance of any of these points (the
+   * road's centre line) takes that level's stride; the coarsest that applies wins.
    */
-  far?: { x: ArrayLike<number>; z: ArrayLike<number>; distance: number; stride: number };
+  far?: { x: ArrayLike<number>; z: ArrayLike<number>; levels: readonly DetailLevel[] };
+  /** A chunk of sea bed whose highest point is at or below `below` metres takes at least this stride, however near the road. */
+  seaBed?: { below: number; stride: number };
+}
+
+/** The stride of every chunk, row by row: what `buildTerrainChunks` uses, for whatever else must know where ground is drawn coarse. */
+export interface GroundDetail {
+  /** Cells along each side of a chunk. */
+  step: number;
+  /** Chunks along each side of the grid. */
+  across: number;
+  strides: Int32Array;
+}
+
+/** The chunk options the 3D view draws an island with: the configured levels of detail, measured from the road's centre line. */
+export function detailOptions(
+  render: Pick<RenderConfig, 'chunkCells' | 'skipSeaBedBelow' | 'detail'>,
+  line: { x: ArrayLike<number>; z: ArrayLike<number> },
+): ChunkOptions {
+  return {
+    chunkCells: render.chunkCells,
+    skipBelow: render.skipSeaBedBelow,
+    far: { x: line.x, z: line.z, levels: render.detail.levels },
+    seaBed: render.detail.seaBed,
+  };
+}
+
+/** Works out how coarsely each chunk is drawn: by its distance from the road, and coarser still for deep sea bed. */
+export function chunkStrides(ground: HeightField, options: ChunkOptions): GroundDetail {
+  const { size, cell, origin, height } = ground;
+  const cells = size - 1;
+  const step = options.chunkCells;
+  const across = Math.ceil(cells / step);
+  const strides = new Int32Array(across * across).fill(1);
+  const far = options.far;
+  const levels = far ? [...far.levels].sort((a, b) => a.distance - b.distance) : [];
+  const nearest = levels.length > 0 ? levels[0]!.distance : Infinity;
+  for (let jz = 0; jz < across; jz++) {
+    for (let jx = 0; jx < across; jx++) {
+      const k = jz * across + jx;
+      if (far && levels.length > 0) {
+        const x0 = origin + jx * step * cell;
+        const z0 = origin + jz * step * cell;
+        const x1 = origin + Math.min(cells, (jx + 1) * step) * cell;
+        const z1 = origin + Math.min(cells, (jz + 1) * step) * cell;
+        // The distance from the chunk's square to the nearest point of the road, stopping as soon as it is in full detail.
+        let closest = Infinity;
+        for (let i = 0; i < far.x.length && closest > nearest * nearest; i++) {
+          const dx = Math.max(x0 - far.x[i]!, 0, far.x[i]! - x1);
+          const dz = Math.max(z0 - far.z[i]!, 0, far.z[i]! - z1);
+          closest = Math.min(closest, dx * dx + dz * dz);
+        }
+        for (const level of levels) if (closest > level.distance * level.distance) strides[k] = Math.max(strides[k]!, level.stride);
+      }
+      if (options.seaBed && options.seaBed.stride > strides[k]!) {
+        let top = -Infinity;
+        for (let iz = jz * step; iz <= Math.min(cells, (jz + 1) * step); iz++) {
+          for (let ix = jx * step; ix <= Math.min(cells, (jx + 1) * step); ix++) top = Math.max(top, height[iz * size + ix]!);
+        }
+        if (top <= options.seaBed.below) strides[k] = options.seaBed.stride;
+      }
+    }
+  }
+  return { step, across, strides };
 }
 
 /**
@@ -42,26 +114,8 @@ export function buildTerrainChunks(ground: HeightField, cover: Cover, options: C
   const step = options.chunkCells;
   const across = Math.ceil(cells / step);
 
-  // How many samples each chunk steps over: 1 near the road, the far stride elsewhere.
-  const strides = new Int32Array(across * across).fill(1);
-  const far = options.far;
-  if (far && far.stride > 1) {
-    for (let jz = 0; jz < across; jz++) {
-      for (let jx = 0; jx < across; jx++) {
-        const x0 = origin + jx * step * cell;
-        const z0 = origin + jz * step * cell;
-        const x1 = origin + Math.min(cells, (jx + 1) * step) * cell;
-        const z1 = origin + Math.min(cells, (jz + 1) * step) * cell;
-        let near = false;
-        for (let i = 0; i < far.x.length && !near; i++) {
-          const dx = Math.max(x0 - far.x[i]!, 0, far.x[i]! - x1);
-          const dz = Math.max(z0 - far.z[i]!, 0, far.z[i]! - z1);
-          if (dx * dx + dz * dz <= far.distance * far.distance) near = true;
-        }
-        if (!near) strides[jz * across + jx] = far.stride;
-      }
-    }
-  }
+  // How many samples each chunk steps over: 1 near the road, coarser further off.
+  const { strides } = chunkStrides(ground, options);
   /** The stride of a chunk, or 1 off the edge of the grid. */
   const strideOf = (jx: number, jz: number): number => (jx < 0 || jz < 0 || jx >= across || jz >= across ? 1 : strides[jz * across + jx]!);
 
@@ -152,7 +206,7 @@ export function buildTerrainChunks(ground: HeightField, cover: Cover, options: C
           indices[k++] = below + 1;
         }
       }
-      chunks.push({ positions, colors, indices, minY, maxY });
+      chunks.push({ positions, colors, indices, minY, maxY, stride });
     }
   }
   return chunks;

@@ -2,6 +2,7 @@ import type { GrassConfig } from '../config';
 import { createNoise, fbm } from '../core/noise';
 import { createRng } from '../core/rng';
 import type { WorldResult } from '../gen/types';
+import type { GroundDetail } from './terrainChunks';
 
 /**
  * What the grass needs to know about the ground besides its height, as plain
@@ -132,8 +133,11 @@ export function flowerMap(seed: number, tile: GridFrame, cfg: GrassConfig['flowe
 /**
  * Packs everything the grass reads about an island into one grid, four bytes to a cell.
  * Made on the page when a world is shown; it takes a few milliseconds.
+ *
+ * @param detail how coarsely each piece of ground is drawn: if given, no grass grows on ground drawn coarse,
+ *   where a blade's foot would stand off the drawn ground
  */
-export function grassGrid(world: WorldResult, cfg: GrassConfig): GrassGrid {
+export function grassGrid(world: WorldResult, cfg: GrassConfig, detail?: GroundDetail): GrassGrid {
   const { ground, cover } = world;
   const { size, cell, origin } = ground;
   const reach = cfg.mown.width + cfg.mown.ease;
@@ -150,17 +154,22 @@ export function grassGrid(world: WorldResult, cfg: GrassConfig): GrassGrid {
     along[i] = g - low[i]!;
   }
 
+  /** Whether the cell in this row of chunks, at this column, is drawn coarse. */
+  const coarse = (chunkRow: number, ix: number): boolean =>
+    detail !== undefined && detail.strides[chunkRow * detail.across + Math.min(detail.across - 1, Math.floor(ix / detail.step))]! > 1;
+
   const data = new Uint8Array(size * size * 4);
   for (let iz = 0; iz < size; iz++) {
     const row = low[iz]! * flowers.size;
     const fz = along[iz]!;
+    const chunkRow = detail ? Math.min(detail.across - 1, Math.floor(iz / detail.step)) : 0;
     for (let ix = 0; ix < size; ix++) {
       const c = iz * size + ix;
       const f = row + low[ix]!;
       const fx = along[ix]!;
       const top = flowers.data[f]! + (flowers.data[f + 1]! - flowers.data[f]!) * fx;
       const bottom = flowers.data[f + flowers.size]! + (flowers.data[f + flowers.size + 1]! - flowers.data[f + flowers.size]!) * fx;
-      data[c * 4] = cover.grass[c]!;
+      data[c * 4] = coarse(chunkRow, ix) ? 0 : cover.grass[c]!;
       data[c * 4 + 1] = cover.variation[c]!;
       data[c * 4 + 2] = roadside[c]!;
       data[c * 4 + 3] = Math.round(top + (bottom - top) * fz);

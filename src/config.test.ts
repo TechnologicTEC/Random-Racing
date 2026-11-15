@@ -75,9 +75,17 @@ describe('config', () => {
     expect(config.render.seaSize / 2).toBeGreaterThanOrEqual(config.render.fogFar + extent / 2);
   });
 
-  it('draws ground far from the road at a quarter of the detail', () => {
-    expect(config.render.farStride).toBe(2);
-    expect(config.render.detailDistance).toBeGreaterThan(config.world.scenery.mountains.clearance);
+  it('draws ground far from the road at a quarter of the detail, and further off at a sixteenth', () => {
+    const { levels, seaBed } = config.render.detail;
+    expect(levels.map((level) => level.stride)).toEqual([2, 4]);
+    // Nothing a camera on the road looks at closely is drawn coarse.
+    expect(levels[0]!.distance).toBeGreaterThan(config.world.scenery.mountains.clearance);
+    expect(levels[1]!.distance).toBeGreaterThan(levels[0]!.distance);
+    // A chunk is a whole number of coarse steps across, so every level ends on a chunk's edge.
+    for (const level of levels) expect(config.render.chunkCells % level.stride).toBe(0);
+    // Sea bed drawn coarse is deep enough that the see-through shallows never show it.
+    expect(seaBed.below).toBeLessThanOrEqual(-config.render.water.clearDepth * 0.5);
+    expect(config.render.chunkCells % seaBed.stride).toBe(0);
   });
 
   describe('grass', () => {

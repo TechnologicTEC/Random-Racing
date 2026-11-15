@@ -815,9 +815,8 @@ export interface RenderConfig {
   chunkCells: number;
   /** Pieces of sea bed entirely deeper than this are not drawn, in metres (a negative number). */
   skipSeaBedBelow: number;
-  /** Pieces of ground further than this from the road, in metres, are drawn with only every `farStride`-th height each way. */
-  detailDistance: number;
-  farStride: number;
+  /** How coarsely ground away from the road is drawn. */
+  detail: GroundDetailConfig;
   /** Camera field of view, top to bottom, in degrees. */
   fieldOfView: number;
   /** Distance at which haze starts, and at which it hides everything, in metres. */
@@ -836,6 +835,17 @@ export interface RenderConfig {
   decor: DecorViewConfig;
   clouds: CloudViewConfig;
   grass: GrassConfig;
+}
+
+/** How coarsely ground away from the road is drawn. Strides must divide `chunkCells`. */
+export interface GroundDetailConfig {
+  /**
+   * A piece of ground none of which comes within `distance` metres of the road's centre line is drawn with only
+   * every `stride`-th height each way: 2 is a quarter of the triangles, 4 a sixteenth. In order of distance.
+   */
+  levels: Array<{ distance: number; stride: number }>;
+  /** A piece of sea bed that lies entirely `below` this height, in metres (a negative number), is drawn at `stride` wherever it is. */
+  seaBed: { below: number; stride: number };
 }
 
 /** How the page measures the time its frames take. */
@@ -1458,8 +1468,13 @@ export const config: GameConfig = {
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,
-    detailDistance: 250,
-    farStride: 2,
+    detail: {
+      levels: [
+        { distance: 250, stride: 2 },
+        { distance: 500, stride: 4 },
+      ],
+      seaBed: { below: -4, stride: 4 },
+    },
     fieldOfView: 50,
     fogNear: 1500,
     fogFar: 6600,

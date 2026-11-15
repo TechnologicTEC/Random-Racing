@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Cover, HeightField } from '../gen/types';
 import { createField, worldX, worldZ } from '../gen/world/heightfield';
 import { terrainColour } from './palette';
-import { buildTerrainChunks } from './terrainChunks';
+import { config } from '../config';
+import { generateWorld } from '../gen/generate';
+import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
 
 /** A small world from formulas: heights, and one cover value for every cell. */
 function world(extent: number, cell: number, heightAt: (x: number, z: number) => number, cover: Partial<Record<keyof Cover, number>> = {}) {
@@ -120,7 +122,8 @@ describe('buildTerrainChunks with far ground at lower detail', () => {
   // 129 samples a side: 128 cells of 2 m, cut into 16 chunks of 32 by 32 cells. A road runs down the left edge.
   const { ground, cover } = world(256, 2, (x, z) => 10 + 6 * Math.sin(x / 9) * Math.cos(z / 7) + x * 0.05);
   const road = { x: Array.from({ length: 65 }, () => -120), z: Array.from({ length: 65 }, (_, i) => -128 + i * 4) };
-  const options = { chunkCells: 32, skipBelow: -100, far: { x: road.x, z: road.z, distance: 70, stride: 2 } };
+  const options = { chunkCells: 32, skipBelow: -100, far: { x: road.x, z: road.z, levels: [{ distance: 70, stride: 2 }] } };
+  const distance = options.far.levels[0]!.distance;
   const chunks = buildTerrainChunks(ground, cover, options);
   const full = buildTerrainChunks(ground, cover, { chunkCells: 32, skipBelow: -100 });
   /** The x of a chunk's left edge. */
@@ -137,7 +140,7 @@ describe('buildTerrainChunks with far ground at lower detail', () => {
     chunks.forEach((chunk, k) => {
       const triangles = chunk.indices.length / 3;
       // A chunk's left edge is 16 m or more from the road at x = -120 once it is past the first two columns.
-      if (left(chunk) - -120 > options.far.distance) {
+      if (left(chunk) - -120 > distance) {
         expect(triangles).toBe(full[k]!.indices.length / 3 / 4);
         far++;
       } else {
@@ -157,7 +160,7 @@ describe('buildTerrainChunks with far ground at lower detail', () => {
         const c = Math.round((z + 128) / 2) * ground.size + Math.round((x + 128) / 2);
         const sample = ground.height[c]!;
         // Full-detail vertices may be pulled onto a coarse neighbour's edge (tested below); all others are exact.
-        if (left(chunk) - -120 > options.far.distance) expect(chunk.positions[v + 1]).toBeCloseTo(sample, 5);
+        if (left(chunk) - -120 > distance) expect(chunk.positions[v + 1]).toBeCloseTo(sample, 5);
       }
     }
   });
@@ -169,7 +172,7 @@ describe('buildTerrainChunks with far ground at lower detail', () => {
     for (const chunk of chunks) {
       const p = chunk.positions;
       for (let v = 0; v < p.length; v += 3) heightAlong.set(`${p[v]},${p[v + 2]}`, p[v + 1]!);
-      if (left(chunk) - -120 > options.far.distance) {
+      if (left(chunk) - -120 > distance) {
         // Remember the coarse chunk's left edge: its z and height at each vertex.
         const x = left(chunk);
         const edge: Array<[number, number]> = [];
@@ -180,7 +183,7 @@ describe('buildTerrainChunks with far ground at lower detail', () => {
     let checked = 0;
     for (const chunk of chunks) {
       const p = chunk.positions;
-      if (left(chunk) - -120 > options.far.distance) continue;
+      if (left(chunk) - -120 > distance) continue;
       for (let v = 0; v < p.length; v += 3) {
         const edge = coarseEdge.get(p[v]!);
         if (!edge) continue;
@@ -250,5 +253,127 @@ describe('terrainColour', () => {
         }
       }
     }
+  });
+});
+
+describe('buildTerrainChunks with three levels of detail', () => {
+  // 257 samples a side: 256 cells of 2 m, cut into 64 chunks of 32 by 32 cells (64 m). A road runs down the left edge at x = -250.
+  const { ground, cover } = world(512, 2, (x, z) => 10 + 6 * Math.sin(x / 9) * Math.cos(z / 7) + x * 0.02);
+  const road = { x: Array.from({ length: 129 }, () => -250), z: Array.from({ length: 129 }, (_, i) => -256 + i * 4) };
+  const levels = [
+    { distance: 70, stride: 2 },
+    { distance: 200, stride: 4 },
+  ];
+  const chunks = buildTerrainChunks(ground, cover, { chunkCells: 32, skipBelow: -100, far: { x: road.x, z: road.z, levels } });
+  const full = buildTerrainChunks(ground, cover, { chunkCells: 32, skipBelow: -100 });
+  /** How far a chunk's nearest point is from the road, which runs along x = -250. */
+  const fromRoad = (chunk: { positions: Float32Array }): number => {
+    let low = Infinity;
+    for (let v = 0; v < chunk.positions.length; v += 3) low = Math.min(low, chunk.positions[v]!);
+    return Math.max(0, low - -250);
+  };
+
+  it('picks each chunk s detail by how far its nearest point is from the road', () => {
+    const seen = new Set<number>();
+    chunks.forEach((chunk, k) => {
+      const away = fromRoad(chunk);
+      const stride = away > 200 ? 4 : away > 70 ? 2 : 1;
+      expect(chunk.indices.length).toBe(full[k]!.indices.length / (stride * stride));
+      seen.add(stride);
+    });
+    expect([...seen].sort()).toEqual([1, 2, 4]);
+  });
+
+  it('reports the step each chunk takes', () => {
+    chunks.forEach((chunk) => {
+      const away = fromRoad(chunk);
+      expect(chunk.stride).toBe(away > 200 ? 4 : away > 70 ? 2 : 1);
+    });
+  });
+
+  it('leaves no cracks anywhere: every vertex on a shared edge lies on the line of the coarser chunk s edge', () => {
+    // For every chunk, its four edges as lists of (position along the edge, height).
+    const edges = new Map<string, Array<Array<[number, number]>>>();
+    const add = (name: string, edge: Array<[number, number]>): void => {
+      edges.set(name, [...(edges.get(name) ?? []), edge]);
+    };
+    const key = (axis: 'x' | 'z', at: number, from: number): string => `${axis}${at}@${from}`;
+    for (const chunk of chunks) {
+      const p = chunk.positions;
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let v = 0; v < p.length; v += 3) {
+        x0 = Math.min(x0, p[v]!); x1 = Math.max(x1, p[v]!);
+        z0 = Math.min(z0, p[v + 2]!); z1 = Math.max(z1, p[v + 2]!);
+      }
+      const along = (axis: 'x' | 'z', at: number): Array<[number, number]> => {
+        const list: Array<[number, number]> = [];
+        for (let v = 0; v < p.length; v += 3) {
+          if (axis === 'x' && p[v] === at) list.push([p[v + 2]!, p[v + 1]!]);
+          if (axis === 'z' && p[v + 2] === at) list.push([p[v]!, p[v + 1]!]);
+        }
+        return list.sort((a, b) => a[0] - b[0]);
+      };
+      add(key('x', x0, z0), along('x', x0));
+      add(key('x', x1, z0), along('x', x1));
+      add(key('z', z0, x0), along('z', z0));
+      add(key('z', z1, x0), along('z', z1));
+    }
+    /** The height on a broken line at a position along it. */
+    const on = (edge: Array<[number, number]>, t: number): number => {
+      const k = edge.findIndex(([at]) => at >= t);
+      const [t1, h1] = edge[k]!;
+      const [t0, h0] = edge[Math.max(0, k - 1)]!;
+      return t1 === t0 ? h1 : h0 + ((h1 - h0) * (t - t0)) / (t1 - t0);
+    };
+    let pairs = 0;
+    // An edge shared by two chunks appears twice under the same name; the sparser of the two must hold the other's vertices.
+    for (const [, both] of edges) {
+      if (both.length < 2) continue;
+      const [a, b] = both.sort((p, q) => p.length - q.length) as [Array<[number, number]>, Array<[number, number]>];
+      for (const [t, h] of b) expect(h).toBeCloseTo(on(a, t), 4);
+      pairs++;
+    }
+    expect(pairs).toBeGreaterThan(50);
+  });
+
+  it('draws sea bed deep under the water at the coarsest step, however near the road', () => {
+    // The same world sunk deep: every chunk is sea bed under at least 5 m of water.
+    const deep = world(512, 2, (x, z) => -20 + 6 * Math.sin(x / 9) * Math.cos(z / 7));
+    const sunk = buildTerrainChunks(deep.ground, deep.cover, { chunkCells: 32, skipBelow: -100, far: { x: road.x, z: road.z, levels }, seaBed: { below: -5, stride: 4 } });
+    expect(sunk).toHaveLength(64);
+    for (const chunk of sunk) expect(chunk.stride).toBe(4);
+    // Ground that comes up near the surface keeps its detail.
+    const shallow = world(512, 2, () => -4);
+    const kept = buildTerrainChunks(shallow.ground, shallow.cover, { chunkCells: 32, skipBelow: -100, seaBed: { below: -5, stride: 4 } });
+    for (const chunk of kept) expect(chunk.stride).toBe(1);
+  });
+});
+
+describe('the ground of real islands, drawn at the configured levels of detail', () => {
+  const triangles = (list: ReturnType<typeof buildTerrainChunks>): number => list.reduce((sum, chunk) => sum + chunk.indices.length / 3, 0);
+  // Seed 1 is a mountain seed with a big island; seed 12 a mountain seed whose island fills much of the tile.
+  for (const seed of [1, 12]) {
+    it(`draws seed ${seed} with well under the triangles of a quarter detail alone`, () => {
+      const world = generateWorld(seed, config);
+      const winner = world.track.candidates[world.track.winnerIndex]!;
+      const options = detailOptions(config.render, winner.line);
+      const now = triangles(buildTerrainChunks(world.ground, world.cover, options));
+      // What R8 drew: full detail near the road, a quarter beyond, nothing coarser.
+      const before = triangles(
+        buildTerrainChunks(world.ground, world.cover, { ...options, far: { ...options.far!, levels: options.far!.levels.slice(0, 1) }, seaBed: undefined }),
+      );
+      // Measured in 15c on eight seeds: 74% to 88% of what R8 drew.
+      expect(now).toBeLessThan(before * 0.9);
+    });
+  }
+
+  it('gives the same step for every chunk as the chunks themselves report', () => {
+    const world = generateWorld(7, config);
+    const winner = world.track.candidates[world.track.winnerIndex]!;
+    const options = detailOptions(config.render, winner.line);
+    const detail = chunkStrides(world.ground, options);
+    const chunks = buildTerrainChunks(world.ground, world.cover, { ...options, skipBelow: -Infinity });
+    expect(chunks).toHaveLength(detail.across * detail.across);
+    chunks.forEach((chunk, k) => expect(chunk.stride).toBe(detail.strides[k]));
   });
 });
