@@ -828,6 +828,8 @@ export interface RenderConfig {
   seaFloorDepth: number;
   /** Sharp screens are drawn at no more than this many pixels per CSS pixel. */
   maxPixelRatio: number;
+  /** What the High and Low quality levels draw. */
+  quality: QualityConfig;
   frames: FramesConfig;
   daylight: DaylightConfig;
   sky: SkyDomeConfig;
@@ -884,6 +886,29 @@ export interface GroundDetailConfig {
   levels: Array<{ distance: number; stride: number }>;
   /** A piece of sea bed that lies entirely `below` this height, in metres (a negative number), is drawn at `stride` wherever it is. */
   seaBed: { below: number; stride: number };
+}
+
+/**
+ * The quality levels (Tane's choices, step 15: High favours steady speed over full sharpness; Low keeps tree shadows).
+ * High draws everything else as configured; Low changes only what is listed here.
+ */
+export interface QualityConfig {
+  /** The most pixels High draws in a frame: a sharper screen is drawn at fewer pixels and stretched. 1080p is 2.07 million. */
+  high: { pixels: number };
+  low: {
+    /** The most pixels Low draws in a frame. */
+    pixels: number;
+    /** The share of the grass blades it keeps, in every field. */
+    grass: number;
+    /** How many of the sea's wave trains it keeps, longest first. */
+    waves: number;
+    /** Cells along each side of each of the sun's two shadow maps. */
+    shadowMap: number;
+    /** Groups of trees within this many metres of the camera are drawn with their full shapes. */
+    treeDetail: number;
+    /** Tree, rock and barrier shadows reach no further than this from the camera, in metres. */
+    shadowReach: number;
+  };
 }
 
 /** How the page measures the time its frames take. */
@@ -1519,6 +1544,10 @@ export const config: GameConfig = {
     seaSize: 16000,
     seaFloorDepth: -23,
     maxPixelRatio: 2,
+    quality: {
+      high: { pixels: 2_800_000 },
+      low: { pixels: 1_200_000, grass: 0.35, waves: 4, shadowMap: 1024, treeDetail: 200, shadowReach: 800 },
+    },
     frames: { keep: 600, target: 16.7, readoutEvery: 0.5 },
     daylight: {
       sunrise: 6.5,

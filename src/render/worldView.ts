@@ -8,6 +8,7 @@ import { createCloudView } from './cloudView';
 import { cloudDrift } from './clouds';
 import type { Daylight } from './daylight';
 import { CASTER_LAYER, createDecorView } from './decorView';
+import { pixelRatioFor } from './quality';
 import { grassEye } from './grass';
 import { grassGrid } from './grassMaps';
 import { createGrassView } from './grassView';
@@ -41,6 +42,8 @@ export interface ViewStats {
   shaded: number;
   /** How far from the camera trees, rocks and barriers cast shadows, in metres; 0 with shadows off. */
   shadowReach: number;
+  /** Shader programs Three.js has built so far: it should stop growing once the island has been drawn. */
+  programs: number;
 }
 
 /** A rough census of the last frame, used by tests to confirm something sensible was drawn. */
@@ -94,6 +97,7 @@ export interface WorldView {
   setWaterShown(shown: boolean): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
+  /** Fits the picture to the window: `pixelRatio` is the screen's pixels for each of the page's. No more than the view's budget of pixels is drawn. */
   resize(width: number, height: number, pixelRatio: number): void;
   render(): void;
   /**
@@ -110,7 +114,11 @@ export interface WorldView {
 
 const colour = (rgb: Rgb): THREE.Color => new THREE.Color(toLinear(rgb[0]), toLinear(rgb[1]), toLinear(rgb[2]));
 
-export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): WorldView {
+/**
+ * @param cfg the render settings for the quality level shown (`qualitySettings`)
+ * @param pixels the most pixels to draw in a frame
+ */
+export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pixels: number): WorldView {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -307,7 +315,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
     },
 
     resize(width, height, pixelRatio) {
-      renderer.setPixelRatio(Math.min(pixelRatio, cfg.maxPixelRatio));
+      renderer.setPixelRatio(pixelRatioFor(width, height, pixelRatio, pixels, cfg.maxPixelRatio));
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
@@ -339,6 +347,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig): W
         blades: grass.object.visible ? grass.count() : 0,
         shaded: shade.shaded(),
         shadowReach: shadowsShown ? sun.shadow.camera.far : 0,
+        programs: renderer.info.programs?.length ?? 0,
       };
     },
 

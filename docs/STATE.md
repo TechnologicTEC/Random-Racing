@@ -7,7 +7,7 @@ Updated at the end of every work session. A new session should read this first, 
 - **Current milestone:** 2, World and track in 3D ([issue #2](https://github.com/TechnologicTEC/Random-Racing/issues/2)), in progress. Milestone 1 (Track lab) is merged and signed off (PR #7)
 - **Branch:** `milestone-2-world`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 14, grass (see "Step 14" below)
-- **Next step:** step 15g (step 15 is planned and recorded under "Step 15" below; 15a to 15f done): High and Low quality, the pixel budget, the Quality button. Then 15h, and steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
+- **Next step:** step 15h (step 15 is planned and recorded under "Step 15" below; 15a to 15g done): the look pass. Shadows are faint; the plan is a setting for how much of the sky's light a shadow also takes, with pictures for Tane to judge. Then steps 16 and 17. Read "Milestone 2 rework" and "Check-in 3 response" below first; they replace parts of "Milestone 2 design"
 
 ## Milestone 2 steps
 
@@ -34,7 +34,7 @@ Part A is data only (no Three.js). Part B is the 3D view.
 | 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
 | 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
 | 14 | Grass | Done (14a to 14f, see "Step 14") |
-| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15f done, see "Step 15") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | In progress (15a to 15g done, see "Step 15") |
 | 16 | 3D becomes the default page; lab on the L key and `?lab=1` | To do |
 | 17 | 20-seed check with screenshot sheets and fit reports; pull request | To do |
 
@@ -528,7 +528,7 @@ Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable
 | 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | Done (below) |
 | 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | Done (below) |
 | 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | Done (below) |
-| 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | To do |
+| 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | Done (below) |
 | 15h | Look pass from pictures; final frame times for High and Low; this file | To do |
 
 **Budgets.** High holds a median of 16.7 ms or less (95th percentile under about 20 ms) in every measured view at 1080p on the Arc laptop; Low is at least about a third faster. If the baseline is already over, or near shadows push High over and the levers do not bring it back, report to Tane before going on. Near shadows add at most about 200k triangles and 90 draw calls to a view from the road. The browser suite takes 428 s now; if it grows by more than about a quarter, tests that are not about shadows open with `shadows=off`.
@@ -639,6 +639,14 @@ High holds 60 frames per second at 1080p in every view, inside the goal (median 
 
 **The flaky failures since 15e were the laptop going into standby.** Windows logged a dozen spells of Modern Standby that afternoon, three of them during 15e's runs (2:23 to 2:57, 3:15 and 3:29 pm). A page caught by one stays on "Raising a new island…". Neither the code nor the long-running dev server (up since 14 November) is to blame, as far as can be told. Three browsers at a time is kept (the suite takes about the same time). Keep the laptop awake while the suites run.
 
+**15g as built.**
+- `render/quality.ts`: `parseQuality`, `qualitySettings(render, level)` (High is the config as it is; Low draws at most 1.2 million pixels, 35% of the grass blades, the 4 longest wave trains, 1024-cell shadow maps reaching at most 800 m, full tree shapes within 200 m; it keeps every kind of shadow) and `pixelRatioFor` (as sharp as the screen allows within the budget, never under one pixel in two). Settings in `render.quality`; High's budget is 2.8 million pixels.
+- The page: a "Quality: High/Low" button, the Q key, `quality=low` in the address; remembered in the browser (`seedCircuit.quality`), the address wins. Switching builds a new view on the same canvas and loads the same island, keeping the camera, time and clocks. `stats().programs` counts Three.js's shader programs.
+- Tests: `src/render/quality.test.ts` (11) and a "quality" group in `e2e/world.spec.ts` (3, run at 1920 by 1080: a 1280 by 720 window is already under Low's budget). 1,094 unit tests pass (run with `--maxWorkers=6` while the laptop was slow). Tane ran the browser suite by hand: 257 passed and one frame-count test failed, which now asks for 3 frames within 30 s like its twin; it and both budget tests then passed.
+- **Why Low gains little from above:** with every shadow off, Low's circling view still takes about 8.9 ms, as High's did before shadows (8.0), though Low draws 40% fewer pixels; with scenery off as well, half the draw calls, about the same. On this graphics card that view has a fixed cost of about 8 ms that neither pixels nor draw calls explain. Low's cuts should do more on a card that is short of pixels. For Milestone 6's performance pass.
+- **Frame times, clean run:** High at 1080p as in 15f (fly 6.2 to 9.4 ms, circling 12.1 to 12.6, summit 7.3 to 9.5); on the full laptop screen High is now drawn at 2116 by 1322 (fly 8.6 to 9.8, circling 14.3 to 17.3, seed 8 just over 16.7). Low at 1080p (drawn at 1460 by 821): fly 6.2 to 6.5, circling 9.6 to 11.7, summit 6.0 to 8.6. **Low is 10% to 50% faster, short of the planned third when circling from above.** Fewer pixels and fewer draw calls (Low's shorter shadow reach cut 100) barely change that view; what holds it up was not found.
+- **The laptop then throttled:** frame times jumped between about 7 ms and 60 to 115 ms from view to view on the same settings, unit tests ran about 60 times slower, and the processor stayed at 1,400 MHz (of 3,800) under load. Measurements were stopped. Earlier that afternoon the laptop also went into standby when the lid was closed (4:12 pm).
+
 ### Rework risks
 
 - **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
@@ -691,6 +699,7 @@ One rule: **generation says what the world is, as plain numbers; rendering only 
 - Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
 - Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
 - Playwright runs three browsers at a time (15e; first thought to be load, but the failures then turned out to be the laptop going into standby).
+- When the laptop is hot it runs at half speed and tests time out (2026-11-15 evening: 19 browser timeouts, unit tests over their 20 s limit). Run unit tests with `npx vitest run --maxWorkers=6`, or let it cool; Tane can run `npm run e2e` by hand.
 - Keep the laptop awake while the test suites or `npm run perf` run: Modern Standby stalls the browsers, and tests fail with worlds that never load or `ERR_NETWORK_IO_SUSPENDED` (found 2026-11-15).
 - Never let a failing test run be followed by a commit in the same command. On 2026-11-12 a Firefox failure was committed past because the test output was piped through a filter, which hid the exit code.
 - Throwaway measurements go in a temporary `src/explore.tmp.test.ts` (deleted before committing). One-off screenshots: copy a script into `test-results/` (ignored by git) so it can import Playwright, with `npm run dev` running. Every Playwright run empties `test-results/`, so keep the script's master copy in the scratchpad and copy it in again.
@@ -1001,3 +1010,4 @@ Files: `src/gen/track/layout.ts` (builder), `fillet.ts` (corner rounding), `skel
 - **2026-11-15 (Milestone 2):** Step 15d done: the land's and the clouds' shadows as plain numbers (`render/terrainShade.ts`, `render/cloudShade.ts`) and as shader text (`render/shade.ts`), settings in `render.shadows`. At 07:00 a mountain island is 42% to 47% in its own shadow, at midday none of it; the land shade takes about 20 ms. Nothing drawn yet.
 - **2026-11-15 (Milestone 2):** Step 15e done: the land's and the clouds' shadows drawn on the ground, road, trees, rocks, grass and sea (`render/shadeView.ts`), worked out again when the time moves; `shadows=off`. Cloud shadows show clearly; mountain shadows at low sun are faint, for the look pass. The browser suite now runs three browsers at a time: four at once timed out worlds.
 - **2026-11-15 (Milestone 2):** Step 15f done: trees, rocks, barriers and the gate cast shadows near the camera (Three.js's `SunLight`, two maps; `render/nearShadows.ts`), trees by their far shapes to keep inside the budget; the grass takes them too. At 1080p every view still holds 60 frames per second (median at most 12.9 ms); the full laptop screen from above does not. Shadows are faint, for the look pass.
+- **2026-11-15 (Milestone 2):** Step 15g done: High and Low quality, the pixel budget, the Quality button and Q key, remembered in the browser. Low measured 10% to 50% faster than High at 1080p, least when circling from above. The laptop throttled for a while (processor held at 1,400 MHz, frame times jumping to 60 ms and more, the browser suite at half speed with 19 timeouts), so Tane ran the browser suite by hand.

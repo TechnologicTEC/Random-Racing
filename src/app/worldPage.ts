@@ -8,8 +8,9 @@ import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
+import { parseQuality, qualitySettings, type QualityLevel } from '../render/quality';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
-import { createWorldView, type PixelCounts, type ViewStats } from '../render/worldView';
+import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
 import { genClient } from '../worker/client';
 
 /** Which camera is in use: flying the lap, or circling a point. */
@@ -50,6 +51,7 @@ const TEMPLATE = `
     <div class="world-card world-controls">
       <button type="button" data-ref="play" data-testid="world-play"></button>
       <button type="button" data-ref="toggle" data-testid="world-camera-toggle"></button>
+      <button type="button" data-ref="quality" data-testid="world-quality" title="High draws everything; Low is lighter, for slower machines (Q)"></button>
       <div class="world-time-control">
         <output data-ref="clock" data-testid="world-clock" aria-live="off"></output>
         <input type="range" data-ref="slider" data-testid="world-time-slider" aria-label="Time of day" step="5" />
@@ -63,6 +65,9 @@ const TEMPLATE = `
     </div>
   </div>
 `;
+
+/** Where the browser keeps the quality level chosen last. */
+const QUALITY_KEY = 'seedCircuit.quality';
 
 const HINTS: Record<CameraMode, string> = {
   fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one.',
@@ -79,7 +84,8 @@ const HINTS: Record<CameraMode, string> = {
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
- * `shadows=off` to leave out every shadow;
+ * `shadows=off` to leave out every shadow; `quality=low` (or high) to open at that quality, which the page otherwise
+ * remembers from last time (the Quality button and the Q key switch it);
  * `sync=1` to wait for the graphics card to finish each frame before the next, so frame times are what frames cost (for `npm run perf`).
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
@@ -101,11 +107,33 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const daylightHour = (hour: number): number => Math.min(latest, Math.max(earliest, hour));
   const fly = config.camera.fly;
 
-  const view = createWorldView(canvas, config.render);
-  view.setDecorShown(params.get('decor') !== 'off');
-  view.setGrassShown(params.get('grass') !== 'off');
-  view.setWaterShown(params.get('water') !== 'off');
-  view.setShadowsShown(params.get('shadows') !== 'off');
+  // The quality level: the address's, or the one chosen last time in this browser, or High.
+  const storedQuality = (): string | null => {
+    try {
+      return window.localStorage.getItem(QUALITY_KEY);
+    } catch {
+      return null;
+    }
+  };
+  let quality: QualityLevel = parseQuality(params.get('quality') ?? storedQuality());
+  const shownParts = {
+    decor: params.get('decor') !== 'off',
+    grass: params.get('grass') !== 'off',
+    water: params.get('water') !== 'off',
+    shadows: params.get('shadows') !== 'off',
+  };
+  /** Builds the 3D view for a quality level, with the parts the address asked for. */
+  const makeView = (level: QualityLevel): WorldView => {
+    const settings = qualitySettings(config.render, level);
+    const made = createWorldView(canvas, settings.render, settings.pixels);
+    made.setDecorShown(shownParts.decor);
+    made.setGrassShown(shownParts.grass);
+    made.setWaterShown(shownParts.water);
+    made.setShadowsShown(shownParts.shadows);
+    document.body.dataset.worldQuality = level;
+    return made;
+  };
+  let view = makeView(quality);
   const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
   const readout = ref('frames');
   readout.hidden = params.get('fps') !== '1';
@@ -151,6 +179,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     ref('play').hidden = mode !== 'fly';
     ref('toggle').textContent = mode === 'fly' ? 'Circle the island' : 'Fly the lap';
     ref('hint').textContent = HINTS[mode];
+    ref('quality').textContent = `Quality: ${quality === 'high' ? 'High' : 'Low'}`;
     document.body.dataset.worldCamera = mode;
   };
 
@@ -170,6 +199,26 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   };
   new ResizeObserver(resize).observe(canvas);
   resize();
+
+  /** Draws the same island again at another quality level, keeping the camera, the time of day and the clocks. */
+  const setQuality = (next: QualityLevel): void => {
+    quality = next;
+    try {
+      window.localStorage.setItem(QUALITY_KEY, next);
+    } catch {
+      // Without storage the choice lasts until the page is closed.
+    }
+    view.dispose();
+    view = makeView(next);
+    resize();
+    view.setWaveTime(waveClock);
+    view.setCloudTime(waveClock);
+    view.setGrassTime(waveClock);
+    if (shown) view.load(shown);
+    setTime(hour);
+    renderControls();
+    dirty = true;
+  };
 
   const aimCamera = (): void => {
     if (mode === 'fly' && flight) {
@@ -365,6 +414,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   ref('play').addEventListener('click', () => setPlaying(!playing));
   ref('toggle').addEventListener('click', () => setMode(mode === 'fly' ? 'orbit' : 'fly'));
   ref('new').addEventListener('click', () => void show(randomSeed(), false));
+  ref('quality').addEventListener('click', () => setQuality(quality === 'high' ? 'low' : 'high'));
   window.addEventListener('keydown', (event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     // The time slider takes its own arrow keys.
@@ -373,6 +423,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (key === ' ' && mode === 'fly') setPlaying(!playing);
     else if (key === 'c') setMode(mode === 'fly' ? 'orbit' : 'fly');
     else if (key === 'n') void show(randomSeed(), false);
+    else if (key === 'q') setQuality(quality === 'high' ? 'low' : 'high');
     else if (key === 'f') {
       readout.hidden = !readout.hidden;
       if (!readout.hidden) renderReadout();

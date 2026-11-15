@@ -622,6 +622,58 @@ test.describe('shadows of trees, rocks and barriers', () => {
   });
 });
 
+test.describe('quality', () => {
+  // At the brief's 1080p: a smaller window is already under Low's budget of pixels, and Low draws it in full.
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  /** Pixels in the picture as drawn, before it is stretched to the window. */
+  const drawn = async (page: Page): Promise<number> =>
+    page.evaluate(() => {
+      const canvas = document.querySelector('canvas')!;
+      return canvas.width * canvas.height;
+    });
+
+  test('opens on High, and draws less on Low while keeping the trees shadows', async ({ page }) => {
+    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00');
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'high');
+    const high = { stats: await page.evaluate(() => window.seedCircuit.view!.stats()), pixels: await drawn(page) };
+    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00&quality=low');
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
+    const low = { stats: await page.evaluate(() => window.seedCircuit.view!.stats()), pixels: await drawn(page) };
+    expect(low.pixels).toBeLessThan(high.pixels * 0.8);
+    expect(low.stats.triangles).toBeLessThan(high.stats.triangles);
+    expect(low.stats.blades).toBeLessThan(high.stats.blades);
+    expect(low.stats.shadowReach).toBeGreaterThan(0);
+  });
+
+  test('switches with the button and the Q key, keeping the island, the camera and the time', async ({ page }) => {
+    await openWorld(page, 'seed=8&still=1&cam=orbit&time=10:30');
+    const button = page.getByTestId('world-quality');
+    await expect(button).toHaveText(/High/);
+    await button.click();
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
+    await expect(button).toHaveText(/Low/);
+    await expect(page.locator('body')).toHaveAttribute('data-world-seed', '8');
+    await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'orbit');
+    await expect(page.locator('body')).toHaveAttribute('data-world-time', '10:30');
+    // Still a whole island in the picture.
+    const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
+    expect(seen.land / seen.total).toBeGreaterThan(0.02);
+    await page.keyboard.press('q');
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'high');
+  });
+
+  test('remembers the choice the next time the page opens, unless the address says otherwise', async ({ page }) => {
+    await openWorld(page, 'seed=8&still=1');
+    await page.getByTestId('world-quality').click();
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
+    await openWorld(page, 'seed=8&still=1');
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
+    await openWorld(page, 'seed=8&still=1&quality=high');
+    await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'high');
+  });
+});
+
 test.describe('frame times', () => {
   test('counts the frames it draws while flying, and starts again when asked', async ({ page }) => {
     await openWorld(page, 'seed=7');
@@ -667,7 +719,8 @@ test.describe('frame times', () => {
     page.on('pageerror', (error) => errors.push(error.message));
     await openWorld(page, 'seed=7&sync=1');
     await expect(page.locator('body')).toHaveAttribute('data-world-sync', 'true');
-    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count).toBeGreaterThan(5);
+    // As in the test above: a headless browser draws in software, a frame can take seconds, so only a few are asked for.
+    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count, { timeout: 30_000 }).toBeGreaterThan(2);
     expect(errors).toEqual([]);
     await openWorld(page, 'seed=7');
     await expect(page.locator('body')).toHaveAttribute('data-world-sync', 'false');
