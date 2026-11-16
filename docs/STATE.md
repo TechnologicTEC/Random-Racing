@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 3, the simulation skeleton (parts 3a to 3c, see "Step 3"): `createSim(rapier, world, config)` in `src/sim/sim.ts` stands the car's body behind the start line and gives `step`, `state`, `hash`, `snapshot` and `restore`. The car does not drive yet: inputs are recorded but move nothing. Step 2 (open walls, see "Step 2") finished the same day
-- **Next step:** 4, springs, engine, steering and grip (no drift yet). Split it into lettered parts before starting; the wheels are cast as 5 cm balls (step 1), and `car.grip` (the body's own grip, 1 for now) should come down once the wheels hold the car
+- **Step 4 (springs, engine, steering and grip, no drift yet) is under way**, in parts 4a to 4e (see "Step 4 parts" and "Step 4"). **4a (groundwork) is done; 4b (springs and standing grip) is next.** The car still rests on its underside and does not drive: 4a added the test grounds, the wheel cast and the pushes, and changed nothing about how the car behaves. `car.grip` (the body's own grip, 1 for now) comes down in 4b once the wheels hold the car
 
 ## Milestone 3 steps
 
@@ -45,7 +45,7 @@ Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-miles
 
 | Part | What | Status |
 | --- | --- | --- |
-| 4a | **Groundwork**, no change to how the car behaves. Test grounds as plain triangles with a start pose (`src/testing/testGrounds.ts`: flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank); `createSimOn(rapier, course, cfg, start)` in `sim.ts` (a course is an island or plain meshes); `carBody.ts` gains the wheel cast and the pushes; the wheels feel only ground, road and kerbs; `src/sim/vec.ts`; `car/surface.ts` (road, kerb, grass, sand, rock or snow under a wheel). Tests: each ground is what it claims; a wheel cast finds the road before the first step and after a restore and ignores walls, trees and the gate; surfaces named on seed 7 | |
+| 4a | **Groundwork**, no change to how the car behaves. Test grounds as plain triangles with a start pose (`src/testing/testGrounds.ts`: flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank); `createSimOn(rapier, course, cfg, start)` in `sim.ts` (a course is an island or plain meshes); `carBody.ts` gains the wheel cast and the pushes; the wheels feel only ground, road and kerbs; `src/sim/vec.ts`; `car/surface.ts` (road, kerb, grass, sand, rock or snow under a wheel). Tests: each ground is what it claims; a wheel cast finds the road before the first step and after a restore and ignores walls, trees and the gate; surfaces named on seed 7 | Done |
 | 4b | **Springs and standing grip.** `car/suspension.ts`, the side grip and the hold, `car/car.ts` joining them, called from `sim.step`; `CarState` gains wheel readings and forward speed; the body's own grip comes down. Tests: dropped on the flat it settles at ride height, level, and stays still; stays put for 10 s on seed 42's sloped start and parked on the 45% bank; fingerprints and restore as before | |
 | 4c | **Engine, brake, reverse.** `car/drive.ts`. Tests: top speed 30 m/s, 95% of it in 3.5 to 4.5 s, braking in a straight line, reverse, coasting to a stop and holding, at most 10% slower up 15% | |
 | 4d | **Steering and cornering.** `car/steer.ts`. Tests: steady circles of the radius the settings say at three speeds, left and right alike; reverse steering; the banked bend at top speed; the kerb at an angle | |
@@ -216,6 +216,21 @@ Measured in Node on seeds 42, 7, 1, 8 and 3 (throwaway code, deleted):
 | The car at rest for 10 s on a sloped start | Does not move on seeds 42 (6.5%), 7 (7.9%) and 8 (4.6%); creeps 0.2 mm on seed 3 (9.2%) and 6 mm on seed 1 (12.8%) |
 
 **For step 4:** the body rests on the road on its own underside for now, held by its grip of 1 (`car.grip`). On the steepest starts it creeps a few millimetres in ten seconds. Once the wheels carry the car, the hold on a slope belongs to `drive.ts`, as planned, and the body's grip should come down so that it slides along what it scrapes.
+
+## Step 4: springs, engine, steering and grip (2026-11-16, under way)
+
+### 4a: groundwork
+
+Nothing about how the car behaves changed. New:
+
+- **Test grounds** (`src/testing/testGrounds.ts`): plain sheets of triangles where the ground is exactly known, each with a start pose and a `height(x, z)`. The car starts at the origin facing -z. `flatGround` (800 m ahead, 300 m each side), `rampGround` (100 m level, then 15% for 600 m, eased in over a 200 m radius dip), `crestGround` (8% up, a crest of 200 m radius, 8% down), `bankedBend` (a ring of 70 m radius banked 8 degrees, the car lapping it to the left), `kerbGround` (a 9 cm kerb 400 m long on the car's right, with its upright outer face), `hillsideGround` (level road with a 45% grass slope rising on the right) and `stepGround` (a 1 m drop 150 m ahead). `poseOn` stands a car anywhere on one, tipped with the ground.
+- **A course** (`src/sim/course.ts`) is an island or a plain ground. `createSimOn(rapier, course, cfg, start)` starts a simulation on either; `createSim(rapier, world, cfg)` is that with an island and its start pose.
+- **The wheel cast** (`castWheel` in `src/sim/physics/carBody.ts`): a ball of `car.wheels.radius` (5 cm) moved from a point in a direction; it gives the distance, the surface's slope there and the collider it met. **It meets only the ground, the road and the kerbs.** Walls, the gate, trees and rocks belong to a group the wheels do not feel (`setCollisionGroups` in `colliders.ts`), and the car's own body is left out. Whether wheels should ride over low rocks is for step 7.
+- **Pushes** (`push`, `twist`): an impulse through the body's middle or at a point, and a turning impulse. Step 4's own sums act on the car only through these.
+- **Surfaces** (`src/sim/car/surface.ts`): `surfaceFinder` names what a wheel met: road and kerb by their colliders, the ground by its cover (snow where it lies, else the thickest of grass, sand and rock; bare ground and the verge count as grass).
+- `src/sim/vec.ts`: add, sub, scale, dot, cross, length, unit.
+
+**Found: a cast finds nothing until the physics world has stepped once.** The engine learns where colliders are only when it steps. So `createCarPhysics` now steps the world once while it holds only the course (nothing in it can move), then adds the car. Straight after a restore a cast works without a step: the snapshot carries what the engine knew. Both are tested (`carBody.test.ts`).
 
 ## Working agreements
 

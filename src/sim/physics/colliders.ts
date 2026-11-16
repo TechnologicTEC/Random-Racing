@@ -4,6 +4,7 @@ import { BARRIER_FOOTING, wallPieces } from '../../gen/road/barriers';
 import { gateBoxes } from '../../gen/road/startGate';
 import type { HeightField, MeshData, WorldResult } from '../../gen/types';
 import { TREE_KINDS } from '../../gen/world/decor';
+import type { Course } from '../course';
 import { quatFromAxes } from '../quat';
 import type { Rapier } from './rapier';
 
@@ -34,6 +35,23 @@ export function meshCollider(rapier: Rapier, mesh: MeshData): ColliderDesc {
   return rapier.ColliderDesc.trimesh(mesh.positions, mesh.indices);
 }
 
+/**
+ * Who meets whom. Everything is solid to the car's body. The wheels, which are
+ * cast down from the body as small balls, feel only what can be driven on: the
+ * ground, the road and the kerbs. Walls, the gate, trees and rocks are hit by
+ * the body alone, so a wheel never climbs a wall or a tree trunk.
+ *
+ * Rapier keeps this as one number for each collider: the groups it belongs to
+ * in the upper 16 bits and the groups it meets in the lower 16.
+ */
+const SOLID = 0x0001;
+const DRIVABLE = 0x0002;
+const EVERYTHING = 0xffff;
+/** Things that stand on the ground: solid, not drivable. The ground, road and kerbs keep Rapier's own setting, which is every group. */
+const STANDING = SOLID * 0x10000 + EVERYTHING;
+/** A wheel's cast: it meets only what is drivable. */
+export const WHEEL_GROUPS = EVERYTHING * 0x10000 + DRIVABLE;
+
 /** Each box of a wall runs this far past both ends of its piece, in metres, so no slit opens between boxes where the wall bends. */
 const WALL_OVERLAP = 0.03;
 
@@ -61,7 +79,8 @@ export function wallColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
     const up = { x: along.y * across.z, y: along.z * across.x - along.x * across.z, z: -along.y * across.x };
     return rapier.ColliderDesc.cuboid(road.barrierWidth / 2, depth / 2, length / 2 + WALL_OVERLAP)
       .setTranslation((from.x + to.x) / 2 - (up.x * depth) / 2, (from.y + to.y) / 2 - (up.y * depth) / 2, (from.z + to.z) / 2 - (up.z * depth) / 2)
-      .setRotation(quatFromAxes(across, up, along));
+      .setRotation(quatFromAxes(across, up, along))
+      .setCollisionGroups(STANDING);
   });
 }
 
@@ -72,7 +91,8 @@ export function gateColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
     rapier.ColliderDesc.cuboid(box.halfAcross, box.halfUp, box.halfAlong)
       .setTranslation(box.x, box.y, box.z)
       // Across the road (to the left of the direction of travel), up, and along the road.
-      .setRotation(quatFromAxes({ x: box.tz, y: 0, z: -box.tx }, { x: 0, y: 1, z: 0 }, { x: box.tx, y: 0, z: box.tz })),
+      .setRotation(quatFromAxes({ x: box.tz, y: 0, z: -box.tx }, { x: 0, y: 1, z: 0 }, { x: box.tx, y: 0, z: box.tz }))
+      .setCollisionGroups(STANDING),
   );
 }
 
@@ -89,7 +109,9 @@ export function treeColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
     const top = rules.trunkHeight * size * trees.tall[t]!;
     const half = (top + rules.trunkRoot) / 2;
     colliders.push(
-      rapier.ColliderDesc.cylinder(half, rules.trunkRadius[TREE_KINDS[trees.kind[t]!]!] * size).setTranslation(trees.x[t]!, trees.y[t]! + top - half, trees.z[t]!),
+      rapier.ColliderDesc.cylinder(half, rules.trunkRadius[TREE_KINDS[trees.kind[t]!]!] * size)
+        .setTranslation(trees.x[t]!, trees.y[t]! + top - half, trees.z[t]!)
+        .setCollisionGroups(STANDING),
     );
   }
   return colliders;
@@ -117,12 +139,15 @@ export function rockColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
     const reachSquared = size * size * Math.max(0, 1 - (sink * sink) / (up * up));
     // The ball through its top and its rim at the ground.
     const radius = (height + reachSquared / height) / 2;
-    colliders.push(rapier.ColliderDesc.ball(radius).setTranslation(rocks.x[r]!, rocks.y[r]! + height - radius, rocks.z[r]!));
+    colliders.push(rapier.ColliderDesc.ball(radius).setTranslation(rocks.x[r]!, rocks.y[r]! + height - radius, rocks.z[r]!).setCollisionGroups(STANDING));
   }
   return colliders;
 }
 
-/** The handles Rapier gave the world's colliders, by what they are. A handle is a plain number. */
+/** Stands for a collider that a course does not have. Never a real handle. */
+export const NO_COLLIDER = -1;
+
+/** The handles Rapier gave a course's colliders, by what they are. A handle is a plain number; `NO_COLLIDER` where a plain ground has none. */
 export interface WorldColliders {
   ground: number;
   road: number;
@@ -155,4 +180,15 @@ export function addWorldColliders(rapier: Rapier, physics: PhysicsWorld, world: 
     trees: treeColliders(rapier, world, cfg).map(add),
     rocks: rockColliders(rapier, world, cfg).map(add),
   };
+}
+
+/**
+ * Adds everything on a course that the car can touch: an island's colliders
+ * (`addWorldColliders`), or a plain ground's meshes, its grass in the place of
+ * the ground, in the same fixed order.
+ */
+export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course: Course, cfg: PhysicsConfig): WorldColliders {
+  if (course.kind === 'island') return addWorldColliders(rapier, physics, course.world, cfg);
+  const add = (mesh: MeshData | undefined): number => (mesh ? physics.createCollider(meshCollider(rapier, mesh)).handle : NO_COLLIDER);
+  return { ground: add(course.grass), road: add(course.road), kerbs: add(course.kerbs), walls: [], gate: [], trees: [], rocks: [] };
 }

@@ -1253,6 +1253,8 @@ export interface CarConfig {
   /** Half the width, height and length of the box that is the car's body. */
   body: { halfWidth: number; halfHeight: number; halfLength: number };
   mass: number;
+  /** The wheels. Each is felt for as a ball of this radius, cast down from the body: a ball, not a bare ray, so it can never slip between two triangles of the ground (step 1). */
+  wheels: { radius: number };
   /**
    * How much the body grips what it rubs against (0 is ice, 1 is rubber), and how much of its speed it keeps when it
    * bounces off something (0 is none). Until the wheels are in (step 4) the body rests on the road, and its grip is what holds it on a slope.
@@ -1642,6 +1644,7 @@ export const config: GameConfig = {
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1 },
     mass: 300,
+    wheels: { radius: 0.05 },
     grip: 1,
     bounce: 0,
   },

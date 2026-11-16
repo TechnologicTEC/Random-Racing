@@ -5,7 +5,8 @@ import { makeInput, NEUTRAL_INPUT, type InputRecord } from './input';
 import { loadRapier, type Rapier } from './physics/rapier';
 import { rotate } from './quat';
 import { scriptedFingerprint, scriptedInput } from './script';
-import { createSim, type Sim } from './sim';
+import { bankedBend, crestGround, flatGround, hillsideGround, kerbGround, rampGround, stepGround, type TestGround } from '../testing/testGrounds';
+import { createSim, createSimOn, type Sim } from './sim';
 import { startPose } from './start';
 
 /** Seed 42 starts on a slope; seed 7 is a hilly seed with a different start. */
@@ -191,6 +192,49 @@ describe('createSim', () => {
     idle(sim, 30);
     expect(sim.hash()).toBe(once);
     sim.free();
+  });
+});
+
+describe('createSimOn', () => {
+  const GROUNDS: Array<[string, () => TestGround]> = [
+    ['flat', flatGround],
+    ['ramp', rampGround],
+    ['banked bend', bankedBend],
+    ['crest', crestGround],
+    ['kerb', kerbGround],
+    ['hillside', hillsideGround],
+    ['step', stepGround],
+  ];
+
+  it.each(GROUNDS)('stands the car on the %s test ground, where it comes to rest', (_name, build) => {
+    const ground = build();
+    const sim = createSimOn(rapier, ground.course, config, ground.start);
+    // The physics engine keeps positions as 32-bit numbers.
+    const placed = sim.state().position;
+    expect(placed.x).toBeCloseTo(ground.start.position.x, 4);
+    expect(placed.y).toBeCloseTo(ground.start.position.y, 4);
+    expect(placed.z).toBeCloseTo(ground.start.position.z, 4);
+    idle(sim, 3 * config.sim.stepsPerSecond);
+    const { position, velocity } = sim.state();
+    expect(Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)).toBeLessThan(0.02);
+    expect(Math.abs(position.x - ground.start.position.x)).toBeLessThan(0.1);
+    expect(Math.abs(position.z - ground.start.position.z)).toBeLessThan(0.1);
+    expect(position.y - ground.height(position.x, position.z)).toBeLessThan(body.halfHeight + config.sim.start.lift + 0.02);
+    expect(position.y - ground.height(position.x, position.z)).toBeGreaterThan(body.halfHeight - 0.05);
+    sim.free();
+  });
+
+  it('is what createSim does with an island and its start pose', () => {
+    const world = worlds.get(42)!;
+    const direct = createSimOn(rapier, { kind: 'island', world }, config, startPose(world, config));
+    const usual = createSim(rapier, world, config);
+    for (let step = 0; step < 90; step++) {
+      direct.step(scriptedInput(step));
+      usual.step(scriptedInput(step));
+    }
+    expect(direct.hash()).toBe(usual.hash());
+    direct.free();
+    usual.free();
   });
 });
 

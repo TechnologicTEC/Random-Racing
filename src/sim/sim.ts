@@ -1,10 +1,11 @@
 import type { PhysicsConfig } from '../config';
 import { createHasher } from '../core/hash';
 import type { WorldResult } from '../gen/types';
+import type { Course } from './course';
 import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input';
 import { createCarPhysics, type BodyMotion } from './physics/carBody';
 import type { Rapier } from './physics/rapier';
-import { startPose } from './start';
+import { startPose, type Pose } from './start';
 
 /**
  * The simulation of one car on one island. It moves on only when `step` is
@@ -52,7 +53,15 @@ export interface SimSnapshot {
  * @param rapier the physics engine, already loaded (`loadRapier`)
  */
 export function createSim(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): Sim {
-  const physics = createCarPhysics(rapier, world, cfg, startPose(world, cfg));
+  return createSimOn(rapier, { kind: 'island', world }, cfg, startPose(world, cfg));
+}
+
+/**
+ * Starts a simulation on any course, with the car at rest wherever it is put.
+ * The game uses `createSim`; tests of the handling use this with plain grounds.
+ */
+export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose): Sim {
+  const physics = createCarPhysics(rapier, course, cfg, start);
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
 
