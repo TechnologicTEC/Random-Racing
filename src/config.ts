@@ -1241,6 +1241,11 @@ export interface FlyConfig {
 export interface SimConfig {
   /** The simulation moves on by this many steps a second, always, whatever the screen's frame rate (brief: 60). */
   stepsPerSecond: number;
+  /**
+   * The page takes at most this many steps in one frame; the rest of a long frame (a hidden tab, a stall) is dropped,
+   * so the car never races to catch up with time the player did not see. The page's limit: the simulation never reads it.
+   */
+  maxStepsPerFrame: number;
   /** How hard everything is pulled down, in metres per second per second. */
   gravity: number;
   /** The car starts this far behind the start line, in metres, standing on its wheels at its ride height. */
@@ -1728,6 +1733,7 @@ export const config: GameConfig = {
   },
   sim: {
     stepsPerSecond: 60,
+    maxStepsPerFrame: 5,
     gravity: 9.81,
     start: { back: 4 },
     colliders: {

@@ -11,11 +11,21 @@ import { daylightAt } from '../render/daylight';
 import { parseQuality, qualitySettings, type QualityLevel } from '../render/quality';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
+import type { Rapier } from '../sim/physics/rapier';
+import { createSim, type CarState, type Sim } from '../sim/sim';
 import { genClient } from '../worker/client';
 import { switchAddress } from './route';
 
 /** Which camera is in use: flying the lap, or circling a point. */
 export type CameraMode = 'fly' | 'orbit';
+
+/** The simulation of the island shown, for browser tests and the console (`window.seedCircuit.drive`). */
+export interface DriveHandle {
+  /** The car as it is now, or null while the simulation is still being built. */
+  state(): CarState | null;
+  /** The simulation's fingerprint, or null while it is still being built. */
+  hash(): string | null;
+}
 
 /** What the page offers to automated checks. */
 export interface ViewHandle {
@@ -36,6 +46,8 @@ export interface ViewHandle {
   graphics(): string;
   /** What the world being shown has for scenery, whether or not it is drawn. */
   decor(): { woods: WoodsKind; trees: number; rocks: number; sky: CloudCover; clouds: number; puffs: number } | null;
+  /** The simulation of the island shown. */
+  drive: DriveHandle;
 }
 
 const TEMPLATE = `
@@ -169,6 +181,28 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let seedHour = 12;
   /** While a new world is being built nothing is drawn, so a slow machine's drawing does not slow the build. */
   let building = false;
+  /**
+   * The physics engine, fetched while the first world is built, and the simulation of the island shown. The
+   * simulation is built once both are in, and freed when another island is asked for: a physics world is not
+   * freed by itself.
+   */
+  const engine: Promise<Rapier> = import('../sim/physics/rapier').then(({ loadRapier }) => loadRapier());
+  let sim: Sim | null = null;
+  const dropSim = (): void => {
+    sim?.free();
+    sim = null;
+    delete document.body.dataset.driveStep;
+  };
+  /** Builds the simulation of a world that has just been shown, unless another island has been asked for meanwhile. */
+  const buildSim = async (world: WorldResult): Promise<void> => {
+    const rapier = await engine;
+    if (wantedSeed !== world.seed || shown !== world) return;
+    const started = performance.now();
+    dropSim();
+    sim = createSim(rapier, world, config);
+    document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
+    document.body.dataset.driveStep = String(sim.state().step);
+  };
 
   const setTime = (next: number): void => {
     hour = daylightHour(next);
@@ -348,6 +382,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const show = async (seed: number, opening: boolean): Promise<void> => {
     wantedSeed = seed;
     building = true;
+    dropSim();
     loading.hidden = false;
     ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
@@ -402,6 +437,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       document.body.dataset.worldMs = ms.toFixed(0);
       loading.hidden = true;
       document.body.dataset.worldReady = 'true';
+      await buildSim(result);
     } catch (error) {
       if (wantedSeed === seed) building = false;
       if (wantedSeed === seed) ref('loadingText').textContent = error instanceof Error ? error.message : String(error);
@@ -474,5 +510,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         clouds: shown.clouds.count,
         puffs: shown.clouds.puffCount,
       },
+    drive: {
+      state: () => sim?.state() ?? null,
+      hash: () => sim?.hash() ?? null,
+    },
   };
 }

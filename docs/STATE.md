@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 5a, input (see "Step 5"). The keyboard and a controller are turned into the simulation's input; the page does not use them until 5e. The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
-- **Next:** `docs/PLAN.md`, "The build order": **5b**, the fixed-step loop. Step 5's plan is approved (see "Step 5")
+- **Last finished part:** 5b, the loop (see "Step 5"). The page builds the island's simulation beside the world, but does not step it yet; the keyboard and controller input (5a) and the loop's sums wait for 5e. The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
+- **Next:** `docs/PLAN.md`, "The build order": **5c**, the car drawn. Step 5's plan is approved (see "Step 5")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -206,7 +206,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | Part | What | Status |
 | --- | --- | --- |
 | 5a | **Input.** `src/input/`: `keysToInput` (keyboard), `padToInput` and `padPresses` (controller, standard layout), `mergeInputs`; `input.deadZone` | Done |
-| 5b | **The loop.** `src/app/drive.ts`: `advance`, `blendState`; `sim.maxStepsPerFrame`; Rapier loaded beside the world and the simulation built on the page (not stepped yet); `drive.state()` and `drive.hash()` | |
+| 5b | **The loop.** `src/app/drive.ts`: `advance`, `blendState`; `sim.maxStepsPerFrame`; Rapier loaded beside the world and the simulation built on the page (not stepped yet); `drive.state()` and `drive.hash()` | Done |
 | 5c | **The car drawn.** `render/carShape.ts`, `render/carView.ts`, `WorldView.setCar`, `KART` colours, `render.car`; the `look=car` close view | |
 | 5d | **Chase camera.** `camera/chase.ts`, `camera.chase` | |
 | 5e | **The page opens driving**, in two commits: old tests get `cam=fly`, then the default changes. Keys, controller, readout, `drive.run` and `drive.reset` | |
@@ -219,6 +219,27 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 - Nothing is smoothed anywhere (brief). The page does not use any of it until 5e.
 
 The three test files failed on their missing modules before the code existed. 2,009 unit tests pass.
+
+### 5b: the loop, and the simulation on the page
+
+- **`advance(carried, frameSeconds, cfg)`** (`src/app/drive.ts`) says how many steps a frame takes. The frame's time is added to the time carried over from the last frame, and each whole sixtieth of a second is one step. A frame takes at most `sim.maxStepsPerFrame` (5) steps; the rest of a longer frame is dropped and nothing is carried over, so after a hidden tab the car does not race to catch up. What is left over is carried to the next frame, and also given as the **blend**, from 0 up to (not including) 1: how far the moment shown lies between the last two steps.
+- **`blendState(before, after, blend)`** gives the car as drawn between two steps. Places, speeds and wheels move in a straight line, and the turn takes the short way round (a normalised blend, with the second turn flipped if it points away from the first). Blends of 0 and 1 give the two states exactly.
+- **On the page**, Rapier is fetched while the worker builds the first world. Once both are in, `createSim` builds the island's simulation. Asking for a new island frees the old simulation at once (`sim.free()`). The simulation is not stepped yet. `window.seedCircuit.drive` has `state()` and `hash()`, each null while the simulation is being built. The body's `data-drive-step` is set once it is built, and `data-drive-ms` gives how long the build took.
+- New test file `e2e/drive.spec.ts`, for the driving tests.
+
+Measured on the page (headless, throwaway test, deleted):
+
+| What | Chromium | Firefox |
+| --- | --- | --- |
+| Loading Rapier on a page that has not loaded it | 101 ms | 253 ms |
+| Building the simulation, seed 7 (median of 4) | 31 ms (90 the first time) | 53 ms |
+| Building the simulation, seed 8, the most wooded (median of 4) | 47 ms | 104 ms |
+| The world in the worker, seed 7, with and without Rapier fetched beside it (median of 4) | 1,110 and 1,080 ms | 1,460 and 1,440 ms |
+| The same, seed 8 | 1,350 and 1,325 ms | 1,850 and 1,790 ms |
+
+Fetching Rapier beside the world makes no difference beyond the noise. The world in the worker is slower here than in Node (430 to 640 ms) because the headless page draws in software at the same time.
+
+Tests seen failing first: `drive.test.ts` on its missing module, and the two browser tests waiting for a simulation that the page did not build. 2,019 unit tests pass.
 
 ## Working agreements
 
@@ -382,3 +403,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-16 (Milestone 3, Opus 5.5):** Line 0 done: Tane ran `npm run e2e` by hand after 4c and it all passed. 4d planned in plan mode, approved, and done (see "4d"). The stick turns the car: `turnWanted` in `src/sim/car/steer.ts`, `car.steer: { minRadius: 6, sideForce: 15 }`. Circles of 6.00, 14.88 and 59.75 m at the three speeds, both ways alike. Reverse steers as a real car does. The banked ring at top speed is held to 4 cm. Kerb crossings change the heading by at most 0.11 degrees. The ring's test driver is now pure pursuit, because the plan's first rule would have run 3.8 m wide (decisions). The kerb's air time is timed per wheel (decisions). 1,973 unit tests pass. The browser suite passed in one clean run: 276 tests in 16.7 minutes. That run includes the scripted run's fingerprint, now with steering, matching in Node, Chromium and Firefox. Next: 4e.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 4e done, which ends step 4 (see "4e"). In the air the car turns back towards roof-up (`stability.ts`, `car.stability: { upright: 12, calm: 3 }`), and every change of spin goes through the box's own inertia (`twistFor`). Found: driving onto the 45% hillside at an angle rolled the car over, because the body's corner dug into the slope. Mapped over 261 crossings; ride height, wheel size and a rounded body tried; Tane chose ride height 26 cm (was 18). Also found: the car drives up the 45% grass hillside from rest (known issues). 1,986 unit tests pass. The browser suite passed in one clean run: 276 tests in 16.9 minutes, the fingerprint check across Node, Chromium and Firefox included. Next: step 5, planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Step 5 planned in plan mode and approved (see "Step 5"). 5a done: the keyboard and a controller are turned into the simulation's input (`src/input/`: `keysToInput`, `padToInput`, `padPresses`, `mergeInputs`; `input.deadZone` 0.15). Keys are read by their place on the keyboard (decisions). The page does not use them yet. 2,009 unit tests pass; all 276 browser tests passed in one run (13.1 minutes). Next: 5b, the fixed-step loop.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 5b done: the fixed-step loop's sums (`advance`, `blendState` in `src/app/drive.ts`; `sim.maxStepsPerFrame` 5) and the island's simulation built on the page beside the world, freed on a new island, not stepped yet (`drive.state()`, `drive.hash()`). Rapier loads in 101 ms (Chromium) and 253 ms (Firefox); the simulation builds in 31 to 104 ms; the world is no slower with Rapier fetched beside it. 2,019 unit tests pass; all 280 browser tests passed in one run (16.1 minutes). Next: 5c, the car drawn.
