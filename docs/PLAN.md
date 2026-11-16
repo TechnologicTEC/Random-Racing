@@ -10,7 +10,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 **Before anything else**
 
-- [x] **0. One clean run of `npm run e2e`.** (Run by hand by Tane, all passed; 2026-11-16) 4c was committed without one (STATE.md, "4c"). Laptop awake, nothing else open, no dev server left running; ask Tane whether it has already been run by hand. Note the result in STATE.md's session log.
+- [x] **0. One clean run of `npm run e2e`.** (Run by hand by Tane, all passed; 2026-11-16) 4c was committed without one (`docs/archive/STATE-milestone-3-step-4.md`, "4c"). Laptop awake, nothing else open, no dev server left running; ask Tane whether it has already been run by hand. Note the result in STATE.md's session log.
 
 **Milestone 3: driving** (branch `milestone-3-driving`, issue #3; the parts: [`docs/plan/M3-driving.md`](plan/M3-driving.md))
 
@@ -21,7 +21,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **5b** The fixed-step loop
 - [x] **5c** The car drawn
 - [x] **5d** Chase camera
-- [ ] **5e** The page opens driving
+- [x] **5e** The page opens driving
 - [ ] **Check-in 1 with Tane** (questions below). Add the car's reference pictures to `docs/VISUAL_BAR.md` once Tane likes the look
 - [ ] **6a** The drift rules, pure
 - [ ] **6b** Drift and boost in the car

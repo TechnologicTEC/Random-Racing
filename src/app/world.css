@@ -78,6 +78,46 @@ body,
   display: none;
 }
 
+/* The readout while driving: the speed in large figures and the surface under the car, in the bottom right corner. */
+.world-dash {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  min-width: 6.5rem;
+  padding: 8px 16px 10px;
+  text-align: right;
+  pointer-events: none;
+}
+
+.world-dash[hidden] {
+  display: none;
+}
+
+.world-dash p {
+  margin: 0;
+}
+
+.world-speed {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-unit {
+  margin-left: 4px;
+  color: #4c665f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.world-surface {
+  color: #1a7d77;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .world-loading {
   position: absolute;
   inset: 0;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { NEUTRAL_INPUT } from '../sim/input';
 import type { CarState } from '../sim/sim';
-import { advance, blendState } from './drive';
+import { advance, blendState, mainSurface } from './drive';
 
 const cfg = config.sim;
 const STEP = 1 / cfg.stepsPerSecond;
@@ -118,5 +118,27 @@ describe('blendState', () => {
     const sameWay = Math.sign(mid.w) === Math.sign(a.w) ? 1 : -1;
     expect(mid.y * sameWay).toBeCloseTo(a.y, 9);
     expect(mid.w * sameWay).toBeCloseTo(a.w, 9);
+  });
+});
+
+describe('mainSurface', () => {
+  const wheel = (surface: 'road' | 'kerb' | 'grass' | 'sand' | null) => ({ touching: surface !== null, squash: 0, surface, at: { x: 0, y: 0, z: 0 } });
+
+  it('names what most wheels stand on', () => {
+    expect(mainSurface([wheel('road'), wheel('road'), wheel('grass'), wheel('road')])).toBe('road');
+    expect(mainSurface([wheel('grass'), wheel('sand'), wheel('grass'), wheel('grass')])).toBe('grass');
+  });
+
+  it('leaves out wheels in the air', () => {
+    expect(mainSurface([wheel(null), wheel(null), wheel('kerb'), wheel(null)])).toBe('kerb');
+  });
+
+  it('gives null with every wheel in the air', () => {
+    expect(mainSurface([wheel(null), wheel(null), wheel(null), wheel(null)])).toBeNull();
+  });
+
+  it('breaks a tie the same way every time: the road first', () => {
+    expect(mainSurface([wheel('grass'), wheel('road'), wheel('grass'), wheel('road')])).toBe('road');
+    expect(mainSurface([wheel('road'), wheel('grass'), wheel('road'), wheel('grass')])).toBe('road');
   });
 });

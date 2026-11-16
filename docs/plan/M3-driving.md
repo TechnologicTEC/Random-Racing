@@ -17,7 +17,7 @@ Each part ends with: its tests seen failing and then passing, `npm test`, `npm r
 - **Prove a rule on a test ground first** (`src/testing/testGrounds.ts`: the ground is exactly known), then on real seeds.
 - **Directions.** The car's front is -z, its right +x, its roof +y. In `car.ts`, `across` (`cross(along, normal)`) points to the car's right. A positive `steer` is to the right. A positive turn rate about the car's `up` is to the left (anticlockwise seen from above), so steering right asks for a negative one.
 - **If a test's number cannot be met, tune the config; if it still cannot, report to Tane.** Do not loosen a number quietly.
-- **The browser suite takes about 25 minutes. Keep the laptop awake for it.** A page that "did not load in time" is standby or a slow spell, not the code: check Windows' event log (Kernel-Power 506 and 507) and run the failed tests again alone before debugging (see STATE.md, "4c").
+- **The browser suite takes about 25 minutes. Keep the laptop awake for it.** A page that "did not load in time" is standby or a slow spell, not the code: check Windows' event log (Kernel-Power 506 and 507) and run the failed tests again alone before debugging (see `docs/archive/STATE-milestone-3-step-4.md`, "4c").
 
 ## Step 4: the two parts left
 

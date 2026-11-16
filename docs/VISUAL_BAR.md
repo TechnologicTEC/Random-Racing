@@ -49,7 +49,7 @@ Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Whe
 | `island-from-above.jpg` | `seed=2024&still=1&cam=orbit` | `world-02024.png` |
 | `sunrise.jpg` | `seed=7&still=1&look=sun&time=07:00` | with `TIMES=07:00`: `world-00007-at-0700-sun.png` |
 
-`cam=fly` does nothing today (the page opens flying); it is there so the addresses still give these pictures once the page opens driving (step 5e). The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
+The page opens driving since step 5e; `cam=fly` keeps these addresses on the flying camera, and the car is not drawn in them. The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
 
 ## The car, sparks and flame (not built yet: a proposal for Tane to judge at check-in 1)
 

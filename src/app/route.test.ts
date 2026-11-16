@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { choosePage, openingCamera, switchAddress } from './route';
+import { choosePage, nextCamera, openingCamera, switchAddress } from './route';
 
 const page = (query: string) => choosePage(new URLSearchParams(query));
 const BASE = 'http://127.0.0.1:5173/';
@@ -98,9 +98,18 @@ describe('openingCamera: which camera the 3D view opens with', () => {
     expect(camera('?seed=5&still=1&lap=0')).toBe('fly');
   });
 
-  it('flies the lap at the plain address, as it always has', () => {
-    expect(camera('')).toBe('fly');
-    expect(camera('?seed=5&still=1')).toBe('fly');
-    expect(camera('?seed=5&cam=nonsense')).toBe('fly');
+  it('drives at the plain address, and for cam=chase', () => {
+    expect(camera('')).toBe('chase');
+    expect(camera('?seed=5&still=1')).toBe('chase');
+    expect(camera('?seed=5&cam=chase')).toBe('chase');
+    expect(camera('?seed=5&cam=nonsense')).toBe('chase');
+  });
+});
+
+describe('nextCamera: what C changes to', () => {
+  it('goes driving, flying, circling, and back to driving', () => {
+    expect(nextCamera('chase')).toBe('fly');
+    expect(nextCamera('fly')).toBe('orbit');
+    expect(nextCamera('orbit')).toBe('chase');
   });
 });

@@ -69,10 +69,11 @@ test('generates the 3D world in the worker within the 3-second budget @budget', 
   expect(fastest).toBeLessThan(3000);
 });
 
-test('opens the 3D view at the plain address, on a random seed that it records', async ({ page }) => {
+test('opens the 3D view at the plain address, driving, on a random seed that it records', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   await expect(page.getByTestId('world-canvas')).toBeVisible();
+  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
   const seed = await page.locator('body').getAttribute('data-world-seed');
   expect(Number(seed)).toBeGreaterThanOrEqual(1);
   expect(Number(seed)).toBeLessThanOrEqual(99999);
@@ -141,12 +142,12 @@ test('pauses and resumes the flight with the button and with Space', async ({ pa
   await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.camera())).distance, { timeout: 45_000 }).toBeGreaterThan(paused.distance + 2);
 });
 
-test('switches between flying the lap and circling the island', async ({ page }) => {
+test('switches from flying the lap to circling the island, then to driving', async ({ page }) => {
   await openWorld(page, 'seed=42&cam=fly');
   await page.keyboard.press('c');
   await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'orbit');
   await page.getByTestId('world-camera-toggle').click();
-  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'fly');
+  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
 });
 
 test('holds still at a chosen point of the lap when asked', async ({ page }) => {
@@ -810,6 +811,14 @@ test.describe('3D screenshots', () => {
         await page.screenshot({ path: `test-results/screens/world-${name}-at-${at}-sun.png` });
       });
     }
+    test(`island ${seed}, driving: at the start and after 5 s of full throttle`, async ({ page }) => {
+      await openWorld(page, `seed=${seed}&still=1`);
+      // The car is drawn once the island's simulation is built, just after the island itself.
+      await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
+      await page.screenshot({ path: `test-results/screens/world-${name}-drive-start.png` });
+      await page.evaluate(() => window.seedCircuit.drive!.run(300, { throttle: 1 }));
+      await page.screenshot({ path: `test-results/screens/world-${name}-drive-5s.png` });
+    });
     test(`island ${seed} from above`, async ({ page }) => {
       await openWorld(page, `seed=${seed}&still=1&cam=orbit`);
       await page.screenshot({ path: `test-results/screens/world-${name}.png` });

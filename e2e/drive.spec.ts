@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
+import { rotate } from '../src/sim/quat';
 import { startPose } from '../src/sim/start';
 
 /**
@@ -75,5 +76,105 @@ test.describe('the simulation on the page', () => {
       await openDriving(page, query);
       await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'hidden');
     }
+  });
+});
+
+/** How far a point lies ahead of a seed's start pose, along the way the car starts facing, in metres. */
+function aheadOfStart(seed: number, at: { x: number; y: number; z: number }): number {
+  const { position, rotation } = startPose(generateWorld(seed, config), config);
+  const nose = rotate(rotation, { x: 0, y: 0, z: -1 });
+  return (at.x - position.x) * nose.x + (at.y - position.y) * nose.y + (at.z - position.z) * nose.z;
+}
+
+test.describe('driving on the page', () => {
+  test('opens driving: the car on the start line, the chase camera and the readout', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=42&still=1');
+    await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
+    await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown');
+    await expect(page.getByTestId('world-hint')).toContainText('W');
+    await expect(page.getByTestId('world-readout')).toBeVisible();
+    await expect(page.getByTestId('world-speed')).toHaveText('0');
+    await expect(page.getByTestId('world-surface')).toHaveText('road');
+    const state = await page.evaluate(() => window.seedCircuit.drive!.state());
+    expect(fromStart(42, state!.position)).toBeLessThan(0.5);
+    expect(state!.wheels.filter((wheel) => wheel.touching)).toHaveLength(4);
+    expect(errors).toEqual([]);
+  });
+
+  test('moves the car while W is held', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=7');
+    await page.keyboard.down('w');
+    await expect.poll(async () => fromStart(7, (await page.evaluate(() => window.seedCircuit.drive!.state()))!.position), { timeout: 30_000 }).toBeGreaterThan(1);
+    await page.keyboard.up('w');
+    expect(errors).toEqual([]);
+  });
+
+  for (const seed of [7, 42]) {
+    test(`leaves the car going over 20 m/s and over 50 m down the road after 300 steps of full throttle, seed ${seed}`, async ({ page }) => {
+      const errors = collectErrors(page);
+      await openDriving(page, `seed=${seed}&still=1`);
+      const state = await page.evaluate(() => window.seedCircuit.drive!.run(300, { throttle: 1 }));
+      expect(state.step).toBe(300);
+      expect(state.speed).toBeGreaterThan(20);
+      expect(aheadOfStart(seed, state.position)).toBeGreaterThan(50);
+      await expect(page.locator('body')).toHaveAttribute('data-drive-step', '300');
+      expect(Number(await page.getByTestId('world-speed').textContent())).toBeGreaterThan(72);
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('C goes round driving, flying and circling, and the hint follows', async ({ page }) => {
+    await openDriving(page, 'seed=42&still=1');
+    const body = page.locator('body');
+    await page.keyboard.press('c');
+    await expect(body).toHaveAttribute('data-world-camera', 'fly');
+    await expect(page.getByTestId('world-hint')).toContainText('Space pauses');
+    await expect(page.getByTestId('world-readout')).toBeHidden();
+    await page.keyboard.press('c');
+    await expect(body).toHaveAttribute('data-world-camera', 'orbit');
+    await expect(page.getByTestId('world-hint')).toContainText('Drag to turn');
+    await page.getByTestId('world-camera-toggle').click();
+    await expect(body).toHaveAttribute('data-world-camera', 'chase');
+    await expect(page.getByTestId('world-readout')).toBeVisible();
+    // The button gives up the focus, so the keys reach the car straight away.
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  });
+
+  for (const [query, camera] of [
+    ['seed=7&cam=fly', 'fly'],
+    ['seed=7&lap=0.3', 'fly'],
+    ['seed=7&cam=orbit', 'orbit'],
+    ['seed=7&look=start', 'orbit'],
+    ['seed=7&at=0,0', 'orbit'],
+  ] as const) {
+    test(`opens the old address ${query} on its old view, with the simulation built but not running`, async ({ page }) => {
+      await openDriving(page, query);
+      await expect(page.locator('body')).toHaveAttribute('data-world-camera', camera);
+      await page.keyboard.down('w');
+      await page.waitForTimeout(1000);
+      await page.keyboard.up('w');
+      await expect(page.locator('body')).toHaveAttribute('data-drive-step', '0');
+      await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'hidden');
+    });
+  }
+
+  test('holds the car still when the address says still=1', async ({ page }) => {
+    await openDriving(page, 'seed=7&still=1');
+    await page.keyboard.down('w');
+    await page.waitForTimeout(1500);
+    await page.keyboard.up('w');
+    expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.step).toBe(0);
+  });
+
+  test('R puts the car back on the start line', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=7&still=1');
+    await page.evaluate(() => window.seedCircuit.drive!.run(120, { throttle: 1 }));
+    await page.keyboard.press('r');
+    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.drive!.state()))!.step).toBe(0);
+    expect(fromStart(7, (await page.evaluate(() => window.seedCircuit.drive!.state()))!.position)).toBeLessThan(0.5);
+    expect(errors).toEqual([]);
   });
 });

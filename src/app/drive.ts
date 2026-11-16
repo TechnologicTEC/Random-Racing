@@ -1,5 +1,7 @@
 import type { SimConfig } from '../config';
 import type { Quat, Vec3 } from '../sim/quat';
+import type { Surface } from '../sim/car/surface';
+import type { WheelState } from '../sim/car/car';
 import type { CarState } from '../sim/sim';
 
 /** What one frame of the page does with the simulation's clock. */
@@ -76,4 +78,18 @@ function turnBetween(a: Quat, b: Quat, t: number): Quat {
   const w = a.w * s + b.w * sign * t;
   const size = Math.sqrt(x * x + y * y + z * z + w * w);
   return { x: x / size, y: y / size, z: z / size, w: w / size };
+}
+
+/** Surfaces in the order a tie is settled: the road first. */
+const SURFACE_ORDER: readonly Surface[] = ['road', 'kerb', 'grass', 'sand', 'rock', 'snow'];
+
+/** What most of the wheels on the ground stand on, for the readout; null with every wheel in the air. */
+export function mainSurface(wheels: readonly WheelState[]): Surface | null {
+  let best: Surface | null = null;
+  let most = 0;
+  for (const surface of SURFACE_ORDER) {
+    const count = wheels.filter((wheel) => wheel.touching && wheel.surface === surface).length;
+    if (count > most) [best, most] = [surface, count];
+  }
+  return best;
 }

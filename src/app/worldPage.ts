@@ -1,4 +1,5 @@
 import './world.css';
+import { chaseStart, type ChaseView } from '../camera/chase';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
 import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
@@ -12,11 +13,15 @@ import { parseQuality, qualitySettings, type QualityLevel } from '../render/qual
 import { kartPose } from '../render/carShape';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
+import { createDevices } from '../input/devices';
+import { makeInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { genClient } from '../worker/client';
-import { openingCamera, switchAddress, type CameraMode } from './route';
+import { mainSurface } from './drive';
+import { createDriving } from './driving';
+import { nextCamera, openingCamera, switchAddress, type CameraMode } from './route';
 
 export type { CameraMode };
 
@@ -26,6 +31,13 @@ export interface DriveHandle {
   state(): CarState | null;
   /** The simulation's fingerprint, or null while it is still being built. */
   hash(): string | null;
+  /**
+   * Takes that many steps at once with that input (nothing pressed if left out), then draws one frame. The page's
+   * own loop takes no step until the frame after. For browser tests and the console: no waiting in real time.
+   */
+  run(steps: number, raw?: RawInput): CarState;
+  /** Puts the car back on the start line, as a new simulation. */
+  reset(): void;
 }
 
 /** What the page offers to automated checks. */
@@ -74,6 +86,10 @@ const TEMPLATE = `
       <button type="button" class="primary" data-ref="new" data-testid="world-new">New island</button>
     </div>
     <div class="world-card world-frames" data-ref="frames" data-testid="world-frames" hidden></div>
+    <div class="world-card world-dash" data-ref="dash" data-testid="world-readout" hidden>
+      <p class="world-speed-line"><span class="world-speed" data-ref="speed" data-testid="world-speed">0</span><span class="world-unit">km/h</span></p>
+      <p class="world-surface" data-ref="surface" data-testid="world-surface"></p>
+    </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
     </div>
@@ -84,18 +100,25 @@ const TEMPLATE = `
 const QUALITY_KEY = 'seedCircuit.quality';
 
 const HINTS: Record<CameraMode, string> = {
+  chase:
+    'W or up drives, S or down brakes and reverses, A and D steer, R starts again. C changes the camera, N makes a new island. L opens the lab. A controller works too, once a button on it is pressed.',
   fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one. L opens the lab.',
-  orbit: 'Drag to turn, scroll to zoom. C flies the lap, N makes a new island. L opens the lab.',
+  orbit: 'Drag to turn, scroll to zoom. C drives, N makes a new island. L opens the lab.',
 };
 
+/** What the camera button says: the view it changes to. */
+const NEXT_VIEW: Record<CameraMode, string> = { chase: 'Drive', fly: 'Fly the lap', orbit: 'Circle the island' };
+
 /**
- * The 3D view of a seed's world: builds it in the worker, then flies a camera
- * round the lap. The camera can be switched to one that circles the island.
+ * The 3D view of a seed's world: builds it in the worker, then drives the car
+ * from the start line with the chase camera behind it. C switches to a camera
+ * that flies the lap, then to one that circles the island, then back.
  *
  * The default page. `L` opens the track lab on the same seed (see `app/route.ts`).
  *
- * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
- * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
+ * Address options: `seed=42`; `cam=fly` to open flying the lap and `cam=orbit` to open circling (the car stays
+ * where it is until the driving view is back); `lap=0.5` to open flying, half way round the lap; `still=1` to open
+ * paused, with the car held at its start; `look=cut` (or fill, bank,
  * close, water, hairpin, start, summit, climb, sun, car) or `at=x,z` for a close view of one place;
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
@@ -165,8 +188,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let flight: FlyPath | null = null;
   let distance = 0;
   let speed = fly.speed;
-  // Anyone who has asked their system for less motion starts paused, as does a still picture.
-  const still = params.get('still') === '1' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // A still picture holds everything: the waves, the flight and the car, so pictures repeat exactly.
+  const holdStill = params.get('still') === '1';
+  // Anyone who has asked their system for less motion starts with the waves and the flight paused, but can still drive.
+  const still = holdStill || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let playing = !still;
   // The waves keep moving unless the picture is held still: then they stand at a set moment, so screenshots repeat exactly.
   let waveClock = config.render.water.stillTime;
@@ -188,31 +213,61 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
    * freed by itself.
    */
   const engine: Promise<Rapier> = import('../sim/physics/rapier').then(({ loadRapier }) => loadRapier());
+  let rapier: Rapier | null = null;
   let sim: Sim | null = null;
-  /** Whether the car is drawn. Only the close view of the car shows it so far; old views give the same pictures as before. */
-  let carShown = false;
-  /** Draws the car as the simulation has it, or hides it. */
+  /** The simulation moved on by the fixed-step loop, and the chase camera. */
+  const driving = createDriving(config);
+  /** The keyboard and any controller. Keys drive only in the driving view. */
+  const devices = createDevices(window, config.input, () => mode === 'chase');
+  /** Whether the car is drawn in the views other than driving: in the close view of it, or once it has been driven. */
+  let lookingAtCar = false;
+  let driven = false;
+  /** The chase camera before the simulation is built: behind the start pose. */
+  let waitingView: ChaseView | null = null;
+  /** The height of the ground of the world shown, for the cameras. */
+  const groundAt = (x: number, z: number): number => (shown ? sampleField(shown.ground, x, z, 0) : 0);
+  /** The car as it is drawn: between the last two steps while driving, as the simulation has it otherwise. */
+  const carState = (): CarState | null => (sim ? (driving.shown() ?? sim.state()) : null);
+  /** Draws the car, or hides it, and writes the readout. */
   const drawCar = (): void => {
-    view.setCar(carShown && sim ? kartPose(sim.state(), config) : null);
-    document.body.dataset.driveCar = carShown && sim ? 'shown' : 'hidden';
+    const state = sim && (mode === 'chase' || lookingAtCar || driven) ? carState() : null;
+    view.setCar(state ? kartPose(state, config) : null);
+    document.body.dataset.driveCar = state ? 'shown' : 'hidden';
+    if (state) {
+      const speed = String(Math.round(Math.abs(state.speed) * 3.6));
+      if (ref('speed').textContent !== speed) ref('speed').textContent = speed;
+      const surface = mainSurface(state.wheels) ?? 'in the air';
+      if (ref('surface').textContent !== surface) ref('surface').textContent = surface;
+      document.body.dataset.driveStep = String(state.step);
+    }
     dirty = true;
   };
   const dropSim = (): void => {
     sim?.free();
     sim = null;
+    driving.setSim(null);
     delete document.body.dataset.driveStep;
+    drawCar();
+  };
+  /** Starts a simulation of the world shown, with the car on its start line. */
+  const startSim = (world: WorldResult, engine: Rapier): void => {
+    const started = performance.now();
+    dropSim();
+    sim = createSim(engine, world, config);
+    driving.setSim(sim);
+    document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
+    document.body.dataset.driveStep = String(sim.state().step);
     drawCar();
   };
   /** Builds the simulation of a world that has just been shown, unless another island has been asked for meanwhile. */
   const buildSim = async (world: WorldResult): Promise<void> => {
-    const rapier = await engine;
+    rapier = await engine;
     if (wantedSeed !== world.seed || shown !== world) return;
-    const started = performance.now();
-    dropSim();
-    sim = createSim(rapier, world, config);
-    document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
-    document.body.dataset.driveStep = String(sim.state().step);
-    drawCar();
+    startSim(world, rapier);
+  };
+  /** Puts the car back on the start line (R, or the controller's Back): a new simulation of the same island. */
+  const resetCar = (): void => {
+    if (shown && rapier && sim) startSim(shown, rapier);
   };
 
   const setTime = (next: number): void => {
@@ -230,16 +285,24 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const renderControls = (): void => {
     ref('play').textContent = playing ? 'Pause' : 'Play';
     ref('play').hidden = mode !== 'fly';
-    ref('toggle').textContent = mode === 'fly' ? 'Circle the island' : 'Fly the lap';
+    ref('toggle').textContent = NEXT_VIEW[nextCamera(mode)];
     ref('hint').textContent = HINTS[mode];
     ref('quality').textContent = `Quality: ${quality === 'high' ? 'High' : 'Low'}`;
+    ref('dash').hidden = mode !== 'chase';
+    // The chase camera sees a wider view than the others.
+    view.setFieldOfView(mode === 'chase' ? config.camera.chase.fieldOfView : config.render.fieldOfView);
     document.body.dataset.worldCamera = mode;
   };
 
   const setMode = (next: CameraMode): void => {
+    if (mode === 'chase') driven = true;
     mode = next;
+    // Back in the driving view, the camera starts straight behind the car; out of it, no key is held.
+    if (mode === 'chase') driving.snap();
+    else devices.release();
     dirty = true;
     renderControls();
+    drawCar();
   };
   const setPlaying = (next: boolean): void => {
     playing = next;
@@ -275,7 +338,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   };
 
   const aimCamera = (): void => {
-    if (mode === 'fly' && flight) {
+    const chase = mode === 'chase' ? (driving.view() ?? waitingView) : null;
+    if (chase) {
+      view.setCamera(chase.eye, chase.look);
+    } else if (mode === 'fly' && flight) {
       const pose = flight.poseAt(distance);
       view.setCamera(pose.eye, pose.look);
     } else {
@@ -301,6 +367,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // A long gap (a hidden tab, say) must not fling the camera down the road.
     const seconds = Math.min(0.05, gap / 1000);
     last = now;
+    // The controller's buttons for the page: Y changes the camera in any view, Back starts again while driving.
+    const pressed = devices.presses();
+    if (pressed.camera) setMode(nextCamera(mode));
+    if (pressed.reset && mode === 'chase') resetCar();
+    // Driving: the fixed-step loop takes its own measure of the frame (at most five steps), unless the picture is held still.
+    if (mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
     if (mode === 'fly' && playing && flight) {
       distance = (distance + speed * seconds) % flight.length;
       dirty = true;
@@ -415,7 +487,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       setTime(opening && askedTime !== null ? askedTime : seedHour);
 
       const winner = result.track.candidates[result.track.winnerIndex]!;
-      const groundAt = (x: number, z: number): number => sampleField(result.ground, x, z, 0);
+      driven = false;
+      // The chase camera, until the simulation is built: behind the car's start pose.
+      waitingView = chaseStart({ ...startPose(result, config), velocity: { x: 0, y: 0, z: 0 } }, groundAt, config.camera.chase);
       flight = createFlyPath(winner.line, winner.profile.height, groundAt, fly);
       frameIsland(result);
 
@@ -430,7 +504,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
             (look === 'sun' ? lookAtSun(winner.line.x[0]!, winner.line.z[0]!, winner.profile.height[0]!) : null) ??
             (look === 'car' ? lookAtCar(startPose(result, config)) : null))
           : null);
-      carShown = opening && look === 'car';
+      lookingAtCar = opening && look === 'car';
       if (spot) {
         orbit = spot;
         mode = 'orbit';
@@ -470,7 +544,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     setTime(seedHour);
   });
   ref('play').addEventListener('click', () => setPlaying(!playing));
-  ref('toggle').addEventListener('click', () => setMode(mode === 'fly' ? 'orbit' : 'fly'));
+  ref('toggle').addEventListener('click', () => setMode(nextCamera(mode)));
+  // A button gives up the focus once clicked, so the keys go back to the car (which ignores them while a button has it).
+  root.addEventListener('click', (event) => {
+    if (event.target instanceof HTMLButtonElement) event.target.blur();
+  });
   ref('new').addEventListener('click', () => void show(randomSeed(), false));
   ref('quality').addEventListener('click', () => setQuality(quality === 'high' ? 'low' : 'high'));
   window.addEventListener('keydown', (event) => {
@@ -479,7 +557,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (event.target instanceof HTMLInputElement) return;
     const key = event.key.toLowerCase();
     if (key === ' ' && mode === 'fly') setPlaying(!playing);
-    else if (key === 'c') setMode(mode === 'fly' ? 'orbit' : 'fly');
+    else if (key === 'c') setMode(nextCamera(mode));
+    else if (key === 'r' && mode === 'chase') {
+      if (!event.repeat) resetCar();
+    }
     else if (key === 'n') void show(randomSeed(), false);
     else if (key === 'q') setQuality(quality === 'high' ? 'low' : 'high');
     // The address already holds the seed being shown, so the lab opens on it.
@@ -487,8 +568,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     else if (key === 'f') {
       readout.hidden = !readout.hidden;
       if (!readout.hidden) renderReadout();
-    } else if (key === 'arrowup') speed = Math.min(fly.speedRange[1], speed * 1.25);
-    else if (key === 'arrowdown') speed = Math.max(fly.speedRange[0], speed / 1.25);
+    } else if (key === 'arrowup' && mode === 'fly') speed = Math.min(fly.speedRange[1], speed * 1.25);
+    else if (key === 'arrowdown' && mode === 'fly') speed = Math.max(fly.speedRange[0], speed / 1.25);
     else return;
     event.preventDefault();
     // A button that still has focus would otherwise act on the same key press.
@@ -527,6 +608,18 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     drive: {
       state: () => sim?.state() ?? null,
       hash: () => sim?.hash() ?? null,
+      run(steps, raw = {}) {
+        if (!sim) throw new Error('The simulation is not built yet');
+        const state = driving.run(steps, makeInput(raw));
+        // Drawn at once, with no step of the page's own and the camera straight behind the car.
+        driving.frame(0, makeInput({}), false, groundAt);
+        drawCar();
+        aimCamera();
+        view.render();
+        dirty = false;
+        return state;
+      },
+      reset: resetCar,
     },
   };
 }
