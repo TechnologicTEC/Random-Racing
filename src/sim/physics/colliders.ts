@@ -185,10 +185,21 @@ export function addWorldColliders(rapier: Rapier, physics: PhysicsWorld, world: 
 /**
  * Adds everything on a course that the car can touch: an island's colliders
  * (`addWorldColliders`), or a plain ground's meshes, its grass in the place of
- * the ground, in the same fixed order.
+ * the ground, and its walls, posts (as trees) and balls (as rocks), in the same fixed order.
  */
 export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course: Course, cfg: PhysicsConfig): WorldColliders {
   if (course.kind === 'island') return addWorldColliders(rapier, physics, course.world, cfg);
   const add = (mesh: MeshData | undefined): number => (mesh ? physics.createCollider(meshCollider(rapier, mesh)).handle : NO_COLLIDER);
-  return { ground: add(course.grass), road: add(course.road), kerbs: add(course.kerbs), walls: [], gate: [], trees: [], rocks: [] };
+  const solid = (collider: ColliderDesc): number => physics.createCollider(collider.setCollisionGroups(STANDING)).handle;
+  return {
+    ground: add(course.grass),
+    road: add(course.road),
+    kerbs: add(course.kerbs),
+    walls: (course.walls ?? []).map(({ centre, half }) => solid(rapier.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation(centre.x, centre.y, centre.z))),
+    gate: [],
+    trees: (course.posts ?? []).map(({ x, z, radius, bottom, top }) =>
+      solid(rapier.ColliderDesc.cylinder((top - bottom) / 2, radius).setTranslation(x, (top + bottom) / 2, z)),
+    ),
+    rocks: (course.balls ?? []).map(({ centre, radius }) => solid(rapier.ColliderDesc.ball(radius).setTranslation(centre.x, centre.y, centre.z))),
+  };
 }

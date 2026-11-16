@@ -25,7 +25,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **Check-in 1 with Tane** (questions below). Add the car's reference pictures to `docs/VISUAL_BAR.md` once Tane likes the look (2026-11-17: answers in STATE.md's decisions; the car casts no shadow)
 - [x] **6a** The drift rules, pure
 - [x] **6b** Drift and boost in the car
-- [ ] **6c** Hits cancel a drift
+- [x] **6c** Hits cancel a drift
 - [ ] **6d** Sparks, flame and hop
 - [ ] **6e** Camera swing and wider view
 - [ ] **6f** Tuning panel

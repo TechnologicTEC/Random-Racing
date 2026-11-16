@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6b, drift and boost in the car (see "Step 6"). Holding the drift button with the stick over at 12 m/s or more slides the car; letting go after 1, 2 or 3 s boosts it. Walls do not cancel a drift yet (6c), and nothing of it is drawn yet (6d)
-- **Next:** `docs/PLAN.md`, "The build order": **6c**, hits cancel a drift. Step 6's plan is approved (see "Step 6")
+- **Last finished part:** 6c, hits cancel a drift (see "Step 6"). Touching a wall, the gate, a tree or a rock ends a slide with no boost. Nothing of the drift is drawn yet (6d)
+- **Next:** `docs/PLAN.md`, "The build order": **6d**, sparks, flame and hop. Step 6's plan is approved (see "Step 6")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -170,7 +170,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | --- | --- | --- |
 | 6a | **The drift rules, pure.** `src/sim/car/drift.ts`: `DriftState`, `NO_DRIFT`, `driftSteps`, `stepDrift`, `tierOf`, `pathTurn`; `car.drift`, `car.boost`, `car.engine.shed` | Done |
 | 6b | **Drift and boost in the car.** `car.ts`, `drive.ts`, `grip.ts`, `sim.ts` | Done |
-| 6c | **Hits cancel a drift.** `touching()` in `carBody.ts` | |
+| 6c | **Hits cancel a drift.** `touching()` in `carBody.ts`; solid things on plain courses; `wallGround` | Done |
 | 6d | **Sparks, flame and hop**, drawn; the readout | |
 | 6e | **Camera swing and wider view** | |
 | 6f | **Tuning panel** | |
@@ -213,6 +213,14 @@ Measured on the flat at top speed (throwaway code, deleted):
 **The 4c test of speed above top speed changed with rule 9**, as the plan says: "holds the car back above top speed, as gently as it eased off…" became "slows by `engine.shed` above top speed, whatever the pedals, and no further than to top speed", and a test that half throttle at 20 m/s still eases off gently was added. Four tests of the boost in `speedChange` were added.
 
 Tests seen failing first: `drifting.test.ts` (20 tests: the car did not drift) and `drive.test.ts` (the old signature). 2,109 unit tests pass.
+
+### 6c: hits cancel a drift
+
+- **`CarPhysics.touching()`** (`carBody.ts`) names the solid thing the body is against after a step, from Rapier's contact pairs (`contactPairsWith`, then `contactPair`, a manifold with `numContacts()` above 0): `{ thing: 'wall' | 'gate' | 'tree' | 'rock', normal }`, or null. The ground, road and kerbs never count. Against several at once, the first of wall, gate, tree, rock is named. The normal is one long and points out of the thing towards the car (tested on a wall: -x within 0.01), ready for 7b's wall bounce.
+- **`sim.step`** reads it straight after the physics step and keeps the thing (in `hash()` and the snapshot since 6b), and the car's next step gives it to `stepDrift`, which cancels a slide or hop on any hit (rule 7). Only the thing is kept for now; 7b keeps the normal too.
+- **Plain test courses** (`PlainCourse`) can now have `walls` (upright boxes), `posts` (hit as trees) and `balls` (hit as rocks), added in the same fixed order as an island's. New **`wallGround()`** in `testGrounds.ts`: the flat ground with a wall 0.8 m high along its right-hand side, 30 m from the start.
+
+Tests: `touching()` names nothing on the start line or while the body rests on the road; on seed 7 it names a wall piece, a gate post, a tree and the biggest rock the body is placed in, and the same after a restore; on `wallGround` it gives the wall's normal. On the car: a slide that meets the wall at 19 degrees (started 10 m from it, facing 3 degrees towards it, with the first tier charged) ends at the wall with no boost, then or when the button is let go; a slide off `stepGround`'s 1 m drop flies (all four wheels off the ground), lands and carries on. The new `touching()` and `wallGround` tests failed on their missing code first; the drop test passed from the start, since nothing on the ground ever cancelled a slide. 2,116 unit tests pass.
 
 ## Working agreements
 
@@ -389,3 +397,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** Check-in 1 with Tane. Speed, steering, braking into reverse, the camera and the walls stay as they are. The car looks good for now; a proper design, perhaps with other car styles, may come later. The controller was not tried. **The car casts no shadow** now (Tane: annoying while driving): `carView.ts`, with a new `carView.test.ts` seen failing first, and the visual bar changed to match. Pictures of seeds 1, 3, 7 and 42 (driving and `look=car`) looked at again. The car's reference pictures `drive-start.jpg` and `car-close.jpg` added to `docs/visual-bar/`. 2,059 unit tests pass; all 320 browser tests passed in one run (18.4 minutes). Next: step 6, planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Step 6 planned in plan mode and approved (see "Step 6"). 6a done: the drift rules as a pure function (`src/sim/car/drift.ts`: `stepDrift`, `tierOf`, `pathTurn`, `driftSteps`), with `car.drift`, `car.boost` and `car.engine.shed` in the config. Three Claude's calls (the 0.3 stick read from the record, a cancel during the hop, a slide to the other side waiting for the nose). 2,084 unit tests pass; all 320 browser tests passed in one run (18.1 minutes). Next: 6b, drift and boost in the car.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6b done: the car drifts and boosts (`car.ts` follows the plan's step line by line; `speedChange` takes the step's top speed and the boost, and sheds 9 m/s2 above top speed; the drift state in the fingerprint and the snapshot). Slide circles of 19.7, 34.1 and 119.9 m at top speed; 29.5 m/s in the tightest slide; a 2.1 s slide gives 39 m/s in 0.32 s for 1 s. 2,109 unit tests pass; all 320 browser tests passed in one run (18.4 minutes), the scripted run's fingerprint across Node, Chromium and Firefox included, now with drift live. Next: 6c, hits cancel a drift.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6c done: hits cancel a drift. `touching()` in `carBody.ts` names the wall, gate, tree or rock the body is against (with the contact's slope); the simulation reads it after each physics step and the car's next step cancels a slide on it. Plain test courses can have walls, posts and balls; new `wallGround()`. 2,116 unit tests pass; all 320 browser tests passed in one run (17.2 minutes). Next: 6d, sparks, flame and hop.

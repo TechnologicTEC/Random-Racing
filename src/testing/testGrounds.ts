@@ -104,6 +104,23 @@ export function flatGround(): TestGround {
   return { course: { kind: 'plain', road }, start: poseOn({ height }, 0, 0, AHEAD, config), height };
 }
 
+export interface WallGround extends TestGround {
+  /** The wall's face, towards the car, is this far to the right of the start (+x). */
+  wallAt: number;
+}
+
+/**
+ * The flat ground with a solid wall along its right-hand side, 30 m from the
+ * start: 0.8 m high, as the island's walls are, reaching 0.6 m into the
+ * ground, and as long as the ground.
+ */
+export function wallGround(): WallGround {
+  const flat = flatGround();
+  const wallAt = 30;
+  const wall = { centre: { x: wallAt + 0.5, y: 0.1, z: -400 }, half: { x: 0.5, y: 0.7, z: 500 } };
+  return { ...flat, course: { ...flat.course, walls: [wall] }, wallAt };
+}
+
 /**
  * A road's height along its length, from pieces that are each straight or
  * curved up or down at one radius, as the generator's roads are. Level before

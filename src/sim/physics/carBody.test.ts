@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { generateWorld, type WorldResult } from '../../gen';
 import { wallPieces } from '../../gen/road/barriers';
-import { flatGround } from '../../testing/testGrounds';
+import { gateBoxes } from '../../gen/road/startGate';
+import { flatGround, poseOn, wallGround } from '../../testing/testGrounds';
 import { startPose } from '../start';
 import { createCarPhysics, type CarPhysics } from './carBody';
 import { loadRapier, type Rapier } from './rapier';
@@ -169,6 +170,86 @@ describe('push and twist', () => {
     const { velocity, spin } = physics.motion();
     expect(spin.y).toBeCloseTo(1.5, 4);
     expect(velocity).toEqual({ x: 0, y: 0, z: 0 });
+    physics.free();
+  });
+});
+
+describe('touching: the solid thing the body is against', () => {
+  /** Stands the body at a point, turned as at the start, and lets the physics take one step. */
+  function placedAt(at: { x: number; y: number; z: number }): CarPhysics {
+    const physics = createCarPhysics(rapier, { kind: 'island', world }, config, { position: at, rotation: startPose(world, config).rotation });
+    physics.step();
+    return physics;
+  }
+
+  it('names nothing while the body rests on the road: the ground, the road and the kerbs never count', () => {
+    const ground = flatGround();
+    const physics = createCarPhysics(rapier, ground.course, config, ground.start);
+    for (let i = 0; i < 120; i++) physics.step();
+    // The body has settled onto the road (no springs here), so it is touching it.
+    expect(physics.motion().position.y).toBeCloseTo(config.car.body.halfHeight, 2);
+    expect(physics.touching()).toBeNull();
+    physics.free();
+  });
+
+  it('names nothing on the start line', () => {
+    const physics = createCarPhysics(rapier, { kind: 'island', world }, config, startPose(world, config));
+    physics.step();
+    expect(physics.touching()).toBeNull();
+    physics.free();
+  });
+
+  it('names a wall, the gate, a tree or a rock that the body is pushed into, with the way out of it', () => {
+    const { line, profile } = winner();
+    const pieces = wallPieces(line, profile.height, world.road.cross, world.road.width, world.road.walls, config);
+    const piece = pieces[Math.floor(pieces.length / 2)]!;
+    const wall = placedAt({ x: (piece.from.x + piece.to.x) / 2, y: (piece.from.y + piece.to.y) / 2 - 0.3, z: (piece.from.z + piece.to.z) / 2 });
+    expect(wall.touching()?.thing).toBe('wall');
+    wall.free();
+
+    const post = gateBoxes(line, profile.height, world.road.cross, world.road.width, config)[0]!;
+    const gate = placedAt({ x: post.x, y: post.y, z: post.z });
+    expect(gate.touching()?.thing).toBe('gate');
+    gate.free();
+
+    const { trees, rocks } = world.decor;
+    const tree = placedAt({ x: trees.x[0]!, y: trees.y[0]! + 1, z: trees.z[0]! });
+    expect(tree.touching()?.thing).toBe('tree');
+    tree.free();
+
+    // The biggest rock, with the body's bottom just under its top.
+    let biggest = 0;
+    for (let r = 1; r < rocks.count; r++) if (rocks.size[r]! > rocks.size[biggest]!) biggest = r;
+    const rock = placedAt({ x: rocks.x[biggest]!, y: rocks.y[biggest]! + 0.4, z: rocks.z[biggest]! });
+    const touch = rock.touching();
+    expect(touch?.thing).toBe('rock');
+    // One long.
+    expect(Math.hypot(touch!.normal.x, touch!.normal.y, touch!.normal.z)).toBeCloseTo(1, 6);
+    rock.free();
+  });
+
+  it('gives the same answer after a restore', () => {
+    const { trees } = world.decor;
+    const tree = placedAt({ x: trees.x[0]!, y: trees.y[0]! + 1, z: trees.z[0]! });
+    const saved = tree.snapshot();
+    const other = createCarPhysics(rapier, { kind: 'island', world }, config, startPose(world, config));
+    other.restore(saved);
+    expect(other.touching()?.thing).toBe('tree');
+    tree.free();
+    other.free();
+  });
+});
+
+describe('touching on a test ground', () => {
+  it('names the wall the body leans on, with the slope pointing out of the wall towards the car', () => {
+    const ground = wallGround();
+    // The body's right side 10 cm into the wall's face.
+    const at = poseOn(ground, ground.wallAt - config.car.body.halfWidth + 0.1, -50, { x: 0, z: -1 }, config);
+    const physics = createCarPhysics(rapier, ground.course, config, at);
+    physics.step();
+    const touch = physics.touching();
+    expect(touch?.thing).toBe('wall');
+    expect(touch!.normal.x).toBeLessThan(-0.99);
     physics.free();
   });
 });

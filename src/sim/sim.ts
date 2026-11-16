@@ -89,6 +89,8 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       // The car's own pushes first, from where it is now; then the physics moves everything on.
       car.step(next, touch);
       physics.step();
+      // What the body is against now: the car's next step reads it (a hit cancels a drift).
+      touch = physics.touching()?.thing ?? null;
       step++;
     },
     state: () => ({ ...physics.motion(), ...car.read(), step, input }),

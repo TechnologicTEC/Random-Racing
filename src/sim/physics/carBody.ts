@@ -28,6 +28,15 @@ export interface WheelHit {
   collider: number;
 }
 
+/** Something solid the body is against: what it is, and the contact's slope, one long, pointing out of it towards the car. */
+export interface Touch {
+  thing: 'wall' | 'gate' | 'tree' | 'rock';
+  normal: Vec3;
+}
+
+/** When the body is against several things at once, the one named is the first in this order. */
+const THINGS: ReadonlyArray<Touch['thing']> = ['wall', 'gate', 'tree', 'rock'];
+
 /**
  * The physics world of one race: the course's colliders and the car's body.
  * The rest of the simulation drives it through these few functions and never
@@ -58,6 +67,11 @@ export interface CarPhysics {
   push(impulse: Vec3, at?: Vec3): void;
   /** Twists the body about its middle: a turning impulse, which changes how fast it turns at once and does not move it. */
   twist(impulse: Vec3): void;
+  /**
+   * The solid thing the body is against after the last step: a wall, the gate, a tree or a rock, or null. The
+   * ground, the road and the kerbs never count. Read it straight after `step`: a restore leaves it to the simulation.
+   */
+  touching(): Touch | null;
   /** Everything needed to come back to this moment: the engine's whole world, as bytes. */
   snapshot(): Uint8Array;
   /** Goes back to a moment saved by `snapshot`, from this world or another built from the same island. */
@@ -102,6 +116,13 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
   );
   // A handle is a plain number that names the body in this world and in any world restored from a snapshot of it.
   const bodyHandle = body.handle;
+  const bodyCollider = body.collider(0).handle;
+  /** What each solid thing's handle is. */
+  const things = new Map<number, Touch['thing']>();
+  for (const handle of colliders.walls) things.set(handle, 'wall');
+  for (const handle of colliders.gate) things.set(handle, 'gate');
+  for (const handle of colliders.trees) things.set(handle, 'tree');
+  for (const handle of colliders.rocks) things.set(handle, 'rock');
   const wheel = new rapier.Ball(cfg.car.wheels.radius);
   const NO_TURN = { x: 0, y: 0, z: 0, w: 1 };
 
@@ -136,6 +157,22 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
       else body.applyImpulse(impulse, true);
     },
     twist: (impulse) => body.applyTorqueImpulse(impulse, true),
+    touching() {
+      const own = physics.getCollider(bodyCollider);
+      let found: Touch | null = null;
+      physics.contactPairsWith(own, (other) => {
+        const thing = things.get(other.handle);
+        if (thing === undefined || (found && THINGS.indexOf(found.thing) <= THINGS.indexOf(thing))) return;
+        physics.contactPair(own, other, (manifold, flipped) => {
+          if (manifold.numContacts() === 0 || (found && found.thing === thing)) return;
+          // The manifold's normal points from its first collider to its second: out of the car when the car is first.
+          const n = manifold.normal();
+          const towardsCar = flipped ? 1 : -1;
+          found = { thing, normal: { x: n.x * towardsCar, y: n.y * towardsCar, z: n.z * towardsCar } };
+        });
+      });
+      return found;
+    },
     snapshot: () => physics.takeSnapshot(),
     restore(saved) {
       const restored = rapier.World.restoreSnapshot(saved);

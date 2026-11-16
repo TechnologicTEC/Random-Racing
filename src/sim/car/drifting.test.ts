@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { hold } from '../../testing/simDriving';
-import { flatGround, poseOn } from '../../testing/testGrounds';
+import { flatGround, poseOn, stepGround, wallGround } from '../../testing/testGrounds';
 import type { RawInput } from '../input';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { rotate } from '../quat';
@@ -228,6 +228,50 @@ describe('the drift state in snapshots and fingerprints', () => {
     expect(sim.hash()).toBe(base);
     sim.restore({ ...saved, car: { ...saved.car, drift: NO_DRIFT } });
     expect(sim.state().drift.phase).toBe('none');
+    sim.free();
+  });
+});
+
+describe('what ends a slide on the course', () => {
+  it('sliding into a wall met at about 20 degrees ends the slide, with no boost and the charge lost', () => {
+    const ground = wallGround();
+    // 10 m from the wall, facing 3 degrees to the right of straight ahead, towards it. The slide turns the path on
+    // into the wall, which it meets at about 20 degrees after charging the first tier.
+    const sim = createSimOn(rapier, ground.course, config, poseOn(ground, ground.wallAt - 10, 0, { x: 0.05234, z: -0.99863 }, config));
+    hold(sim, { throttle: 1 }, 2.5);
+    const states = [...slide(sim, 1, -1, 1), ...steps(sim, { throttle: 1, drift: true, steer: -1 }, 6 * perSecond)];
+    const ended = states.findIndex((state) => state.drift.phase !== 'slide');
+    expect(ended).toBeGreaterThan(Math.round(car.drift.tiers[0] * perSecond));
+    const before = states[ended - 1]!;
+    const at = states[ended]!;
+    // It had charged at least one tier, was still fast, and is against the wall.
+    expect(before.drift.tier).toBeGreaterThanOrEqual(1);
+    expect(flatSpeed(at)).toBeGreaterThan(car.drift.endSpeed * topSpeed);
+    expect(at.position.x).toBeGreaterThan(ground.wallAt - 2);
+    // The way it came at the wall, a fifth of a second before (on the step of the hit the wall has already turned it).
+    const coming = states[ended - Math.round(0.2 * perSecond)]!;
+    const angle = Math.atan2(Math.abs(coming.velocity.x), Math.abs(coming.velocity.z)) / DEGREE;
+    expect(angle).toBeGreaterThan(15);
+    expect(angle).toBeLessThan(25);
+    // No boost, then or when the button is let go.
+    expect(at.drift).toMatchObject({ phase: 'none', tier: 0, boostLeft: 0 });
+    const [letGo] = steps(sim, { throttle: 1 }, 1);
+    expect(letGo!.drift.boostLeft).toBe(0);
+    sim.free();
+  });
+
+  it('flying off a 1 m drop mid-slide and landing does not end it', () => {
+    const ground = stepGround();
+    const sim = createSimOn(rapier, ground.course, config, ground.start);
+    // Up to speed, then a slide begun about 20 m before the edge, its stick away from the corner so it stays on the ground's 60 m width.
+    let state = sim.state();
+    while (-state.position.z < ground.edge - 20) state = steps(sim, { throttle: 1 }, 1)[0]!;
+    const states = [...slide(sim, -1, 1, 1), ...steps(sim, { throttle: 1, drift: true, steer: 1 }, 1.5 * perSecond)];
+    expect(states.some((s) => s.wheels.every((wheel) => !wheel.touching))).toBe(true);
+    const last = states[states.length - 1]!;
+    expect(-last.position.z).toBeGreaterThan(ground.edge + 10);
+    expect(last.position.y).toBeLessThan(0);
+    expect(states.every((s) => s.drift.phase === 'slide')).toBe(true);
     sim.free();
   });
 });
