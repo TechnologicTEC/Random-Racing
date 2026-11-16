@@ -88,7 +88,7 @@ export function poseOn(ground: Pick<TestGround, 'height'>, x: number, z: number,
   const across = { x: -forward.z, y: slope(-forward.z, forward.x), z: forward.x };
   const right = unit(sub(across, scale(ahead, dot(across, ahead))));
   const up = cross(right, ahead);
-  const above = cfg.car.body.halfHeight + cfg.sim.start.lift;
+  const above = cfg.car.body.halfHeight + cfg.car.suspension.rideHeight;
   return {
     position: { x: x + up.x * above, y: ground.height(x, z) + up.y * above, z: z + up.z * above },
     rotation: quatFromAxes(right, up, scale(ahead, -1)),

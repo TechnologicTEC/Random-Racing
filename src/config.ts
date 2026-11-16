@@ -1243,24 +1243,59 @@ export interface SimConfig {
   stepsPerSecond: number;
   /** How hard everything is pulled down, in metres per second per second. */
   gravity: number;
-  /** The car starts this far behind the start line, in metres, with its underside this far above the road. */
-  start: { back: number; lift: number };
+  /** The car starts this far behind the start line, in metres, standing on its wheels at its ride height. */
+  start: { back: number };
   colliders: ColliderConfig;
 }
 
-/** The car. Distances in metres, mass in kilograms. Handling, drift and boost join it in steps 4 and 6. */
+/** The car. Distances in metres, mass in kilograms, speeds in metres per second. Steering joins it in step 4d, drift and boost in step 6. */
 export interface CarConfig {
-  /** Half the width, height and length of the box that is the car's body. */
-  body: { halfWidth: number; halfHeight: number; halfLength: number };
-  mass: number;
-  /** The wheels. Each is felt for as a ball of this radius, cast down from the body: a ball, not a bare ray, so it can never slip between two triangles of the ground (step 1). */
-  wheels: { radius: number };
   /**
-   * How much the body grips what it rubs against (0 is ice, 1 is rubber), and how much of its speed it keeps when it
-   * bounces off something (0 is none). Until the wheels are in (step 4) the body rests on the road, and its grip is what holds it on a slope.
+   * The box that is the car's body: half its width, height and length; how much it grips what it rubs against (0 is
+   * ice, 1 is rubber) and how much of its speed it keeps when it bounces off something (0 is none). The wheels carry
+   * the car, so the body touches things only when it hits them: a low grip lets it slide along what it scrapes.
    */
-  grip: number;
-  bounce: number;
+  body: { halfWidth: number; halfHeight: number; halfLength: number; grip: number; bounce: number };
+  mass: number;
+  wheels: WheelConfig;
+  suspension: SuspensionConfig;
+  /**
+   * The tyres. `side` is the hardest they can push the car sideways, in metres per second per second: 9.81 is the
+   * car's own weight. `turn` is how quickly they can change the rate the car turns at, in radians per second per second.
+   */
+  grip: { side: number; turn: number };
+  /** The engine. With no pedal pressed the car slows by `coast` metres per second each second. More joins it in step 4c. */
+  engine: { coast: number };
+  /**
+   * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
+   * `holdBelow` is held still by the brake, so it stays put on a slope.
+   */
+  brake: { strength: number; holdBelow: number };
+}
+
+/**
+ * The wheels: front left, front right, rear left, rear right. Each is felt for as a ball of `radius`, cast down from
+ * the body: a ball, not a bare ray, so it can never slip between two triangles of the ground (step 1). They are
+ * `halfTrack` either side of the car's middle line, the front pair `front` ahead of its middle and the rear pair `rear` behind.
+ */
+export interface WheelConfig {
+  radius: number;
+  halfTrack: number;
+  front: number;
+  rear: number;
+}
+
+/** The springs, one a wheel. */
+export interface SuspensionConfig {
+  /** How high the body's underside rides above level ground, at rest. Higher than a kerb. */
+  rideHeight: number;
+  /**
+   * How far the springs are squashed by the car's own weight at rest. More is softer. It is also how far a wheel
+   * can drop below where it rides before it leaves the ground.
+   */
+  sag: number;
+  /** How quickly a bounce dies away: 1 stops it dead, 0 lets it bounce for ever. */
+  damping: number;
 }
 
 /**
@@ -1632,7 +1667,7 @@ export const config: GameConfig = {
   sim: {
     stepsPerSecond: 60,
     gravity: 9.81,
-    start: { back: 4, lift: 0.05 },
+    start: { back: 4 },
     colliders: {
       // The trunks as they are drawn at the ground (render/treeShapes.ts).
       trunkRadius: { broadleaf: 0.38, pine: 0.32, palm: 0.28 },
@@ -1642,11 +1677,14 @@ export const config: GameConfig = {
     },
   },
   car: {
-    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1 },
+    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0 },
     mass: 300,
-    wheels: { radius: 0.05 },
-    grip: 1,
-    bounce: 0,
+    wheels: { radius: 0.05, halfTrack: 0.6, front: 0.8, rear: 0.8 },
+    // About two bounces a second if nothing damped them: firm, for a kart.
+    suspension: { rideHeight: 0.18, sag: 0.05, damping: 0.8 },
+    grip: { side: 22, turn: 30 },
+    engine: { coast: 3 },
+    brake: { strength: 20, holdBelow: 0.5 },
   },
   render: {
     chunkCells: 64,

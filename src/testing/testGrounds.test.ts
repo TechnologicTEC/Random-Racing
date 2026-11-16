@@ -52,14 +52,14 @@ describe.each(ALL)('the %s test ground', (_name, build) => {
     }
   });
 
-  it('starts the car just above the ground, the right way up', () => {
+  it('starts the car at its ride height above the ground, the right way up', () => {
     const ground = build();
     const { position, rotation } = ground.start;
     const under = ground.height(position.x, position.z);
     const up = rotate(rotation, { x: 0, y: 1, z: 0 });
     expect(up.y).toBeGreaterThan(0.95);
-    // The middle of the body is half its height and the start's lift above the ground, measured square to the ground.
-    expect((position.y - under) * up.y).toBeCloseTo(config.car.body.halfHeight + config.sim.start.lift, 1);
+    // The middle of the body is half its height and the ride height above the ground, measured square to the ground.
+    expect((position.y - under) * up.y).toBeCloseTo(config.car.body.halfHeight + config.car.suspension.rideHeight, 1);
   });
 });
 
@@ -207,8 +207,8 @@ describe('poseOn', () => {
     const up = poseOn(ground, ground.foot + 10, -100, { x: 1, z: 0 }, config);
     const forward = rotate(up.rotation, { x: 0, y: 0, z: -1 });
     expect(forward.y / forward.x).toBeCloseTo(0.45, 3);
-    // Its middle is half its height and the lift off the slope, square to it.
+    // Its middle is half its height and the ride height off the slope, square to it.
     const roof = rotate(up.rotation, { x: 0, y: 1, z: 0 });
-    expect((up.position.y - 4.5) / roof.y).toBeCloseTo(config.car.body.halfHeight + config.sim.start.lift, 2);
+    expect((up.position.y - 4.5) / roof.y).toBeCloseTo(config.car.body.halfHeight + config.car.suspension.rideHeight, 2);
   });
 });

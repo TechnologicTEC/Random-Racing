@@ -19,7 +19,8 @@ beforeAll(async () => {
   for (const seed of SEEDS) worlds.set(seed, generateWorld(seed, config));
 });
 
-const body = config.car.body;
+/** How high the body's middle rides above the road at rest. */
+const riding = config.car.body.halfHeight + config.car.suspension.rideHeight;
 const winner = (world: WorldResult): WorldResult['track']['candidates'][number] => world.track.candidates[world.track.winnerIndex]!;
 
 /** Where a point is against the lap's first sample: metres past the start line, metres right of the centre line. */
@@ -43,11 +44,11 @@ describe('startPose', () => {
     const place = fromStart(world, pose.position.x, pose.position.z);
     expect(place.along).toBeCloseTo(-config.sim.start.back, 1);
     expect(place.lateral).toBeCloseTo(0, 1);
-    // Just clear of the road under it: its underside is `lift` above the surface.
+    // At its ride height above the road under it.
     const slope = (profile.height[0]! - profile.height[line.count - 1]!) / line.spacing;
     const roadUnder = profile.height[0]! - slope * config.sim.start.back;
-    expect(pose.position.y - roadUnder).toBeGreaterThan(body.halfHeight);
-    expect(pose.position.y - roadUnder).toBeLessThan(body.halfHeight + config.sim.start.lift + 0.05);
+    expect(pose.position.y - roadUnder).toBeGreaterThan(riding - 0.02);
+    expect(pose.position.y - roadUnder).toBeLessThan(riding + 0.05);
     // The car's front is its -z side, its right its +x side, its roof its +y side.
     const forward = rotate(pose.rotation, { x: 0, y: 0, z: -1 });
     expect(forward.x).toBeCloseTo(line.tx[0]!, 2);
@@ -107,14 +108,15 @@ describe('createSim', () => {
     expect(moved).toBeLessThan(0.02);
     expect(Math.sqrt(later.velocity.x ** 2 + later.velocity.y ** 2 + later.velocity.z ** 2)).toBeLessThan(0.01);
     expect(Math.sqrt(later.spin.x ** 2 + later.spin.y ** 2 + later.spin.z ** 2)).toBeLessThan(0.01);
-    // Still where it was put: behind the line, in the middle of the road, on its underside on the road.
+    // Still where it was put: behind the line, in the middle of the road, on its wheels at its ride height.
     const place = fromStart(world, later.position.x, later.position.z);
     expect(place.along).toBeGreaterThan(-config.sim.start.back - 0.2);
     expect(place.along).toBeLessThan(-config.sim.start.back + 0.2);
     expect(Math.abs(place.lateral)).toBeLessThan(0.1);
     const roadUnder = profile.height[0]! + slope * place.along;
-    expect(later.position.y - roadUnder).toBeGreaterThan(body.halfHeight - 0.03);
-    expect(later.position.y - roadUnder).toBeLessThan(body.halfHeight + 0.03);
+    expect(later.position.y - roadUnder).toBeGreaterThan(riding - 0.03);
+    expect(later.position.y - roadUnder).toBeLessThan(riding + 0.03);
+    expect(later.wheels.every((wheel) => wheel.touching && wheel.surface === 'road')).toBe(true);
     expect(rotate(later.rotation, { x: 0, y: 1, z: 0 }).y).toBeGreaterThan(0.99);
     sim.free();
   });
@@ -219,8 +221,8 @@ describe('createSimOn', () => {
     expect(Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)).toBeLessThan(0.02);
     expect(Math.abs(position.x - ground.start.position.x)).toBeLessThan(0.1);
     expect(Math.abs(position.z - ground.start.position.z)).toBeLessThan(0.1);
-    expect(position.y - ground.height(position.x, position.z)).toBeLessThan(body.halfHeight + config.sim.start.lift + 0.02);
-    expect(position.y - ground.height(position.x, position.z)).toBeGreaterThan(body.halfHeight - 0.05);
+    expect(position.y - ground.height(position.x, position.z)).toBeLessThan(riding + 0.03);
+    expect(position.y - ground.height(position.x, position.z)).toBeGreaterThan(riding - 0.03);
     sim.free();
   });
 

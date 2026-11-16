@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 3, the simulation skeleton (parts 3a to 3c, see "Step 3"): `createSim(rapier, world, config)` in `src/sim/sim.ts` stands the car's body behind the start line and gives `step`, `state`, `hash`, `snapshot` and `restore`. The car does not drive yet: inputs are recorded but move nothing. Step 2 (open walls, see "Step 2") finished the same day
-- **Step 4 (springs, engine, steering and grip, no drift yet) is under way**, in parts 4a to 4e (see "Step 4 parts" and "Step 4"). **4a (groundwork) is done; 4b (springs and standing grip) is next.** The car still rests on its underside and does not drive: 4a added the test grounds, the wheel cast and the pushes, and changed nothing about how the car behaves. `car.grip` (the body's own grip, 1 for now) comes down in 4b once the wheels hold the car
+- **Step 4 (springs, engine, steering and grip, no drift yet) is under way**, in parts 4a to 4e (see "Step 4 parts" and "Step 4"). **4a (groundwork) and 4b (springs and standing grip) are done; 4c (engine, brake, reverse) is next.** The car now stands on four sprung wheels and stays put on any slope, but does not drive yet: the pedals and the steering still move nothing
 
 ## Milestone 3 steps
 
@@ -46,7 +46,7 @@ Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-miles
 | Part | What | Status |
 | --- | --- | --- |
 | 4a | **Groundwork**, no change to how the car behaves. Test grounds as plain triangles with a start pose (`src/testing/testGrounds.ts`: flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank); `createSimOn(rapier, course, cfg, start)` in `sim.ts` (a course is an island or plain meshes); `carBody.ts` gains the wheel cast and the pushes; the wheels feel only ground, road and kerbs; `src/sim/vec.ts`; `car/surface.ts` (road, kerb, grass, sand, rock or snow under a wheel). Tests: each ground is what it claims; a wheel cast finds the road before the first step and after a restore and ignores walls, trees and the gate; surfaces named on seed 7 | Done |
-| 4b | **Springs and standing grip.** `car/suspension.ts`, the side grip and the hold, `car/car.ts` joining them, called from `sim.step`; `CarState` gains wheel readings and forward speed; the body's own grip comes down. Tests: dropped on the flat it settles at ride height, level, and stays still; stays put for 10 s on seed 42's sloped start and parked on the 45% bank; fingerprints and restore as before | |
+| 4b | **Springs and standing grip.** `car/suspension.ts`, the side grip and the hold, `car/car.ts` joining them, called from `sim.step`; `CarState` gains wheel readings and forward speed; the body's own grip comes down. Tests: dropped on the flat it settles at ride height, level, and stays still; stays put for 10 s on seed 42's sloped start and parked on the 45% bank; fingerprints and restore as before | Done |
 | 4c | **Engine, brake, reverse.** `car/drive.ts`. Tests: top speed 30 m/s, 95% of it in 3.5 to 4.5 s, braking in a straight line, reverse, coasting to a stop and holding, at most 10% slower up 15% | |
 | 4d | **Steering and cornering.** `car/steer.ts`. Tests: steady circles of the radius the settings say at three speeds, left and right alike; reverse steering; the banked bend at top speed; the kerb at an angle | |
 | 4e | **Stability and the whole car.** `car/stability.ts`, tuning. Tests: wheels stay down over the 200 m crest; never tips on the 45% bank; lands on its wheels off a 1 m drop; the scripted run on seeds 42 and 7 stays upright with one fingerprint in Node, Chromium and Firefox. The measured table here | |
@@ -231,6 +231,28 @@ Nothing about how the car behaves changed. New:
 - `src/sim/vec.ts`: add, sub, scale, dot, cross, length, unit.
 
 **Found: a cast finds nothing until the physics world has stepped once.** The engine learns where colliders are only when it steps. So `createCarPhysics` now steps the world once while it holds only the course (nothing in it can move), then adds the car. Straight after a restore a cast works without a step: the snapshot carries what the engine knew. Both are tested (`carBody.test.ts`).
+
+### 4b: springs and standing grip
+
+The car stands on its wheels. New in `src/sim/car`: `suspension.ts` (where the wheels are, the spring worked out from the settings, `springPush`), `grip.ts` (`sideGrip`, `turnGrip`), `drive.ts` (`restChange`: with no pedal pressed, coast when rolling and hold when all but still) and `car.ts` (`createCar`, which joins them: `step` gives the body one step's pushes, `read` gives the wheels and the speed). `sim.step` calls the car's step, then the physics. `CarState` gained `wheels` (touching, squash, surface, where it is; front left, front right, rear left, rear right) and `speed` (along the car, negative backwards).
+
+- **Each step:** four wheel casts straight down in the car's own directions; each wheel on the ground pushes the body along the ground's slope there (spring and damper, never a pull); then, through the body's middle, the tyres take off the sideways speed (up to `car.grip.side`), the hold or the coast acts along the car, and the car's turning is brought to what is wanted (nothing, until 4d). Along and across are measured on the average slope under the grounded wheels. With no wheel down, nothing is pushed.
+- **The tyres act on the speed the car is about to have:** its speed now and what gravity adds in the step. So a parked car is held exactly, not a step late.
+- **Settings** (`car` in `src/config.ts`): `body` now carries its own grip (0.2, was 1) and bounce; `wheels` (5 cm balls, 0.6 m either side, 0.8 m ahead of and behind the middle); `suspension` (ride height 0.18 m, sag 0.05 m, damping 0.8: the spring is worked out from these, about 2 bounces a second undamped); `grip` (side 22 m/s2, turn 30 rad/s2); `engine.coast` (3 m/s2); `brake` (strength 20 m/s2, hold below 0.5 m/s). `sim.start.lift` is gone: the car starts at its ride height.
+- **Nothing new is saved.** Every sum starts from the body's motion and the casts, so `hash`, `snapshot` and `restore` are unchanged.
+
+**Found: the engine spreads gravity through a step in four small moves.** A car held up by pushes given once a step then reads as falling at 6 cm/s at every step's end while standing still, rides 7 mm high, and a parked car crept down a slope (25 cm in 10 s on the 45% hillside). Now the world has no gravity of its own and `carBody.ts` gives the car its weight as one push at the start of each step, like every other push. The body's speed at a step's end is then simply its speed.
+
+**Found: nothing held the car's turning.** Rounding in the pushes set a parked car turning very slowly. `turnGrip` now brings the turning to the rate wanted (none yet); 4d's steering will set that rate.
+
+Measured (throwaway code, deleted):
+
+| What | Measured |
+| --- | --- |
+| Dropped from 0.5 m on the flat | Underside comes no lower than 14 cm (it rides at 18); settled to 2 mm and 1 cm/s after 0.7 s |
+| At rest for 10 s on a sloped start | Moves 0.15 mm on seed 42 (6.5%), 0.34 mm on seed 1 (12.8%), 0.06 mm on seed 7, nothing on seeds 3 and 8. Was up to 6 mm resting on its underside |
+| Parked on the 45% hillside for 10 s, facing along, up, down and across it | Under 2 cm and still (test) |
+| One step with the car at rest | 0.31 to 0.45 ms; 0.87 ms on seed 8 (was 0.26 to 0.73 before the wheels) |
 
 ## Working agreements
 

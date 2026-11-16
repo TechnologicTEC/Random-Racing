@@ -1,6 +1,8 @@
 import type { PhysicsConfig } from '../config';
 import { createHasher } from '../core/hash';
 import type { WorldResult } from '../gen/types';
+import { createCar, type CarReading } from './car/car';
+import { surfaceFinder } from './car/surface';
 import type { Course } from './course';
 import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input';
 import { createCarPhysics, type BodyMotion } from './physics/carBody';
@@ -29,8 +31,12 @@ export interface Sim {
   free(): void;
 }
 
-/** The car at one moment. Its front is its -z side, its right its +x side and its roof its +y side, turned by `rotation`. */
-export interface CarState extends BodyMotion {
+/**
+ * The car at one moment: its body's motion, its wheels and its speed along
+ * itself. Its front is its -z side, its right its +x side and its roof its +y
+ * side, turned by `rotation`.
+ */
+export interface CarState extends BodyMotion, CarReading {
   /** How many steps the simulation has taken. */
   step: number;
   /** What the driver asked for during the last step. */
@@ -62,17 +68,20 @@ export function createSim(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig
  */
 export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose): Sim {
   const physics = createCarPhysics(rapier, course, cfg, start);
+  const ground = course.kind === 'island' ? { field: course.world.ground, cover: course.world.cover } : null;
+  const car = createCar(physics, cfg, surfaceFinder(physics.colliders, ground));
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
 
   return {
     step(next) {
-      // Until the car has wheels and an engine (step 4), the input is only remembered.
       input = next;
+      // The car's own pushes first, from where it is now; then the physics moves everything on.
+      car.step(next);
       physics.step();
       step++;
     },
-    state: () => ({ ...physics.motion(), step, input }),
+    state: () => ({ ...physics.motion(), ...car.read(), step, input }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
       return createHasher()

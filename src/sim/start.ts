@@ -11,13 +11,13 @@ export interface Pose {
 /**
  * Where the car starts: in the middle of the road, `sim.start.back` metres
  * behind the start line, facing along the lap and tipped with the road, so it
- * sits flat on a start that slopes. Its underside is `sim.start.lift` above
- * the road, so it never starts inside it.
+ * sits flat on a start that slopes. It stands at its ride height, where its
+ * springs carry it, so nothing moves when the simulation starts.
  */
 export function startPose(world: WorldResult, cfg: PhysicsConfig): Pose {
   const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
   const n = line.count;
-  const { back, lift } = cfg.sim.start;
+  const { back } = cfg.sim.start;
   // The start line is at sample 0, on a straight, so the road behind it runs straight back.
   const tx = line.tx[0]!;
   const tz = line.tz[0]!;
@@ -43,7 +43,7 @@ export function startPose(world: WorldResult, cfg: PhysicsConfig): Pose {
     z: right.x * forward.y - right.y * forward.x,
   };
 
-  const above = cfg.car.body.halfHeight + lift;
+  const above = cfg.car.body.halfHeight + cfg.car.suspension.rideHeight;
   return {
     position: { x: line.x[0]! - tx * back + up.x * above, y: roadHeight + up.y * above, z: line.z[0]! - tz * back + up.z * above },
     rotation: quatFromAxes(right, up, { x: -forward.x, y: -forward.y, z: -forward.z }),

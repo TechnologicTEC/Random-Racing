@@ -36,7 +36,7 @@ export interface WheelHit {
 export interface CarPhysics {
   /** The handles of everything the car can hit, by what it is. */
   readonly colliders: WorldColliders;
-  /** Moves everything on by one step of the simulation's clock. */
+  /** Moves everything on by one step of the simulation's clock: gravity's pull on the car for the step, then the engine's step. */
   step(): void;
   motion(): BodyMotion;
   /**
@@ -71,16 +71,24 @@ export interface CarPhysics {
  * The body is one solid box, always awake, with continuous collision
  * detection so that at full speed it cannot pass through a thin wall between
  * two steps.
+ *
+ * Gravity is given to the car as one push at the start of each step, not left
+ * to the engine. The engine spreads gravity through a step in several small
+ * moves, so a car held up by pushes given once a step would read as falling at
+ * every step's end while standing still. With gravity as one push like the
+ * others, the body's speed at a step's end is simply its speed, and it moves
+ * by that speed times the step.
  */
 export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose): CarPhysics {
-  let physics: PhysicsWorld = new rapier.World({ x: 0, y: -cfg.sim.gravity, z: 0 });
+  let physics: PhysicsWorld = new rapier.World({ x: 0, y: 0, z: 0 });
+  const weight = { x: 0, y: (-cfg.sim.gravity * cfg.car.mass) / cfg.sim.stepsPerSecond, z: 0 };
   physics.timestep = 1 / cfg.sim.stepsPerSecond;
   const colliders = addCourseColliders(rapier, physics, course, cfg);
   // One step with nothing in the world that can move. The engine only learns where colliders are when it steps, and the
   // wheels must be able to feel the ground before the car's first step.
   physics.step();
 
-  const { halfWidth, halfHeight, halfLength } = cfg.car.body;
+  const { halfWidth, halfHeight, halfLength, grip, bounce } = cfg.car.body;
   let body: RigidBody = physics.createRigidBody(
     rapier.RigidBodyDesc.dynamic()
       .setTranslation(start.position.x, start.position.y, start.position.z)
@@ -89,7 +97,7 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
       .setCanSleep(false),
   );
   physics.createCollider(
-    rapier.ColliderDesc.cuboid(halfWidth, halfHeight, halfLength).setMass(cfg.car.mass).setFriction(cfg.car.grip).setRestitution(cfg.car.bounce),
+    rapier.ColliderDesc.cuboid(halfWidth, halfHeight, halfLength).setMass(cfg.car.mass).setFriction(grip).setRestitution(bounce),
     body,
   );
   // A handle is a plain number that names the body in this world and in any world restored from a snapshot of it.
@@ -99,7 +107,10 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
 
   return {
     colliders,
-    step: () => physics.step(),
+    step() {
+      body.applyImpulse(weight, true);
+      physics.step();
+    },
     motion() {
       const at = body.translation();
       const turn = body.rotation();
