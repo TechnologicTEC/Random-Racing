@@ -142,6 +142,7 @@ The check-ins are lines in the build order. Bring the page running, a short list
 | How many laps does a ghost cover: the best single lap, or the whole 3-lap race? (This plan assumes the whole race) | M5.0 |
 | May a favourite saved before the generator is `v1` stop rebuilding when the generator changes? (This plan assumes yes, with a note on screen) | M5.0 |
 | What is cut from Milestone 6 if it runs long, and in what order are its steps wanted? | M6.0 |
+| When the generator changes after `v1`: keep every released version runnable, or store each favourite's centre line? (The brief allows either) | M6.8 |
 | Where is version 1 hosted, and under which name ("Seed Circuit" is a working title)? | M6.9 |
 
 ## Where each known issue is dealt with

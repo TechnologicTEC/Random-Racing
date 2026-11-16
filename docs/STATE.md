@@ -134,8 +134,8 @@ A third full run the same evening, two browsers at a time with the laptop kept a
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
-- Models: plan each milestone with Fable 5.2 at high effort; mechanical steps after plan approval can use medium effort or a cheaper model (Tane's call).
-- Start each milestone in a fresh session: read `CLAUDE.md`, this file and `docs/GAME_BRIEF.md`, then plan in plan mode.
+- Models: Fable 5.2 built up to 4c and wrote the plan (2026-11-16); Opus 5.5 builds from here. Which model and effort for each milestone is Tane's call.
+- Start each milestone in a fresh session: read `CLAUDE.md`, this file, `docs/PLAN.md` and the milestone's file in `docs/plan/`, and `docs/GAME_BRIEF.md`, then plan in plan mode.
 - Playwright runs three browsers at a time (15e; first thought to be load, but the failures then turned out to be the laptop going into standby).
 - When the laptop is hot it runs at half speed and tests time out (2026-11-15 evening: 19 browser timeouts, unit tests over their 20 s limit). Run unit tests with `npx vitest run --maxWorkers=6`, or let it cool; Tane can run `npm run e2e` by hand.
 - Keep the laptop awake while the test suites or `npm run perf` run: Modern Standby stalls the browsers, and tests fail with worlds that never load or `ERR_NETWORK_IO_SUSPENDED` (found 2026-11-15).
