@@ -5,6 +5,7 @@ import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
+import { twistFor, uprightChange } from './stability';
 import { turnWanted } from './steer';
 import { springOf, springPush, wheelMounts } from './suspension';
 import type { Surface } from './surface';
@@ -53,8 +54,6 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   const dt = 1 / cfg.sim.stepsPerSecond;
   const spring = springOf(cfg);
   const mounts = wheelMounts(car);
-  // How hard the body is to turn about its upright axis: a solid box's, mass x (width squared + length squared) / 12.
-  const turnInertia = (car.mass * (car.body.halfWidth * car.body.halfWidth + car.body.halfLength * car.body.halfLength)) / 3;
 
   /** Feels for the ground under each wheel: a ball cast from the spring's mount, straight down in the car's own directions. */
   function feel(motion: BodyMotion): Array<WheelState & { normal: Vec3 }> {
@@ -83,6 +82,9 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const pedals = inputFractions(input);
       const motion = physics.motion();
       const wheels = feel(motion);
+      const up = rotate(motion.rotation, UP);
+      /** Changes the body's spin by `change`, in radians per second. */
+      const spinBy = (change: Vec3): void => physics.twist(twistFor(change, motion.rotation, car));
 
       // The springs: each wheel on the ground pushes the body away from it, where the wheel is.
       let grounded = 0;
@@ -96,7 +98,11 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
         const closing = -dot(moving, wheel.normal);
         physics.push(scale(wheel.normal, springPush(spring, wheel.squash, closing, dt)), wheel.at);
       }
-      if (grounded === 0) return;
+      // In the air, the only thing that acts is the turn that brings the roof back up.
+      if (grounded === 0) {
+        spinBy(uprightChange(up, motion.spin, car, dt));
+        return;
+      }
 
       // The tyres. Along and across the ground under the car, they act on the speed the car would have at the end of the
       // step if they did nothing: its speed now and what gravity adds in one step. So a parked car stays exactly where it is.
@@ -111,9 +117,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const pull = dot(coming, along) - dot(motion.velocity, along);
       physics.push(scale(along, car.mass * speedChange(dot(motion.velocity, along), pull, pedals, share, car, dt)));
       // And they bring the car's turning to what the stick asks for, as fast as they can.
-      const up = rotate(motion.rotation, UP);
       const wanted = turnWanted(pedals.steer, dot(motion.velocity, along), car);
-      physics.twist(scale(up, turnInertia * turnGrip(dot(motion.spin, up), wanted, share, car, dt)));
+      spinBy(scale(up, turnGrip(dot(motion.spin, up), wanted, share, car, dt)));
     },
   };
 }

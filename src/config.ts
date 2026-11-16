@@ -1266,6 +1266,8 @@ export interface CarConfig {
   grip: { side: number; turn: number };
   /** The steering. `sideForce` must stay under `grip.side`, so ordinary steering never slides. */
   steer: SteerConfig;
+  /** Keeping the car the right way up when no wheel is on the ground. */
+  stability: StabilityConfig;
   engine: EngineConfig;
   /**
    * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
@@ -1289,6 +1291,18 @@ export interface SteerConfig {
    * widens to keep to it. The two limits meet at the square root of `minRadius` times this. Keep it under `grip.side`.
    */
   sideForce: number;
+}
+
+/**
+ * In the air (no wheel on the ground) the car is turned back towards roof-up, so it lands on its wheels (brief: the
+ * car should never flip). With wheels down nothing more is needed: drive, brake and grip act through the body's
+ * middle, so they cannot roll it.
+ */
+export interface StabilityConfig {
+  /** How hard the roof is turned back up, in radians per second per second for each unit of tilt (the sine of the angle from straight up). */
+  upright: number;
+  /** How quickly a roll or a pitch dies away, as a share a second. Turning about the car's own upright axis is left alone. */
+  calm: number;
 }
 
 /** The engine. */
@@ -1718,11 +1732,13 @@ export const config: GameConfig = {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0 },
     mass: 300,
     wheels: { radius: 0.05, halfTrack: 0.6, front: 0.8, rear: 0.8 },
-    // About two bounces a second if nothing damped them: firm, for a kart.
-    suspension: { rideHeight: 0.18, sag: 0.05, damping: 0.8 },
+    // About two bounces a second if nothing damped them: firm, for a kart. Ridden at 26 cm (was 18) so the body's corner
+    // clears a 45% bank met at an angle at speed instead of digging in and rolling the car (step 4e; Tane's choice).
+    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.8 },
     grip: { side: 22, turn: 30 },
     // Full stick: a 6 m circle up to 9.5 m/s, 15 m at 15 m/s, 60 m at top speed.
     steer: { minRadius: 6, sideForce: 15 },
+    stability: { upright: 12, calm: 3 },
     // 95% of top speed in about 4 seconds.
     engine: { topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5 },
     brake: { strength: 20, holdBelow: 0.5 },

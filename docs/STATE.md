@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 4d, steering and cornering (see "Step 4"). Steps 0 to 3 and parts 4a to 4c are done before it. The car stands on four sprung wheels, stays put on any slope, drives, brakes and reverses, and steers: a 6 m circle at walking pace, 60 m at top speed. Nothing is drawn of the car yet
-- **Next:** `docs/PLAN.md`, "The build order": **4e** (stability and the whole car)
+- **Last finished part:** 4e, stability and the whole car, which ends step 4 (see "Step 4"). The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
+- **Next:** `docs/PLAN.md`, "The build order": **step 5** (drive it), starting with 5a. Step 5 is a new step, so plan it in plan mode first
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -52,7 +52,7 @@ Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-miles
 | 4b | **Springs and standing grip.** `car/suspension.ts`, the side grip and the hold, `car/car.ts` joining them, called from `sim.step`; `CarState` gains wheel readings and forward speed; the body's own grip comes down. Tests: dropped on the flat it settles at ride height, level, and stays still; stays put for 10 s on seed 42's sloped start and parked on the 45% bank; fingerprints and restore as before | Done |
 | 4c | **Engine, brake, reverse.** `car/drive.ts`. Tests: top speed 30 m/s, 95% of it in 3.5 to 4.5 s, braking in a straight line, reverse, coasting to a stop and holding, at most 10% slower up 15% | Done |
 | 4d | **Steering and cornering.** `car/steer.ts`. Tests: steady circles of the radius the settings say at three speeds, left and right alike; reverse steering; the banked bend at top speed; the kerb at an angle | Done |
-| 4e | **Stability and the whole car.** `car/stability.ts`, tuning. Tests: wheels stay down over the 200 m crest; never tips on the 45% bank; lands on its wheels off a 1 m drop; the scripted run on seeds 42 and 7 stays upright with one fingerprint in Node, Chromium and Firefox. The measured table here | |
+| 4e | **Stability and the whole car.** `car/stability.ts`, tuning. Tests: wheels stay down over the 200 m crest; never tips on the 45% bank; lands on its wheels off a 1 m drop; the scripted run on seeds 42 and 7 stays upright with one fingerprint in Node, Chromium and Firefox. The measured table here | Done |
 
 **How the car will work (Claude's calls):** four 5 cm balls cast down from the body's corners each step; a spring and damper at each; sideways speed cancelled up to a grip limit; speed chases top speed with an acceleration that tapers off near the top, with slope help; the brake reverses from a standstill; the stick sets how fast the car turns at once, with a tightest circle at low speed and a sideways-force limit at high speed; drive, brake and grip forces act at the height of the car's middle so they cannot roll it; in the air a gentle turning force brings the roof back up. Every sum uses only the body's motion and the wheel casts, so there is nothing new to save in a snapshot.
 
@@ -65,7 +65,7 @@ Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-miles
 
 The design approved on 2026-11-15 (Tane's choices, how the car is simulated, the folders and their rules, the main pieces, the risks) and the records of steps 1 (the Rapier proof), 2 (open walls) and 3 (the simulation skeleton), with their measurements, are in `docs/archive/STATE-milestone-3-design-and-steps-1-3.md`, unchanged.
 
-## Step 4: springs, engine, steering and grip (2026-11-16, under way)
+## Step 4: springs, engine, steering and grip (2026-11-16 and 17, done)
 
 ### 4a: groundwork
 
@@ -158,6 +158,47 @@ Measured (throwaway code, deleted):
 
 The 4d tests were seen failing without the code. 8 of the 11 car tests failed. The 15 degree, 30 m/s kerb crossing failed before any steering existed, on the air-time measure described above. The pure tests failed on the missing module. 1,973 unit tests pass, and all 276 browser tests passed in one run.
 
+### 4e: stability and the whole car
+
+The car lands on its wheels. In `src/sim/car/stability.ts`:
+- `uprightChange(up, spin, car, dt)`: on a step with no wheel on the ground, the body is turned towards roof-up by `stability.upright` (12 rad/s²) for each unit of tilt, and its roll and pitch are damped by `stability.calm` (3 a second). Yaw is left alone.
+- `twistFor(change, rotation, car)`: the turning push that changes the spin by a given amount, using the box's inertia about each of its own axes. `car.ts` gives every change of spin through it (`spinBy`), the steering's yaw included. With wheels down nothing new acts.
+
+**Settings:** `car.stability: { upright: 12, calm: 3 }` (`StabilityConfig`). **`car.suspension.rideHeight` is now 0.26 (was 0.18)**, see below.
+
+**Found: driving onto the 45% hillside at an angle could roll the car over.** It is not the air: at 20 degrees and 18 m/s the car meets the slope's foot side-on at 6 m/s, so the ground under its right wheels rises at 2.8 m/s. The springs cannot lift that side fast enough, the body's front corner (10 cm outboard of and 30 cm ahead of the wheel) digs into the slope, and the kick rolls the car 62 degrees. The car lost 4.7 m/s in that one step. Mapped over 261 crossings (5 to 25 degrees, 9 to 30 m/s, run on the hillside test ground):
+
+| Tried | Crossings that fail | Worst tilt |
+| --- | --- | --- |
+| As it was (ride height 18 cm) | 40 | on its roof |
+| Ride height 22 cm, damping 1.0 | 4 | 164 degrees |
+| **Ride height 26 cm** | **1** | **44 degrees** |
+| Ride height 30 cm | 1 | 50 degrees |
+| Wheel balls of 12, 15 and 20 cm | 32, 27, 24 | on its roof |
+| Body with 15 cm rounded edges (same size, same inertia) | 0 | 28 degrees |
+
+A bump stop, the plan's first lever, would not have helped: the corner meets the slope while the springs are still 2 cm or more short of where it would start. The rounded body fixed every crossing but gave an unexplained 0.4 m/s upward jolt on the banked ring with all four wheels down, so it was not used. **Tane chose ride height 26 cm**: every test passes, and the car will be drawn 8 cm higher than planned (5c).
+
+**Also found: the car drives straight up the 45% grass hillside from rest**, at 26 m/s after 4 s. Nothing limits the engine's push by grip, and the slope help makes up half the climb. 7a's grass slowdown will cap it at 18 m/s. Whether it should climb at all is for step 8 and check-in 1 (known issues).
+
+The whole car, measured (throwaway code, deleted):
+
+| What | Measured |
+| --- | --- |
+| Top speed; time to 95% of it | 30.000 m/s; 3.98 s |
+| Braking from top speed | 22.3 m |
+| Full stick circles at 7.4, 14.9 and 29.9 m/s | 6.00, 14.88 and 59.75 m |
+| The 15% climb | 29.30 m/s (97.7% of top speed) |
+| The 45% grass hillside, straight up from rest | Climbs: 7.3 m/s after 1 s, 25.9 m/s after 4 s, 23.5 m higher |
+| Onto the 45% hillside at 20 degrees, 18 m/s, along it 3 s and off | Most tilt 24.7 degrees (the slope is 24.2); never under three wheels down for more than 1 step |
+| The 200 m crest at top speed | Four wheels down throughout, the lightest still 2.8 cm squashed |
+| The 1 m drop at 10 and 30 m/s | 17 and 24 steps in the air; roof-up 0.965 and 0.997 at touchdown, level a second later; speed lost 0.4% and 0; on its line |
+| Dropped from 3 m, rolled 60 and pitched 30 degrees | Roof-up 0.999 when the first wheel touches |
+| Scripted run, lowest roof-up | Seed 42: 0.843, seed 7: 0.971, seed 8: 0.974 |
+| One step of the scripted run, with a state read each step | Seed 42: 0.36 ms, seed 7: 0.49 ms, seed 8 (the most wooded): 0.94 ms |
+
+Tests: `stability.test.ts` (the sums) and `upright.test.ts` (the crest, the hillside, the drop at two speeds, the tipped fall, the scripted run on seeds 42 and 7). Seen failing before the code: the pure tests on the missing module, and the hillside, the 10 m/s drop, the tipped fall and seed 42's scripted run (roof-up 0.57). 1,986 unit tests pass, and all 276 browser tests passed in one run.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -221,6 +262,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-16 | **In a drift the line of travel is worked out from the slide as it was before the step**, and the slide keeps its side until the nose is back; `drift.turnGrip` 240 rad/s² | Found while checking step 6's rules: as first written, the path swung 1.6 degrees wide for the whole swing-in, which broke the step's own test |
 | 2026-11-16 | **The wall-bump settings are `car.bump`** (`BumpConfig`), not `car.wall` | `WallConfig` is already the generator's (`road.walls`) |
 | 2026-11-16 | **The line-following test driver is pure pursuit** (`stickToward` in `src/testing/lineDriver.ts`): it asks for the circle through the car and the point ahead. 9a's bot uses it | Claude's call, for Tane to see (test code only). The plan's first rule, 2.5 times the sine of the angle to the point, gives 0.27 of the 0.857 stick the 70 m ring needs at top speed, so the car would settle about 3.8 m wide and the 1 m test could not pass. Pure pursuit holds it to 4 cm |
+| 2026-11-17 | **The car rides at 26 cm** (`car.suspension.rideHeight`, was 18) | Tane's choice (4e), from three options. At 18 cm the body's corner dug into a 45% bank met at an angle, and the car rolled over on 40 of 261 crossings. At 26 cm, 1 of 261 fails and every test passes. Rounded body edges fixed all 261 but jolted the car on the banked ring for reasons not yet found. The car is drawn 8 cm higher than planned |
 | 2026-11-16 | **"No wheel in the air for over 0.2 s" at the kerb is timed per wheel** | Claude's reading of the plan's words, for Tane to judge. The wheels leave the kerb's 9 cm face one after another, each for up to 0.17 s, so all four are not down together for 0.3 s at 15 degrees and 30 m/s. Heading and speed are unaffected (0.11 degrees, 0.09%) |
 
 ## Notes for later milestones
@@ -238,6 +280,8 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 ## Known issues and risks
 
 - **Few roadsides open onto the sea** (step 2d): half the seeds with sea beside the road have an opening facing it, mostly flat and rolling ones, and no mountain seed has. Coast roads mostly run above a cliff or round the outside of a corner, and both keep their wall. Opening corner outsides above gentle beaches, or lower coast roads, would change it. For Tane at check-in 1.
+- **The car drives up a 45% grass slope at 26 m/s from rest** (4e): nothing limits the engine's push by grip. 7a's grass slowdown caps it at 18 m/s. If it should not climb such slopes, the plan's lever is `grip.drive` (the push held to what the wheels' load allows). For step 8 and check-in 1.
+- **One hillside crossing in 261 still rolls the car** (4e, at 26 cm ride height; worst 44 degrees). A body with rounded edges fixed every crossing in a trial but jolted the car on the banked ring; worth another look if rolls show up in step 9's laps.
 - **Wall ends are ramps** (0.8 m up over 6 m), and hillsides of up to 40% beside mountain roads are open: both wait for the car (steps 4, 7 and 8; see "Step 2" in `docs/archive/STATE-milestone-3-design-and-steps-1-3.md`).
 
 - **The verge still dips a little at its outer edge on steep banks** (about 0.3 m at worst, seed 1; was about 0.45 m before R5's 4 m verge). The road is unaffected and the barrier footing hides it; the barrier test asks for a third of the footing in the ground and passes. Holding the road's height one cell beyond the verge in `fit.ts` would remove the rest.
@@ -314,3 +358,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-16 (Milestone 3, hand-over):** Last day of the model that built steps 0 to 4c. Planned in plan mode and approved by Tane: every step still to do is split into parts with the tests and numbers that prove each (`docs/PLAN.md`), with step 6's drift and boost rules, timings and starting config values set out exactly; design notes for Milestones 4, 5 and 6 ("Notes for later milestones"); and the visual bar (`docs/VISUAL_BAR.md`) with eleven reference pictures in `docs/visual-bar/`. The decisions of Milestones 1 and 2 moved to `docs/archive/DECISIONS-milestone-1-2.md`. No code changed after 4c. A third browser run failed 22 tests on page-load timeouts; the same tests passed when run alone (see "4c"), so **a clean full browser run is still owed**. **Tane asked that 4d and 4e wait until Tane has had another look.** Next, when Tane says: 4d.
 - **2026-11-16 (Milestone 3, the plan finished):** Tane asked for the rest of the project to be planned so the next model knows exactly what to do and in what order. Approved in plan mode. `docs/PLAN.md` and one file per milestone in `docs/plan/` now hold everything still to build: the build order (a list to tick from line 0, the owed browser run, to the release of version 1), the routine for one part, what to do when something does not go to plan, whose call is whose, the questions for each check-in, steps 4d to 10 with their sums written out (step 6's car step line by line), Milestones 4, 5 and 6 as ordered steps with their tests, and where each known issue is dealt with. The visual bar moved to `docs/VISUAL_BAR.md`. Found while checking step 6: the line of travel must use the slide as it was before the step (decisions). Fable 5.2 started this; Opus 5.5 finished it. Docs only. Next: line 0 of the build order, then 4d once Tane has looked at the plan.
 - **2026-11-16 (Milestone 3, Opus 5.5):** Line 0 done: Tane ran `npm run e2e` by hand after 4c and it all passed. 4d planned in plan mode, approved, and done (see "4d"). The stick turns the car: `turnWanted` in `src/sim/car/steer.ts`, `car.steer: { minRadius: 6, sideForce: 15 }`. Circles of 6.00, 14.88 and 59.75 m at the three speeds, both ways alike. Reverse steers as a real car does. The banked ring at top speed is held to 4 cm. Kerb crossings change the heading by at most 0.11 degrees. The ring's test driver is now pure pursuit, because the plan's first rule would have run 3.8 m wide (decisions). The kerb's air time is timed per wheel (decisions). 1,973 unit tests pass. The browser suite passed in one clean run: 276 tests in 16.7 minutes. That run includes the scripted run's fingerprint, now with steering, matching in Node, Chromium and Firefox. Next: 4e.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 4e done, which ends step 4 (see "4e"). In the air the car turns back towards roof-up (`stability.ts`, `car.stability: { upright: 12, calm: 3 }`), and every change of spin goes through the box's own inertia (`twistFor`). Found: driving onto the 45% hillside at an angle rolled the car over, because the body's corner dug into the slope. Mapped over 261 crossings; ride height, wheel size and a rounded body tried; Tane chose ride height 26 cm (was 18). Also found: the car drives up the 45% grass hillside from rest (known issues). 1,986 unit tests pass. The browser suite passed in one clean run: 276 tests in 16.9 minutes, the fingerprint check across Node, Chromium and Firefox included. Next: step 5, planned in plan mode first.
