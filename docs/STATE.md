@@ -4,7 +4,7 @@ Updated at the end of every work session. A new session should read this first, 
 
 The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins and the session log) is in `docs/archive/STATE-milestone-1-2.md`, and their decisions are in `docs/archive/DECISIONS-milestone-1-2.md`. Known issues and working agreements from those milestones are still here.
 
-**For a new model taking over (2026-11-16):** read "Where we are", then "Plan for steps 4d to 10", "Visual bar" and "Working agreements". The rest is the record of what was built and why.
+**For a new model taking over (2026-11-16):** read "Where we are", then `docs/PLAN.md`, `docs/VISUAL_BAR.md` and "Working agreements". The rest is the record of what was built and why.
 
 ## Where we are
 
@@ -12,13 +12,13 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 3, the simulation skeleton (parts 3a to 3c, see "Step 3"): `createSim(rapier, world, config)` in `src/sim/sim.ts` stands the car's body behind the start line and gives `step`, `state`, `hash`, `snapshot` and `restore`. The car does not drive yet: inputs are recorded but move nothing. Step 2 (open walls, see "Step 2") finished the same day
 - **Step 4 (springs, engine, steering and grip, no drift yet) is under way**, in parts 4a to 4e (see "Step 4 parts" and "Step 4"). **4a (groundwork), 4b (springs and standing grip) and 4c (engine, brake, reverse) are done; 4d (steering and cornering) is next.** The car stands on four sprung wheels, stays put on any slope, and drives, brakes and reverses in a straight line. The steering still moves nothing
-- **Hand-over, 2026-11-16.** This was the last day of the model that built steps 0 to 4c. Everything still to do in this milestone is planned in parts under "Plan for steps 4d to 10", Milestones 4 to 6 have design notes under "Notes for later milestones", and the look is described under "Visual bar". **Tane asked for 4d and 4e not to be started until Tane has had another look**
+- **Hand-over, 2026-11-16.** This was the last day of the model that built steps 0 to 4c. Everything still to do in this milestone is planned in parts in `docs/PLAN.md`, Milestones 4 to 6 have their steps and design notes there too, and the look is described in `docs/VISUAL_BAR.md`. **Tane asked for 4d and 4e not to be started until Tane has had another look**
 
 ## Milestone 3 steps
 
 Tests first, watched failing. Unit and browser suites pass before each commit; commit and push after each step; short report after each step.
 
-**Steps 4d to 10 are split into parts, with the tests and numbers that prove each, under "Plan for steps 4d to 10".** The table here is the overview.
+**Steps 4d to 10 are split into parts, with the tests and numbers that prove each, in `docs/PLAN.md`.** The table here is the overview.
 
 | # | Step | Ends with | Status |
 | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 
 ### Step 4 parts
 
-Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-milestone-3-rippling-corbato.md`). How the car works is in "Step 4" once the parts are done; the short version is under the table. **4d and 4e are set out in full, with their numbers, under "Plan for steps 4d to 10".**
+Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-milestone-3-rippling-corbato.md`). How the car works is in "Step 4" once the parts are done; the short version is under the table. **4d and 4e are set out in full, with their numbers, in `docs/PLAN.md`.**
 
 | Part | What | Status |
 | --- | --- | --- |
@@ -58,218 +58,10 @@ Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-miles
 
 **How the car will work (Claude's calls):** four 5 cm balls cast down from the body's corners each step; a spring and damper at each; sideways speed cancelled up to a grip limit; speed chases top speed with an acceleration that tapers off near the top, with slope help; the brake reverses from a standstill; the stick sets how fast the car turns at once, with a tightest circle at low speed and a sideways-force limit at high speed; drive, brake and grip forces act at the height of the car's middle so they cannot roll it; in the air a gentle turning force brings the roof back up. Every sum uses only the body's motion and the wheel casts, so there is nothing new to save in a snapshot.
 
-## Plan for steps 4d to 10 (written 2026-11-16 for the next model)
+## The plan and the visual bar have their own files
 
-Written by the model that built steps 0 to 4c, on its last day, and approved by Tane the same day. It splits every step still to do into parts, each with the tests and numbers that prove it is done. **Every number is a starting value in `src/config.ts`, to be tuned by feel at the check-ins; the tests read the config, so they follow it.** The reasons are given so that a number can be changed with its consequences in view.
-
-Each part ends with: its tests seen failing and then passing, `npm test`, `npm run typecheck`, `npm run e2e`, a commit, a push, and this file saying what is next. Each step is still planned in plan mode when it starts (CLAUDE.md); this section is what that plan starts from.
-
-### Rules that hold for every part
-
-- **`src/sim` uses exact maths only**: `+ - * /`, `Math.sqrt`, and `dsin` / `dcos` from `src/core/dmath.ts`. The architecture test enforces it. `src/camera`, `src/render`, `src/input` and `src/app` may use anything.
-- **Anything the simulation remembers from one step to the next goes into `hash()`, `snapshot()` and `restore()`**, with a test that a restored run carries on exactly. Up to step 5 it remembers nothing of its own. The drift state (step 6), the wall touch (7b) and the progress (8) are the first.
-- **Times in the config are seconds; the code turns each into whole steps once** (`Math.round(seconds * stepsPerSecond)`) and counts steps. Never add up fractions of a second.
-- **Look Rapier's function names up** in `node_modules/@dimforge/rapier3d-deterministic-compat/dist/**/*.d.ts`. This is version 0.21; do not trust memory. Only `src/sim/physics` may import it.
-- **Prove a rule on a test ground first** (`src/testing/testGrounds.ts`: the ground is exactly known), then on real seeds.
-- **Directions.** The car's front is -z, its right +x, its roof +y. In `car.ts`, `across` (`cross(along, normal)`) points to the car's right. A positive `steer` is to the right. A positive turn rate about the car's `up` is to the left (anticlockwise seen from above), so steering right asks for a negative one.
-- **If a test's number cannot be met, tune the config; if it still cannot, report to Tane.** Do not loosen a number quietly.
-- **The browser suite takes about 25 minutes. Keep the laptop awake for it.** A page that "did not load in time" is standby or a slow spell, not the code: check Windows' event log (Kernel-Power 506 and 507) and run the failed tests again alone before debugging (see "4c").
-
-### Step 4: the two parts left
-
-| Part | Build | Rule and starting values | Done when |
-| --- | --- | --- | --- |
-| **4d Steering and cornering** | `car/steer.ts`: `turnWanted(steer, speed, car)`. `car.ts` gives it to `turnGrip` in place of the 0 it gives now | `car.steer: { minRadius: 6, sideForce: 15 }`. The turn rate asked for is `steer` times the smaller of speed / `minRadius` and `sideForce` / speed, and it changes sign with the speed, so a reversing car steers as a real one does. That is a 6 m circle up to 9.5 m/s, 15 m at 15 m/s and 60 m at 30 m/s; the fastest turning is 1.58 rad/s at 9.5 m/s. `sideForce` is under `grip.side` (22), so the car never slides in ordinary steering | Pure tests: those values; half stick gives half the rate; left mirrors right exactly; nothing at a standstill; reversed when rolling backwards. On the flat: circles at throttle 0.25, 0.5 and 1 have radius 6, 15 and 60 m within 5% (worked out from speed / turn rate, and the middle of the circle stays put within 5% of the radius for a whole lap); left and right within 1% of each other; speed within 2% of the straight-line speed for that throttle; four wheels down; roof up. One step after the stick moves, at 15 m/s, the turn rate is over 0.4 rad/s (the brief: instant). Half stick at top speed: 120 m. Reversing with the stick right: the car backs to its right and its nose swings left. Two laps of the banked ring (70 m, 8 degrees) at top speed, steered by a simple test driver: within 1 m of its middle line, 29 m/s or more, wheels down (it needs 12.9 of the 15 m/s2). The kerb crossed at 5 and 15 degrees, at 18 and 30 m/s, up its ramp and off its upright face: heading changed by under 3 degrees afterwards, no wheel in the air for over 0.2 s, under 3% of the speed lost. Every earlier test still passes |
-| **4e Stability and the whole car** | `car/stability.ts`; the scripted run looked at now that it drives; the measured table | `car.stability: { upright: 12, calm: 3 }`. With no wheel on the ground: a turn towards roof-up of 12 rad/s2 for each unit of tilt (the sine of the angle between the car's up and straight up), and its roll and pitch damped by 3 a second; yaw is left alone. With wheels down, nothing new: drive, brake and grip already act through the body's middle, so they cannot roll it. Levers if a test fails, in this order: a bump stop (the spring twice as stiff over its last 4 cm before the underside meets the ground); then an extra pull down while only some wheels touch | Four wheels touching on every step over the 200 m crest at top speed (it needs 4.5 of gravity's 9.81 m/s2; at boost speed, 7.6). Onto the 45% hillside at 20 degrees, along it for 3 s and off again: never tipped more than 8 degrees beyond the slope's own 24, never under three wheels down for over 0.3 s. Off the 1 m drop at 10 and at 30 m/s: roof-up 0.95 or more at touchdown, level a second later, under 10% of forward speed lost, within 0.5 m of its line 2 s on. Started 3 m up, rolled 60 degrees and pitched 30: lands on its wheels (roof-up 0.9 or more). The scripted run on seeds 42 and 7 stays roof-up (0.7 or more) and gives one fingerprint in Node, Chromium and Firefox (`e2e/determinism.spec.ts`, as now). A table under "Step 4": top speed, time to 95% of it, braking distance, the three circles, speed up the 15% climb, whether it climbs the 45% hillside from rest and how fast, the cost of a step on seeds 7 and 8 |
-
-### Step 5: drive it
-
-Nothing in `src/sim` changes in this step.
-
-| Part | Build | Done when |
-| --- | --- | --- |
-| **5a Input** | `src/input/keyboard.ts`: `keysToInput(held)`. `src/input/gamepad.ts`: `padToInput(axes, buttons, cfg)` for the standard mapping only (right trigger, button 7, throttle; left trigger, 6, brake; left stick, axis 0, steering; right bumper, 5, drift; Back, 8, reset; Y, 3, camera and Start, 9, pause are for the page, not the record). `mergeInputs(a, b)`: the larger of each pedal, the steering further from the middle, either button. New `input: { deadZone: 0.15 }`: a stick inside it reads 0, and the rest is stretched to reach 1. **No smoothing anywhere** (the brief) | Unit tests: every key in the brief's table; left and right together give 0; Space and Shift both drift; a stick at 0.15 gives 0, at 0.575 gives a half, at 1 gives 1, and left mirrors right; a trigger at 0.5 gives 128 of 255; `mergeInputs` |
-| **5b The loop** | `src/app/drive.ts`: `advance(carried, frameSeconds)` gives how many steps to take (5 at most, the rest dropped) and the blend between the last two states; `blendState(before, after, blend)` (positions straight, turns the short way round). Rapier (`loadRapier`) is fetched beside world generation and the simulation made when both are in. A new island frees the old simulation (`sim.free()`); a Rapier world is not freed by itself | Unit tests: 1,000 frames at 144 a second give 60 steps a second within 1; one frame of a whole second (the tab was hidden) gives 5 steps and carries nothing over; the blend is at least 0 and under 1; a blend of 0 and of 1 give the two states exactly |
-| **5c The car drawn** | `src/render/carShape.ts` (plain numbers, unit tested, the pattern of `treeShapes.ts`) and `src/render/carView.ts` (the Three.js wrapper). A low-poly kart built in code: see "Visual bar". Each wheel is drawn where the simulation says it is (`CarState.wheels[i].at`), so the springs show; the front wheels turn with the stick; the car casts a shadow | Unit tests: the shape lies inside the body's box (1.4 by 0.6 by 2.2 m) apart from the wheels; the wheels sit at `wheelMounts`; under 600 triangles. Screenshots on seeds 1, 3, 7 and 42 looked at beside the "Visual bar" pictures |
-| **5d Chase camera** | `src/camera/chase.ts` as plain numbers, like `flyAlong.ts`. New `camera.chase: { back: 6.5, height: 2.4, lookAhead: 5, lookHeight: 1, follow: 0.15, clearance: 0.8, fieldOfView: 60 }` (the other cameras keep 50). It stands `back` metres behind the car along **the way the car is travelling on the map** (its velocity above 2 m/s, its nose below), `height` up, and looks at a point `lookAhead` in front and `lookHeight` up. Its direction eases to the car's with a time of `follow` seconds, by the frame's own length, so it is the same at any frame rate. It never comes within `clearance` of the ground (`sampleField` on `world.ground`, the idea in `flyAlong.ts`) | Unit tests: 6.5 m behind and 2.4 m up on the flat; after the car turns a quarter circle the camera is within 5 degrees of behind it in 0.5 s; the same place within 1 cm after 2 s at 30, 60 and 144 frames a second; never within 0.8 m of the ground on seed 28496 (the start gate in a gorge) |
-| **5e The page** | `worldPage.ts` stays the wiring. The page opens driving. C goes round chase, flying, circling. In the chase view W, S, A, D, the arrows, Space, Shift and R drive; in the flying view Space and the arrows keep their old use. `cam=fly`, `cam=orbit`, `look=`, `at=` and `lap=` open their old views with the simulation not running, so old screenshot addresses give the same pictures as before. `still=1` holds the simulation too. A readout card: speed in km/h and the surface. `window.seedCircuit.drive`: `state()` and `run(steps, input)`, so a browser test steps the simulation itself instead of waiting in real time. Existing tests that assumed the page opens flying get `cam=fly` in their address; so does `e2e/perf.spec.ts` | Browser tests, Chromium and Firefox: the car is on the start line on four wheels (within 0.5 m of `startPose`); W held moves it; `run(300, { throttle: 1 })` leaves it over 20 m/s further down the road; C switches the camera and the hint; each old address still opens its old view; no console errors; the 3-second budget tests still pass. New screenshots `world-<seed>-drive-start.png` and `-drive-5s.png` (after `run(300, …)`), looked at on seeds 1, 3, 7 and 42 |
-
-Then **check-in 1 with Tane**: speed, steering, camera, where the walls are. By then the car steers but does not drift, the walls are hard (step 7 softens them) and nothing brings the car back from the sea (step 8); say so.
-
-### Step 6: drift and boost, the exact rules
-
-**What the car remembers** (`DriftState`, all of it in `hash()` and the snapshot): `phase` (none, hop or slide), `dir` (-1 left, 1 right, 0 none), `charge` (steps spent sliding), `hopLeft` (steps of hop still to draw), `slide` (from 0 to 1: how far the nose has swung in), `boostLeft` (steps), `boostTier` (0 to 3, for the flame), `held` (whether the button was down on the last step).
-
-**Starting values:**
-
-```
-car.drift: {
-  startSpeed: 0.4,                     // share of top speed: 12 m/s (brief: about 40%)
-  endSpeed: 0.3,                       // 9 m/s
-  steerToStart: 0.3,                   // share of full stick
-  hop: { time: 0.15, height: 0.08 },   // seconds and metres; drawn only
-  angle: 0.42,                         // radians: 24 degrees
-  swing: 0.25, recover: 0.2,           // seconds for the nose to swing in, and back
-  turn: { wide: 0.25, tight: 1.5 },    // radians per second
-  grip: 60,                            // m/s2
-  turnGrip: 120,                       // rad/s2
-  tiers: [1, 2, 3],                    // seconds (brief)
-  boosts: [0.5, 1.0, 1.6],             // seconds (brief)
-  brakeCancel: 0.5,                    // share of the brake pedal
-}
-car.boost: { speed: 1.3, accel: 30 }   // times top speed; m/s2
-car.engine.shed: 9                     // m/s2
-```
-
-**The rules:**
-
-1. **Start.** On the step the drift button goes from up to down, with the car going forwards at 12 m/s or more and two or more wheels on the ground, the hop begins: 9 steps, drawn only. If the stick is 0.3 or more to one side on that step, the slide starts at once to that side. If it is not, the slide starts on the first of the hop's 9 steps on which the stick reaches 0.3 with the button still down. If the hop ends first, nothing more happens until the button is let go and pressed again.
-2. **The direction is locked.** `dir` never changes during a slide, whatever the stick does.
-3. **The slide.** `slide` rises evenly from 0 to 1 over `swing` (15 steps). The nose points `angle * slide` into the corner from the line the car travels along. That line is `travel = along * dcos(b) - across * dir * dsin(b)` with `b = angle * slide`. While `slide` is above 0 the tyres take off the speed across `travel`, up to `drift.grip`, and the engine and the brake act along `travel`, on the speed along it. (With `slide` at 0 this is exactly step 4's car.)
-4. **Steering sets how tight, not which way.** The path turns towards `dir` at `wide` with the stick fully away from the corner, `tight` with it fully into the corner, and evenly between: 0.875 rad/s with the stick in the middle. At top speed those are circles of 120 m, 20 m and 34 m; slower, they are tighter. The body's turn rate asked for is the path's plus the rate the nose is swinging, held with `drift.turnGrip` in place of `grip.turn`.
-5. **Charge.** `charge` goes up by one on every step of the slide. Tier 1 (blue) from 60, tier 2 (orange) from 120, tier 3 (purple) from 180.
-6. **Release.** When the button comes up during a slide: a boost of 30, 60 or 96 steps for tiers 1, 2 and 3, and none below tier 1. If a boost is still running, the longer of the two is kept, with its tier. `charge` goes to 0, `phase` to none, and `slide` falls evenly to 0 over `recover` (12 steps): the nose swings back out while the car carries on along `travel`, which ordinary steering now turns.
-7. **Cancel**, with no boost and the charge lost (`slide` falls as in 6): the body touches a wall, the gate, a tree or a rock (6c); the brake is half down or more; the speed along `travel` falls under 9 m/s; a respawn (step 8). **Not** cancelled by: leaving the ground, kerbs, grass, letting go of the throttle.
-8. **Boost.** While `boostLeft` is above 0 it falls by one a step, on the ground or in the air. For those steps the top speed is 1.3 times what it would be (39 m/s on the road), the throttle counts as fully down, and the engine's push is `boost.accel` with no easing, never taking the car past that top speed. The brake still brakes.
-9. **After a boost.** A car faster than its top speed, with no boost running, slows by `engine.shed` (or by the brake, if that is harder) and no further than to its top speed. This replaces what 4c does above top speed, and 4c's two tests of that ("holds the car back above top speed…" in `drive.test.ts`) change with it. Below top speed nothing changes: half throttle at 20 m/s still eases off gently. Step 7 uses the same rule when the car runs onto grass.
-
-**Why these numbers.** The generator scores a corner as a drift corner when its radius is 20 to 90 m (`track.score.driftMinRadius`, `driftMaxRadius`), and a hairpin's widest line on a 12 m road is about 25 m: so a slide must turn as tightly as 20 m at top speed and as widely as 120 m. Ordinary steering turns no tighter than 60 m at top speed, so every corner the generator banks fully (70 m and wider) is flat out on grip alone and anything tighter needs a slide or a lift: that is what makes drifting the fastest way through a corner (pillar 2). Turning takes a little speed off by itself, because the tyres take off the sideways part of the car's speed on every step: 0.06 m/s at 0.5 rad/s, 0.5 m/s in the tightest slide. With `shed` at 9, a boost is worth about 8, 12 and 18 m of road for the three tiers (a quarter to six tenths of a second); at the coasting rate it would fade for three more seconds and the tiers would hardly differ.
-
-| Part | Build | Done when |
-| --- | --- | --- |
-| **6a The rules** | `car/drift.ts`: `stepDrift(state, asked, cfg)`, a pure function from the state, what is asked (button, stick, brake, speed along `travel`, wheels down, hit) and the config to the next state; `tierOf(charge)`; `pathTurn(state, steer)` | One unit test for each rule, on the exact step: starts at 12.0 m/s and not at 11.9; not without the stick; the stick arriving on the hop's ninth step starts it and on the tenth does not; not while reversing; a stick thrown the other way mid-slide changes nothing; `pathTurn` is 0.25, 0.875 and 1.5 towards `dir`; tiers on steps 60, 120 and 180 exactly; boosts of 30, 60 and 96 steps; none at 59; the longer boost is kept; each cancel loses the charge; the brake at 0.49 does not cancel; nothing restarts while the button stays down |
-| **6b In the car** | `car.ts` uses `travel`, the path's turn rate, the drift grip, the boost and the shed; `speedChange` is given the top speed for the step; `Car` gains `save()` and `load()`; `Sim` puts the drift state in `hash`, `snapshot` and `restore`; `CarState.drift` for drawing (phase, dir, tier, slide angle, hop from 0 to 1, boost left and tier) | On the flat at top speed, sliding right and left: circles of 20, 34 and 120 m within 5%; the nose 24 degrees inside the line of travel within 1 degree once swung in; as a slide starts the path never turns away from the corner by more than half a degree (this is what `turnGrip` is for); 97% of top speed or more in the tightest slide. After a 2.1 s slide and release: over 30 m/s on the next step, 39 m/s within 0.4 s, held within 1% to the boost's last step, back under 30.1 m/s within 1.1 s more, never over 39. The top speed is raised on exactly 30, 60 and 96 steps. A snapshot taken mid-slide and one taken mid-boost carry on exactly; two simulations that differ only in drift state have different fingerprints. The scripted run already dabs the drift button, so `e2e/determinism.spec.ts` proves one fingerprint in Node, Chromium and Firefox |
-| **6c Hits cancel** | `carBody.ts`: `touching()`, from `world.contactPairsWith` and `world.contactPair` (a manifold with `numContacts()` above 0, its `normal()`), names the solid thing the body is against (wall, gate, tree or rock, by `WorldColliders`) or null; the ground, road and kerbs do not count. `PlainCourse` gains optional walls, posts and balls; new `wallGround()` in `testGrounds.ts` | Sliding into the wall at 20 degrees ends the slide with no boost and `charge` 0; landing hard on the body's underside (the 1 m drop, mid-slide) does not |
-| **6d Sparks, flame and hop** | `carView.ts`: the hop drawn from `hopLeft` (an arc 8 cm high); sparks at both rear wheels while sliding from tier 1, in the tier's colour; a flame behind the car while a boost runs, longer for a higher tier. Colours in a new `render.car`. Everything is drawn from the simulation's state and its step count, never the frame clock, so `still=1` repeats. Readout: tier and boost left | Screenshots of each tier and of a boost (reached with `drive.run`), looked at beside the "Visual bar"; the same address twice gives the same picture |
-| **6e Camera** | `chase.ts`: because it follows the line of travel, a sliding car is already seen turned into the corner; add a swing of `camera.chase.swing` (0.12 rad) to the outside of the corner, eased over 0.3 s, and a field of view of `boostFieldOfView` (70) during a boost, eased over 0.25 s in and 0.5 s out | Unit tests in `chase.test.ts` |
-| **6f Tuning panel** | T opens a panel of sliders for `car.engine`, `car.steer`, `car.grip`, `car.drift`, `car.boost` and `camera.chase`, with a button that copies the values as text for `config.ts`. The panel works on its own copy of the config. When a value changes it takes a snapshot, builds a new simulation with the new values and restores into it (about 60 ms). The body, mass, wheels and springs are not on the panel: a snapshot carries the old body | Browser test: moving the top-speed slider changes the speed the car reaches; the copied text holds the value; the shared `config` and every fingerprint are untouched |
-
-### Step 7: surfaces and bumps
-
-| Part | Build | Done when |
-| --- | --- | --- |
-| **7a Off the road** | New `car.surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 }`: each surface's share of top speed. The car's share is the average over its wheels on the ground, so two wheels on a kerb or the grass cost little. It multiplies the top speed, boost included; the car comes down to it by rule 9 | Unit test of the average. On a grass test ground: top speed 18 m/s within 1% (the brief: about 40% slower); from 30 m/s on the road, under 19 m/s within 1.5 s of all four wheels reaching the grass; two wheels on grass, 24 m/s; a boost on grass, 23.4 m/s. On seed 7, a wheel on the beach reads sand and slows the same |
-| **7b Walls** | The touch from 6c is kept in the simulation's state (in `hash` and the snapshot) and used on the next step. New `car.wall: { turn: 3, push: 1.5, again: 0.5 }`: while the body touches a wall or the gate, the turn rate asked for gains up to `turn` rad/s, in proportion to how squarely the nose points into the wall, turning it along the wall; and on a new hit (none in the last `again` seconds) the car is pushed off the wall at `push` m/s. **These two rules are untried**: Rapier already stops the car going through, with the body's own grip of 0.2, and the tests decide what more is needed | On `wallGround()` at top speed: a 30-degree hit leaves 21 m/s or more (70%) a second later, within 10 degrees of the wall's line, roof-up, not touching, and at no step through the wall; a 10-degree brush keeps 90%; head on, the car stops, rolls back at 1 to 2 m/s, stays roof-up and can reverse away. The sloping end of a wall met head on at 30 m/s does not launch the car (under 0.5 m of height gained, lands on its wheels); if it does, make the end's collider blunt in `wallColliders`: colliders are not part of the world fingerprint |
-| **7c Trees and rocks** | Decided: the wheels do not feel rocks, the body does. No new rule unless a test needs one | A trunk met head on, and half a metre off centre, at 30 m/s: under 3 m/s a second later (head on), roof-up 0.95 or more throughout, never turning faster than 6 rad/s, never inside the trunk. A flat rock (0.3 m high) crossed at 18 m/s: roof-up 0.8 or more throughout, on its wheels and level 2 s later. A tall rock stops it like a tree |
-| **7d Kerbs** | No new rule | The kerb's upright outer face crossed from the grass at 5, 20 and 45 degrees, at 18 and 30 m/s: under 3 degrees of heading and 3% of speed lost. A slide across a kerb carries on with its charge |
-
-### Step 8: progress and respawn
-
-| Part | Build | Done when |
-| --- | --- | --- |
-| **8a Place on the lap** | `src/sim/track/progress.ts`. The car's place: metres along the lap from the start line, and metres to the right of the centre line (`world.track.candidates[winnerIndex].line`, the arrays `startPose` reads). It is looked for within 40 m along the lap of the last place; only when the car is more than 30 m from the line there is the whole lap searched. **Checkpoints** every 100 m (the lap divided evenly into the nearest whole number of them): one is passed when the place goes forwards past it with the car within half the road's width plus 6 m of the centre line, and only the next one in order can be passed. Remembered, in `hash` and the snapshot: the place, the last checkpoint, how many have been passed | On seed 7 and on a folded seed with sections 40 m apart: a car moved round the centre line has a place that only rises, with every checkpoint passed in order; a car set down on the section next door is not mistaken for being there; a cut across the grass that misses a checkpoint does not pass the one after it; reversing over one does not count |
-| **8b Respawn** | New `sim.respawn: { delay: 1, waterDepth: 0.5, edge: 20, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } }`. A wait of `delay` (60 steps) starts when: the car's middle is 0.5 m or more under the sea (height 0); it is within 20 m of the tile's edge or 30 m under the sea; its roof-up has been under 0.3 for 1 s; or a pedal has been down for 3 s with the car slower than 0.5 m/s. During the wait the pedals and stick do nothing. Then the car stands at the last checkpoint passed (the start pose before any): on the centre line, facing along the lap, tipped with the road, at its ride height, still, with no drift, charge or boost (`poseAlong(world, cfg, metres)`, made from `startPose`). R, on the step it goes down, does the same with no wait | On real seeds with an opening onto the sea (7 and 9; find the place with a helper in `testing/checkSeeds.ts`): driven in, the car is at the last checkpoint, still, on four wheels and facing along the road, 60 steps after it went under. One test for each of the other triggers and for R. A car holding the brake at a standstill is never "stuck". A snapshot taken during the wait carries on exactly |
-| **8c The page** | A short fade to white and back over the respawn; the readout shows the place on the lap | Browser test: `drive.run` into the sea and back to the checkpoint; no console errors |
-
-Also answer in this step, from step 2's list: can the car drive back up a 40% hillside onto a mountain road (4e's table says whether it climbs 45% on the road's grip; grass takes 40% of its top speed, not its push), and does a long slide down one need a respawn (the "stuck" rule should cover it).
-
-### Step 9: the bot and the corner proof
-
-| Part | Build | Done when |
-| --- | --- | --- |
-| **9a A bot that laps** | `src/testing/botDriver.ts` (test code, never shipped). It steers at the point on the centre line 6 m plus half a second of travel ahead of its place (the stick is 2.5 times the sine of the angle to that point, held to full). It brakes for what is coming within 80 m: the speed a corner allows is the square root of 0.9 × `sideForce` × its radius | Seeds 1 to 20 in Node, one lap from the start line and one flying lap: every lap finished, **0 respawns**, 0 wall touches, four wheels on road or kerb for 98% of the lap. A table here: lap time, average speed, wall touches, seconds off the road |
-| **9b Drifting where told** | The bot slides through corners that turn 45 degrees or more with a radius of 90 m or less (the generator's own drift corners): button and stick from 10 m before the corner, the stick then holding the centre line, release when 15 degrees of the corner are left | Three real corners each of hairpin, sweeper (70 to 110 m), chicane and plain corner, from seeds 1 to 20, the 3 km 15% seeds among them: from 40 m before the corner to 120 m after it, the pass with the slide is quicker than the best pass without, with four wheels on road or kerb and no wall touched. The lap with slides is quicker on all 20 seeds. A table here, by corner type: time and exit speed with and without. **This table is the evidence for the milestone's "drift-boost works through every corner type"** |
-| **9c Same everywhere** | The inputs of the sliding lap on seeds 1 and 7, recorded in Node (`packInput`) and replayed through `window.seedCircuit` | One fingerprint in Node, Chromium and Firefox |
-
-Then **check-in 2 with Tane**: the feel of the drift, with the tuning panel.
-
-### Step 10
-
-| Part | Build | Done when |
-| --- | --- | --- |
-| **10a Tuning** | Tane's numbers from check-in 2 into `config.ts` | Step 9's tables run again and still pass; new tables here |
-| **10b Speed** | `npm run perf` with the chase view added to its views | 16.7 ms a frame or less on High at 1080p on the Arc graphics; a step under 1 ms on seed 8 (the most wooded) |
-| **10c Docs and the pull request** | README, CLAUDE.md (controls, addresses, commands), this file, one pull request for the milestone | Tane's playtest sign-off, then merge |
-
-## Visual bar
-
-What the game looks like, in terms that can be checked, with pictures to lay new work beside. Written 2026-11-16 from eleven pictures taken that day (1280 by 720, headless Chromium, `still=1`) and looked at one by one. They are in `docs/visual-bar/`. **Anything new that is drawn (the car, sparks, flames, menus) must look as if it belongs in these pictures.**
-
-**The look in one line:** a bright, clean toy island on a clear day. Every surface is flat-coloured facets with no textures and no outlines, the light is one sun and a soft sky, the horizon fades into blue haze, and the road is the crispest thing in the picture.
-
-### The rules that make it
-
-- **Flat shading everywhere.** Each triangle has one colour and its own light; nothing is rounded off by smooth shading. Trees are faceted lumps, clouds are clusters of faceted puffs, rocks are faceted boulders.
-- **No image files.** Colour comes from `src/render/palette.ts` (ordinary screen colours from 0 to 1) and from the ground's cover. A new thing takes its colours from that file, or adds to it.
-- **One light for everything.** A sun and a sky light worked out from the time of day (`render/daylight.ts`), the same for ground, road, trees and anything new. Shadows keep 60% of the sky's light (`render.shadows.skyShare`), so a shadow is a darker tint of the surface, never black.
-- **Haze** from 1,500 m to 6,600 m, in the horizon's colour, so far land and sea melt into the sky.
-- **No glow, bloom, outlines or film effects.** There is no post-processing at all. Bright things (sparks, a flame) are bright because they are drawn unlit in a light colour.
-- **The view** is 50 degrees tall for the flying and circling cameras; the chase camera is planned at 60.
-- **The cards** on top are pale, slightly see-through rounded panels (`rgba(246, 250, 247, 0.86)`, 14 px corners, a soft shadow) with dark green-black text (`#15302b`) and one teal accent (`#1a7d77`). They sit in the corners and along the bottom, never over the middle of the road.
-
-### Each part, with its picture
-
-| Part | What it must look like | Picture |
-| --- | --- | --- |
-| **Road** | Dark blue-grey asphalt (`[0.26, 0.265, 0.275]`), off-white dashed centre line and solid edge lines with crisp edges, a brown earth shoulder that fades into the grass. Banked in corners | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
-| **Kerbs** | Red and off-white blocks on the inside of corners, low and flat, each block one clean colour | `road-corner-kerb.jpg`, `hairpin-and-beach.jpg` |
-| **Walls** | Low pale-grey blocks, red and white on the outside of corners, plain elsewhere. A wall's end slopes down to the ground. No gap under a wall | `road-morning-shadows.jpg`, `road-corner-woods.jpg` (a sloping end), `mountain-road.jpg` |
-| **Start gate** | Two dark posts, a pale beam, a chequered line across the road, a short wall each side | `start-gate.jpg`, `sunrise.jpg` |
-| **Grass** | Green that varies lush to dry in broad patches, fine blades near the camera, a short mown strip by the road, dabs of white, yellow and red flowers in places | `road-straight-meadow.jpg`, `start-gate.jpg` |
-| **Trees and rocks** | Broadleaf trees as dark-green faceted lumps on short brown trunks, pines as stacked cones, palms by the beach; in groves and woods, not evenly scattered. Grey faceted boulders on rocky ground. Every tree casts a shadow | `road-corner-woods.jpg`, `road-morning-shadows.jpg`, `hairpin-and-beach.jpg`, `mountain.jpg` (rocks) |
-| **Mountains** | Big rounded or ridged forms, grass low down, grey rock above, with the road climbing across them | `mountain.jpg`, `mountain-road.jpg` |
-| **Sea and shore** | Deep blue with lines of waves, turquoise shallows, pale sand, a thin white line of foam where they meet | `hairpin-and-beach.jpg`, `shore.jpg`, `island-from-above.jpg` |
-| **Sky and clouds** | Blue, paler at the horizon; white faceted clouds, few or many by the seed | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
-| **Time of day** | Low sun: long shadows across the road, warmer light. 07:00 and 19:30: a pink sky with the sun's disc low over the sea, and darker ground | `road-morning-shadows.jpg` (07:27), `sunrise.jpg` (07:00) |
-| **The whole island** | The track is easy to read from above; the land is green with sand at the edge and woods in patches | `island-from-above.jpg` |
-
-### The pictures and how to make each again
-
-Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Where the browser suite takes the same picture, its name in `test-results/screens/` is given.
-
-| Picture | Address | From `npm run e2e` |
-| --- | --- | --- |
-| `road-morning-shadows.jpg` | `seed=7&still=1&cam=fly&lap=0.3` | `world-00007-fly-30.png` |
-| `road-straight-meadow.jpg` | `seed=8&still=1&cam=fly&lap=0.3` | with `SEEDS=8`: `world-00008-fly-30.png` |
-| `road-corner-kerb.jpg` | `seed=1&still=1&cam=fly&lap=0.55` | `world-00001-fly-55.png` |
-| `road-corner-woods.jpg` | `seed=2024&still=1&cam=fly&lap=0.3&time=18:30` | no |
-| `start-gate.jpg` | `seed=42&still=1&look=start` | `world-00042-start.png` |
-| `hairpin-and-beach.jpg` | `seed=100&still=1&look=hairpin` | `world-00100-hairpin.png` |
-| `shore.jpg` | `seed=7&still=1&look=water` | `world-00007-water.png` |
-| `mountain-road.jpg` | `seed=1&still=1&look=climb` | `world-00001-climb.png` |
-| `mountain.jpg` | `seed=1&still=1&look=summit` | `world-00001-summit.png` |
-| `island-from-above.jpg` | `seed=2024&still=1&cam=orbit` | `world-02024.png` |
-| `sunrise.jpg` | `seed=7&still=1&look=sun&time=07:00` | with `TIMES=07:00`: `world-00007-at-0700-sun.png` |
-
-`cam=fly` does nothing today (the page opens flying); it is there so the addresses still give these pictures once the page opens driving (step 5e). The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
-
-### The car, sparks and flame (not built yet: a proposal for Tane to judge at check-in 1)
-
-Nothing here has been drawn or seen. It is the bar the first version should aim at, by the rules above.
-
-- **The car** is a small open kart with a driver, built in code from flat-shaded facets, 300 to 600 triangles: a wedge nose, a low floor, side pods, a seat back, a driver's body and a round helmet, and four fat wheels that stand clear of the body. The helmet and the open wheels are what make it read as a kart and give it scale. It fits the simulated body: 1.4 m wide, 2.2 m long, about 1 m to the top of the helmet.
-- **Colours** (to add to `palette.ts`): body a warm yellow-orange, about `[0.98, 0.72, 0.12]`, which stands out from the green grass, the dark road, the blue sea and the red of the kerbs; chassis and seat the gate's dark grey `[0.16, 0.17, 0.2]`; helmet off-white `[0.94, 0.94, 0.92]`; tyres near black `[0.07, 0.07, 0.08]` with pale hubs.
-- **It sits in the world's light**: lit by the same sun and sky as the road, casting a shadow on it and shaded by trees and walls. Its wheels touch the road: no gap and no sinking that can be seen.
-- **From the chase camera** it is about an eighth of the picture's width, low in the middle, with the road ahead clear above it.
-- **Sparks** are small flat triangles, like the flower dabs, thrown back and out from the two rear wheels, 20 to 30 a wheel, each living about a quarter of a second, drawn unlit: blue `[0.25, 0.65, 1.0]`, orange `[1.0, 0.6, 0.12]`, purple `[0.7, 0.35, 1.0]`. A burst never grows bigger than the wheel it comes from.
-- **The boost flame** is two faceted cones behind the car, pale yellow at the core `[1, 0.95, 0.7]` and orange outside `[1, 0.55, 0.1]`, unlit, 0.6, 0.9 and 1.2 m long for the three tiers and flickering by a sixth of that. Never longer than the car.
-- **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the drift tier as a dot of the tier's colour.
-
-When the car has been drawn and Tane has approved it at check-in 1, add `drive-start.jpg`, `drive-slide.jpg` and `drive-boost.jpg` to `docs/visual-bar/` and to the table above.
-
-### What fails the bar
-
-- Smooth-shaded or textured surfaces, or anything with an outline, a glow or a blur.
-- A colour that is not in `palette.ts`, or a thing lit by its own light so that it looks pasted on (compare its shadowed side with the wall in `road-morning-shadows.jpg`).
-- A car with no shadow, or one that floats above the road or sinks into it.
-- An effect that hides the road ahead, or a card over the middle of the picture.
-- Flicker where two surfaces lie on each other, a gap under a wall, or things that pop in while driving.
-- Two pictures of the same address with `still=1` that differ.
-
-### Flaws these pictures already have (known issues, not the bar)
-
-- The top edge of a sea cliff or a bank is a saw-tooth (`shore.jpg`; the bank inside the corner in `road-corner-woods.jpg`).
-- From above, the sun's glare on the sea is a wide pale patch with wave stripes (`island-from-above.jpg`, right).
-- At 07:00 the clouds are grey-brown against the pink sky (`sunrise.jpg`).
-- The rock on a mountain can lie in a hard-edged band (`mountain.jpg`).
-- `time=18:30` is named "evening light" but its sky is still plain blue (`road-corner-woods.jpg`).
-
-### How to check a visual change
-
-1. `$env:SEEDS = "1,7,42,100,2024"; npm run e2e` (or `npx playwright test --project=chromium -g "screenshots"` for the pictures alone), then copy `test-results/screens/` somewhere, because the next run empties it.
-2. Open each new picture beside the reference of the same address. Nothing that was not meant to change should have changed.
-3. Look at what is new against "What fails the bar", on at least seeds 1 (mountain), 7 (hilly, by the sea), 42 (sloped start) and 2024 (rolling, wooded), and at a low sun (`time=07:30`).
-4. Say in the report which pictures were looked at.
+- **`docs/PLAN.md`: everything still to build, in order.** The build order, the routine for one part, steps 4d to 10 of this milestone in parts with their tests and numbers (step 6's drift and boost rules among them), and the steps of Milestones 4, 5 and 6.
+- **`docs/VISUAL_BAR.md`: what the game looks like**, with reference pictures in `docs/visual-bar/`. Read it before drawing anything.
 
 ## Milestone 3 design (approved 2026-11-15)
 
@@ -553,7 +345,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-15 | The step-by-step record of Milestones 1 and 2 moved from this file to `docs/archive/STATE-milestone-1-2.md` | This file had grown to 1,144 lines, more than a new session can read in one go |
 | 2026-11-16 | **The engine eases off over the last 30% of its speed, and makes up half of what a slope takes** (4c: `engine.taper`, `engine.slopeHelp`) | Claude's call. 95% of top speed in 3.98 s (the brief: about 4); 97.6% of top speed up the steepest road, 15% |
 | 2026-11-16 | **The brake wins over the throttle, and reverses once the car is all but still** (4c) | Claude's call. One pedal for brake and reverse, as the brief's controls table has it; worked out from the speed and the pedals alone, so nothing is remembered |
-| 2026-11-16 | **Steps 4d to 10 are planned in parts with their tests and numbers** ("Plan for steps 4d to 10"), and Milestones 4 to 6 have design notes | Tane: a different model builds everything after today, so the planning is done first. Approved by Tane with the plan |
+| 2026-11-16 | **Steps 4d to 10 are planned in parts with their tests and numbers** (`docs/PLAN.md`), and Milestones 4 to 6 have design notes | Tane: a different model builds everything after today, so the planning is done first. Approved by Tane with the plan |
 | 2026-11-16 | **The drift hop is drawn, not simulated**: the body stays on its springs | Claude's call, approved with the plan. A real hop takes the wheels off the ground, and all grip with them, for a quarter of a second at the start of every drift |
 | 2026-11-16 | **In a drift the car really is turned 24 degrees into the corner**, and the tyres grip along the line it travels, not the line it points | Claude's call, approved with the plan. The slide is then real for collisions and for the camera, and one rule (how fast the path turns) gives the handling |
 | 2026-11-16 | **Drift turning is a turn rate**: 0.25 rad/s with the stick away from the corner to 1.5 with it in, circles of 120 m to 20 m at top speed. **Ordinary steering holds 15 m/s2 at most**: a 60 m circle at top speed | Claude's call, approved with the plan. The generator's drift corners are 20 to 90 m; corners it banks fully (70 m and wider) are flat out on grip alone, tighter ones need a slide or a lift |
@@ -563,38 +355,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 
 ## Notes for later milestones
 
-### Design notes for Milestones 4, 5 and 6 (written 2026-11-16)
-
-Key decisions, traps and what to reuse, from the model that built Milestone 3's simulation. Not full plans: each milestone is still planned in plan mode when it starts, and Tane decides.
-
-**Milestone 4, time trial**
-
-- **The race clock is steps, never the wall clock.** A lap time is steps divided by 60, with the moment the car crosses the line placed inside its step by exact sums (how far before and after the line it was). A time is then the same on every computer, and a ghost's time can be checked by replaying it.
-- **The race's rules are a pure state machine in `src/sim`** (countdown, racing, finished; laps; sector times), in `hash()` and the snapshot like the drift state. The page only draws it. The countdown is counted in steps too.
-- **A lap counts only when every checkpoint was passed in order** (step 8a). Crossing the line alone is not a lap; that is what stops a cut across the grass from counting.
-- **Sectors:** three, each a whole number of checkpoints.
-- **Start boost:** the throttle first pressed in the last 0.25 s before "go" gives a tier 1 boost (`boostLeft` from step 6); a throttle held from earlier gives none. Decided by step counts, so a ghost replays it.
-- **Flatten the start area first** (known issue: seed 42 starts on an 8% descent). It is a generator change, so every world fingerprint moves: do it before anything is saved by seed in Milestone 5.
-- **Menus are HTML over the canvas**, as the title card is, not drawn in 3D. Pausing is simply not calling `step`. Pause when the tab is hidden; `advance` (step 5b) already drops a long frame.
-- **Reuse:** checkpoints and `poseAlong` (step 8), `boostLeft` (step 6), `parseSeedInput` and `formatSeedCode` (`core/seedCode.ts`), the track's generated name, the readout card, `time=` for the player's pick of time of day.
-- **Traps:** timing anything with `performance.now()`; taking steps or recording inputs while paused; a lap that counts after a short cut; a results screen that reads the wall clock.
-
-**Milestone 5, ghosts and favourites**
-
-- **A ghost is the inputs, one whole number a step** (`packInput`), from the first step of the countdown, saved with the seed, the generator version, a fingerprint of `config.car` and `config.sim` (the handling), and the run's last `hash()`. A 3-lap race is about 13,000 numbers.
-- **Also save where the car was, ten times a second** (position and turn). The ghost is drawn from those, so no second physics world runs during a race. The inputs are the proof: replayed in a fresh simulation they must end on the saved fingerprint. That replay, after a page reload, is the milestone's "done when" test.
-- **If the handling's fingerprint differs** (the game was tuned since), the ghost is still drawn from its saved places, marked as from an older version, and its time is not the one to beat.
-- **Ghosts in IndexedDB** (the best per seed), **favourites in `localStorage`** (seed, version, name, best time, date). All storage is page code; `src/sim` never sees it.
-- **Reuse:** `packInput` / `unpackInput` (`sim/input.ts`), `sim.hash()`, the pattern of `sim/script.ts` and `e2e/determinism.spec.ts` (step 9c already replays recorded inputs in every browser), `blendState` for drawing between saved places.
-- **Traps:** a run made with the tuning panel open must not be saved; a snapshot is 7 to 9 MB and is not for ghosts; the reset button is part of the input record and must replay; a favourite saved under generator `v0` will not rebuild after the generator changes, so say so on screen until `v1`.
-
-**Milestone 6, polish**
-
-- **Bridges and tunnels are a generator change.** Every world fingerprint moves once more, and the generator becomes `v1` only after them (decision of 2026-11-11). The ground is one height at each point, so a bridge is the road's own mesh over lowered ground (the wheels already feel the road mesh, not the ground under it), and a tunnel is a cutting with a lid over it, drawn and collided as its own mesh. The earthworks rule (`gen/track/earthworks.ts`) rejects the turns that would need them today; that is where they come in.
-- **Sound is made in code** with Web Audio (the engine's pitch from the speed, filtered noise for the screech and the boost). No files, so nothing more to download (pillar 4). A browser only lets sound start after a key or a click.
-- **Effects only read the simulation's state.** Smoke, dust and motion lines never feed back into it, and are driven by its step count so that `still=1` pictures repeat.
-- **Speed and size:** Rapier is 1.68 MB gzipped; the build that does not carry its WebAssembly as text saves about a quarter. "Racing within 10 seconds" should be measured on a slow connection. The frame numbers to hold are in the archive under "Step 15".
-- **Traps:** an effect driven by the frame clock makes screenshots differ from run to run; a setting that changes anything in `src/sim` or `src/gen` breaks ghosts and seeds, so settings touch drawing and sound only.
+The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.md`.
 
 ### Earlier notes
 
@@ -680,4 +441,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-16 (Milestone 3):** Step 3b done. Everything the car can hit has a collider, added in a fixed order by `addWorldColliders` (ground, road, kerbs, walls, gate, trees, rocks), which returns the handles so a later step can tell what a wheel or the body met. A wall is one solid box a piece, its top along the drawn wall's top (so the sloping ends are ramps here too), reaching 0.6 m into the ground, each box 3 cm longer at both ends so no slit opens where a wall bends. The gate is its two posts and its beam. A tree is an upright post where its trunk is (`sim.colliders.trunkRadius` by kind, times the tree's size; 2.5 m tall, 1 m into the ground); leaves are not hit. A rock is the ball that stands as high as the drawn rock and is as wide at the ground, so a flat rock is a shallow dome and a tall one a boulder. `wallPieces` and `gateBoxes` give the walls and the gate as numbers, and the drawn triangles are built from the same numbers; no world fingerprint changed (checked on seeds 1, 7, 42 and 100). `render.decor.rockSink` and `sim.colliders.rockSink` are one number. 12 new tests on seed 7. 1,817 unit tests and 274 browser tests pass. Next: 3c.
 - **2026-11-16 (Milestone 3):** Step 3c done, which ends step 3. `createSim` builds the physics world of an island (3b's colliders) and stands the car's body behind the start line (`startPose`); `step`, `state`, `hash`, `snapshot` and `restore` work, and the car settles and stays put for ten seconds on seed 42's sloped start. Inputs are recorded but do not move the car until step 4. `sim/quat.ts` holds the turn sums (square roots only); `sim/physics/carBody.ts` is the only code besides the colliders that touches Rapier. `sim/script.ts` drives a made-up driver for ten seconds; its fingerprint is the same in Node, Chromium and Firefox on seeds 42 and 7 (`simHashFor`, a new test in `e2e/determinism.spec.ts`). Measurements under "Step 3". 1,841 unit tests and 276 browser tests pass. Next: step 4.
 - **2026-11-16 (Milestone 3):** Steps 4a, 4b and 4c done (see "Step 4"). 4a: test grounds, `createSimOn`, the wheel cast, pushes, surfaces. 4b: the car stands on four sprung wheels and stays put on any slope; gravity became one push a step. 4c: the engine, the brake and reverse (`speedChange` in `sim/car/drive.ts`); 95% of top speed in 3.98 s, 22.3 m to stop from top speed, 97.6% of top speed up the 15% climb. 1,949 unit tests pass. The browser suite had no clean run (hot laptop, page-load timeouts only; see "4c"): **run `npm run e2e` once the laptop is cool and note the result here.** Next: 4d, steering and cornering.
-- **2026-11-16 (Milestone 3, hand-over):** Last day of the model that built steps 0 to 4c. Planned in plan mode and approved by Tane: every step still to do is split into parts with the tests and numbers that prove each ("Plan for steps 4d to 10"), with step 6's drift and boost rules, timings and starting config values set out exactly; design notes for Milestones 4, 5 and 6 ("Notes for later milestones"); and a "Visual bar" section with eleven reference pictures in `docs/visual-bar/`. The decisions of Milestones 1 and 2 moved to `docs/archive/DECISIONS-milestone-1-2.md`. No code changed after 4c. A third browser run failed 22 tests on page-load timeouts; the same tests passed when run alone (see "4c"), so **a clean full browser run is still owed**. **Tane asked that 4d and 4e wait until Tane has had another look.** Next, when Tane says: 4d.
+- **2026-11-16 (Milestone 3, hand-over):** Last day of the model that built steps 0 to 4c. Planned in plan mode and approved by Tane: every step still to do is split into parts with the tests and numbers that prove each (`docs/PLAN.md`), with step 6's drift and boost rules, timings and starting config values set out exactly; design notes for Milestones 4, 5 and 6 ("Notes for later milestones"); and the visual bar (`docs/VISUAL_BAR.md`) with eleven reference pictures in `docs/visual-bar/`. The decisions of Milestones 1 and 2 moved to `docs/archive/DECISIONS-milestone-1-2.md`. No code changed after 4c. A third browser run failed 22 tests on page-load timeouts; the same tests passed when run alone (see "4c"), so **a clean full browser run is still owed**. **Tane asked that 4d and 4e wait until Tane has had another look.** Next, when Tane says: 4d.

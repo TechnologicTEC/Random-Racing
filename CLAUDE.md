@@ -3,8 +3,11 @@
 Procedural kart racer for desktop browsers. Every race happens on a world and track generated from a seed.
 
 ## Read first
-- docs/GAME_BRIEF.md: the full design brief. Follow its architecture rules.
+In this order:
 - docs/STATE.md: current progress, decisions and known issues. Update it at the end of every work session.
+- docs/PLAN.md: everything still to build, in order, with the tests and numbers that prove each part done. Find the first line without a tick in "The build order", and tick lines as parts are finished.
+- docs/GAME_BRIEF.md: the full design brief. Follow its architecture rules.
+- docs/VISUAL_BAR.md: what the game looks like, with reference pictures in docs/visual-bar/. Read it before drawing anything.
 
 ## Rules
 - Plan each milestone in plan mode and wait for approval before writing code.
