@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 4e, stability and the whole car, which ends step 4 (see "Step 4"). The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
-- **Next:** `docs/PLAN.md`, "The build order": **step 5** (drive it), starting with 5a. Step 5 is a new step, so plan it in plan mode first
+- **Last finished part:** 5a, input (see "Step 5"). The keyboard and a controller are turned into the simulation's input; the page does not use them until 5e. The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
+- **Next:** `docs/PLAN.md`, "The build order": **5b**, the fixed-step loop. Step 5's plan is approved (see "Step 5")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -199,6 +199,27 @@ The whole car, measured (throwaway code, deleted):
 
 Tests: `stability.test.ts` (the sums) and `upright.test.ts` (the crest, the hillside, the drop at two speeds, the tipped fall, the scripted run on seeds 42 and 7). Seen failing before the code: the pure tests on the missing module, and the hillside, the 10 m/s drop, the tipped fall and seed 42's scripted run (roof-up 0.57). 1,986 unit tests pass, and all 276 browser tests passed in one run.
 
+## Step 5: drive it (2026-11-17)
+
+Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-dee8-random-racing-compressed-pumpkin.md`). Nothing in `src/sim` changes in this step.
+
+| Part | What | Status |
+| --- | --- | --- |
+| 5a | **Input.** `src/input/`: `keysToInput` (keyboard), `padToInput` and `padPresses` (controller, standard layout), `mergeInputs`; `input.deadZone` | Done |
+| 5b | **The loop.** `src/app/drive.ts`: `advance`, `blendState`; `sim.maxStepsPerFrame`; Rapier loaded beside the world and the simulation built on the page (not stepped yet); `drive.state()` and `drive.hash()` | |
+| 5c | **The car drawn.** `render/carShape.ts`, `render/carView.ts`, `WorldView.setCar`, `KART` colours, `render.car`; the `look=car` close view | |
+| 5d | **Chase camera.** `camera/chase.ts`, `camera.chase` | |
+| 5e | **The page opens driving**, in two commits: old tests get `cam=fly`, then the default changes. Keys, controller, readout, `drive.run` and `drive.reset` | |
+
+### 5a: input
+
+- **Keyboard** (`src/input/keyboard.ts`): `keysToInput(held)` takes the set of keys held, by `KeyboardEvent.code`: the key's place on the keyboard, not its letter, so W, A, S and D sit in the same place on any layout (Claude's call). W or Up: throttle. S or Down: brake and reverse. A or Left, D or Right: steer, and both together cancel. Space or either Shift: drift. R: reset. Each key is all or nothing.
+- **Controller** (`src/input/gamepad.ts`): `padToInput(axes, buttons, cfg)` for the browser's standard layout only. Right trigger (button 7): throttle. Left trigger (6): brake. Left stick (axis 0): steering. Right bumper (5): drift. Back (8): reset. `padPresses(buttons)` gives Y (3, camera) and Start (9, pause), which are for the page and not in the input record. A stick within `input.deadZone` (0.15) of its middle reads 0, and the rest of its travel is stretched to reach 1: 0.575 gives a half.
+- **Both at once** (`src/input/merge.ts`): `mergeInputs(a, b)` takes the harder press of each pedal, the steering further from the middle, and a button if either device presses it.
+- Nothing is smoothed anywhere (brief). The page does not use any of it until 5e.
+
+The three test files failed on their missing modules before the code existed. 2,009 unit tests pass.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -264,6 +285,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-16 | **The line-following test driver is pure pursuit** (`stickToward` in `src/testing/lineDriver.ts`): it asks for the circle through the car and the point ahead. 9a's bot uses it | Claude's call, for Tane to see (test code only). The plan's first rule, 2.5 times the sine of the angle to the point, gives 0.27 of the 0.857 stick the 70 m ring needs at top speed, so the car would settle about 3.8 m wide and the 1 m test could not pass. Pure pursuit holds it to 4 cm |
 | 2026-11-17 | **The car rides at 26 cm** (`car.suspension.rideHeight`, was 18) | Tane's choice (4e), from three options. At 18 cm the body's corner dug into a 45% bank met at an angle, and the car rolled over on 40 of 261 crossings. At 26 cm, 1 of 261 fails and every test passes. Rounded body edges fixed all 261 but jolted the car on the banked ring for reasons not yet found. The car is drawn 8 cm higher than planned |
 | 2026-11-16 | **"No wheel in the air for over 0.2 s" at the kerb is timed per wheel** | Claude's reading of the plan's words, for Tane to judge. The wheels leave the kerb's 9 cm face one after another, each for up to 0.17 s, so all four are not down together for 0.3 s at 15 degrees and 30 m/s. Heading and speed are unaffected (0.11 degrees, 0.09%) |
+| 2026-11-17 | **Keys are read by their place on the keyboard** (`KeyboardEvent.code`), not by the letter on them (5a) | Claude's call, for Tane to judge. W, A, S and D then sit under the same fingers on any layout (AZERTY's Z, Q, S, D) |
 
 ## Notes for later milestones
 
@@ -359,3 +381,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-16 (Milestone 3, the plan finished):** Tane asked for the rest of the project to be planned so the next model knows exactly what to do and in what order. Approved in plan mode. `docs/PLAN.md` and one file per milestone in `docs/plan/` now hold everything still to build: the build order (a list to tick from line 0, the owed browser run, to the release of version 1), the routine for one part, what to do when something does not go to plan, whose call is whose, the questions for each check-in, steps 4d to 10 with their sums written out (step 6's car step line by line), Milestones 4, 5 and 6 as ordered steps with their tests, and where each known issue is dealt with. The visual bar moved to `docs/VISUAL_BAR.md`. Found while checking step 6: the line of travel must use the slide as it was before the step (decisions). Fable 5.2 started this; Opus 5.5 finished it. Docs only. Next: line 0 of the build order, then 4d once Tane has looked at the plan.
 - **2026-11-16 (Milestone 3, Opus 5.5):** Line 0 done: Tane ran `npm run e2e` by hand after 4c and it all passed. 4d planned in plan mode, approved, and done (see "4d"). The stick turns the car: `turnWanted` in `src/sim/car/steer.ts`, `car.steer: { minRadius: 6, sideForce: 15 }`. Circles of 6.00, 14.88 and 59.75 m at the three speeds, both ways alike. Reverse steers as a real car does. The banked ring at top speed is held to 4 cm. Kerb crossings change the heading by at most 0.11 degrees. The ring's test driver is now pure pursuit, because the plan's first rule would have run 3.8 m wide (decisions). The kerb's air time is timed per wheel (decisions). 1,973 unit tests pass. The browser suite passed in one clean run: 276 tests in 16.7 minutes. That run includes the scripted run's fingerprint, now with steering, matching in Node, Chromium and Firefox. Next: 4e.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 4e done, which ends step 4 (see "4e"). In the air the car turns back towards roof-up (`stability.ts`, `car.stability: { upright: 12, calm: 3 }`), and every change of spin goes through the box's own inertia (`twistFor`). Found: driving onto the 45% hillside at an angle rolled the car over, because the body's corner dug into the slope. Mapped over 261 crossings; ride height, wheel size and a rounded body tried; Tane chose ride height 26 cm (was 18). Also found: the car drives up the 45% grass hillside from rest (known issues). 1,986 unit tests pass. The browser suite passed in one clean run: 276 tests in 16.9 minutes, the fingerprint check across Node, Chromium and Firefox included. Next: step 5, planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** Step 5 planned in plan mode and approved (see "Step 5"). 5a done: the keyboard and a controller are turned into the simulation's input (`src/input/`: `keysToInput`, `padToInput`, `padPresses`, `mergeInputs`; `input.deadZone` 0.15). Keys are read by their place on the keyboard (decisions). The page does not use them yet. 2,009 unit tests pass; all 276 browser tests passed in one run (13.1 minutes). Next: 5b, the fixed-step loop.

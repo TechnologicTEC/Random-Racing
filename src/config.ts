@@ -1367,12 +1367,22 @@ export interface ColliderConfig {
   rockSink: number;
 }
 
+/** How the keyboard and a controller are read. Nothing is smoothed (brief: input must feel instant). */
+export interface InputConfig {
+  /**
+   * A controller stick closer to its middle than this (0 to 1) reads as centred, since a stick at rest rarely reads
+   * exactly 0. The rest of its travel is stretched to reach full at the end.
+   */
+  deadZone: number;
+}
+
 export interface GameConfig {
   track: TrackConfig;
   road: RoadConfig;
   world: WorldConfig;
   sim: SimConfig;
   car: CarConfig;
+  input: InputConfig;
   render: RenderConfig;
   camera: CameraConfig;
 }
@@ -1744,6 +1754,7 @@ export const config: GameConfig = {
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },
+  input: { deadZone: 0.15 },
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,

@@ -17,7 +17,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] Steps 0 to 3, and 4a, 4b, 4c
 - [x] **4d** Steering and cornering
 - [x] **4e** Stability and the whole car
-- [ ] **5a** Input: keyboard and controller
+- [x] **5a** Input: keyboard and controller
 - [ ] **5b** The fixed-step loop
 - [ ] **5c** The car drawn
 - [ ] **5d** Chase camera
