@@ -3,6 +3,7 @@ import { config } from '../src/config';
 import { generateTrack, generateWorld, hashTrack, hashWorld } from '../src/gen';
 import { dropFingerprint } from '../src/sim/physics/proof';
 import { loadRapier } from '../src/sim/physics/rapier';
+import { scriptedFingerprint } from '../src/sim/script';
 
 /**
  * Pillar 5, "same seed, same everything": the track a seed produces must be
@@ -46,6 +47,21 @@ test('the physics in this browser gives exactly the same result as in Node', asy
   const actual = await page.evaluate((list) => Promise.all(list.map((seed) => window.seedCircuit.physicsHashFor(seed))), seeds);
 
   expect(actual, `physics fingerprints in ${browserName}`).toEqual(expected);
+});
+
+test('the simulation in this browser gives exactly the same result as in Node', async ({ page, browserName }) => {
+  // The car put on the start line of a seed with a sloped start and of a hilly one, and ten seconds of a scripted
+  // driver's inputs (sim/script.ts). The fingerprint is mixed twice a second, so it only matches if the physics
+  // and our own sums on top of it agreed all the way.
+  const seeds = [42, 7];
+  const rapier = await loadRapier();
+  const expected = seeds.map((seed) => scriptedFingerprint(rapier, generateWorld(seed, config), config));
+
+  await page.goto('/?lab=1&seed=1');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+  const actual = await page.evaluate((list) => Promise.all(list.map((seed) => window.seedCircuit.simHashFor(seed))), seeds);
+
+  expect(actual, `simulation fingerprints in ${browserName}`).toEqual(expected);
 });
 
 test('generation runs in a Web Worker, not on the page', async ({ page }) => {

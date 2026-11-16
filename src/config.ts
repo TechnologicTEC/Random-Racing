@@ -1237,9 +1237,28 @@ export interface FlyConfig {
   clearance: number;
 }
 
-/** The simulation: the car and everything it can hit. */
+/** The simulation: its clock, where the car starts, and the shapes of what it can hit. */
 export interface SimConfig {
+  /** The simulation moves on by this many steps a second, always, whatever the screen's frame rate (brief: 60). */
+  stepsPerSecond: number;
+  /** How hard everything is pulled down, in metres per second per second. */
+  gravity: number;
+  /** The car starts this far behind the start line, in metres, with its underside this far above the road. */
+  start: { back: number; lift: number };
   colliders: ColliderConfig;
+}
+
+/** The car. Distances in metres, mass in kilograms. Handling, drift and boost join it in steps 4 and 6. */
+export interface CarConfig {
+  /** Half the width, height and length of the box that is the car's body. */
+  body: { halfWidth: number; halfHeight: number; halfLength: number };
+  mass: number;
+  /**
+   * How much the body grips what it rubs against (0 is ice, 1 is rubber), and how much of its speed it keeps when it
+   * bounces off something (0 is none). Until the wheels are in (step 4) the body rests on the road, and its grip is what holds it on a slope.
+   */
+  grip: number;
+  bounce: number;
 }
 
 /**
@@ -1264,6 +1283,7 @@ export interface GameConfig {
   road: RoadConfig;
   world: WorldConfig;
   sim: SimConfig;
+  car: CarConfig;
   render: RenderConfig;
   camera: CameraConfig;
 }
@@ -1271,8 +1291,8 @@ export interface GameConfig {
 /** The parts of the config that generation needs. */
 export type GenConfig = Pick<GameConfig, 'track' | 'road' | 'world'>;
 
-/** The parts of the config that the physics world needs: the road's walls and gate, and the simulation's own settings. */
-export type PhysicsConfig = Pick<GameConfig, 'road' | 'sim'>;
+/** The parts of the config that the simulation needs: the road's walls and gate, its own settings, and the car. */
+export type PhysicsConfig = Pick<GameConfig, 'road' | 'sim' | 'car'>;
 
 /** How far a rock is sunk into the ground, as a share of its size: one number for how it is drawn and how it is hit. */
 const ROCK_SINK = 0.4;
@@ -1608,6 +1628,9 @@ export const config: GameConfig = {
     },
   },
   sim: {
+    stepsPerSecond: 60,
+    gravity: 9.81,
+    start: { back: 4, lift: 0.05 },
     colliders: {
       // The trunks as they are drawn at the ground (render/treeShapes.ts).
       trunkRadius: { broadleaf: 0.38, pine: 0.32, palm: 0.28 },
@@ -1615,6 +1638,12 @@ export const config: GameConfig = {
       trunkRoot: 1,
       rockSink: ROCK_SINK,
     },
+  },
+  car: {
+    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1 },
+    mass: 300,
+    grip: 1,
+    bounce: 0,
   },
   render: {
     chunkCells: 64,

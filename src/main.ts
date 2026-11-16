@@ -31,6 +31,8 @@ declare global {
       worldHashFor(seed: number): Promise<string>;
       /** The fingerprint of the physics drop proof on a seed (`sim/physics/proof.ts`), to confirm every browser's physics agrees. */
       physicsHashFor(seed: number): Promise<string>;
+      /** The fingerprint of the scripted run on a seed (`sim/script.ts`), to confirm every browser's simulation agrees. */
+      simHashFor(seed: number): Promise<string>;
       /** The 3D view, when that is the page being shown. */
       view?: ViewHandle;
     };
@@ -47,5 +49,13 @@ window.seedCircuit = {
       genClient().world(seed, config),
     ]);
     return dropFingerprint(await loadRapier(), result);
+  },
+  simHashFor: async (seed) => {
+    const [{ loadRapier }, { scriptedFingerprint }, { result }] = await Promise.all([
+      import('./sim/physics/rapier'),
+      import('./sim/script'),
+      genClient().world(seed, config),
+    ]);
+    return scriptedFingerprint(await loadRapier(), result, config);
   },
 };

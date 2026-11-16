@@ -4,6 +4,7 @@ import { BARRIER_FOOTING, wallPieces } from '../../gen/road/barriers';
 import { gateBoxes } from '../../gen/road/startGate';
 import type { HeightField, MeshData, WorldResult } from '../../gen/types';
 import { TREE_KINDS } from '../../gen/world/decor';
+import { quatFromAxes } from '../quat';
 import type { Rapier } from './rapier';
 
 type ColliderDesc = InstanceType<Rapier['ColliderDesc']>;
@@ -33,35 +34,6 @@ export function meshCollider(rapier: Rapier, mesh: MeshData): ColliderDesc {
   return rapier.ColliderDesc.trimesh(mesh.positions, mesh.indices);
 }
 
-interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/**
- * The turn that takes a box lying along the axes to one whose sides run along
- * `x`, `y` and `z`: three unit vectors at right angles, `z` being `x` crossed
- * with `y`. Worked out with square roots only, so it is the same everywhere.
- */
-function turnTo(x: Vec3, y: Vec3, z: Vec3): { x: number; y: number; z: number; w: number } {
-  const trace = x.x + y.y + z.z;
-  if (trace > 0) {
-    const s = 2 * Math.sqrt(trace + 1);
-    return { w: s / 4, x: (y.z - z.y) / s, y: (z.x - x.z) / s, z: (x.y - y.x) / s };
-  }
-  if (x.x > y.y && x.x > z.z) {
-    const s = 2 * Math.sqrt(1 + x.x - y.y - z.z);
-    return { w: (y.z - z.y) / s, x: s / 4, y: (y.x + x.y) / s, z: (z.x + x.z) / s };
-  }
-  if (y.y > z.z) {
-    const s = 2 * Math.sqrt(1 + y.y - x.x - z.z);
-    return { w: (z.x - x.z) / s, x: (y.x + x.y) / s, y: s / 4, z: (z.y + y.z) / s };
-  }
-  const s = 2 * Math.sqrt(1 + z.z - x.x - y.y);
-  return { w: (x.y - y.x) / s, x: (z.x + x.z) / s, y: (z.y + y.z) / s, z: s / 4 };
-}
-
 /** Each box of a wall runs this far past both ends of its piece, in metres, so no slit opens between boxes where the wall bends. */
 const WALL_OVERLAP = 0.03;
 
@@ -89,7 +61,7 @@ export function wallColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
     const up = { x: along.y * across.z, y: along.z * across.x - along.x * across.z, z: -along.y * across.x };
     return rapier.ColliderDesc.cuboid(road.barrierWidth / 2, depth / 2, length / 2 + WALL_OVERLAP)
       .setTranslation((from.x + to.x) / 2 - (up.x * depth) / 2, (from.y + to.y) / 2 - (up.y * depth) / 2, (from.z + to.z) / 2 - (up.z * depth) / 2)
-      .setRotation(turnTo(across, up, along));
+      .setRotation(quatFromAxes(across, up, along));
   });
 }
 
@@ -100,7 +72,7 @@ export function gateColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
     rapier.ColliderDesc.cuboid(box.halfAcross, box.halfUp, box.halfAlong)
       .setTranslation(box.x, box.y, box.z)
       // Across the road (to the left of the direction of travel), up, and along the road.
-      .setRotation(turnTo({ x: box.tz, y: 0, z: -box.tx }, { x: 0, y: 1, z: 0 }, { x: box.tx, y: 0, z: box.tz })),
+      .setRotation(quatFromAxes({ x: box.tz, y: 0, z: -box.tx }, { x: 0, y: 1, z: 0 }, { x: box.tx, y: 0, z: box.tz })),
   );
 }
 
