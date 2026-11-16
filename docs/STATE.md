@@ -181,6 +181,96 @@ Then **check-in 2 with Tane**: the feel of the drift, with the tuning panel.
 | **10b Speed** | `npm run perf` with the chase view added to its views | 16.7 ms a frame or less on High at 1080p on the Arc graphics; a step under 1 ms on seed 8 (the most wooded) |
 | **10c Docs and the pull request** | README, CLAUDE.md (controls, addresses, commands), this file, one pull request for the milestone | Tane's playtest sign-off, then merge |
 
+## Visual bar
+
+What the game looks like, in terms that can be checked, with pictures to lay new work beside. Written 2026-11-16 from eleven pictures taken that day (1280 by 720, headless Chromium, `still=1`) and looked at one by one. They are in `docs/visual-bar/`. **Anything new that is drawn (the car, sparks, flames, menus) must look as if it belongs in these pictures.**
+
+**The look in one line:** a bright, clean toy island on a clear day. Every surface is flat-coloured facets with no textures and no outlines, the light is one sun and a soft sky, the horizon fades into blue haze, and the road is the crispest thing in the picture.
+
+### The rules that make it
+
+- **Flat shading everywhere.** Each triangle has one colour and its own light; nothing is rounded off by smooth shading. Trees are faceted lumps, clouds are clusters of faceted puffs, rocks are faceted boulders.
+- **No image files.** Colour comes from `src/render/palette.ts` (ordinary screen colours from 0 to 1) and from the ground's cover. A new thing takes its colours from that file, or adds to it.
+- **One light for everything.** A sun and a sky light worked out from the time of day (`render/daylight.ts`), the same for ground, road, trees and anything new. Shadows keep 60% of the sky's light (`render.shadows.skyShare`), so a shadow is a darker tint of the surface, never black.
+- **Haze** from 1,500 m to 6,600 m, in the horizon's colour, so far land and sea melt into the sky.
+- **No glow, bloom, outlines or film effects.** There is no post-processing at all. Bright things (sparks, a flame) are bright because they are drawn unlit in a light colour.
+- **The view** is 50 degrees tall for the flying and circling cameras; the chase camera is planned at 60.
+- **The cards** on top are pale, slightly see-through rounded panels (`rgba(246, 250, 247, 0.86)`, 14 px corners, a soft shadow) with dark green-black text (`#15302b`) and one teal accent (`#1a7d77`). They sit in the corners and along the bottom, never over the middle of the road.
+
+### Each part, with its picture
+
+| Part | What it must look like | Picture |
+| --- | --- | --- |
+| **Road** | Dark blue-grey asphalt (`[0.26, 0.265, 0.275]`), off-white dashed centre line and solid edge lines with crisp edges, a brown earth shoulder that fades into the grass. Banked in corners | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
+| **Kerbs** | Red and off-white blocks on the inside of corners, low and flat, each block one clean colour | `road-corner-kerb.jpg`, `hairpin-and-beach.jpg` |
+| **Walls** | Low pale-grey blocks, red and white on the outside of corners, plain elsewhere. A wall's end slopes down to the ground. No gap under a wall | `road-morning-shadows.jpg`, `road-corner-woods.jpg` (a sloping end), `mountain-road.jpg` |
+| **Start gate** | Two dark posts, a pale beam, a chequered line across the road, a short wall each side | `start-gate.jpg`, `sunrise.jpg` |
+| **Grass** | Green that varies lush to dry in broad patches, fine blades near the camera, a short mown strip by the road, dabs of white, yellow and red flowers in places | `road-straight-meadow.jpg`, `start-gate.jpg` |
+| **Trees and rocks** | Broadleaf trees as dark-green faceted lumps on short brown trunks, pines as stacked cones, palms by the beach; in groves and woods, not evenly scattered. Grey faceted boulders on rocky ground. Every tree casts a shadow | `road-corner-woods.jpg`, `road-morning-shadows.jpg`, `hairpin-and-beach.jpg`, `mountain.jpg` (rocks) |
+| **Mountains** | Big rounded or ridged forms, grass low down, grey rock above, with the road climbing across them | `mountain.jpg`, `mountain-road.jpg` |
+| **Sea and shore** | Deep blue with lines of waves, turquoise shallows, pale sand, a thin white line of foam where they meet | `hairpin-and-beach.jpg`, `shore.jpg`, `island-from-above.jpg` |
+| **Sky and clouds** | Blue, paler at the horizon; white faceted clouds, few or many by the seed | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
+| **Time of day** | Low sun: long shadows across the road, warmer light. 07:00 and 19:30: a pink sky with the sun's disc low over the sea, and darker ground | `road-morning-shadows.jpg` (07:27), `sunrise.jpg` (07:00) |
+| **The whole island** | The track is easy to read from above; the land is green with sand at the edge and woods in patches | `island-from-above.jpg` |
+
+### The pictures and how to make each again
+
+Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Where the browser suite takes the same picture, its name in `test-results/screens/` is given.
+
+| Picture | Address | From `npm run e2e` |
+| --- | --- | --- |
+| `road-morning-shadows.jpg` | `seed=7&still=1&cam=fly&lap=0.3` | `world-00007-fly-30.png` |
+| `road-straight-meadow.jpg` | `seed=8&still=1&cam=fly&lap=0.3` | with `SEEDS=8`: `world-00008-fly-30.png` |
+| `road-corner-kerb.jpg` | `seed=1&still=1&cam=fly&lap=0.55` | `world-00001-fly-55.png` |
+| `road-corner-woods.jpg` | `seed=2024&still=1&cam=fly&lap=0.3&time=18:30` | no |
+| `start-gate.jpg` | `seed=42&still=1&look=start` | `world-00042-start.png` |
+| `hairpin-and-beach.jpg` | `seed=100&still=1&look=hairpin` | `world-00100-hairpin.png` |
+| `shore.jpg` | `seed=7&still=1&look=water` | `world-00007-water.png` |
+| `mountain-road.jpg` | `seed=1&still=1&look=climb` | `world-00001-climb.png` |
+| `mountain.jpg` | `seed=1&still=1&look=summit` | `world-00001-summit.png` |
+| `island-from-above.jpg` | `seed=2024&still=1&cam=orbit` | `world-02024.png` |
+| `sunrise.jpg` | `seed=7&still=1&look=sun&time=07:00` | with `TIMES=07:00`: `world-00007-at-0700-sun.png` |
+
+`cam=fly` does nothing today (the page opens flying); it is there so the addresses still give these pictures once the page opens driving (step 5e). The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
+
+### The car, sparks and flame (not built yet: a proposal for Tane to judge at check-in 1)
+
+Nothing here has been drawn or seen. It is the bar the first version should aim at, by the rules above.
+
+- **The car** is a small open kart with a driver, built in code from flat-shaded facets, 300 to 600 triangles: a wedge nose, a low floor, side pods, a seat back, a driver's body and a round helmet, and four fat wheels that stand clear of the body. The helmet and the open wheels are what make it read as a kart and give it scale. It fits the simulated body: 1.4 m wide, 2.2 m long, about 1 m to the top of the helmet.
+- **Colours** (to add to `palette.ts`): body a warm yellow-orange, about `[0.98, 0.72, 0.12]`, which stands out from the green grass, the dark road, the blue sea and the red of the kerbs; chassis and seat the gate's dark grey `[0.16, 0.17, 0.2]`; helmet off-white `[0.94, 0.94, 0.92]`; tyres near black `[0.07, 0.07, 0.08]` with pale hubs.
+- **It sits in the world's light**: lit by the same sun and sky as the road, casting a shadow on it and shaded by trees and walls. Its wheels touch the road: no gap and no sinking that can be seen.
+- **From the chase camera** it is about an eighth of the picture's width, low in the middle, with the road ahead clear above it.
+- **Sparks** are small flat triangles, like the flower dabs, thrown back and out from the two rear wheels, 20 to 30 a wheel, each living about a quarter of a second, drawn unlit: blue `[0.25, 0.65, 1.0]`, orange `[1.0, 0.6, 0.12]`, purple `[0.7, 0.35, 1.0]`. A burst never grows bigger than the wheel it comes from.
+- **The boost flame** is two faceted cones behind the car, pale yellow at the core `[1, 0.95, 0.7]` and orange outside `[1, 0.55, 0.1]`, unlit, 0.6, 0.9 and 1.2 m long for the three tiers and flickering by a sixth of that. Never longer than the car.
+- **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the drift tier as a dot of the tier's colour.
+
+When the car has been drawn and Tane has approved it at check-in 1, add `drive-start.jpg`, `drive-slide.jpg` and `drive-boost.jpg` to `docs/visual-bar/` and to the table above.
+
+### What fails the bar
+
+- Smooth-shaded or textured surfaces, or anything with an outline, a glow or a blur.
+- A colour that is not in `palette.ts`, or a thing lit by its own light so that it looks pasted on (compare its shadowed side with the wall in `road-morning-shadows.jpg`).
+- A car with no shadow, or one that floats above the road or sinks into it.
+- An effect that hides the road ahead, or a card over the middle of the picture.
+- Flicker where two surfaces lie on each other, a gap under a wall, or things that pop in while driving.
+- Two pictures of the same address with `still=1` that differ.
+
+### Flaws these pictures already have (known issues, not the bar)
+
+- The top edge of a sea cliff or a bank is a saw-tooth (`shore.jpg`; the bank inside the corner in `road-corner-woods.jpg`).
+- From above, the sun's glare on the sea is a wide pale patch with wave stripes (`island-from-above.jpg`, right).
+- At 07:00 the clouds are grey-brown against the pink sky (`sunrise.jpg`).
+- The rock on a mountain can lie in a hard-edged band (`mountain.jpg`).
+- `time=18:30` is named "evening light" but its sky is still plain blue (`road-corner-woods.jpg`).
+
+### How to check a visual change
+
+1. `$env:SEEDS = "1,7,42,100,2024"; npm run e2e` (or `npx playwright test --project=chromium -g "screenshots"` for the pictures alone), then copy `test-results/screens/` somewhere, because the next run empties it.
+2. Open each new picture beside the reference of the same address. Nothing that was not meant to change should have changed.
+3. Look at what is new against "What fails the bar", on at least seeds 1 (mountain), 7 (hilly, by the sea), 42 (sloped start) and 2024 (rolling, wooded), and at a low sun (`time=07:30`).
+4. Say in the report which pictures were looked at.
+
 ## Milestone 3 design (approved 2026-11-15)
 
 **Done when:** drift-boost works through every corner type, and the handling passes Tane's playtest.
@@ -409,6 +499,8 @@ The 4c tests were seen failing without the code (23 of 30) and pass with it. 1,9
 
 **The browser suite did not give a clean run for 4c.** Two full runs, 24 and 27 minutes: 12 failures, then 28 different ones, every one a page that did not finish loading inside its time limit, none a wrong answer. The laptop went into Modern Standby from 18:08:58 to 18:11:21 during the first run (Windows' event log), which accounts for its three Chromium failures; the rest look like the hot, slow laptop of the working agreements, though that was not proved. Every test passed in one run or the other, the simulation's fingerprint in Chromium and Firefox among them (first run), except the two 3-second budget tests, which run last and only after a clean run, so they did not run. 4c changes nothing a page draws. Committed on that evidence so the work was safe; a clean run is still owed (see the session log for whether it has been done).
 
+A third full run the same evening, two browsers at a time with the laptop kept awake (no standby in the event log): 252 passed and 22 failed, all in Chromium, all pages that did not load inside 45 s, in four runs of neighbouring tests. Eight of them had also failed in the second run. **Those tests, run again alone straight afterwards, all passed in 4 to 22 s each (16 of 16).** A fresh `npm run dev` then served sixteen 3D pages to headless Chromium in 2 to 4 s each. So the pages and the tests are sound, and it is the long full run on this laptop that slows down in spells; the same happened on 2026-11-15 (the archive, "Step 15 done"), when the suite passed once Tane ran it by hand. Still owed: one clean full run, best by hand with nothing else open.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -588,3 +680,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-16 (Milestone 3):** Step 3b done. Everything the car can hit has a collider, added in a fixed order by `addWorldColliders` (ground, road, kerbs, walls, gate, trees, rocks), which returns the handles so a later step can tell what a wheel or the body met. A wall is one solid box a piece, its top along the drawn wall's top (so the sloping ends are ramps here too), reaching 0.6 m into the ground, each box 3 cm longer at both ends so no slit opens where a wall bends. The gate is its two posts and its beam. A tree is an upright post where its trunk is (`sim.colliders.trunkRadius` by kind, times the tree's size; 2.5 m tall, 1 m into the ground); leaves are not hit. A rock is the ball that stands as high as the drawn rock and is as wide at the ground, so a flat rock is a shallow dome and a tall one a boulder. `wallPieces` and `gateBoxes` give the walls and the gate as numbers, and the drawn triangles are built from the same numbers; no world fingerprint changed (checked on seeds 1, 7, 42 and 100). `render.decor.rockSink` and `sim.colliders.rockSink` are one number. 12 new tests on seed 7. 1,817 unit tests and 274 browser tests pass. Next: 3c.
 - **2026-11-16 (Milestone 3):** Step 3c done, which ends step 3. `createSim` builds the physics world of an island (3b's colliders) and stands the car's body behind the start line (`startPose`); `step`, `state`, `hash`, `snapshot` and `restore` work, and the car settles and stays put for ten seconds on seed 42's sloped start. Inputs are recorded but do not move the car until step 4. `sim/quat.ts` holds the turn sums (square roots only); `sim/physics/carBody.ts` is the only code besides the colliders that touches Rapier. `sim/script.ts` drives a made-up driver for ten seconds; its fingerprint is the same in Node, Chromium and Firefox on seeds 42 and 7 (`simHashFor`, a new test in `e2e/determinism.spec.ts`). Measurements under "Step 3". 1,841 unit tests and 276 browser tests pass. Next: step 4.
 - **2026-11-16 (Milestone 3):** Steps 4a, 4b and 4c done (see "Step 4"). 4a: test grounds, `createSimOn`, the wheel cast, pushes, surfaces. 4b: the car stands on four sprung wheels and stays put on any slope; gravity became one push a step. 4c: the engine, the brake and reverse (`speedChange` in `sim/car/drive.ts`); 95% of top speed in 3.98 s, 22.3 m to stop from top speed, 97.6% of top speed up the 15% climb. 1,949 unit tests pass. The browser suite had no clean run (hot laptop, page-load timeouts only; see "4c"): **run `npm run e2e` once the laptop is cool and note the result here.** Next: 4d, steering and cornering.
+- **2026-11-16 (Milestone 3, hand-over):** Last day of the model that built steps 0 to 4c. Planned in plan mode and approved by Tane: every step still to do is split into parts with the tests and numbers that prove each ("Plan for steps 4d to 10"), with step 6's drift and boost rules, timings and starting config values set out exactly; design notes for Milestones 4, 5 and 6 ("Notes for later milestones"); and a "Visual bar" section with eleven reference pictures in `docs/visual-bar/`. The decisions of Milestones 1 and 2 moved to `docs/archive/DECISIONS-milestone-1-2.md`. No code changed after 4c. A third browser run failed 22 tests on page-load timeouts; the same tests passed when run alone (see "4c"), so **a clean full browser run is still owed**. **Tane asked that 4d and 4e wait until Tane has had another look.** Next, when Tane says: 4d.
