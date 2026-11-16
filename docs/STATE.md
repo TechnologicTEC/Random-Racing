@@ -273,6 +273,10 @@ Measured (throwaway code, deleted):
 
 `chase.test.ts` (10 tests) failed on its missing module first. 2,041 unit tests pass.
 
+### 5e: the page opens driving
+
+**First commit, with the page unchanged:** every browser test address that relied on the page opening flying now says so with `cam=fly` (43 in `e2e/world.spec.ts`, the screenshot loop's `lap=` views among them, and the flying view of `e2e/perf.spec.ts`). The page picks its opening camera with `openingCamera(params)` in `src/app/route.ts`: `cam=orbit` circles; `cam=fly`, a point of the lap and the plain address fly. 2,044 unit tests pass; all 290 browser tests passed in one run (19.2 minutes). The second commit makes driving the default.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -440,3 +444,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5b done: the fixed-step loop's sums (`advance`, `blendState` in `src/app/drive.ts`; `sim.maxStepsPerFrame` 5) and the island's simulation built on the page beside the world, freed on a new island, not stepped yet (`drive.state()`, `drive.hash()`). Rapier loads in 101 ms (Chromium) and 253 ms (Firefox); the simulation builds in 31 to 104 ms; the world is no slower with Rapier fetched beside it. 2,019 unit tests pass; all 280 browser tests passed in one run (16.1 minutes). Next: 5c, the car drawn.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5c done: the kart is built in code (`render/carShape.ts`, 492 triangles, inside the body box) and drawn where the simulation has it, wheels on the springs and front wheels turned with the stick (`render/carView.ts`, `WorldView.setCar`). New close view `look=car`; no car in the old views. Pictures of seeds 1, 3, 7 and 42 looked at beside the visual bar. 2,031 unit tests pass; all 290 browser tests passed in one run (16.0 minutes). Next: 5d, the chase camera.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5d done: the chase camera as plain numbers (`camera/chase.ts`, `camera.chase`). Its easing is solved exactly, so it follows a steadily turning car identically at 30, 60 and 144 frames a second; it keeps behind the nose while reversing; it clears the ground through seed 28496's start gorge. 2,041 unit tests pass; all 290 browser tests passed in one run (16.0 minutes). Next: 5e, the page opens driving.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 5e, first commit: the old browser tests open flying with `cam=fly`, and the page reads it (`openingCamera` in `app/route.ts`); the page itself is unchanged. 2,044 unit tests pass; all 290 browser tests passed in one run (19.2 minutes). Next: 5e's second commit, the page opens driving.

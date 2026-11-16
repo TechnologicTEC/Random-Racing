@@ -15,7 +15,7 @@ const withParts = process.env.PARTS !== '0';
 const extra = process.env.EXTRA ? `&${process.env.EXTRA}` : '';
 
 /** The views measured: flying the lap, circling the island from above, and the close view of the lap's highest point. */
-const views: Record<string, string> = { fly: 'lap=0', circle: 'cam=orbit', summit: 'look=summit' };
+const views: Record<string, string> = { fly: 'cam=fly&lap=0', circle: 'cam=orbit', summit: 'look=summit' };
 
 /** Parts of the picture switched off in turn on the flying view, to see what each costs. */
 const parts: Record<string, string> = {

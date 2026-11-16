@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { choosePage, switchAddress } from './route';
+import { choosePage, openingCamera, switchAddress } from './route';
 
 const page = (query: string) => choosePage(new URLSearchParams(query));
 const BASE = 'http://127.0.0.1:5173/';
@@ -82,5 +82,25 @@ describe('switchAddress: where the L key goes', () => {
 
   it('keeps the path, so the game still works when served from a folder', () => {
     expect(new URL(switchAddress('http://example.com/racing/?seed=3', 'lab')).pathname).toBe('/racing/');
+  });
+});
+
+describe('openingCamera: which camera the 3D view opens with', () => {
+  const camera = (query: string) => openingCamera(new URLSearchParams(query));
+
+  it('flies the lap for cam=fly, and circles for cam=orbit', () => {
+    expect(camera('?seed=5&cam=fly')).toBe('fly');
+    expect(camera('?seed=5&cam=orbit')).toBe('orbit');
+  });
+
+  it('flies the lap when a point of the lap is asked for, whatever else', () => {
+    expect(camera('?seed=5&lap=0.3')).toBe('fly');
+    expect(camera('?seed=5&still=1&lap=0')).toBe('fly');
+  });
+
+  it('flies the lap at the plain address, as it always has', () => {
+    expect(camera('')).toBe('fly');
+    expect(camera('?seed=5&still=1')).toBe('fly');
+    expect(camera('?seed=5&cam=nonsense')).toBe('fly');
   });
 });

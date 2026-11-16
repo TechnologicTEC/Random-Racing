@@ -16,10 +16,9 @@ import type { Rapier } from '../sim/physics/rapier';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { genClient } from '../worker/client';
-import { switchAddress } from './route';
+import { openingCamera, switchAddress, type CameraMode } from './route';
 
-/** Which camera is in use: flying the lap, or circling a point. */
-export type CameraMode = 'fly' | 'orbit';
+export type { CameraMode };
 
 /** The simulation of the island shown, for browser tests and the console (`window.seedCircuit.drive`). */
 export interface DriveHandle {
@@ -162,7 +161,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const sync = params.get('sync') === '1';
   document.body.dataset.worldSync = String(sync);
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
-  let mode: CameraMode = params.get('cam') === 'orbit' ? 'orbit' : 'fly';
+  let mode: CameraMode = openingCamera(params);
   let flight: FlyPath | null = null;
   let distance = 0;
   let speed = fly.speed;

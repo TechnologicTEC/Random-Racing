@@ -53,7 +53,7 @@ test('draws the ground at three levels of detail on a big island, and still show
 test('generates the 3D world in the worker within the 3-second budget @budget', async ({ page }) => {
   // Held still, as the page is behind its loading screen while a new world is built: the builds below
   // bypass that screen, and a headless browser drawing in software would take time from the worker.
-  await openWorld(page, 'seed=7&still=1');
+  await openWorld(page, 'seed=7&still=1&cam=fly');
   expect(page.workers()).toHaveLength(1);
   const ms = Number(await page.locator('body').getAttribute('data-world-ms'));
   expect(ms).toBeGreaterThan(0);
@@ -80,7 +80,7 @@ test('opens the 3D view at the plain address, on a random seed that it records',
 });
 
 test('still opens the 3D view from an old view=3d address', async ({ page }) => {
-  await openWorld(page, 'view=3d&seed=42&still=1&decor=off');
+  await openWorld(page, 'view=3d&seed=42&still=1&decor=off&cam=fly');
   await expect(page.locator('body')).toHaveAttribute('data-world-seed', '42');
   await expect(page.getByTestId('world-name')).toHaveText('Thalgard Circuit');
 });
@@ -117,7 +117,7 @@ test('turns the camera when the view is dragged and zooms with the wheel', async
 });
 
 test('opens flying the lap, and keeps moving', async ({ page }) => {
-  await openWorld(page, 'seed=42');
+  await openWorld(page, 'seed=42&cam=fly');
   await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'fly');
   const first = await page.evaluate(() => window.seedCircuit.view!.camera());
   expect(first.playing).toBe(true);
@@ -129,7 +129,7 @@ test('pauses and resumes the flight with the button and with Space', async ({ pa
   // A flying page draws in software at a second or more a frame, and each frame moves the camera at most 0.05 s of flight,
   // so seeing it move again after the pause can take longer than the usual minute.
   test.setTimeout(120_000);
-  await openWorld(page, 'seed=42');
+  await openWorld(page, 'seed=42&cam=fly');
   await page.getByTestId('world-play').click();
   const paused = await page.evaluate(() => window.seedCircuit.view!.camera());
   expect(paused.playing).toBe(false);
@@ -142,7 +142,7 @@ test('pauses and resumes the flight with the button and with Space', async ({ pa
 });
 
 test('switches between flying the lap and circling the island', async ({ page }) => {
-  await openWorld(page, 'seed=42');
+  await openWorld(page, 'seed=42&cam=fly');
   await page.keyboard.press('c');
   await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'orbit');
   await page.getByTestId('world-camera-toggle').click();
@@ -150,7 +150,7 @@ test('switches between flying the lap and circling the island', async ({ page })
 });
 
 test('holds still at a chosen point of the lap when asked', async ({ page }) => {
-  await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00');
+  await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&cam=fly');
   const camera = await page.evaluate(() => window.seedCircuit.view!.camera());
   expect(camera.mode).toBe('fly');
   expect(camera.playing).toBe(false);
@@ -161,7 +161,7 @@ test('holds still at a chosen point of the lap when asked', async ({ page }) => 
 });
 
 test('raises a new island from the button, and records its seed', async ({ page }) => {
-  await openWorld(page, 'seed=42');
+  await openWorld(page, 'seed=42&cam=fly');
   await page.getByTestId('world-new').click();
   await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '42');
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
@@ -194,16 +194,16 @@ test('shows red and white kerbs on the inside of the tightest corner', async ({ 
 
 test('names the kind of island under its seed', async ({ page }) => {
   // Seed 3 is a climbing mountain seed with three ridged ranges.
-  await openWorld(page, 'seed=3&still=1');
+  await openWorld(page, 'seed=3&still=1&cam=fly');
   await expect(page.getByTestId('world-character')).toContainText('mountain, climbing');
   await expect(page.getByTestId('world-character')).toContainText('3 mountains, ridged range');
 });
 
 test('names the woods and the sky under the kind of island', async ({ page }) => {
   // Seed 7 is a wooded island under a fair sky; seed 2 is wooded under a cloudy one.
-  await openWorld(page, 'seed=7&still=1');
+  await openWorld(page, 'seed=7&still=1&cam=fly');
   await expect(page.getByTestId('world-scenery')).toHaveText('wooded · fair sky');
-  await openWorld(page, 'seed=2&still=1');
+  await openWorld(page, 'seed=2&still=1&cam=fly');
   await expect(page.getByTestId('world-scenery')).toHaveText('wooded · cloudy sky');
 });
 
@@ -239,7 +239,7 @@ const warmth = ([r, , b]: readonly number[]): number => r! / Math.max(1, b!);
 
 test.describe('time of day', () => {
   test('opens at the seed s own time, a daylight time in whole minutes', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1');
+    await openWorld(page, 'seed=42&still=1&cam=fly');
     const time = await page.locator('body').getAttribute('data-world-time');
     expect(time).toMatch(/^\d\d:\d\d$/);
     expect(time! >= '07:00' && time! <= '19:30').toBe(true);
@@ -253,23 +253,23 @@ test.describe('time of day', () => {
   });
 
   test('opens at the time in the address, held to daylight', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1&time=17:45');
+    await openWorld(page, 'seed=42&still=1&time=17:45&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-time', '17:45');
-    await openWorld(page, 'seed=42&still=1&time=06:30');
+    await openWorld(page, 'seed=42&still=1&time=06:30&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-time', '07:00');
-    await openWorld(page, 'seed=42&still=1&time=23:00');
+    await openWorld(page, 'seed=42&still=1&time=23:00&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-time', '19:30');
   });
 
   test('names the time and its light on the title card and the clock', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1&time=17:45');
+    await openWorld(page, 'seed=42&still=1&time=17:45&cam=fly');
     await expect(page.getByTestId('world-time')).toHaveText('17:45 · evening light');
     await expect(page.getByTestId('world-clock')).toHaveText('17:45');
     await expect(page.getByTestId('world-time-slider')).toHaveValue(String(17 * 60 + 45));
   });
 
   test('moves the time with the slider, redrawing the light, and brings back the seed s own time', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1');
+    await openWorld(page, 'seed=42&still=1&cam=fly');
     const seeds = await page.locator('body').getAttribute('data-world-time');
     const before = await page.evaluate(() => window.seedCircuit.view!.pixelCounts().digest);
     const target = seeds === '08:00' ? '18:00' : '08:00';
@@ -284,7 +284,7 @@ test.describe('time of day', () => {
   });
 
   test('gives a new island its own time, not the one chosen for the last', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1&time=07:00');
+    await openWorld(page, 'seed=42&still=1&time=07:00&cam=fly');
     await page.getByTestId('world-new').click();
     await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '42');
     await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
@@ -303,9 +303,9 @@ test.describe('time of day', () => {
 
   test('draws an evening sky darker, and its light warmer, than a midday one', async ({ page }) => {
     // Seed 9 is flat with no mountain, so the top of a flying view is open sky.
-    await openWorld(page, 'seed=9&still=1&lap=0.3&time=13:00');
+    await openWorld(page, 'seed=9&still=1&lap=0.3&time=13:00&cam=fly');
     const midday = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
-    await openWorld(page, 'seed=9&still=1&lap=0.3&time=19:15');
+    await openWorld(page, 'seed=9&still=1&lap=0.3&time=19:15&cam=fly');
     const evening = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
     expect(brightness(evening.bands[0]!)).toBeLessThan(brightness(midday.bands[0]!) * 0.9);
     expect(warmth(evening.mean)).toBeGreaterThan(warmth(midday.mean) * 1.08);
@@ -387,9 +387,9 @@ test.describe('trees, rocks and clouds', () => {
   test('draws nearby trees in full and far ones simply', async ({ page }) => {
     // Flying through the woods, the trees close by have several times the triangles of their far shapes.
     // (Without shadows: the shadow maps draw the trees again, simply.)
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&shadows=off');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&shadows=off&cam=fly');
     const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off&shadows=off');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off&shadows=off&cam=fly');
     const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
     expect(stats.nearGroups).toBeGreaterThan(0);
     expect(stats.triangles - bare.triangles).toBeGreaterThan(2000);
@@ -430,7 +430,7 @@ test.describe('trees, rocks and clouds', () => {
   });
 
   test('gives a new island its own trees and clouds', async ({ page }) => {
-    await openWorld(page, 'seed=7&still=1');
+    await openWorld(page, 'seed=7&still=1&cam=fly');
     const before = await page.evaluate(() => window.seedCircuit.view!.stats());
     await page.getByTestId('world-new').click();
     await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '7');
@@ -451,9 +451,9 @@ test.describe('grass', () => {
       if (message.type() === 'error') errors.push(message.text());
     });
 
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&cam=fly');
     const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&grass=off');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&grass=off&cam=fly');
     const bare = await page.evaluate(() => window.seedCircuit.view!.stats());
 
     expect(stats.blades).toBeGreaterThan(50_000);
@@ -468,9 +468,9 @@ test.describe('grass', () => {
   });
 
   test('changes the picture of the ground beside the road, and leaves the road itself clear', async ({ page }) => {
-    await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&decor=off');
+    await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&decor=off&cam=fly');
     const seen = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
-    await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&decor=off&grass=off');
+    await openWorld(page, 'seed=42&still=1&lap=0.5&time=13:00&decor=off&grass=off&cam=fly');
     const bare = await page.evaluate(() => window.seedCircuit.view!.pixelCounts());
     expect(seen.digest).not.toBe(bare.digest);
     expect(seen.lowDigest).not.toBe(bare.lowDigest);
@@ -511,19 +511,19 @@ test.describe('grass', () => {
   });
 
   test('hides the blades when the address says grass=off, and keeps the trees', async ({ page }) => {
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&grass=off');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&grass=off&cam=fly');
     const { decor, stats } = await page.evaluate(() => ({ decor: window.seedCircuit.view!.decor()!, stats: window.seedCircuit.view!.stats() }));
     expect(stats.blades).toBe(0);
     expect(stats.trees).toBe(decor.trees);
     // And the other way round: decor=off leaves the grass.
-    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off');
+    await openWorld(page, 'seed=7&still=1&lap=0.3&time=13:00&decor=off&cam=fly');
     const noDecor = await page.evaluate(() => window.seedCircuit.view!.stats());
     expect(noDecor.trees).toBe(0);
     expect(noDecor.blades).toBeGreaterThan(50_000);
   });
 
   test('gives a new island its grass too', async ({ page }) => {
-    await openWorld(page, 'seed=7&still=1');
+    await openWorld(page, 'seed=7&still=1&cam=fly');
     await page.getByTestId('world-new').click();
     await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '7');
     await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
@@ -646,7 +646,7 @@ test.describe('shadows of trees, rocks and barriers', () => {
   });
 
   test('reaches a few hundred metres from a camera on the road, and further from high above', async ({ page }) => {
-    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00');
+    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00&cam=fly');
     const flying = (await page.evaluate(() => window.seedCircuit.view!.stats())).shadowReach;
     await openWorld(page, 'seed=8&still=1&cam=orbit&time=13:00');
     const above = (await page.evaluate(() => window.seedCircuit.view!.stats())).shadowReach;
@@ -670,10 +670,10 @@ test.describe('quality', () => {
     });
 
   test('opens on High, and draws less on Low while keeping the trees shadows', async ({ page }) => {
-    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00');
+    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'high');
     const high = { stats: await page.evaluate(() => window.seedCircuit.view!.stats()), pixels: await drawn(page) };
-    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00&quality=low');
+    await openWorld(page, 'seed=8&still=1&lap=0.8&time=13:00&quality=low&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
     const low = { stats: await page.evaluate(() => window.seedCircuit.view!.stats()), pixels: await drawn(page) };
     expect(low.pixels).toBeLessThan(high.pixels * 0.8);
@@ -700,19 +700,19 @@ test.describe('quality', () => {
   });
 
   test('remembers the choice the next time the page opens, unless the address says otherwise', async ({ page }) => {
-    await openWorld(page, 'seed=8&still=1');
+    await openWorld(page, 'seed=8&still=1&cam=fly');
     await page.getByTestId('world-quality').click();
     await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
-    await openWorld(page, 'seed=8&still=1');
+    await openWorld(page, 'seed=8&still=1&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'low');
-    await openWorld(page, 'seed=8&still=1&quality=high');
+    await openWorld(page, 'seed=8&still=1&quality=high&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-quality', 'high');
   });
 });
 
 test.describe('frame times', () => {
   test('counts the frames it draws while flying, and starts again when asked', async ({ page }) => {
-    await openWorld(page, 'seed=7');
+    await openWorld(page, 'seed=7&cam=fly');
     // A headless browser draws in software: with every test running at once a frame can take seconds, so only a few are asked for.
     await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count, { timeout: 30_000 }).toBeGreaterThan(2);
     const frames = await page.evaluate(() => window.seedCircuit.view!.frames());
@@ -727,20 +727,20 @@ test.describe('frame times', () => {
   });
 
   test('counts nothing while the picture is held still', async ({ page }) => {
-    await openWorld(page, 'seed=7&still=1');
+    await openWorld(page, 'seed=7&still=1&cam=fly');
     await page.waitForTimeout(500);
     expect((await page.evaluate(() => window.seedCircuit.view!.frames())).count).toBe(0);
   });
 
   test('shows frame times, triangles and draw calls when the address says fps=1', async ({ page }) => {
-    await openWorld(page, 'seed=7&fps=1');
+    await openWorld(page, 'seed=7&fps=1&cam=fly');
     const readout = page.getByTestId('world-frames');
     await expect(readout).toBeVisible();
     await expect(readout).toHaveText(/\d+(\.\d)? ms · \d+ fps · \d+k triangles · \d+ calls/);
   });
 
   test('keeps the readout hidden until F is pressed, and hides it again', async ({ page }) => {
-    await openWorld(page, 'seed=7');
+    await openWorld(page, 'seed=7&cam=fly');
     const readout = page.getByTestId('world-frames');
     await expect(readout).toBeHidden();
     await page.keyboard.press('f');
@@ -753,17 +753,17 @@ test.describe('frame times', () => {
   test('waits for each frame to be drawn before the next when the address says sync=1, and still counts frames', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await openWorld(page, 'seed=7&sync=1');
+    await openWorld(page, 'seed=7&sync=1&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-sync', 'true');
     // As in the test above: a headless browser draws in software, a frame can take seconds, so only a few are asked for.
     await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.view!.frames())).count, { timeout: 30_000 }).toBeGreaterThan(2);
     expect(errors).toEqual([]);
-    await openWorld(page, 'seed=7');
+    await openWorld(page, 'seed=7&cam=fly');
     await expect(page.locator('body')).toHaveAttribute('data-world-sync', 'false');
   });
 
   test('names the graphics card that is drawing', async ({ page }) => {
-    await openWorld(page, 'seed=7&still=1');
+    await openWorld(page, 'seed=7&still=1&cam=fly');
     expect((await page.evaluate(() => window.seedCircuit.view!.graphics())).length).toBeGreaterThan(3);
   });
 
@@ -816,7 +816,7 @@ test.describe('3D screenshots', () => {
     });
     for (const lap of laps) {
       test(`island ${seed}, flying at ${lap} of the lap`, async ({ page }) => {
-        await openWorld(page, `seed=${seed}&still=1&lap=${lap}`);
+        await openWorld(page, `seed=${seed}&still=1&lap=${lap}&cam=fly`);
         await page.screenshot({ path: `test-results/screens/world-${name}-fly-${String(Math.round(Number(lap) * 100)).padStart(2, '0')}.png` });
       });
     }

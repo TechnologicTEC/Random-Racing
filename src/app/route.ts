@@ -37,6 +37,19 @@ export function choosePage(params: URLSearchParams): Page {
   return { kind: 'world' };
 }
 
+/** The cameras of the 3D view. */
+export type CameraMode = 'fly' | 'orbit';
+
+/**
+ * Which camera the 3D view opens with: `cam=orbit` circles the island;
+ * `cam=fly`, or a point of the lap (`lap=0.3`), flies the lap; so does the
+ * plain address. A close view (`look=`, `at=`) is chosen once the island is in.
+ */
+export function openingCamera(params: URLSearchParams): CameraMode {
+  if (params.get('cam') === 'orbit') return 'orbit';
+  return 'fly';
+}
+
 /**
  * The address the L key goes to: the same seed on the other page. The 3D
  * view's options are kept both ways, so coming back finds them again; the
