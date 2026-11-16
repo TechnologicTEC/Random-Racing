@@ -1295,7 +1295,7 @@ export interface SimConfig {
   colliders: ColliderConfig;
 }
 
-/** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. Drift and boost join it in step 6. */
+/** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. */
 export interface CarConfig {
   /**
    * The box that is the car's body: half its width, height and length; how much it grips what it rubs against (0 is
@@ -1316,6 +1316,10 @@ export interface CarConfig {
   /** Keeping the car the right way up when no wheel is on the ground. */
   stability: StabilityConfig;
   engine: EngineConfig;
+  /** Drifting: the hop, the slide, the charge and its tiers (brief, "Drift-boost"). */
+  drift: DriftConfig;
+  /** The boost a drift gives when it is let go. */
+  boost: BoostConfig;
   /**
    * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
    * `holdBelow` is held still by the brake, so it stays put on a slope. With the brake pressed, a car slower than
@@ -1352,6 +1356,44 @@ export interface StabilityConfig {
   calm: number;
 }
 
+/**
+ * Drifting (step 6; the rules are in docs/plan/M3-driving.md). Times are in seconds, turned into whole steps once.
+ * Speeds are shares of `engine.topSpeed`.
+ */
+export interface DriftConfig {
+  /** A drift starts only going forwards at this share of top speed or more (brief: about 40%). */
+  startSpeed: number;
+  /** It is cancelled when the speed along the line of travel falls under this share. */
+  endSpeed: number;
+  /** The share of full stick, to one side, that starts the slide. */
+  steerToStart: number;
+  /** The hop at the start: how long and how high. Drawn only; the body stays on its springs. */
+  hop: { time: number; height: number };
+  /** How far the nose turns into the corner from the line of travel, in radians. */
+  angle: number;
+  /** How long the nose takes to swing in at the start of a slide, and back out at its end. */
+  swing: number;
+  recover: number;
+  /** How fast the path turns towards the corner, in radians per second: `wide` with the stick fully away from it, `tight` fully into it. */
+  turn: { wide: number; tight: number };
+  /** The hardest the tyres push sideways while sliding, in metres per second per second (in place of `grip.side`). */
+  grip: number;
+  /** How quickly the tyres change the rate the car turns at while sliding, in radians per second per second (in place of `grip.turn`). */
+  turnGrip: number;
+  /** How long a slide must last for each tier of charge (blue, orange, purple; brief: about 1, 2 and 3 seconds). */
+  tiers: readonly [number, number, number];
+  /** How long the boost for each tier lasts (brief: about 0.5, 1.0 and 1.6 seconds). */
+  boosts: readonly [number, number, number];
+  /** The brake pressed this far (a share) or more cancels a drift. */
+  brakeCancel: number;
+}
+
+/** The boost: while it runs, the top speed is `speed` times the usual and the engine pushes at `accel` with no easing. */
+export interface BoostConfig {
+  speed: number;
+  accel: number;
+}
+
 /** The engine. */
 export interface EngineConfig {
   /** The speed the car makes for with the throttle right down (brief: 30). Part way down, it makes for that share of it. */
@@ -1370,6 +1412,11 @@ export interface EngineConfig {
    * the slope, 1 makes a climb as fast as the flat. It also holds that share back downhill.
    */
   slopeHelp: number;
+  /**
+   * A car faster than its top speed (after a boost, or on running onto grass) slows by this much each second, or by
+   * the brake if that is harder, whatever the pedals, and no further than to its top speed.
+   */
+  shed: number;
 }
 
 /**
@@ -1798,7 +1845,30 @@ export const config: GameConfig = {
     steer: { minRadius: 6, sideForce: 15 },
     stability: { upright: 12, calm: 3 },
     // 95% of top speed in about 4 seconds.
-    engine: { topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5 },
+    // Above top speed the car sheds 9 m/s2: a boost's extra speed is gone within about a second of it ending.
+    engine: { topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5, shed: 9 },
+    drift: {
+      // 12 m/s to start, 9 m/s to keep going.
+      startSpeed: 0.4,
+      endSpeed: 0.3,
+      steerToStart: 0.3,
+      hop: { time: 0.15, height: 0.08 },
+      // 24 degrees.
+      angle: 0.42,
+      swing: 0.25,
+      recover: 0.2,
+      // At top speed: circles of 120 m (stick away), 34 m (middle) and 20 m (stick in). The generator's drift corners are 20 to 90 m.
+      turn: { wide: 0.25, tight: 1.5 },
+      // Holds the tightest slide at top speed (45 m/s2) and just holds it at boost speed (58.5).
+      grip: 60,
+      // 4 rad/s in one step: enough for the nose to swing in as a slide starts without the path turning away from the corner.
+      turnGrip: 240,
+      tiers: [1, 2, 3],
+      boosts: [0.5, 1.0, 1.6],
+      brakeCancel: 0.5,
+    },
+    // 39 m/s on the road while a boost runs.
+    boost: { speed: 1.3, accel: 30 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },

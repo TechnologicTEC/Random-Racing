@@ -23,7 +23,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **5d** Chase camera
 - [x] **5e** The page opens driving
 - [x] **Check-in 1 with Tane** (questions below). Add the car's reference pictures to `docs/VISUAL_BAR.md` once Tane likes the look (2026-11-17: answers in STATE.md's decisions; the car casts no shadow)
-- [ ] **6a** The drift rules, pure
+- [x] **6a** The drift rules, pure
 - [ ] **6b** Drift and boost in the car
 - [ ] **6c** Hits cancel a drift
 - [ ] **6d** Sparks, flame and hop

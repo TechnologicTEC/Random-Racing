@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** check-in 1 with Tane (decisions, 2026-11-17): everything stays as it is, except that the car no longer casts a shadow. Before that, 5e, the page opens driving, which ends step 5 (see "Step 5"). The plain address drives the car with the keyboard or a controller and the chase camera; C goes driving, flying, circling; R puts the car back on the start line; a readout shows the speed and the surface. No drift yet, the walls are hard and nothing brings the car back from the sea except R The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
-- **Next:** `docs/PLAN.md`, "The build order": **6a**, the drift rules. Step 6 is a new step, so plan it in plan mode first Step 5's plan is approved (see "Step 5")
+- **Last finished part:** 6a, the drift rules as a pure function (see "Step 6"). Nothing the car does has changed yet: 6b puts the rules in the car
+- **Next:** `docs/PLAN.md`, "The build order": **6b**, drift and boost in the car. Step 6's plan is approved (see "Step 6")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -161,6 +161,32 @@ Measured (throwaway code, deleted):
 Pictures looked at (`world-<seed>-drive-start.png` and `-drive-5s.png`, after `run(300, { throttle: 1 })`, on seeds 1, 3, 7 and 42; seed 7 opens at 07:27, a low sun): the car sits low in the middle at about an eighth of the picture's width. The road ahead is clear above it, and no card covers the road (the readout sits in the bottom right, beside the controls). The car stands on its wheels with its shadow under it, under the gate's shadow on seed 3, and darker in seed 1's evening light. After 5 s the readout shows 105 to 108 km/h on the road. **Seen from straight behind, the kart shows mostly its dark engine block and seat, with the yellow only at the side pods**: a question for check-in 1 (making the engine cover body-coloured is a one-line change in `carShape.ts`).
 
 Tests seen failing first: `nextCamera`, `openingCamera`'s driving default, `mainSurface` and `driving.test.ts` on their missing code, and seven of the eight new browser tests on the old page (the eighth, `still=1` holding the car, passed because nothing stepped it yet). 2,056 unit tests pass.
+
+## Step 6: drift and boost (2026-11-17)
+
+Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-dfe7-random-racing-structured-brooks.md`). The rules, starting values and tests are those of `docs/plan/M3-driving.md`, "Step 6".
+
+| Part | What | Status |
+| --- | --- | --- |
+| 6a | **The drift rules, pure.** `src/sim/car/drift.ts`: `DriftState`, `NO_DRIFT`, `driftSteps`, `stepDrift`, `tierOf`, `pathTurn`; `car.drift`, `car.boost`, `car.engine.shed` | Done |
+| 6b | **Drift and boost in the car.** `car.ts`, `drive.ts`, `sim.ts` | |
+| 6c | **Hits cancel a drift.** `touching()` in `carBody.ts` | |
+| 6d | **Sparks, flame and hop**, drawn; the readout | |
+| 6e | **Camera swing and wider view** | |
+| 6f | **Tuning panel** | |
+
+### 6a: the drift rules
+
+- **`stepDrift(state, asked, car, steps)`** gives the drift state one step on from what is asked (the button, the stick, the brake, the speed along the line of travel, the wheels down, what the body hit). In this order: a running boost and the hop count down a step; the drift starts, picks its side, charges or is let go; anything that cancels it does; then the nose swings in (while sliding) or back out. `slide` moves by a fifteenth (in) or a twelfth (out) a step and is snapped to exactly 0 or 1 within 1e-9, so a swing takes exactly its steps.
+- **Times become whole steps once** (`driftSteps`): hop 9, swing 15, recover 12, tiers at 60, 120 and 180 steps, boosts of 30, 60 and 96. The step a slide starts on is its first step of charge, so tier 1 comes on the 60th step of sliding.
+- **The boost on the release step**: the step the button comes up sets `boostLeft` to the tier's steps, so the top speed is raised on that step and the 29 (59, 95) after it: 30, 60 and 96 steps in all.
+- **Config:** `car.drift` and `car.boost` as planned (`DriftConfig`, `BoostConfig`), `car.engine.shed: 9`. Nothing reads them in the car until 6b.
+- **Claude's calls, for Tane to judge:**
+  - *"The stick at 0.3" is read from the input record*: `steer / 127 >= 0.3`, so a stick of exactly 0.3 (38 of 127 steps, 0.299) does not start a slide and 39 does. A keyboard always gives full stick.
+  - *Cancelling during the hop* ends the drift; the hop is still drawn to its end.
+  - *A new slide to the other side waits until the nose has swung back* from the last one (at most 12 steps); to the same side it picks up from where the nose is.
+
+`drift.test.ts` (25 tests: each rule on its exact step, plus no start with one wheel down, no cancel in the air, a boost counting down in the air and not ended by the brake) failed on its missing module first. 2,084 unit tests pass.
 
 ## Working agreements
 
@@ -335,3 +361,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5e, first commit: the old browser tests open flying with `cam=fly`, and the page reads it (`openingCamera` in `app/route.ts`); the page itself is unchanged. 2,044 unit tests pass; all 290 browser tests passed in one run (19.2 minutes). Next: 5e's second commit, the page opens driving.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5e done, which ends step 5: the page opens driving. Keys and a controller drive the car (`input/devices.ts`), the fixed-step loop moves it and draws it blended between steps with the chase camera behind it (`app/driving.ts`), C goes driving, flying, circling, R puts the car back on the start line, and a readout shows the speed and the surface. Old addresses open their old views with the simulation built but not running. Pictures of seeds 1, 3, 7 and 42 looked at. 2,056 unit tests pass; all 320 browser tests passed in one run (22.5 minutes), the 3-second budget tests included. Step 4's record moved unchanged to `docs/archive/STATE-milestone-3-step-4.md`, so this file still reads in one go. Next: check-in 1 with Tane.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Check-in 1 with Tane. Speed, steering, braking into reverse, the camera and the walls stay as they are. The car looks good for now; a proper design, perhaps with other car styles, may come later. The controller was not tried. **The car casts no shadow** now (Tane: annoying while driving): `carView.ts`, with a new `carView.test.ts` seen failing first, and the visual bar changed to match. Pictures of seeds 1, 3, 7 and 42 (driving and `look=car`) looked at again. The car's reference pictures `drive-start.jpg` and `car-close.jpg` added to `docs/visual-bar/`. 2,059 unit tests pass; all 320 browser tests passed in one run (18.4 minutes). Next: step 6, planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** Step 6 planned in plan mode and approved (see "Step 6"). 6a done: the drift rules as a pure function (`src/sim/car/drift.ts`: `stepDrift`, `tierOf`, `pathTurn`, `driftSteps`), with `car.drift`, `car.boost` and `car.engine.shed` in the config. Three Claude's calls (the 0.3 stick read from the record, a cancel during the hop, a slide to the other side waiting for the nose). 2,084 unit tests pass; all 320 browser tests passed in one run (18.1 minutes). Next: 6b, drift and boost in the car.
