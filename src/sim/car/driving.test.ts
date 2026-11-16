@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
+import { hold } from '../../testing/simDriving';
 import { flatGround, rampGround, type TestGround } from '../../testing/testGrounds';
-import { makeInput, type RawInput } from '../input';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { rotate } from '../quat';
 import { createSimOn, type CarState, type Sim } from '../sim';
@@ -14,19 +14,9 @@ beforeAll(async () => {
 
 const car = config.car;
 const { topSpeed } = car.engine;
-const perSecond = config.sim.stepsPerSecond;
-const dt = 1 / perSecond;
+const dt = 1 / config.sim.stepsPerSecond;
 
 const simOn = (ground: TestGround, start: Pose = ground.start): Sim => createSimOn(rapier, ground.course, config, start);
-
-/** Steps a sim for some seconds with the same thing pressed, calling `each` after every step. */
-function hold(sim: Sim, pressed: RawInput, seconds: number, each?: (state: CarState) => void): void {
-  const input = makeInput(pressed);
-  for (let i = 0; i < Math.round(seconds * perSecond); i++) {
-    sim.step(input);
-    each?.(sim.state());
-  }
-}
 
 const THROTTLE = { throttle: 1 };
 const BRAKE = { brake: 1 };

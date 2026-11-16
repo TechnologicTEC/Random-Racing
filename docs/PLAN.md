@@ -10,12 +10,12 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 **Before anything else**
 
-- [ ] **0. One clean run of `npm run e2e`.** 4c was committed without one (STATE.md, "4c"). Laptop awake, nothing else open, no dev server left running; ask Tane whether it has already been run by hand. Note the result in STATE.md's session log.
+- [x] **0. One clean run of `npm run e2e`.** (Run by hand by Tane, all passed; 2026-11-16) 4c was committed without one (STATE.md, "4c"). Laptop awake, nothing else open, no dev server left running; ask Tane whether it has already been run by hand. Note the result in STATE.md's session log.
 
 **Milestone 3: driving** (branch `milestone-3-driving`, issue #3; the parts: [`docs/plan/M3-driving.md`](plan/M3-driving.md))
 
 - [x] Steps 0 to 3, and 4a, 4b, 4c
-- [ ] **4d** Steering and cornering
+- [x] **4d** Steering and cornering
 - [ ] **4e** Stability and the whole car
 - [ ] **5a** Input: keyboard and controller
 - [ ] **5b** The fixed-step loop

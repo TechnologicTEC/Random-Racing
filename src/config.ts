@@ -1248,7 +1248,7 @@ export interface SimConfig {
   colliders: ColliderConfig;
 }
 
-/** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. Steering joins it in step 4d, drift and boost in step 6. */
+/** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. Drift and boost join it in step 6. */
 export interface CarConfig {
   /**
    * The box that is the car's body: half its width, height and length; how much it grips what it rubs against (0 is
@@ -1264,6 +1264,8 @@ export interface CarConfig {
    * car's own weight. `turn` is how quickly they can change the rate the car turns at, in radians per second per second.
    */
   grip: { side: number; turn: number };
+  /** The steering. `sideForce` must stay under `grip.side`, so ordinary steering never slides. */
+  steer: SteerConfig;
   engine: EngineConfig;
   /**
    * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
@@ -1273,6 +1275,20 @@ export interface CarConfig {
   brake: { strength: number; holdBelow: number };
   /** Reversing: its top speed, and its push from a standstill. It eases off towards its top speed as the engine does. */
   reverse: { topSpeed: number; accel: number };
+}
+
+/**
+ * The steering: how fast the car turns with the stick right over. The stick sets the turn rate at once, with no
+ * easing (brief: input must feel instant); part way over, it asks for that share of it.
+ */
+export interface SteerConfig {
+  /** The tightest circle the car turns on, in metres: what full stick gives at low speed. */
+  minRadius: number;
+  /**
+   * The hardest full stick pushes the car sideways, in metres per second per second: at higher speeds the circle
+   * widens to keep to it. The two limits meet at the square root of `minRadius` times this. Keep it under `grip.side`.
+   */
+  sideForce: number;
 }
 
 /** The engine. */
@@ -1705,6 +1721,8 @@ export const config: GameConfig = {
     // About two bounces a second if nothing damped them: firm, for a kart.
     suspension: { rideHeight: 0.18, sag: 0.05, damping: 0.8 },
     grip: { side: 22, turn: 30 },
+    // Full stick: a 6 m circle up to 9.5 m/s, 15 m at 15 m/s, 60 m at top speed.
+    steer: { minRadius: 6, sideForce: 15 },
     // 95% of top speed in about 4 seconds.
     engine: { topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5 },
     brake: { strength: 20, holdBelow: 0.5 },

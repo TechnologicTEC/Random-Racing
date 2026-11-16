@@ -5,6 +5,7 @@ import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
+import { turnWanted } from './steer';
 import { springOf, springPush, wheelMounts } from './suspension';
 import type { Surface } from './surface';
 
@@ -109,9 +110,10 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       physics.push(scale(across, car.mass * sideGrip(dot(coming, across), share, car, dt)));
       const pull = dot(coming, along) - dot(motion.velocity, along);
       physics.push(scale(along, car.mass * speedChange(dot(motion.velocity, along), pull, pedals, share, car, dt)));
-      // And they hold the car's turning to what is asked for: nothing, until the steering is in (4d).
+      // And they bring the car's turning to what the stick asks for, as fast as they can.
       const up = rotate(motion.rotation, UP);
-      physics.twist(scale(up, turnInertia * turnGrip(dot(motion.spin, up), 0, share, car, dt)));
+      const wanted = turnWanted(pedals.steer, dot(motion.velocity, along), car);
+      physics.twist(scale(up, turnInertia * turnGrip(dot(motion.spin, up), wanted, share, car, dt)));
     },
   };
 }
