@@ -1,8 +1,10 @@
 import type { PhysicsConfig } from '../../config';
+import { dcos, dsin } from '../../core/dmath';
 import { inputFractions, type InputRecord } from '../input';
 import type { BodyMotion, CarPhysics } from '../physics/carBody';
 import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
+import { driftSteps, NO_DRIFT, pathTurn, stepDrift, tierOf, type DriftPhase, type DriftState, type Hit } from './drift';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
 import { twistFor, uprightChange } from './stability';
@@ -22,20 +24,51 @@ export interface WheelState {
   at: Vec3;
 }
 
+/** The drift as it is now, for drawing, the camera and the readout. */
+export interface DriftView {
+  phase: DriftPhase;
+  /** The side of the slide: -1 left, 1 right, 0 none. */
+  dir: -1 | 0 | 1;
+  /** The tier the charge has reached while sliding (1 blue, 2 orange, 3 purple), 0 otherwise. */
+  tier: 0 | 1 | 2 | 3;
+  /** How far the nose is turned into the corner from the line of travel, in radians. */
+  angle: number;
+  /** How much of the hop is still to come, from 1 on its first step down to 0 with no hop. */
+  hop: number;
+  /** How long the boost has left, in seconds; 0 with none. */
+  boostLeft: number;
+  /** The tier of the boost running, 0 with none. */
+  boostTier: 0 | 1 | 2 | 3;
+}
+
 /** What the car's own sums add to the body's motion, for drawing, the camera and the readout. */
 export interface CarReading {
   /** Front left, front right, rear left, rear right. */
   wheels: WheelState[];
   /** The car's speed along itself, in metres per second: negative when it rolls backwards. */
   speed: number;
+  drift: DriftView;
+}
+
+/** Everything the car remembers from one step to the next, as plain numbers: it goes into the fingerprint and the snapshot. */
+export interface CarMemory {
+  drift: DriftState;
 }
 
 /** The handling of one car: the sums that turn what the driver asks for into pushes on its body. */
 export interface Car {
-  /** The wheels and the speed as they are now. */
+  /** The wheels, the speed and the drift as they are now. */
   read(): CarReading;
-  /** Works out one step's pushes and gives them to the body. Call it once, just before the physics moves on a step. */
-  step(input: InputRecord): void;
+  /**
+   * Works out one step's pushes and gives them to the body. Call it once, just before the physics moves on a step.
+   *
+   * @param hit what the body touched on the last physics step (`CarPhysics.touching`)
+   */
+  step(input: InputRecord, hit?: Hit): void;
+  /** What the car remembers now. */
+  save(): CarMemory;
+  /** Goes back to what it remembered at a saved moment. */
+  load(memory: CarMemory): void;
 }
 
 const FORWARD = { x: 0, y: 0, z: -1 };
@@ -43,9 +76,9 @@ const UP = { x: 0, y: 1, z: 0 };
 
 /**
  * Joins the car's handling to its body. Every sum here starts from the body's
- * motion and the four wheel casts as they are at that moment, and keeps
- * nothing from one step to the next, so there is nothing of its own to save
- * in a snapshot or to cover in a fingerprint.
+ * motion and the four wheel casts as they are at that moment, and from the
+ * drift state, which is all the car remembers from one step to the next
+ * (`save`, `load`).
  *
  * @param surfaceOf names what a wheel met (`surfaceFinder`)
  */
@@ -54,6 +87,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   const dt = 1 / cfg.sim.stepsPerSecond;
   const spring = springOf(cfg);
   const mounts = wheelMounts(car);
+  const steps = driftSteps(car, cfg.sim.stepsPerSecond);
+  let drift: DriftState = NO_DRIFT;
 
   /** Feels for the ground under each wheel: a ball cast from the spring's mount, straight down in the car's own directions. */
   function feel(motion: BodyMotion): Array<WheelState & { normal: Vec3 }> {
@@ -70,21 +105,49 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
     });
   }
 
+  /**
+   * The car's forward direction along the ground (`along`), its right (`across`) and the line it travels along
+   * (`travel`): `along` turned out of the corner by the slide's angle, so the nose points that far into it.
+   */
+  function lines(facing: Vec3, normal: Vec3, state: DriftState): { along: Vec3; across: Vec3; travel: Vec3 } {
+    const along = unit(sub(facing, scale(normal, dot(facing, normal))));
+    const across = cross(along, normal);
+    if (state.slide === 0) return { along, across, travel: along };
+    const b = car.drift.angle * state.slide;
+    return { along, across, travel: sub(scale(along, dcos(b)), scale(across, state.dir * dsin(b))) };
+  }
+
   const speedOf = (motion: BodyMotion): number => dot(motion.velocity, rotate(motion.rotation, FORWARD));
+
+  const view = (): DriftView => ({
+    phase: drift.phase,
+    dir: drift.dir,
+    tier: drift.phase === 'slide' ? tierOf(drift.charge, steps) : 0,
+    angle: car.drift.angle * drift.slide,
+    hop: drift.hopLeft / steps.hop,
+    boostLeft: drift.boostLeft / cfg.sim.stepsPerSecond,
+    boostTier: drift.boostTier,
+  });
 
   return {
     read() {
       const motion = physics.motion();
-      return { wheels: feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at })), speed: speedOf(motion) };
+      return { wheels: feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at })), speed: speedOf(motion), drift: view() };
+    },
+    save: () => ({ drift }),
+    load(memory) {
+      drift = { ...memory.drift };
     },
 
-    step(input) {
+    step(input, hit = null) {
       const pedals = inputFractions(input);
       const motion = physics.motion();
       const wheels = feel(motion);
       const up = rotate(motion.rotation, UP);
+      const facing = rotate(motion.rotation, FORWARD);
       /** Changes the body's spin by `change`, in radians per second. */
       const spinBy = (change: Vec3): void => physics.twist(twistFor(change, motion.rotation, car));
+      const ask = (speed: number, wheelsDown: number) => ({ button: input.drift === 1, steer: pedals.steer, brake: pedals.brake, speed, wheelsDown, hit });
 
       // The springs: each wheel on the ground pushes the body away from it, where the wheel is.
       let grounded = 0;
@@ -98,27 +161,41 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
         const closing = -dot(moving, wheel.normal);
         physics.push(scale(wheel.normal, springPush(spring, wheel.squash, closing, dt)), wheel.at);
       }
-      // In the air, the only thing that acts is the turn that brings the roof back up.
+      // The drift state as the last step left it: the line of travel is worked out from it, not from this step's.
+      const old = drift;
+      // In the air, the only thing that acts is the turn that brings the roof back up. The drift carries on.
       if (grounded === 0) {
         spinBy(uprightChange(up, motion.spin, car, dt));
+        drift = stepDrift(old, ask(dot(motion.velocity, lines(facing, up, old).travel), 0), car, steps);
         return;
       }
 
-      // The tyres. Along and across the ground under the car, they act on the speed the car would have at the end of the
+      // The tyres. Along and across the line of travel, they act on the speed the car would have at the end of the
       // step if they did nothing: its speed now and what gravity adds in one step. So a parked car stays exactly where it is.
       const share = grounded / wheels.length;
       const normal = unit(ground);
-      const facing = rotate(motion.rotation, FORWARD);
-      const along = unit(sub(facing, scale(normal, dot(facing, normal))));
-      const across = cross(along, normal);
+      const { travel } = lines(facing, normal, old);
+      const side = cross(travel, normal);
       const coming = { x: motion.velocity.x, y: motion.velocity.y - cfg.sim.gravity * dt, z: motion.velocity.z };
-      // Through the body's middle, so they neither roll it nor pitch it.
-      physics.push(scale(across, car.mass * sideGrip(dot(coming, across), share, car, dt)));
-      const pull = dot(coming, along) - dot(motion.velocity, along);
-      physics.push(scale(along, car.mass * speedChange(dot(motion.velocity, along), pull, pedals, share, car, dt)));
-      // And they bring the car's turning to what the stick asks for, as fast as they can.
-      const wanted = turnWanted(pedals.steer, dot(motion.velocity, along), car);
-      spinBy(scale(up, turnGrip(dot(motion.spin, up), wanted, share, car, dt)));
+      const speed = dot(motion.velocity, travel);
+      drift = stepDrift(old, ask(speed, grounded), car, steps);
+      const boosting = drift.boostLeft > 0;
+      const top = boosting ? car.engine.topSpeed * car.boost.speed : car.engine.topSpeed;
+
+      // Through the body's middle, so they neither roll it nor pitch it. In a slide the tyres hold harder sideways.
+      physics.push(scale(side, car.mass * sideGrip(dot(coming, side), share, car, dt, old.slide > 0 ? car.drift.grip : car.grip.side)));
+      const pull = dot(coming, travel) - speed;
+      physics.push(scale(travel, car.mass * speedChange(speed, pull, pedals, share, top, boosting, car, dt)));
+
+      // And they bring the car's turning to what is asked, as fast as they can: in a slide, how fast its path turns
+      // towards the corner, and the nose swinging in or out on top of that.
+      const swing = (drift.slide - old.slide) * car.drift.angle * cfg.sim.stepsPerSecond;
+      const path = drift.phase === 'slide' ? (0 - drift.dir) * pathTurn(drift, pedals.steer, car) : turnWanted(pedals.steer, speed, car);
+      // The side of the slide, on its first and last steps too. Into the corner is -d (positive turning is to the left).
+      const d = drift.dir !== 0 ? drift.dir : old.dir;
+      const wanted = path - d * swing;
+      const sliding = drift.phase === 'slide' || drift.slide > 0 || old.slide > 0;
+      spinBy(scale(up, turnGrip(dot(motion.spin, up), wanted, share, car, dt, sliding ? car.drift.turnGrip : car.grip.turn)));
     },
   };
 }

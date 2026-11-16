@@ -8,9 +8,10 @@ import type { CarConfig } from '../../config';
  * @param sideSpeed the sideways speed the car would have at the end of the step if the tyres did nothing, in metres per second
  * @param share how many of its wheels are on the ground, from 0 to 1
  * @param dt the length of a step, in seconds
+ * @param most the hardest the tyres push sideways, in metres per second per second: `grip.side`, or `drift.grip` in a slide
  */
-export function sideGrip(sideSpeed: number, share: number, car: CarConfig, dt: number): number {
-  return within(0 - sideSpeed, car.grip.side * dt * share);
+export function sideGrip(sideSpeed: number, share: number, car: CarConfig, dt: number, most = car.grip.side): number {
+  return within(0 - sideSpeed, most * dt * share);
 }
 
 /**
@@ -22,9 +23,10 @@ export function sideGrip(sideSpeed: number, share: number, car: CarConfig, dt: n
  * @param turning how fast the car is turning now, in radians per second
  * @param wanted how fast the steering asks it to turn
  * @param share how many of its wheels are on the ground, from 0 to 1
+ * @param most how quickly the tyres can change the turning, in radians per second per second: `grip.turn`, or `drift.turnGrip` in a slide
  */
-export function turnGrip(turning: number, wanted: number, share: number, car: CarConfig, dt: number): number {
-  return within(wanted - turning, car.grip.turn * dt * share);
+export function turnGrip(turning: number, wanted: number, share: number, car: CarConfig, dt: number, most = car.grip.turn): number {
+  return within(wanted - turning, most * dt * share);
 }
 
 /** A change held to no more than `most` either way. */

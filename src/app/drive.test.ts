@@ -73,6 +73,7 @@ function stateAt(k: number, rotation = { x: 0, y: 0, z: 0, w: 1 }): CarState {
     spin: v(0.5),
     wheels: [0, 1, 2, 3].map((i) => ({ touching: k > 0, squash: 0.01 * k, surface: k > 0 ? ('road' as const) : null, at: v(i + 1) })),
     speed: 10 * k,
+    drift: { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 },
     step: k,
     input: NEUTRAL_INPUT,
   };

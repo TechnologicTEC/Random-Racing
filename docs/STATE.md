@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6a, the drift rules as a pure function (see "Step 6"). Nothing the car does has changed yet: 6b puts the rules in the car
-- **Next:** `docs/PLAN.md`, "The build order": **6b**, drift and boost in the car. Step 6's plan is approved (see "Step 6")
+- **Last finished part:** 6b, drift and boost in the car (see "Step 6"). Holding the drift button with the stick over at 12 m/s or more slides the car; letting go after 1, 2 or 3 s boosts it. Walls do not cancel a drift yet (6c), and nothing of it is drawn yet (6d)
+- **Next:** `docs/PLAN.md`, "The build order": **6c**, hits cancel a drift. Step 6's plan is approved (see "Step 6")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -169,7 +169,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | Part | What | Status |
 | --- | --- | --- |
 | 6a | **The drift rules, pure.** `src/sim/car/drift.ts`: `DriftState`, `NO_DRIFT`, `driftSteps`, `stepDrift`, `tierOf`, `pathTurn`; `car.drift`, `car.boost`, `car.engine.shed` | Done |
-| 6b | **Drift and boost in the car.** `car.ts`, `drive.ts`, `sim.ts` | |
+| 6b | **Drift and boost in the car.** `car.ts`, `drive.ts`, `grip.ts`, `sim.ts` | Done |
 | 6c | **Hits cancel a drift.** `touching()` in `carBody.ts` | |
 | 6d | **Sparks, flame and hop**, drawn; the readout | |
 | 6e | **Camera swing and wider view** | |
@@ -187,6 +187,32 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
   - *A new slide to the other side waits until the nose has swung back* from the last one (at most 12 steps); to the same side it picks up from where the nose is.
 
 `drift.test.ts` (25 tests: each rule on its exact step, plus no start with one wheel down, no cancel in the air, a boost counting down in the air and not ended by the brake) failed on its missing module first. 2,084 unit tests pass.
+
+### 6b: drift and boost in the car
+
+- **The car's step** (`car.ts`) is "The car's step, line by line" of `docs/plan/M3-driving.md`. The line of travel is the nose turned out of the corner by the slide's angle, worked out from the drift state as the last step left it. The tyres take off speed across that line (up to `drift.grip`, 60 m/s², while the nose is swung in at all), the engine and brake act along it, and the turn asked for is the path's (`pathTurn`) plus the nose swinging in or out, held with `drift.turnGrip` (240 rad/s²) until the nose is back. With no slide the sums are exactly step 4's: the line of travel is then `along` itself, not `along` turned by an angle of 0, since `dcos(0)` need not be exactly 1.
+- **In the air** the drift carries on (rule 7); its speed along the line of travel is read with the car's own up in place of the ground's.
+- **`speedChange`** (`drive.ts`) takes the step's top speed and whether a boost runs. Above top speed it sheds `engine.shed` (9 m/s²), or brakes if that is harder, whatever the pedals, and no further than to top speed (rule 9). While boosting the throttle counts as right down and the push is `boost.accel` (30 m/s²) with no easing. Below top speed nothing changed.
+- **What the car remembers** is now its drift state: `Car.save()` and `load()` (`CarMemory`); `SimSnapshot` gains `car` and `touch` (what the body touched, which 6c fills); `hash()` adds the drift state's eight numbers and the touch.
+- **`CarState.drift`** (`DriftView`) for drawing: phase, side, tier, slide angle, hop (1 down to 0), boost left in seconds and its tier.
+- `sideGrip` and `turnGrip` (`grip.ts`) take their limit as an optional last argument.
+
+Measured on the flat at top speed (throwaway code, deleted):
+
+| What | Asked | Measured |
+| --- | --- | --- |
+| Slide circles, stick into the corner, middle, away | 20, 34.3, 120 m | 19.66, 34.08, 119.94 m |
+| Speed in the slide, same order | 97% of 30 or more | 29.49, 29.82, 29.99 m/s |
+| The nose inside the line of travel, stick in the middle | 24 degrees within 1 | within 1 (test); with the stick fully in, about 25.5, since the path then turns 1.5 degrees in a step |
+| The path turning away from the corner as a slide starts | under 1 degree | 0 |
+| After a 2.1 s slide (stick in the middle) and release | over 30 next step; 39 within 0.4 s; held to the end; under 30.1 within 1.2 s after | 30.33 m/s on the next step; 39 after 19 steps (0.32 s); held to the 60th step; 30.0 after 60 steps more (1.0 s) |
+| Steps with the top speed raised, tiers 1 to 3 | 30, 60, 96 | 30, 60, 96 (test) |
+
+**One test tolerance set by measurement:** "never over 39 m/s" is checked to 1e-5 m/s. The physics engine rounds the speed held at 39 by a few millionths either way (measured 38.9999853 to 39.0000027 m/s), so the first tolerance tried, 1e-6, failed on rounding, not on any overshoot.
+
+**The 4c test of speed above top speed changed with rule 9**, as the plan says: "holds the car back above top speed, as gently as it eased off…" became "slows by `engine.shed` above top speed, whatever the pedals, and no further than to top speed", and a test that half throttle at 20 m/s still eases off gently was added. Four tests of the boost in `speedChange` were added.
+
+Tests seen failing first: `drifting.test.ts` (20 tests: the car did not drift) and `drive.test.ts` (the old signature). 2,109 unit tests pass.
 
 ## Working agreements
 
@@ -362,3 +388,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5e done, which ends step 5: the page opens driving. Keys and a controller drive the car (`input/devices.ts`), the fixed-step loop moves it and draws it blended between steps with the chase camera behind it (`app/driving.ts`), C goes driving, flying, circling, R puts the car back on the start line, and a readout shows the speed and the surface. Old addresses open their old views with the simulation built but not running. Pictures of seeds 1, 3, 7 and 42 looked at. 2,056 unit tests pass; all 320 browser tests passed in one run (22.5 minutes), the 3-second budget tests included. Step 4's record moved unchanged to `docs/archive/STATE-milestone-3-step-4.md`, so this file still reads in one go. Next: check-in 1 with Tane.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Check-in 1 with Tane. Speed, steering, braking into reverse, the camera and the walls stay as they are. The car looks good for now; a proper design, perhaps with other car styles, may come later. The controller was not tried. **The car casts no shadow** now (Tane: annoying while driving): `carView.ts`, with a new `carView.test.ts` seen failing first, and the visual bar changed to match. Pictures of seeds 1, 3, 7 and 42 (driving and `look=car`) looked at again. The car's reference pictures `drive-start.jpg` and `car-close.jpg` added to `docs/visual-bar/`. 2,059 unit tests pass; all 320 browser tests passed in one run (18.4 minutes). Next: step 6, planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Step 6 planned in plan mode and approved (see "Step 6"). 6a done: the drift rules as a pure function (`src/sim/car/drift.ts`: `stepDrift`, `tierOf`, `pathTurn`, `driftSteps`), with `car.drift`, `car.boost` and `car.engine.shed` in the config. Three Claude's calls (the 0.3 stick read from the record, a cancel during the hop, a slide to the other side waiting for the nose). 2,084 unit tests pass; all 320 browser tests passed in one run (18.1 minutes). Next: 6b, drift and boost in the car.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6b done: the car drifts and boosts (`car.ts` follows the plan's step line by line; `speedChange` takes the step's top speed and the boost, and sheds 9 m/s2 above top speed; the drift state in the fingerprint and the snapshot). Slide circles of 19.7, 34.1 and 119.9 m at top speed; 29.5 m/s in the tightest slide; a 2.1 s slide gives 39 m/s in 0.32 s for 1 s. 2,109 unit tests pass; all 320 browser tests passed in one run (18.4 minutes), the scripted run's fingerprint across Node, Chromium and Firefox included, now with drift live. Next: 6c, hits cancel a drift.

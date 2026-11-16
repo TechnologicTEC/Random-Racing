@@ -1,7 +1,8 @@
 import type { PhysicsConfig } from '../config';
 import { createHasher } from '../core/hash';
 import type { WorldResult } from '../gen/types';
-import { createCar, type CarReading } from './car/car';
+import { createCar, type CarMemory, type CarReading } from './car/car';
+import type { Hit } from './car/drift';
 import { surfaceFinder } from './car/surface';
 import type { Course } from './course';
 import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input';
@@ -50,7 +51,15 @@ export interface SimSnapshot {
   input: number;
   /** The physics engine's whole world. */
   physics: Uint8Array;
+  /** What the car remembers: its drift. */
+  car: CarMemory;
+  /** What the body touched on the last physics step, which the car's next step reads. */
+  touch: Hit;
 }
+
+/** Each phase and each thing touched as a number for the fingerprint, in a fixed order. */
+const PHASES = ['none', 'hop', 'slide'] as const;
+const TOUCHES: readonly Hit[] = [null, 'wall', 'gate', 'tree', 'rock'];
 
 /**
  * Starts a simulation: the island's ground, road, walls, gate, trees and rocks
@@ -72,27 +81,32 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
   const car = createCar(physics, cfg, surfaceFinder(physics.colliders, ground));
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
+  let touch: Hit = null;
 
   return {
     step(next) {
       input = next;
       // The car's own pushes first, from where it is now; then the physics moves everything on.
-      car.step(next);
+      car.step(next, touch);
       physics.step();
       step++;
     },
     state: () => ({ ...physics.motion(), ...car.read(), step, input }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
+      const d = car.save().drift;
       return createHasher()
         .numbers([step, packInput(input)])
         .numbers([position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, rotation.w])
         .numbers([velocity.x, velocity.y, velocity.z, spin.x, spin.y, spin.z])
+        .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch)])
         .digest();
     },
-    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot() }),
+    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch }),
     restore(saved) {
       physics.restore(saved.physics);
+      car.load(saved.car);
+      touch = saved.touch;
       step = saved.step;
       input = unpackInput(saved.input);
     },
