@@ -141,6 +141,20 @@ export function terrainColour(height: number, grass: number, sand: number, rock:
   return colour;
 }
 
+/**
+ * The kart (docs/VISUAL_BAR.md): a warm yellow-orange body that stands out from the green grass, the dark road, the
+ * blue sea and the red of the kerbs; the start gate's dark grey for the chassis and seat; an off-white helmet; the
+ * page's teal for the driver; near-black tyres with pale hubs.
+ */
+export const KART = {
+  body: [0.98, 0.72, 0.12] as Rgb,
+  chassis: [0.16, 0.17, 0.2] as Rgb,
+  helmet: [0.94, 0.94, 0.92] as Rgb,
+  driver: [0.1, 0.49, 0.47] as Rgb,
+  tyre: [0.07, 0.07, 0.08] as Rgb,
+  hub: [0.78, 0.78, 0.75] as Rgb,
+};
+
 /** Converts one channel of a screen colour to linear light. */
 export function toLinear(channel: number): number {
   return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);

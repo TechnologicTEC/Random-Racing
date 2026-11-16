@@ -58,4 +58,22 @@ test.describe('the simulation on the page', () => {
     }, { timeout: 30_000 }).toBeLessThan(0.5);
     expect(errors).toEqual([]);
   });
+
+  test('draws the car in the close view of it, standing at the start', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=7&still=1&look=car');
+    await expect(page.locator('body')).toHaveAttribute('data-world-look', 'car');
+    await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown');
+    const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
+    expect(fromStart(7, { x: orbit.targetX, y: orbit.targetY, z: orbit.targetZ })).toBeLessThan(0.01);
+    expect(orbit.distance).toBeLessThan(10);
+    expect(errors).toEqual([]);
+  });
+
+  test('draws no car in the old views, so their pictures are as before', async ({ page }) => {
+    for (const query of ['seed=7&still=1&look=start', 'seed=7&still=1&cam=orbit', 'seed=7&still=1&lap=0.02']) {
+      await openDriving(page, query);
+      await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'hidden');
+    }
+  });
 });

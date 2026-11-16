@@ -1,6 +1,7 @@
 import { config } from '../config';
 import type { CenterLine, FitReport, FitSpot, MountainSummit, Section } from '../gen/types';
 import { orbitEye, type Orbit } from './orbit';
+import { rotate, type Quat, type Vec3 } from '../sim/quat';
 
 /** The places the fit report singles out, by the names used in the address bar (`&look=cut`). */
 export const SPOT_NAMES = ['cut', 'fill', 'bank', 'close', 'water'] as const;
@@ -196,6 +197,27 @@ export function lookAtPoint(text: string, heightAt: (x: number, z: number) => nu
   const z = Number(parts[1]);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
   return closeView(x, z, heightAt, view);
+}
+
+/**
+ * A close camera on the car where it stands (`&look=car`): aimed at its
+ * middle, from behind it and `view.side` radians round to its right, so its
+ * back and one side are seen. Used to look at how the car is drawn.
+ *
+ * @param pose where the car is and how it is turned (its front is its -z side)
+ */
+export function lookAtCar(pose: { position: Vec3; rotation: Quat }, view = config.camera.car): Orbit {
+  const nose = rotate(pose.rotation, { x: 0, y: 0, z: -1 });
+  // The orbit's angle is the compass direction from the target to the eye: here, straight back from the nose, then round.
+  const behind = Math.atan2(-nose.x, -nose.z);
+  return {
+    targetX: pose.position.x,
+    targetY: pose.position.y,
+    targetZ: pose.position.z,
+    angle: behind + view.side,
+    tilt: view.tilt,
+    distance: view.distance,
+  };
 }
 
 /** Turns tried, in order, when the usual direction is blocked: an eighth of a circle each way, then further. */

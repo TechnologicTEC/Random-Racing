@@ -28,7 +28,7 @@ export type Detail = 'near' | 'far';
 const TAU = Math.PI * 2;
 
 /** Collects the parts of a shape. Each part has vertices of its own, so its colour never smears into the next. */
-function createBuilder() {
+export function createShapeBuilder() {
   const positions: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
@@ -208,7 +208,7 @@ const OCTAHEDRON = {
 const ROOT = 0.4;
 
 function pine(detail: Detail): Shape {
-  const b = createBuilder();
+  const b = createShapeBuilder();
   if (detail === 'near') {
     b.tube([[0, -ROOT, 0, 0.32], [0, 1.9, 0, 0.22]], 5, TREES.bark);
     b.cone(1.2, 4.4, 2.0, 6, TREES.pine[0]!);
@@ -222,7 +222,7 @@ function pine(detail: Detail): Shape {
 }
 
 function broadleaf(detail: Detail): Shape {
-  const b = createBuilder();
+  const b = createShapeBuilder();
   if (detail === 'near') {
     b.tube([[0, -ROOT, 0, 0.38], [0, 2.7, 0, 0.24]], 5, TREES.bark);
     b.ball(0, 3.8, 0, 2.2, 2.2, 2.2, TREES.broadleaf[0]!);
@@ -239,7 +239,7 @@ function broadleaf(detail: Detail): Shape {
 const CROWN: readonly [number, number, number] = [1.3, 6.4, 0];
 
 function palm(detail: Detail): Shape {
-  const b = createBuilder();
+  const b = createShapeBuilder();
   const [cx, cy, cz] = CROWN;
   if (detail === 'near') {
     b.tube(
@@ -298,7 +298,7 @@ const LUMPS = [1.08, 0.86, 0.95, 1.14, 0.9, 1.02, 0.84, 1.1, 0.97, 0.88, 1.12, 0
 
 /** A boulder about a metre in radius, centred on the origin. */
 export function rockShape(detail: Detail): Shape {
-  const b = createBuilder();
+  const b = createShapeBuilder();
   if (detail === 'near') b.ball(0, 0, 0, 1, 1, 1, ROCKS.boulder, { scale: LUMPS });
   else b.diamond(0, 0, 0, 1, 1, 1, ROCKS.boulder, LUMPS);
   return b.finish();
@@ -306,7 +306,7 @@ export function rockShape(detail: Detail): Shape {
 
 /** One puff of a cloud: a ball of radius 1, centred on the origin. */
 export function puffShape(): Shape {
-  const b = createBuilder();
+  const b = createShapeBuilder();
   b.ball(0, 0, 0, 1, 1, 1, CLOUDS.puff, { split: true });
   return b.finish();
 }

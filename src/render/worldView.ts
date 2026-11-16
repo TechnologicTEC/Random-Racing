@@ -4,6 +4,8 @@ import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { HeightField, WorldResult } from '../gen/types';
 import { sampleField } from '../gen/world/heightfield';
+import type { KartPose } from './carShape';
+import { createCarView } from './carView';
 import { createCloudView } from './cloudView';
 import { cloudDrift } from './clouds';
 import type { Daylight } from './daylight';
@@ -97,6 +99,10 @@ export interface WorldView {
   setWaterShown(shown: boolean): void;
   /** Puts the camera at `eye`, looking at `look`. Both are in metres. */
   setCamera(eye: Point3, look: Point3): void;
+  /** How tall the view is, in degrees. */
+  setFieldOfView(degrees: number): void;
+  /** Draws the kart where the pose says (`kartPose`), or hides it for null. */
+  setCar(pose: KartPose | null): void;
   /** Fits the picture to the window: `pixelRatio` is the screen's pixels for each of the page's. No more than the view's budget of pixels is drawn. */
   resize(width: number, height: number, pixelRatio: number): void;
   render(): void;
@@ -180,6 +186,9 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   // Trees, rocks and clouds: scenery on top of the ground and in the sky.
   const decor = createDecorView(cfg.decor, (material) => shade.patch(material));
   scene.add(decor.object);
+  // The kart, hidden until it is given a pose; it takes the land's and clouds' shadows like the road.
+  const car = createCarView(cfg.car, (material) => shade.patch(material));
+  scene.add(car.object);
   const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength, cfg.clouds.thin);
   scene.add(clouds.object);
 
@@ -314,6 +323,16 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       aim.set(look.x, look.y, look.z);
     },
 
+    setFieldOfView(degrees) {
+      if (camera.fov === degrees) return;
+      camera.fov = degrees;
+      camera.updateProjectionMatrix();
+    },
+
+    setCar(pose) {
+      car.set(pose);
+    },
+
     resize(width, height, pixelRatio) {
       renderer.setPixelRatio(pixelRatioFor(width, height, pixelRatio, pixels, cfg.maxPixelRatio));
       renderer.setSize(width, height, false);
@@ -438,6 +457,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       floorMaterial.dispose();
       sky.dispose();
       decor.dispose();
+      car.dispose();
       clouds.dispose();
       grass.dispose();
       renderer.dispose();

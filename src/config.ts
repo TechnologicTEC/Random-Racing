@@ -867,6 +867,8 @@ export interface RenderConfig {
   sky: SkyDomeConfig;
   water: WaterConfig;
   decor: DecorViewConfig;
+  /** How the car is drawn. */
+  car: KartViewConfig;
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -1055,6 +1057,18 @@ export interface DecorViewConfig {
   shade: Range;
 }
 
+/**
+ * How the kart is drawn (`render/carShape.ts`), in metres and radians. Its body is drawn inside the simulated box
+ * (`car.body`); the wheels are drawn where the simulation's wheel casts are, standing on the ground where they touch.
+ */
+export interface KartViewConfig {
+  /** The drawn tyres. Bigger than the 5 cm balls the simulation casts, which only find the ground. */
+  wheelRadius: number;
+  wheelWidth: number;
+  /** How far the front wheels are drawn turned with the stick right over. Drawn only: the steering itself is `car.steer`. */
+  steerAngle: number;
+}
+
 /** How the clouds are drawn. */
 export interface CloudViewConfig {
   /** How fast they drift down the wind (`water.wind`), in metres per second. */
@@ -1205,6 +1219,11 @@ export interface CameraConfig {
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
+  /**
+   * The close view of the car where it stands (`&look=car`): `distance` metres from its middle, tipped up `tilt`
+   * radians, from behind it and `side` radians round to its right, so its back and one side are seen.
+   */
+  car: { distance: number; tilt: number; side: number };
   /**
    * The close view of the lap's highest point, facing the main summit (`&look=summit`). The camera stands
    * `back` metres behind the point, `lift` metres above the road, and steps further back until the point and
@@ -1849,6 +1868,7 @@ export const config: GameConfig = {
       stillTime: 0,
     },
     decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: ROCK_SINK, shade: [0.8, 1.12] },
+    car: { wheelRadius: 0.28, wheelWidth: 0.24, steerAngle: 0.35 },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
@@ -1886,6 +1906,7 @@ export const config: GameConfig = {
       fit: 1.25,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
+    car: { distance: 7, tilt: 0.3, side: 0.7 },
     summit: { back: 70, lift: 15, spread: 0.6, ahead: 300, clearance: 4 },
     climb: { window: 40, distance: 80, side: 0.3, tilt: 0.12, clearance: 4 },
     fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },

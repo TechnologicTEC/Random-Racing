@@ -786,7 +786,7 @@ test.describe('3D screenshots', () => {
   const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [1, 7, 42, 100, 2024, 48213];
 
   /** Which close views to take as well as the overview. Override with LOOKS, for example: $env:LOOKS = "cut,water" */
-  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start', 'summit', 'climb'];
+  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start', 'summit', 'climb', 'car'];
 
   /** Points of the lap to photograph from the flying camera, as fractions. Override with LAPS, for example: $env:LAPS = "0.1,0.6" */
   const laps = process.env.LAPS ? process.env.LAPS.split(',') : ['0.02', '0.3', '0.55', '0.8'];
@@ -823,6 +823,8 @@ test.describe('3D screenshots', () => {
     for (const look of looks) {
       test(`island ${seed}, close view of ${look}`, async ({ page }) => {
         await openWorld(page, `seed=${seed}&still=1&look=${look}`);
+        // The car is drawn once the island's simulation is built, just after the island itself.
+        if (look === 'car') await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
         await page.screenshot({ path: `test-results/screens/world-${name}-${look}.png` });
       });
     }

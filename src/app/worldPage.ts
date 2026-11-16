@@ -1,7 +1,7 @@
 import './world.css';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
-import { lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
+import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
 import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
@@ -9,10 +9,12 @@ import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
 import { parseQuality, qualitySettings, type QualityLevel } from '../render/quality';
+import { kartPose } from '../render/carShape';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
 import type { Rapier } from '../sim/physics/rapier';
 import { createSim, type CarState, type Sim } from '../sim/sim';
+import { startPose } from '../sim/start';
 import { genClient } from '../worker/client';
 import { switchAddress } from './route';
 
@@ -95,7 +97,7 @@ const HINTS: Record<CameraMode, string> = {
  *
  * Address options: `seed=42`; `cam=orbit` to open circling; `lap=0.5` to open
  * half way round the lap; `still=1` to open paused; `look=cut` (or fill, bank,
- * close, water, hairpin, start, summit, climb, sun) or `at=x,z` for a close view of one place;
+ * close, water, hairpin, start, summit, climb, sun, car) or `at=x,z` for a close view of one place;
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
@@ -188,10 +190,19 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
    */
   const engine: Promise<Rapier> = import('../sim/physics/rapier').then(({ loadRapier }) => loadRapier());
   let sim: Sim | null = null;
+  /** Whether the car is drawn. Only the close view of the car shows it so far; old views give the same pictures as before. */
+  let carShown = false;
+  /** Draws the car as the simulation has it, or hides it. */
+  const drawCar = (): void => {
+    view.setCar(carShown && sim ? kartPose(sim.state(), config) : null);
+    document.body.dataset.driveCar = carShown && sim ? 'shown' : 'hidden';
+    dirty = true;
+  };
   const dropSim = (): void => {
     sim?.free();
     sim = null;
     delete document.body.dataset.driveStep;
+    drawCar();
   };
   /** Builds the simulation of a world that has just been shown, unless another island has been asked for meanwhile. */
   const buildSim = async (world: WorldResult): Promise<void> => {
@@ -202,6 +213,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     sim = createSim(rapier, world, config);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
     document.body.dataset.driveStep = String(sim.state().step);
+    drawCar();
   };
 
   const setTime = (next: number): void => {
@@ -257,6 +269,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     view.setCloudTime(waveClock);
     view.setGrassTime(waveClock);
     if (shown) view.load(shown);
+    drawCar();
     setTime(hour);
     renderControls();
     dirty = true;
@@ -415,8 +428,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
           ? (lookAtSpot(look, result.report, groundAt) ??
             lookAtTrack(look, winner.line, winner.sections, groundAt) ??
             lookAtRoad(look, winner.line, winner.profile.height, result.mountains, groundAt) ??
-            (look === 'sun' ? lookAtSun(winner.line.x[0]!, winner.line.z[0]!, winner.profile.height[0]!) : null))
+            (look === 'sun' ? lookAtSun(winner.line.x[0]!, winner.line.z[0]!, winner.profile.height[0]!) : null) ??
+            (look === 'car' ? lookAtCar(startPose(result, config)) : null))
           : null);
+      carShown = opening && look === 'car';
       if (spot) {
         orbit = spot;
         mode = 'orbit';

@@ -19,7 +19,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **4e** Stability and the whole car
 - [x] **5a** Input: keyboard and controller
 - [x] **5b** The fixed-step loop
-- [ ] **5c** The car drawn
+- [x] **5c** The car drawn
 - [ ] **5d** Chase camera
 - [ ] **5e** The page opens driving
 - [ ] **Check-in 1 with Tane** (questions below). Add the car's reference pictures to `docs/VISUAL_BAR.md` once Tane likes the look
