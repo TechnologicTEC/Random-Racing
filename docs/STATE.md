@@ -471,6 +471,41 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 
 ## Notes for later milestones
 
+### Design notes for Milestones 4, 5 and 6 (written 2026-11-16)
+
+Key decisions, traps and what to reuse, from the model that built Milestone 3's simulation. Not full plans: each milestone is still planned in plan mode when it starts, and Tane decides.
+
+**Milestone 4, time trial**
+
+- **The race clock is steps, never the wall clock.** A lap time is steps divided by 60, with the moment the car crosses the line placed inside its step by exact sums (how far before and after the line it was). A time is then the same on every computer, and a ghost's time can be checked by replaying it.
+- **The race's rules are a pure state machine in `src/sim`** (countdown, racing, finished; laps; sector times), in `hash()` and the snapshot like the drift state. The page only draws it. The countdown is counted in steps too.
+- **A lap counts only when every checkpoint was passed in order** (step 8a). Crossing the line alone is not a lap; that is what stops a cut across the grass from counting.
+- **Sectors:** three, each a whole number of checkpoints.
+- **Start boost:** the throttle first pressed in the last 0.25 s before "go" gives a tier 1 boost (`boostLeft` from step 6); a throttle held from earlier gives none. Decided by step counts, so a ghost replays it.
+- **Flatten the start area first** (known issue: seed 42 starts on an 8% descent). It is a generator change, so every world fingerprint moves: do it before anything is saved by seed in Milestone 5.
+- **Menus are HTML over the canvas**, as the title card is, not drawn in 3D. Pausing is simply not calling `step`. Pause when the tab is hidden; `advance` (step 5b) already drops a long frame.
+- **Reuse:** checkpoints and `poseAlong` (step 8), `boostLeft` (step 6), `parseSeedInput` and `formatSeedCode` (`core/seedCode.ts`), the track's generated name, the readout card, `time=` for the player's pick of time of day.
+- **Traps:** timing anything with `performance.now()`; taking steps or recording inputs while paused; a lap that counts after a short cut; a results screen that reads the wall clock.
+
+**Milestone 5, ghosts and favourites**
+
+- **A ghost is the inputs, one whole number a step** (`packInput`), from the first step of the countdown, saved with the seed, the generator version, a fingerprint of `config.car` and `config.sim` (the handling), and the run's last `hash()`. A 3-lap race is about 13,000 numbers.
+- **Also save where the car was, ten times a second** (position and turn). The ghost is drawn from those, so no second physics world runs during a race. The inputs are the proof: replayed in a fresh simulation they must end on the saved fingerprint. That replay, after a page reload, is the milestone's "done when" test.
+- **If the handling's fingerprint differs** (the game was tuned since), the ghost is still drawn from its saved places, marked as from an older version, and its time is not the one to beat.
+- **Ghosts in IndexedDB** (the best per seed), **favourites in `localStorage`** (seed, version, name, best time, date). All storage is page code; `src/sim` never sees it.
+- **Reuse:** `packInput` / `unpackInput` (`sim/input.ts`), `sim.hash()`, the pattern of `sim/script.ts` and `e2e/determinism.spec.ts` (step 9c already replays recorded inputs in every browser), `blendState` for drawing between saved places.
+- **Traps:** a run made with the tuning panel open must not be saved; a snapshot is 7 to 9 MB and is not for ghosts; the reset button is part of the input record and must replay; a favourite saved under generator `v0` will not rebuild after the generator changes, so say so on screen until `v1`.
+
+**Milestone 6, polish**
+
+- **Bridges and tunnels are a generator change.** Every world fingerprint moves once more, and the generator becomes `v1` only after them (decision of 2026-11-11). The ground is one height at each point, so a bridge is the road's own mesh over lowered ground (the wheels already feel the road mesh, not the ground under it), and a tunnel is a cutting with a lid over it, drawn and collided as its own mesh. The earthworks rule (`gen/track/earthworks.ts`) rejects the turns that would need them today; that is where they come in.
+- **Sound is made in code** with Web Audio (the engine's pitch from the speed, filtered noise for the screech and the boost). No files, so nothing more to download (pillar 4). A browser only lets sound start after a key or a click.
+- **Effects only read the simulation's state.** Smoke, dust and motion lines never feed back into it, and are driven by its step count so that `still=1` pictures repeat.
+- **Speed and size:** Rapier is 1.68 MB gzipped; the build that does not carry its WebAssembly as text saves about a quarter. "Racing within 10 seconds" should be measured on a slow connection. The frame numbers to hold are in the archive under "Step 15".
+- **Traps:** an effect driven by the frame clock makes screenshots differ from run to run; a setting that changes anything in `src/sim` or `src/gen` breaks ghosts and seeds, so settings touch drawing and sound only.
+
+### Earlier notes
+
 - **M2 (from Tane):** track-first is fine. Shape the island so the track looks like it belongs: hills where it climbs, coastline near it where possible.
 - **M3 (from Tane), done 2026-11-15:** checked and flagged; Tane chose the deterministic build (see decisions).
 - **M2:** add the elevation score; move generation into a Web Worker.
