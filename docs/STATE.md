@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 5c, the car drawn (see "Step 5"). The kart is built in code and drawn where the simulation has it, so far only in the `look=car` close view. The page builds the island's simulation beside the world, but does not step it yet; the input (5a) and the loop's sums (5b) wait for 5e. The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
-- **Next:** `docs/PLAN.md`, "The build order": **5d**, the chase camera. Step 5's plan is approved (see "Step 5")
+- **Last finished part:** 5d, the chase camera (see "Step 5"), as plain numbers, used by the page from 5e. The kart is built in code and drawn where the simulation has it, so far only in the `look=car` close view. The page builds the island's simulation beside the world, but does not step it yet; the input (5a) and the loop's sums (5b) wait for 5e. The car stands on four sprung wheels at 26 cm, stays put on any slope, drives, brakes, reverses and steers, and lands on its wheels. Nothing is drawn of the car yet
+- **Next:** `docs/PLAN.md`, "The build order": **5e**, the page opens driving, in two commits (old tests get `cam=fly` first). Step 5's plan is approved (see "Step 5")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -208,7 +208,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | 5a | **Input.** `src/input/`: `keysToInput` (keyboard), `padToInput` and `padPresses` (controller, standard layout), `mergeInputs`; `input.deadZone` | Done |
 | 5b | **The loop.** `src/app/drive.ts`: `advance`, `blendState`; `sim.maxStepsPerFrame`; Rapier loaded beside the world and the simulation built on the page (not stepped yet); `drive.state()` and `drive.hash()` | Done |
 | 5c | **The car drawn.** `render/carShape.ts`, `render/carView.ts`, `WorldView.setCar`, `KART` colours, `render.car`; the `look=car` close view | Done |
-| 5d | **Chase camera.** `camera/chase.ts`, `camera.chase` | |
+| 5d | **Chase camera.** `camera/chase.ts`, `camera.chase` | Done |
 | 5e | **The page opens driving**, in two commits: old tests get `cam=fly`, then the default changes. Keys, controller, readout, `drive.run` and `drive.reset` | |
 
 ### 5a: input
@@ -252,6 +252,26 @@ Tests seen failing first: `drive.test.ts` on its missing module, and the two bro
 Pictures looked at (`look=car` on seeds 1, 3, 7 and 42; seed 7 opens at 07:27, a low sun): the car stands on its four wheels with no gap and no sinking; it casts a soft shadow on the road and sits in the gate's shadow on seed 3; it is lit like the walls beside it; its yellow stands out from the road and grass; nothing is outlined or glows. `look=start` and `lap=0.02` on the same seeds show no car, and seed 42's start view matches `docs/visual-bar/start-gate.jpg`. The car's own reference pictures wait for Tane at check-in 1.
 
 Tests seen failing first: `carShape.test.ts` and `lookAtCar` on their missing code; the two browser tests (the car in `look=car`, no car in old views) on the last commit's page. 2,031 unit tests pass.
+
+### 5d: chase camera
+
+`chaseStart(car, groundAt, cfg)` and `chaseNext(prev, car, frameSeconds, groundAt, cfg)` in `src/camera/chase.ts` are plain numbers, like `flyAlong.ts`. The page uses them from 5e.
+
+- **Where it stands:** `back` (6.5 m) behind the car's middle, along the way the car travels on the map, and `height` (2.4 m) above it. It looks at a point `lookAhead` (5 m) in front and `lookHeight` (1 m) up. It is raised to stay `clearance` (0.8 m) above the ground under it (`groundAt`, which the page gives as `sampleField` on `world.ground`).
+- **Which way:** the car's velocity on the map, once that is over `travelBelow` (2 m/s) and pointing forwards. Otherwise the car's nose. **So a reversing car keeps the camera behind its nose** (Claude's call): following the velocity, the camera would swing round in front of a car reversing faster than 2 m/s.
+- **Easing:** the heading eases towards that direction with a time of `follow` (0.15 s), solved exactly for a direction that turns evenly through the frame. A car turning steadily is then followed identically at any frame rate. Angles are not wrapped, so passing a half turn never sends it the long way round.
+- **Settings:** `camera.chase: { back: 6.5, height: 2.4, lookAhead: 5, lookHeight: 1, follow: 0.15, clearance: 0.8, fieldOfView: 60, travelBelow: 2 }` (`ChaseConfig`). The field of view is used from 5e.
+
+Measured (throwaway code, deleted):
+
+| What | Measured |
+| --- | --- |
+| The eye after 2 s on a 60 m circle at 30 m/s, at 30, 60 and 144 frames a second | The same to 1e-14 m. A plain `1 - exp(-dt / follow)` ease would differ by 4.1 cm |
+| After the car turns a quarter circle at once (60 frames a second) | 18 degrees off behind it after 0.25 s, 3.4 after 0.5 s, 0.12 after 1 s |
+| A steady turn of 0.5 rad/s | It lags the line of travel by 0.075 rad (4.3 degrees), the follow time times the turn rate (test) |
+| Driven at 30 m/s through seed 28496's start gorge, 300 m either side of the line | Never under 0.8 m above the ground (test) |
+
+`chase.test.ts` (10 tests) failed on its missing module first. 2,041 unit tests pass.
 
 ## Working agreements
 
@@ -320,6 +340,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-16 | **"No wheel in the air for over 0.2 s" at the kerb is timed per wheel** | Claude's reading of the plan's words, for Tane to judge. The wheels leave the kerb's 9 cm face one after another, each for up to 0.17 s, so all four are not down together for 0.3 s at 15 degrees and 30 m/s. Heading and speed are unaffected (0.11 degrees, 0.09%) |
 | 2026-11-17 | **Keys are read by their place on the keyboard** (`KeyboardEvent.code`), not by the letter on them (5a) | Claude's call, for Tane to judge. W, A, S and D then sit under the same fingers on any layout (AZERTY's Z, Q, S, D) |
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
+| 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 
 ## Notes for later milestones
 
@@ -418,3 +439,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** Step 5 planned in plan mode and approved (see "Step 5"). 5a done: the keyboard and a controller are turned into the simulation's input (`src/input/`: `keysToInput`, `padToInput`, `padPresses`, `mergeInputs`; `input.deadZone` 0.15). Keys are read by their place on the keyboard (decisions). The page does not use them yet. 2,009 unit tests pass; all 276 browser tests passed in one run (13.1 minutes). Next: 5b, the fixed-step loop.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5b done: the fixed-step loop's sums (`advance`, `blendState` in `src/app/drive.ts`; `sim.maxStepsPerFrame` 5) and the island's simulation built on the page beside the world, freed on a new island, not stepped yet (`drive.state()`, `drive.hash()`). Rapier loads in 101 ms (Chromium) and 253 ms (Firefox); the simulation builds in 31 to 104 ms; the world is no slower with Rapier fetched beside it. 2,019 unit tests pass; all 280 browser tests passed in one run (16.1 minutes). Next: 5c, the car drawn.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 5c done: the kart is built in code (`render/carShape.ts`, 492 triangles, inside the body box) and drawn where the simulation has it, wheels on the springs and front wheels turned with the stick (`render/carView.ts`, `WorldView.setCar`). New close view `look=car`; no car in the old views. Pictures of seeds 1, 3, 7 and 42 looked at beside the visual bar. 2,031 unit tests pass; all 290 browser tests passed in one run (16.0 minutes). Next: 5d, the chase camera.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 5d done: the chase camera as plain numbers (`camera/chase.ts`, `camera.chase`). Its easing is solved exactly, so it follows a steadily turning car identically at 30, 60 and 144 frames a second; it keeps behind the nose while reversing; it clears the ground through seed 28496's start gorge. 2,041 unit tests pass; all 290 browser tests passed in one run (16.0 minutes). Next: 5e, the page opens driving.

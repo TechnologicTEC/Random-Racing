@@ -1239,6 +1239,29 @@ export interface CameraConfig {
   climb: { window: number; distance: number; side: number; tilt: number; clearance: number };
   /** The camera that flies the lap. */
   fly: FlyConfig;
+  /** The camera behind the car while driving. */
+  chase: ChaseConfig;
+}
+
+/**
+ * The camera behind the car (`camera/chase.ts`). Distances in metres, times in seconds. It follows the way the car
+ * travels on the map, eased, and the car's height as it is.
+ */
+export interface ChaseConfig {
+  /** How far behind the car's middle it stands, and how far above it. */
+  back: number;
+  height: number;
+  /** It looks at a point this far in front of the car's middle, this far above it. */
+  lookAhead: number;
+  lookHeight: number;
+  /** How quickly it swings round behind the car after a turn: about two thirds of the way in this time. */
+  follow: number;
+  /** It never comes closer to the ground under it than this. */
+  clearance: number;
+  /** How tall its view is, in degrees (the other cameras use `render.fieldOfView`). */
+  fieldOfView: number;
+  /** Below this speed on the map, in metres per second, it follows the car's nose instead of the way it travels. */
+  travelBelow: number;
 }
 
 export interface FlyConfig {
@@ -1910,5 +1933,6 @@ export const config: GameConfig = {
     summit: { back: 70, lift: 15, spread: 0.6, ahead: 300, clearance: 4 },
     climb: { window: 40, distance: 80, side: 0.3, tilt: 0.12, clearance: 4 },
     fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },
+    chase: { back: 6.5, height: 2.4, lookAhead: 5, lookHeight: 1, follow: 0.15, clearance: 0.8, fieldOfView: 60, travelBelow: 2 },
   },
 };
