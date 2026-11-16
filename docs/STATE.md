@@ -279,7 +279,7 @@ Measured on the test grounds (throwaway code, deleted):
 
 The 4c tests were seen failing without the code (23 of 30) and pass with it. 1,949 unit tests pass.
 
-**The browser suite did not give a clean run for 4c.** The laptop was hot and running at about a third of its speed (1.4 of 3.8 GHz). Two full runs: 12 failures, then 28 different ones, every one a page that did not finish loading inside its time limit, none a wrong answer. Every test passed in one run or the other, the simulation's fingerprint in Chromium and Firefox among them (first run), except the two 3-second budget tests, which run last and only after a clean run, so they did not run. 4c changes nothing a page draws. Committed on that evidence so the work was safe; a clean run is still owed (see the session log for whether it has been done).
+**The browser suite did not give a clean run for 4c.** Two full runs, 24 and 27 minutes: 12 failures, then 28 different ones, every one a page that did not finish loading inside its time limit, none a wrong answer. The laptop went into Modern Standby from 18:08:58 to 18:11:21 during the first run (Windows' event log), which accounts for its three Chromium failures; the rest look like the hot, slow laptop of the working agreements, though that was not proved. Every test passed in one run or the other, the simulation's fingerprint in Chromium and Firefox among them (first run), except the two 3-second budget tests, which run last and only after a clean run, so they did not run. 4c changes nothing a page draws. Committed on that evidence so the work was safe; a clean run is still owed (see the session log for whether it has been done).
 
 ## Working agreements
 
