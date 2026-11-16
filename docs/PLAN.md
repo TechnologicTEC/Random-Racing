@@ -22,7 +22,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **5c** The car drawn
 - [x] **5d** Chase camera
 - [x] **5e** The page opens driving
-- [ ] **Check-in 1 with Tane** (questions below). Add the car's reference pictures to `docs/VISUAL_BAR.md` once Tane likes the look
+- [x] **Check-in 1 with Tane** (questions below). Add the car's reference pictures to `docs/VISUAL_BAR.md` once Tane likes the look (2026-11-17: answers in STATE.md's decisions; the car casts no shadow)
 - [ ] **6a** The drift rules, pure
 - [ ] **6b** Drift and boost in the car
 - [ ] **6c** Hits cancel a drift
@@ -154,7 +154,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | The start line can sit on a steep slope (seed 42, 8%) | **M4.1** |
 | A gorge can hold the start gate (seed 28496) | M4.1 checks it; 5d's camera clearance is tested there |
 | Wall ends are ramps; hillsides of up to 40% open beside mountain roads | **7b** (the wall end met head on), **4e** and **8** (climbing back up, sliding down) |
-| Few roadsides open onto the sea; beaches open; the 40% wall rule | Tane, **check-in 1** (question 6) |
+| Few roadsides open onto the sea; beaches open; the 40% wall rule | Tane, **check-in 1** (question 6): answered 2026-11-17, the walls are fine as they are |
 | Nobody has watched the grass move; from the road it reads as a fine texture | Tane, **check-in 1** (the chase camera is lower and closer than the flying one) |
 | Near and far tree shapes swap a whole square at once | Watched while driving at **check-in 1**; fixed in **M6.7** if it shows |
 | Mountain worlds are the slowest to build (3.0 to 3.3 s headless); Firefox 1.6 times slower than Chromium | **M6.7** (the budget test uses seed 7 and passes) |

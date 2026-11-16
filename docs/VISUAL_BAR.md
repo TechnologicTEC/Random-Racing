@@ -21,6 +21,7 @@ What the game looks like, in terms that can be checked, with pictures to lay new
 | --- | --- | --- |
 | **Road** | Dark blue-grey asphalt (`[0.26, 0.265, 0.275]`), off-white dashed centre line and solid edge lines with crisp edges, a brown earth shoulder that fades into the grass. Banked in corners | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
 | **Kerbs** | Red and off-white blocks on the inside of corners, low and flat, each block one clean colour | `road-corner-kerb.jpg`, `hairpin-and-beach.jpg` |
+| **The car** | A small open kart with a driver, flat-shaded facets: yellow-orange body, dark grey chassis and seat, off-white helmet, teal driver, near-black tyres with pale hubs. Its wheels touch the road. Lit by the same sun and sky as the road and shaded by trees, walls and the gate, but **it casts no shadow** (Tane, check-in 1). From the chase camera it is about an eighth of the picture's width, low in the middle, with the road ahead clear above it | `drive-start.jpg`, `car-close.jpg` |
 | **Walls** | Low pale-grey blocks, red and white on the outside of corners, plain elsewhere. A wall's end slopes down to the ground. No gap under a wall | `road-morning-shadows.jpg`, `road-corner-woods.jpg` (a sloping end), `mountain-road.jpg` |
 | **Start gate** | Two dark posts, a pale beam, a chequered line across the road, a short wall each side | `start-gate.jpg`, `sunrise.jpg` |
 | **Grass** | Green that varies lush to dry in broad patches, fine blades near the camera, a short mown strip by the road, dabs of white, yellow and red flowers in places | `road-straight-meadow.jpg`, `start-gate.jpg` |
@@ -48,28 +49,30 @@ Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Whe
 | `mountain.jpg` | `seed=1&still=1&look=summit` | `world-00001-summit.png` |
 | `island-from-above.jpg` | `seed=2024&still=1&cam=orbit` | `world-02024.png` |
 | `sunrise.jpg` | `seed=7&still=1&look=sun&time=07:00` | with `TIMES=07:00`: `world-00007-at-0700-sun.png` |
+| `drive-start.jpg` | `seed=42&still=1` | `world-00042-drive-start.png` |
+| `car-close.jpg` | `seed=42&still=1&look=car` | `world-00042-car.png` |
 
 The page opens driving since step 5e; `cam=fly` keeps these addresses on the flying camera, and the car is not drawn in them. The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
 
-## The car, sparks and flame (not built yet: a proposal for Tane to judge at check-in 1)
+## The car, sparks and flame
 
-Nothing here has been drawn or seen. It is the bar the first version should aim at, by the rules above.
+The car was drawn in step 5c, to the proposal below, and Tane approved it at check-in 1 (2026-11-17) "for now": a proper design, and perhaps other car styles, may come later. Its pictures are `drive-start.jpg` and `car-close.jpg`. **The car casts no shadow** (Tane's choice at check-in 1: it was distracting to drive behind); it still takes the shadows of trees, walls and the gate. The sparks and the flame are not built yet (step 6d).
 
 - **The car** is a small open kart with a driver, built in code from flat-shaded facets, 300 to 600 triangles: a wedge nose, a low floor, side pods, a seat back, a driver's body and a round helmet, and four fat wheels that stand clear of the body. The helmet and the open wheels are what make it read as a kart and give it scale. It fits the simulated body: 1.4 m wide, 2.2 m long, about 1 m to the top of the helmet.
 - **Colours** (to add to `palette.ts`): body a warm yellow-orange, about `[0.98, 0.72, 0.12]`, which stands out from the green grass, the dark road, the blue sea and the red of the kerbs; chassis and seat the gate's dark grey `[0.16, 0.17, 0.2]`; helmet off-white `[0.94, 0.94, 0.92]`; tyres near black `[0.07, 0.07, 0.08]` with pale hubs.
-- **It sits in the world's light**: lit by the same sun and sky as the road, casting a shadow on it and shaded by trees and walls. Its wheels touch the road: no gap and no sinking that can be seen.
+- **It sits in the world's light**: lit by the same sun and sky as the road and shaded by trees and walls, but casting no shadow of its own. Its wheels touch the road: no gap and no sinking that can be seen.
 - **From the chase camera** it is about an eighth of the picture's width, low in the middle, with the road ahead clear above it.
 - **Sparks** are small flat triangles, like the flower dabs, thrown back and out from the two rear wheels, 20 to 30 a wheel, each living about a quarter of a second, drawn unlit: blue `[0.25, 0.65, 1.0]`, orange `[1.0, 0.6, 0.12]`, purple `[0.7, 0.35, 1.0]`. A burst never grows bigger than the wheel it comes from.
 - **The boost flame** is two faceted cones behind the car, pale yellow at the core `[1, 0.95, 0.7]` and orange outside `[1, 0.55, 0.1]`, unlit, 0.6, 0.9 and 1.2 m long for the three tiers and flickering by a sixth of that. Never longer than the car.
 - **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the drift tier as a dot of the tier's colour.
 
-When the car has been drawn and Tane has approved it at check-in 1, add `drive-start.jpg`, `drive-slide.jpg` and `drive-boost.jpg` to `docs/visual-bar/` and to the table above.
+`drive-slide.jpg` and `drive-boost.jpg` join `drive-start.jpg` in `docs/visual-bar/` and the table above once Tane has seen the sparks and the flame (step 6d).
 
 ## What fails the bar
 
 - Smooth-shaded or textured surfaces, or anything with an outline, a glow or a blur.
 - A colour that is not in `palette.ts`, or a thing lit by its own light so that it looks pasted on (compare its shadowed side with the wall in `road-morning-shadows.jpg`).
-- A car with no shadow, or one that floats above the road or sinks into it.
+- A car that floats above the road or sinks into it, or that casts a shadow (Tane, check-in 1).
 - An effect that hides the road ahead, or a card over the middle of the picture.
 - Flicker where two surfaces lie on each other, a gap under a wall, or things that pop in while driving.
 - Two pictures of the same address with `still=1` that differ.
