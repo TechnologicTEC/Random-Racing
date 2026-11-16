@@ -1,9 +1,9 @@
 import type { PhysicsConfig } from '../../config';
-import type { InputRecord } from '../input';
+import { inputFractions, type InputRecord } from '../input';
 import type { BodyMotion, CarPhysics } from '../physics/carBody';
 import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
-import { restChange } from './drive';
+import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
 import { springOf, springPush, wheelMounts } from './suspension';
 import type { Surface } from './surface';
@@ -78,7 +78,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       return { wheels: feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at })), speed: speedOf(motion) };
     },
 
-    step(_input) {
+    step(input) {
+      const pedals = inputFractions(input);
       const motion = physics.motion();
       const wheels = feel(motion);
 
@@ -106,7 +107,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const coming = { x: motion.velocity.x, y: motion.velocity.y - cfg.sim.gravity * dt, z: motion.velocity.z };
       // Through the body's middle, so they neither roll it nor pitch it.
       physics.push(scale(across, car.mass * sideGrip(dot(coming, across), share, car, dt)));
-      physics.push(scale(along, car.mass * restChange(dot(coming, along), share, car, dt)));
+      const pull = dot(coming, along) - dot(motion.velocity, along);
+      physics.push(scale(along, car.mass * speedChange(dot(motion.velocity, along), pull, pedals, share, car, dt)));
       // And they hold the car's turning to what is asked for: nothing, until the steering is in (4d).
       const up = rotate(motion.rotation, UP);
       physics.twist(scale(up, turnInertia * turnGrip(dot(motion.spin, up), 0, share, car, dt)));

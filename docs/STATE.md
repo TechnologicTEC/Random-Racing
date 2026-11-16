@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished step:** 3, the simulation skeleton (parts 3a to 3c, see "Step 3"): `createSim(rapier, world, config)` in `src/sim/sim.ts` stands the car's body behind the start line and gives `step`, `state`, `hash`, `snapshot` and `restore`. The car does not drive yet: inputs are recorded but move nothing. Step 2 (open walls, see "Step 2") finished the same day
-- **Step 4 (springs, engine, steering and grip, no drift yet) is under way**, in parts 4a to 4e (see "Step 4 parts" and "Step 4"). **4a (groundwork) and 4b (springs and standing grip) are done; 4c (engine, brake, reverse) is next.** The car now stands on four sprung wheels and stays put on any slope, but does not drive yet: the pedals and the steering still move nothing
+- **Step 4 (springs, engine, steering and grip, no drift yet) is under way**, in parts 4a to 4e (see "Step 4 parts" and "Step 4"). **4a (groundwork), 4b (springs and standing grip) and 4c (engine, brake, reverse) are done; 4d (steering and cornering) is next.** The car stands on four sprung wheels, stays put on any slope, and drives, brakes and reverses in a straight line. The steering still moves nothing
 
 ## Milestone 3 steps
 
@@ -47,7 +47,7 @@ Planned 2026-11-16 (plan file: `C:\Users\tanee\.claude\plans\random-racing-miles
 | --- | --- | --- |
 | 4a | **Groundwork**, no change to how the car behaves. Test grounds as plain triangles with a start pose (`src/testing/testGrounds.ts`: flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank); `createSimOn(rapier, course, cfg, start)` in `sim.ts` (a course is an island or plain meshes); `carBody.ts` gains the wheel cast and the pushes; the wheels feel only ground, road and kerbs; `src/sim/vec.ts`; `car/surface.ts` (road, kerb, grass, sand, rock or snow under a wheel). Tests: each ground is what it claims; a wheel cast finds the road before the first step and after a restore and ignores walls, trees and the gate; surfaces named on seed 7 | Done |
 | 4b | **Springs and standing grip.** `car/suspension.ts`, the side grip and the hold, `car/car.ts` joining them, called from `sim.step`; `CarState` gains wheel readings and forward speed; the body's own grip comes down. Tests: dropped on the flat it settles at ride height, level, and stays still; stays put for 10 s on seed 42's sloped start and parked on the 45% bank; fingerprints and restore as before | Done |
-| 4c | **Engine, brake, reverse.** `car/drive.ts`. Tests: top speed 30 m/s, 95% of it in 3.5 to 4.5 s, braking in a straight line, reverse, coasting to a stop and holding, at most 10% slower up 15% | |
+| 4c | **Engine, brake, reverse.** `car/drive.ts`. Tests: top speed 30 m/s, 95% of it in 3.5 to 4.5 s, braking in a straight line, reverse, coasting to a stop and holding, at most 10% slower up 15% | Done |
 | 4d | **Steering and cornering.** `car/steer.ts`. Tests: steady circles of the radius the settings say at three speeds, left and right alike; reverse steering; the banked bend at top speed; the kerb at an angle | |
 | 4e | **Stability and the whole car.** `car/stability.ts`, tuning. Tests: wheels stay down over the 200 m crest; never tips on the 45% bank; lands on its wheels off a 1 m drop; the scripted run on seeds 42 and 7 stays upright with one fingerprint in Node, Chromium and Firefox. The measured table here | |
 
@@ -253,6 +253,33 @@ Measured (throwaway code, deleted):
 | At rest for 10 s on a sloped start | Moves 0.15 mm on seed 42 (6.5%), 0.34 mm on seed 1 (12.8%), 0.06 mm on seed 7, nothing on seeds 3 and 8. Was up to 6 mm resting on its underside |
 | Parked on the 45% hillside for 10 s, facing along, up, down and across it | Under 2 cm and still (test) |
 | One step with the car at rest | 0.31 to 0.45 ms; 0.87 ms on seed 8 (was 0.26 to 0.73 before the wheels) |
+
+### 4c: engine, brake, reverse
+
+The pedals drive the car. `speedChange(speed, pull, pedals, share, car, dt)` in `src/sim/car/drive.ts` gives how much the car's speed along itself changes in one step; `car.ts` calls it in place of `restChange` and pushes the body by it through its middle. It is worked out from the speed and the pedals alone, so nothing new is saved and `hash`, `snapshot` and `restore` are unchanged.
+
+- **No pedal:** as 4b. The car coasts (3 m/s2) and is held once it is slower than 0.5 m/s.
+- **Throttle:** the engine makes for top speed (30 m/s) times how far the pedal is down. Its push is 9.3 m/s2 until the car is within 30% of top speed (9 m/s) of that target, then evenly less, nothing at the target. Above the target it holds the car back as gently, never harder than coasting. A car rolling backwards faster than 0.5 m/s is braked first.
+- **Brake:** slows a car going forwards by 20 m/s2 times how far the pedal is down. Once the car is slower than 0.5 m/s the same pedal reverses it: 6 m/s2, easing off to nothing at 8 m/s backwards. **The brake wins over the throttle** when both are down.
+- **Slope help** (`engine.slopeHelp`, 0.5): while a pedal drives the car, the engine makes up half of what the slope takes in the step, and holds half back downhill. So a climb costs little speed, and a descent does not run away.
+- **Everything is scaled by the share of wheels on the ground**; in the air the pedals do nothing.
+- **Settings** (`car` in `src/config.ts`): `engine` is now `{ topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5 }`; new `reverse: { topSpeed: 8, accel: 6 }`; `brake` unchanged.
+
+Measured on the test grounds (throwaway code, deleted):
+
+| What | Measured |
+| --- | --- |
+| Flat, throttle down | Half of top speed in 1.62 s, 90% in 3.32 s, **95% in 3.98 s**, 99% in 5.53 s. Settles at 29.9996 m/s and never goes over 30 |
+| Straightness | 4.7 mm sideways after 308 m |
+| Brake from 30 m/s | Stops in 1.55 s over 22.3 m (the sum gives 22.5 m) |
+| Coasting from 30 m/s | Stops in 9.9 s over 150 m, then holds |
+| Reverse from a standstill | 95% of 8 m/s in 1.65 s; never faster than 8 m/s |
+| The 15% climb | Steady at 29.3 m/s, **97.6% of top speed**. By the same sum an 8% road costs 1.3% (not measured) |
+| One step while driving on the flat test ground | 0.023 ms (the islands' cost is their colliders, measured in 4b) |
+
+The 4c tests were seen failing without the code (23 of 30) and pass with it. 1,949 unit tests pass.
+
+**The browser suite did not give a clean run for 4c.** The laptop was hot and running at about a third of its speed (1.4 of 3.8 GHz). Two full runs: 12 failures, then 28 different ones, every one a page that did not finish loading inside its time limit, none a wrong answer. Every test passed in one run or the other, the simulation's fingerprint in Chromium and Firefox among them (first run), except the two 3-second budget tests, which run last and only after a clean run, so they did not run. 4c changes nothing a page draws. Committed on that evidence so the work was safe; a clean run is still owed (see the session log for whether it has been done).
 
 ## Working agreements
 
@@ -557,3 +584,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-16 (Milestone 3):** Step 3a done. The architecture rules cover `src/sim`: it may import `core`, `gen` and itself, and the config's types only; the same bans on chance, the clock and inexact maths as generation; Rapier may be imported only under `src/sim/physics`, and a second test checks no other file in `src` imports it (`importsRapier`). `src/sim` is in the type check without browser types. The input record (`src/sim/input.ts`): throttle and brake as 0 to 255, steering as -127 (left) to 127 (right), drift and reset as 0 or 1; `makeInput` from a device's readings, `inputFractions` back to fractions, `packInput` and `unpackInput` for one whole number a record (for ghosts and fingerprints). Step 3 split into parts 3a to 3c. 1,795 unit tests and 274 browser tests pass. Next: 3b.
 - **2026-11-16 (Milestone 3):** Step 3b done. Everything the car can hit has a collider, added in a fixed order by `addWorldColliders` (ground, road, kerbs, walls, gate, trees, rocks), which returns the handles so a later step can tell what a wheel or the body met. A wall is one solid box a piece, its top along the drawn wall's top (so the sloping ends are ramps here too), reaching 0.6 m into the ground, each box 3 cm longer at both ends so no slit opens where a wall bends. The gate is its two posts and its beam. A tree is an upright post where its trunk is (`sim.colliders.trunkRadius` by kind, times the tree's size; 2.5 m tall, 1 m into the ground); leaves are not hit. A rock is the ball that stands as high as the drawn rock and is as wide at the ground, so a flat rock is a shallow dome and a tall one a boulder. `wallPieces` and `gateBoxes` give the walls and the gate as numbers, and the drawn triangles are built from the same numbers; no world fingerprint changed (checked on seeds 1, 7, 42 and 100). `render.decor.rockSink` and `sim.colliders.rockSink` are one number. 12 new tests on seed 7. 1,817 unit tests and 274 browser tests pass. Next: 3c.
 - **2026-11-16 (Milestone 3):** Step 3c done, which ends step 3. `createSim` builds the physics world of an island (3b's colliders) and stands the car's body behind the start line (`startPose`); `step`, `state`, `hash`, `snapshot` and `restore` work, and the car settles and stays put for ten seconds on seed 42's sloped start. Inputs are recorded but do not move the car until step 4. `sim/quat.ts` holds the turn sums (square roots only); `sim/physics/carBody.ts` is the only code besides the colliders that touches Rapier. `sim/script.ts` drives a made-up driver for ten seconds; its fingerprint is the same in Node, Chromium and Firefox on seeds 42 and 7 (`simHashFor`, a new test in `e2e/determinism.spec.ts`). Measurements under "Step 3". 1,841 unit tests and 276 browser tests pass. Next: step 4.
+- **2026-11-16 (Milestone 3):** Steps 4a, 4b and 4c done (see "Step 4"). 4a: test grounds, `createSimOn`, the wheel cast, pushes, surfaces. 4b: the car stands on four sprung wheels and stays put on any slope; gravity became one push a step. 4c: the engine, the brake and reverse (`speedChange` in `sim/car/drive.ts`); 95% of top speed in 3.98 s, 22.3 m to stop from top speed, 97.6% of top speed up the 15% climb. 1,949 unit tests pass. The browser suite had no clean run (hot laptop, page-load timeouts only; see "4c"): **run `npm run e2e` once the laptop is cool and note the result here.** Next: 4d, steering and cornering.

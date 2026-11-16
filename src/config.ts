@@ -1248,7 +1248,7 @@ export interface SimConfig {
   colliders: ColliderConfig;
 }
 
-/** The car. Distances in metres, mass in kilograms, speeds in metres per second. Steering joins it in step 4d, drift and boost in step 6. */
+/** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. Steering joins it in step 4d, drift and boost in step 6. */
 export interface CarConfig {
   /**
    * The box that is the car's body: half its width, height and length; how much it grips what it rubs against (0 is
@@ -1264,13 +1264,35 @@ export interface CarConfig {
    * car's own weight. `turn` is how quickly they can change the rate the car turns at, in radians per second per second.
    */
   grip: { side: number; turn: number };
-  /** The engine. With no pedal pressed the car slows by `coast` metres per second each second. More joins it in step 4c. */
-  engine: { coast: number };
+  engine: EngineConfig;
   /**
    * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
-   * `holdBelow` is held still by the brake, so it stays put on a slope.
+   * `holdBelow` is held still by the brake, so it stays put on a slope. With the brake pressed, a car slower than
+   * that reverses.
    */
   brake: { strength: number; holdBelow: number };
+  /** Reversing: its top speed, and its push from a standstill. It eases off towards its top speed as the engine does. */
+  reverse: { topSpeed: number; accel: number };
+}
+
+/** The engine. */
+export interface EngineConfig {
+  /** The speed the car makes for with the throttle right down (brief: 30). Part way down, it makes for that share of it. */
+  topSpeed: number;
+  /** Its full push, from a standstill up to where it starts to ease off. */
+  accel: number;
+  /**
+   * Over the last `taper` of top speed (0.3 is the last 30%) the push eases off evenly, to nothing at top speed. With
+   * `accel` this sets how long the car takes to reach it (brief: about 4 seconds). Above top speed the engine holds the car back as gently.
+   */
+  taper: number;
+  /** With no pedal pressed the car slows by this much each second. Also the hardest the engine holds the car back. */
+  coast: number;
+  /**
+   * The share of a slope's pull along the car that the engine makes up while a pedal drives it: 0 leaves the car to
+   * the slope, 1 makes a climb as fast as the flat. It also holds that share back downhill.
+   */
+  slopeHelp: number;
 }
 
 /**
@@ -1683,8 +1705,10 @@ export const config: GameConfig = {
     // About two bounces a second if nothing damped them: firm, for a kart.
     suspension: { rideHeight: 0.18, sag: 0.05, damping: 0.8 },
     grip: { side: 22, turn: 30 },
-    engine: { coast: 3 },
+    // 95% of top speed in about 4 seconds.
+    engine: { topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5 },
     brake: { strength: 20, holdBelow: 0.5 },
+    reverse: { topSpeed: 8, accel: 6 },
   },
   render: {
     chunkCells: 64,
