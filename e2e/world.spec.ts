@@ -831,9 +831,6 @@ test.describe('3D screenshots', () => {
       test.setTimeout(180_000);
       await openWorld(page, `seed=${seed}&still=1`);
       await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
-      // Since the 20 m road (6h-3), seed 42's start runs into a walled corner too soon for a slide held on one input
-      // from the start line (`slideTo`) to reach tier 3: no drift pictures there. Any other seed must have them.
-      test.skip(seed === 42 && !(await slideTo(page, 3)), 'no room from the start line for a slide held on one input to reach tier 3');
       // Earlier tiers too with TIERS, for example: $env:TIERS = "1,2"
       for (const tier of tiers) {
         expect(await slideTo(page, tier), `a slide reaching tier ${tier}`).toBe(true);

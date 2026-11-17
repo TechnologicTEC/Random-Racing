@@ -14,6 +14,16 @@ describe('turnWanted: the turn rate the stick asks for', () => {
     expect(30 / -turnWanted(1, 30, car)).toBeCloseTo(60, 9);
   });
 
+  it('keeps the circle it gives at top speed at any faster speed: 60 m at 34.5 m/s and at 45 m/s (Tane, 6h-4: a boosted car can still steer)', () => {
+    const { topSpeed } = car.engine;
+    const atTop = topSpeed / -turnWanted(1, topSpeed, car);
+    expect(atTop).toBeCloseTo(60, 9);
+    for (const speed of [30.001, 34.5, 45]) expect(speed / -turnWanted(1, speed, car)).toBeCloseTo(atTop, 9);
+    expect(turnWanted(-1, 34.5, car)).toBe(-turnWanted(1, 34.5, car));
+    // Rolling backwards it steers the other way, on the same circle.
+    expect(turnWanted(1, -34.5, car)).toBe(-turnWanted(1, 34.5, car));
+  });
+
   it('turns fastest where the two limits meet, at about 9.5 m/s', () => {
     const meet = Math.sqrt(minRadius * sideForce);
     expect(meet).toBeCloseTo(9.487, 3);
@@ -45,11 +55,14 @@ describe('turnWanted: the turn rate the stick asks for', () => {
     expect(turnWanted(1, -5, car)).toBe(-turnWanted(1, 5, car));
   });
 
-  it('never asks for more sideways force than the setting', () => {
-    for (let speed = 0.1; speed <= 40; speed += 0.1) expect(-turnWanted(1, speed, car) * speed).toBeLessThanOrEqual(sideForce * (1 + 1e-12));
+  it('never asks for more sideways force than the setting, up to top speed', () => {
+    for (let speed = 0.1; speed <= car.engine.topSpeed; speed += 0.1) expect(-turnWanted(1, speed, car) * speed).toBeLessThanOrEqual(sideForce * (1 + 1e-12));
   });
 
-  it('keeps the sideways force under what the tyres can hold, so ordinary steering never slides', () => {
+  it('keeps the sideways force under what the tyres can hold, so ordinary steering never slides, up to the boost top speed', () => {
     expect(sideForce).toBeLessThan(car.grip.side);
+    // Faster than top speed the circle stays the same, so the force grows with the square of the speed (6h-4).
+    const boostTop = car.engine.topSpeed * car.boost.speed;
+    expect(-turnWanted(1, boostTop, car) * boostTop).toBeLessThan(car.grip.side);
   });
 });

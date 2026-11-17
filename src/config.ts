@@ -1956,11 +1956,12 @@ export const config: GameConfig = {
       angle: 0.2618,
       swing: 0.25,
       recover: 0.2,
-      // Circles at any speed (Tane, 2026-11-17). Corners on seeds 1 to 40, by their tightest point: hairpins 26 m, plain
-      // corners 34 m and sweepers 101 m (medians). With these, a keyboard driver changing key at most every 0.15 s holds a
-      // slide through 95% of the corners of seeds 1 to 20 (30/50/110 m: 78%; src/sim/car/corners.test.ts).
-      radius: { tight: 22, middle: 45, wide: 160 },
-      // Holds the tightest slide at top speed (41 m/s2); at boost speed (69) the tightest slide runs a little wide.
+      // Circles at any speed (Tane, 2026-11-17), the gentlest that pass the corner tests on the 20 m road (6h-4, from Tane's
+      // second drive: slides held into the corner hit the inner wall). A keyboard driver changing key at most every 0.15 s
+      // holds a slide through 97% of the corners of seeds 1 to 20; one changing key once a second through 96% of plain
+      // corners, every hairpin and 87% of chicanes (src/sim/car/corners.test.ts; was 22, 45 and 160 m on the 12 m road).
+      radius: { tight: 28, middle: 57, wide: 203 },
+      // Holds the tightest slide at top speed (32 m/s2) and at boost speed (43).
       grip: 60,
       // 4 rad/s in one step: enough for the nose to swing in as a slide starts without the path turning away from the corner.
       turnGrip: 240,
@@ -1968,8 +1969,9 @@ export const config: GameConfig = {
       boosts: [0.5, 1.0, 1.6],
       brakeCancel: 0.5,
     },
-    // 39 m/s on the road while a boost runs.
-    boost: { speed: 1.3, accel: 30 },
+    // 34.5 m/s on the road while a boost runs, reached in about 0.4 s (Tane, 6h: short and mild; was 1.3 at 30, 39 m/s,
+    // which threw the car into walls). Steering keeps its top-speed circle while boosting (steer.ts).
+    boost: { speed: 1.15, accel: 12 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },

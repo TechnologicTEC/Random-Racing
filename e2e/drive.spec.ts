@@ -199,9 +199,11 @@ test.describe('drifting on the page', () => {
   });
 
   test('gives the same picture of a slide and of a boost twice', async ({ page }) => {
+    // A slide may take several tries from the start line (`slideTo`), each drawing frames in software, and this takes it twice.
+    test.setTimeout(180_000);
     const pictures: Buffer[][] = [];
     for (let k = 0; k < 2; k++) {
-      // Seed 7: since the 20 m road (6h-3), seed 42's start has no room for a slide held on one input to reach tier 3.
+      // Seed 7: its start straight takes a slide to tier 3 in fewer tries than seed 42's since the 20 m road.
       await openDriving(page, 'seed=7&still=1');
       expect(await slideTo(page, 3)).toBe(true);
       const slide = await page.screenshot();

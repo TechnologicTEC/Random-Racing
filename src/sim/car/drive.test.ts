@@ -156,7 +156,7 @@ describe('speedChange', () => {
     it('pushes at the full push of the boost, with no easing, as if the throttle were right down', () => {
       for (const pedals of [throttle(), throttle(0.2), NOTHING]) {
         expect(speedChange(30, FLAT, pedals, 1, boostTop, true, car, dt)).toBeCloseTo(boostAccel * dt, 12);
-        expect(speedChange(38, FLAT, pedals, 1, boostTop, true, car, dt)).toBeCloseTo(boostAccel * dt, 12);
+        expect(speedChange(boostTop - 1, FLAT, pedals, 1, boostTop, true, car, dt)).toBeCloseTo(boostAccel * dt, 12);
       }
     });
 
@@ -167,7 +167,7 @@ describe('speedChange', () => {
     });
 
     it('still brakes', () => {
-      expect(speedChange(35, FLAT, brake(), 1, boostTop, true, car, dt)).toBeCloseTo(-strength * dt, 12);
+      expect(speedChange(boostTop - 1, FLAT, brake(), 1, boostTop, true, car, dt)).toBeCloseTo(-strength * dt, 12);
     });
 
     it('does less with fewer wheels on the ground, and nothing in the air', () => {

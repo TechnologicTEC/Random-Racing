@@ -143,19 +143,23 @@ describe('the boost', () => {
     return { atRelease: sliding[sliding.length - 1]!, after };
   }
 
-  it('after a 2.1 s slide: over 30 m/s on the next step, 39 within 0.4 s, held there to its last step, back under 30.1 within 1.2 s more, never over 39', () => {
+  // How long the boost takes to reach its top speed, and how long the shed takes to bring the car back from it.
+  const reachTime = (boostTop - topSpeed) / car.boost.accel;
+  const shedTime = (boostTop - topSpeed) / shed;
+
+  it(`after a 2.1 s slide: over top speed on the next step, at ${boostTop} m/s within ${(reachTime + 0.1).toFixed(2)} s, held there to its last step, back to top speed within ${(shedTime + 0.2).toFixed(2)} s more, never over`, () => {
     const { after } = release(Math.round(2.1 * perSecond));
     const boostSteps = Math.round(car.drift.boosts[1] * perSecond);
     expect(after[0]!.drift.boostLeft).toBeGreaterThan(0);
     expect(flatSpeed(after[0]!)).toBeGreaterThan(topSpeed);
     const reached = after.findIndex((state) => flatSpeed(state) >= boostTop - 1e-6);
     expect(reached).toBeGreaterThanOrEqual(0);
-    expect(reached + 1).toBeLessThanOrEqual(0.4 * perSecond);
+    expect(reached + 1).toBeLessThanOrEqual((reachTime + 0.1) * perSecond);
     for (const state of after.slice(reached, boostSteps)) expect(flatSpeed(state)).toBeGreaterThan(boostTop * 0.99);
     const back = after.findIndex((state, i) => i >= boostSteps && flatSpeed(state) < topSpeed + 0.1);
     expect(back).toBeGreaterThanOrEqual(0);
-    expect(back + 1 - boostSteps).toBeLessThanOrEqual(1.2 * perSecond);
-    // The physics engine rounds the speed held at 39 by a few millionths of a m/s either way (measured: 38.9999853 to 39.0000027).
+    expect(back + 1 - boostSteps).toBeLessThanOrEqual((shedTime + 0.2) * perSecond);
+    // The physics engine rounds the speed held at the boost's top by a few millionths of a m/s either way (measured at 39: 38.9999853 to 39.0000027).
     for (const state of after) expect(flatSpeed(state)).toBeLessThanOrEqual(boostTop + 1e-5);
   });
 
@@ -173,6 +177,20 @@ describe('the boost', () => {
       expect(lost).toBeLessThan((shed / perSecond) * 1.01);
     });
   }
+
+  it('lets a boosted car steer round the circle it has at top speed (Tane, 6h-4), not a wider one', () => {
+    const sim = atTopSpeed();
+    slide(sim, 1, 0, Math.round(2.1 * perSecond));
+    // Let go with full stick; once the nose is back and the boost is well past top speed, measure the circle.
+    const after = steps(sim, { throttle: 1, steer: 1 }, Math.round(car.drift.boosts[1] * perSecond));
+    const fast = after.slice(Math.round(car.drift.recover * perSecond) + 1).filter((state) => state.drift.boostLeft > 0 && flatSpeed(state) > topSpeed + 2);
+    expect(fast.length).toBeGreaterThan(10);
+    const measured = mean(fast.map((state) => flatSpeed(state) / Math.abs(state.spin.y)));
+    const atTop = (topSpeed * topSpeed) / car.steer.sideForce;
+    expect(measured).toBeGreaterThan(atTop * 0.95);
+    expect(measured).toBeLessThan(atTop * 1.05);
+    sim.free();
+  });
 
   it('gives nothing for a slide let go before the first tier', () => {
     const { after } = release(Math.round(car.drift.tiers[0] * perSecond) - 1);
@@ -259,9 +277,10 @@ describe('the drift state in snapshots and fingerprints', () => {
 describe('what ends a slide on the course', () => {
   it('sliding into a wall met at about 20 degrees ends the slide, with no boost and the charge lost', () => {
     const ground = wallGround();
-    // 10 m from the wall, facing 3 degrees to the right of straight ahead, towards it. The slide turns the path on
-    // into the wall, which it meets at about 20 degrees after charging the first tier.
-    const sim = createSimOn(rapier, ground.course, config, poseOn(ground, ground.wallAt - 10, 0, { x: 0.05234, z: -0.99863 }, config));
+    // 15 m from the wall, facing about 6 degrees to the right of straight ahead, towards it (6h-4: 10 m and 3 degrees with
+    // the 160 m wide circle; the 218 m one turns the path more slowly). The slide turns the path on into the wall, which
+    // it meets at about 20 degrees after charging the first tier.
+    const sim = createSimOn(rapier, ground.course, config, poseOn(ground, ground.wallAt - 15, 0, { x: 0.09983, z: -0.995 }, config));
     hold(sim, { throttle: 1 }, 2.5);
     const states = [...slide(sim, 1, -1, 1), ...steps(sim, { throttle: 1, drift: true, steer: -1 }, 6 * perSecond)];
     const ended = states.findIndex((state) => state.drift.phase !== 'slide');

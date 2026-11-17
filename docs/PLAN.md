@@ -34,7 +34,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **6h-1** Measure, then fix the numbers: the corner driver's holder style and drive out of the corner; the grid of road widths, circles and boosts
   - [x] **6h-2** The track at 20 m
   - [x] **6h-3** The road and the island at 20 m; the reference pictures taken again
-  - [ ] **6h-4** Drift and boost: the gentler circles, a boost of 1.15 times at 12 m/s², steering that keeps its top-speed circle above top speed
+  - [x] **6h-4** Drift and boost: the gentler circles (28, 57 and 203 m), a boost of 1.15 times at 12 m/s², steering that keeps its top-speed circle above top speed
   - [ ] **6h-5** Sparks, boost and the drift's look: sprites and bloom
 - [ ] **7a** Off the road
 - [ ] **7b** Walls
@@ -132,8 +132,8 @@ The check-ins are lines in the build order. Bring the page running, a short list
 **Check-in 2, after step 9** (drift, boost, surfaces, respawn, with the tuning panel open and step 9's table to hand). Same seeds, plus the corners the table names.
 
 1. Starting a drift: is 40% of top speed the right threshold? Is the hop right, drawn only?
-2. The slide: the angle (15 degrees since 6g), how tight and how wide it can go (circles of 22, 45 and 160 m at any speed since 6g).
-3. The tiers (1, 2 and 3 s) and the boosts (0.5, 1.0 and 1.6 s at 1.3 times top speed): worth the risk? Too strong?
+2. The slide: the angle (15 degrees since 6g), how tight and how wide it can go (circles of 28, 57 and 203 m at any speed since 6h-4).
+3. The tiers (1, 2 and 3 s) and the boosts (0.5, 1.0 and 1.6 s at 1.15 times top speed since 6h-4, steering as at top speed): worth the risk? Too weak or too strong?
 4. Is drifting the fastest way through each kind of corner when driving by hand, as the table says it is for the bot?
 5. Walls: does a glancing hit feel gentle enough? Does a head-on one feel fair?
 6. Grass and sand (40% slower): does cutting a corner ever pay?
@@ -160,7 +160,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | --- | --- |
 | The start line can sit on a steep slope (seed 5, 8%, since the 20 m road; seed 42 before) | **M4.1** |
 | A gorge can hold the start gate (seed 28496 at 12 m; on the 20 m road the gorges are seeds 39898 and 42, not at the start) | M4.1 checks it; 5d's camera clearance is tested through seed 42's gorge |
-| Mountain placement near-misses on test islands of seed 5; no drift pictures for seed 42 (6h-3) | **M6.3** (Tane picks); the drift pictures when a road-following slide helper is written |
+| Mountain placement near-misses on test islands of seed 5 (6h-3) | **M6.3** (Tane picks) |
 | Wall ends are ramps; hillsides of up to 40% open beside mountain roads | **7b** (the wall end met head on), **4e** and **8** (climbing back up, sliding down) |
 | Few roadsides open onto the sea; beaches open; the 40% wall rule | Tane, **check-in 1** (question 6): answered 2026-11-17, the walls are fine as they are |
 | Nobody has watched the grass move; from the road it reads as a fine texture | Tane, **check-in 1** (the chase camera is lower and closer than the flying one) |

@@ -99,14 +99,14 @@ describe('stepDrift', () => {
   });
 
   describe('rule 4: pathCurve, how tightly the path curves towards the corner', () => {
-    it('follows a circle of 160 m with the stick away, 45 m in the middle, 22 m with it in (Tane, 2026-11-17)', () => {
+    it('follows a circle of 203 m with the stick away, 57 m in the middle, 28 m with it in (6h-4: the gentlest that pass the corner tests on the 20 m road)', () => {
       const right = slidFor(5);
-      expect(1 / pathCurve(right, -1, car)).toBeCloseTo(160, 9);
-      expect(1 / pathCurve(right, 0, car)).toBeCloseTo(45, 9);
-      expect(1 / pathCurve(right, 1, car)).toBeCloseTo(22, 9);
+      expect(1 / pathCurve(right, -1, car)).toBeCloseTo(203, 9);
+      expect(1 / pathCurve(right, 0, car)).toBeCloseTo(57, 9);
+      expect(1 / pathCurve(right, 1, car)).toBeCloseTo(28, 9);
       const left = slidFor(5, { steer: -1 });
-      expect(1 / pathCurve(left, 1, car)).toBeCloseTo(160, 9);
-      expect(1 / pathCurve(left, -1, car)).toBeCloseTo(22, 9);
+      expect(1 / pathCurve(left, 1, car)).toBeCloseTo(203, 9);
+      expect(1 / pathCurve(left, -1, car)).toBeCloseTo(28, 9);
     });
 
     it('curves evenly between them as the stick moves, never wider than the widest or tighter than the tightest', () => {
