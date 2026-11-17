@@ -4,7 +4,7 @@ import { inputFractions, type InputRecord } from '../input';
 import type { BodyMotion, CarPhysics } from '../physics/carBody';
 import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
-import { driftSteps, NO_DRIFT, pathTurn, stepDrift, tierOf, type DriftPhase, type DriftState, type Hit } from './drift';
+import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftPhase, type DriftState, type Hit } from './drift';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
 import { twistFor, uprightChange } from './stability';
@@ -187,10 +187,10 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const pull = dot(coming, travel) - speed;
       physics.push(scale(travel, car.mass * speedChange(speed, pull, pedals, share, top, boosting, car, dt)));
 
-      // And they bring the car's turning to what is asked, as fast as they can: in a slide, how fast its path turns
-      // towards the corner, and the nose swinging in or out on top of that.
+      // And they bring the car's turning to what is asked, as fast as they can: in a slide, the turn that keeps its path
+      // on the slide's circle at the speed it is going, and the nose swinging in or out on top of that.
       const swing = (drift.slide - old.slide) * car.drift.angle * cfg.sim.stepsPerSecond;
-      const path = drift.phase === 'slide' ? (0 - drift.dir) * pathTurn(drift, pedals.steer, car) : turnWanted(pedals.steer, speed, car);
+      const path = drift.phase === 'slide' ? (0 - drift.dir) * speed * pathCurve(drift, pedals.steer, car) : turnWanted(pedals.steer, speed, car);
       // The side of the slide, on its first and last steps too. Into the corner is -d (positive turning is to the left).
       const d = drift.dir !== 0 ? drift.dir : old.dir;
       const wanted = path - d * swing;

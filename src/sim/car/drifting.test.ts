@@ -62,25 +62,25 @@ const mean = (list: number[]): number => list.reduce((a, b) => a + b, 0) / list.
 describe('a slide on the flat at top speed', () => {
   for (const dir of [1, -1] as const) {
     const side = dir === 1 ? 'right' : 'left';
-    for (const { name, steer, rate } of [
-      { name: 'stick into the corner', steer: dir, rate: car.drift.turn.tight },
-      { name: 'stick in the middle', steer: 0, rate: (car.drift.turn.tight + car.drift.turn.wide) / 2 },
-      { name: 'stick away from the corner', steer: -dir, rate: car.drift.turn.wide },
+    for (const { name, steer, radius } of [
+      { name: 'stick into the corner', steer: dir, radius: car.drift.radius.tight },
+      { name: 'stick in the middle', steer: 0, radius: car.drift.radius.middle },
+      { name: 'stick away from the corner', steer: -dir, radius: car.drift.radius.wide },
     ]) {
-      it(`goes round a circle of top speed / ${rate} rad/s, within 5%, sliding ${side} with the ${name}`, () => {
+      it(`goes round a circle of ${radius} m, within 5%, sliding ${side} with the ${name}`, () => {
         const sim = atTopSpeed();
         slide(sim, dir, steer, 3 * perSecond);
         const settled = slide(sim, dir, steer, perSecond).slice(1);
-        const radius = mean(settled.map((state) => flatSpeed(state) / Math.abs(state.spin.y)));
-        expect(radius).toBeGreaterThan((topSpeed / rate) * 0.95);
-        expect(radius).toBeLessThan((topSpeed / rate) * 1.05);
+        const measured = mean(settled.map((state) => flatSpeed(state) / Math.abs(state.spin.y)));
+        expect(measured).toBeGreaterThan(radius * 0.95);
+        expect(measured).toBeLessThan(radius * 1.05);
         // It turns the way of the slide: right is clockwise seen from above.
         for (const state of settled) expect(Math.sign(state.spin.y)).toBe(-dir);
         sim.free();
       });
     }
 
-    it(`points its nose 24 degrees inside its line of travel, within 1 degree, once swung in (${side})`, () => {
+    it(`points its nose 15 degrees inside its line of travel, within 1 degree, once swung in (${side})`, () => {
       const sim = atTopSpeed();
       slide(sim, dir, 0, perSecond);
       for (const state of slide(sim, dir, 0, perSecond).slice(1)) {
@@ -106,6 +106,30 @@ describe('a slide on the flat at top speed', () => {
     const states = slide(sim, 1, 1, 4 * perSecond);
     for (const state of states) expect(flatSpeed(state)).toBeGreaterThanOrEqual(0.97 * topSpeed);
     sim.free();
+  });
+});
+
+describe('a slide at a lower speed', () => {
+  it('follows the same circles at 20 m/s as at top speed: speed does not tighten it (Tane, 2026-11-17)', () => {
+    for (const { steer, radius } of [
+      { steer: 1, radius: car.drift.radius.tight },
+      { steer: 0, radius: car.drift.radius.middle },
+      { steer: -1, radius: car.drift.radius.wide },
+    ]) {
+      const sim = newSim();
+      hold(sim, { throttle: 1 }, 3.5);
+      // Throttle 0.67 makes for 20 m/s and holds there.
+      slide(sim, 1, steer, 1);
+      hold(sim, { throttle: 0.67, drift: true, steer }, 3);
+      const settled = steps(sim, { throttle: 0.67, drift: true, steer }, perSecond);
+      const speed = mean(settled.map(flatSpeed));
+      expect(speed).toBeGreaterThan(18);
+      expect(speed).toBeLessThan(22);
+      const measured = mean(settled.map((state) => flatSpeed(state) / Math.abs(state.spin.y)));
+      expect(measured).toBeGreaterThan(radius * 0.95);
+      expect(measured).toBeLessThan(radius * 1.05);
+      sim.free();
+    }
   });
 });
 

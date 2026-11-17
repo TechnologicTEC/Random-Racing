@@ -81,15 +81,17 @@ export function tierOf(charge: number, steps: DriftSteps): 0 | 1 | 2 | 3 {
 }
 
 /**
- * How fast the path of a slide turns towards its corner, in radians per
- * second: `turn.wide` with the stick fully away from the corner, `turn.tight`
- * with it fully into it, and evenly between. Steering sets how tight, not
- * which way (brief).
+ * How tightly the path of a slide curves towards its corner, as one over the
+ * radius of its circle (per metre): `radius.wide` with the stick fully away
+ * from the corner, `radius.middle` with it in the middle, `radius.tight` with
+ * it fully into it, and evenly between (in curve, not radius). The same
+ * whatever the speed, so slowing down does not tighten a slide. Steering sets
+ * how tight, not which way (brief).
  */
-export function pathTurn(state: DriftState, steer: number, car: CarConfig): number {
-  const { wide, tight } = car.drift.turn;
-  const into = (steer * state.dir + 1) / 2;
-  return wide + (tight - wide) * into;
+export function pathCurve(state: DriftState, steer: number, car: CarConfig): number {
+  const { tight, middle, wide } = car.drift.radius;
+  const into = steer * state.dir;
+  return into >= 0 ? 1 / middle + (1 / tight - 1 / middle) * into : 1 / middle + (1 / middle - 1 / wide) * into;
 }
 
 /** A share within this of 0 or 1 is taken as exactly that, so a slide takes exactly its number of steps to swing in or out. */

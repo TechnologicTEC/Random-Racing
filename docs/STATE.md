@@ -8,7 +8,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6f, the tuning panel, which ends step 6 (see "Step 6"). The car drifts and boosts, with sparks, a flame, a hopping kart, a camera that swings out and widens, and a panel (T) to tune all of it on the page
+- **Last finished part:** 6g, the drift's turning from Tane's first drive (see "Step 6"): a slide now follows a circle of 22, 45 or 160 m whatever the speed, and the nose points 15 degrees into the corner. Before that, 6f, the tuning panel, which ended step 6
 - **Next:** `docs/PLAN.md`, "The build order": **7a**, off the road. Step 7 is a new step, so plan it in plan mode first. Check-in 2 comes after step 9
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
@@ -174,6 +174,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | 6d | **Sparks, flame and hop**, drawn (`render/driftEffects.ts`, `carShape.ts`, `carView.ts`); the readout | Done |
 | 6e | **Camera swing and wider view** (`camera/chase.ts`) | Done |
 | 6f | **Tuning panel** (`app/tuning.ts`, `app/tuningPanel.ts`) | Done |
+| 6g | **Drift turning from Tane's first drive**: circles by size at any speed, 15 degrees; a keyboard corner driver on real seeds (`testing/cornerDriver.ts`, `car/corners.test.ts`) | Done |
 
 ### 6a: the drift rules
 
@@ -261,6 +262,28 @@ Tests: `tuning.test.ts` (7: the fields cover exactly the six blocks, the ranges 
 
 **Step 6 is done.** What it gives Tane at check-in 2: hold Space or Shift with A or D at 43 km/h or more, let go after 1, 2 or 3 s for a boost of 0.5, 1.0 or 1.6 s; T to tune.
 
+### 6g: the drift's turning, from Tane's first drive (2026-11-17)
+
+**What Tane found:** "the angle at which it drifts is too much ... I can't even hold space/shift for a second, otherwise my car will turn into the barrier". The player should be able to drift through most of a corner, starting just after the road starts to curve and letting go about when it straightens.
+
+**Why:** a keyboard key is always full stick, so holding D through a right-hand slide asked for the tightest slide: 1.5 rad/s, a 20 m circle at top speed, and tighter as the car slowed (13 m at 20 m/s), because the slide turned at a rate. The corners of seeds 1 to 40, by their tightest point, have median radii of 26 m (hairpins), 34 m (plain corners) and 101 m (sweepers): 9 in 10 are wider than 20 m.
+
+**What changed (Tane's choices, from options with the numbers):**
+- **A slide follows a circle of a set size at any speed** (`car.drift.radius`, `pathCurve` in `drift.ts`; was `drift.turn` and `pathTurn`): 22 m with the key into the corner, 45 m with no key, 160 m with the other key, and evenly between in how much it curves for a stick part way. The car turns at its speed along the line of travel times that curve. Tane first chose 30, 50 and 110 m; the corner driver below held slides through only 78% of corners with them (hairpins 58%, since a 30 m circle cannot follow a 23 m hairpin), and Tane then chose 22, 45 and 160 m.
+- **The nose points 15 degrees into the corner** (`car.drift.angle` 0.2618, was 0.42, 24 degrees).
+
+**The proof** (`src/testing/cornerDriver.ts`, `src/sim/car/corners.test.ts`, Claude's design, for Tane to judge): every corner of seeds 1 to 20 but the kinks (225 corners). The car is put on the middle of the road 100 m before the corner and driven there at full throttle on grip (the line driver). 4 m into the corner it presses drift with the key into the corner; each step it picks whichever of the three keys' circles is nearest the circle through a point 12 m ahead on the middle of the road, **keeping each key at least 0.15 s** (a person, not a machine); it lets go 4 m before the corner's end. A corner counts when the slide lasts all that way with the car's middle at least half the car's width inside the road's edge.
+
+| Circles (key, none, other key) | All | Plain corners | Hairpins | Chicanes | Sweepers |
+| --- | --- | --- | --- | --- | --- |
+| 30, 50, 110 m | 78% | 83% | 58% | 98% | 48% |
+| 25, 45, 160 m | 93% | 98% | 87% | 100% | 67% |
+| **22, 45, 160 m (chosen)** | **95%** | **100%** | **100%** | **98%** | **63%** |
+
+The sweepers that fail are wider than the widest slide follows well; they are taken flat out on grip (60 m at top speed) without a slide. Entry speeds were 28.5 to 29.9 m/s. The test asks for 90% of all corners, of hairpins, of plain corners and of chicanes; it takes about a minute.
+
+**Tests changed with the behaviour, as Tane asked:** `pathCurve` (circles of 160, 45 and 22 m, evenly between) replaced the `pathTurn` test (0.25, 0.875, 1.5 rad/s); the slide circles on the flat are now 22, 45 and 160 m within 5% (were 20, 34 and 120 m), and a new test finds the same circles at 20 m/s; the nose 15 degrees within 1. Seen failing first: the new `drift.test.ts` and `drifting.test.ts` tests on the missing code; the corner test's measure failed at 78% with the first circles. Every other drift test (the boost, the wall at about 20 degrees, the 1 m drop, snapshots) passes unchanged. The drift pictures of seeds 7 and 42 looked at again: the kart now points only a little into the turn. Found on the way: the tuning panel's slider step for the new angle (0.001) did not hold 0.2618, so a slider's step is now also fine enough for its value's own decimals (the panel test caught it). 2,153 unit tests pass.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -332,6 +355,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-17 | **A slide follows a circle of 22, 45 or 160 m whatever the speed** (key into the corner, no key, the other key), not a turn rate; **the nose points 15 degrees into the corner** (was 24) | Tane's choices after the first drive (6g): a held slide ran into the barrier within a second. A keyboard corner driver holds a slide through 95% of the corners of seeds 1 to 20 with these circles, 78% with the 30/50/110 m Tane chose first |
 
 ## Notes for later milestones
 
@@ -442,3 +466,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6d done: sparks in the tier's colour at both rear wheels, an orange flame with a pale tip while a boost runs, the hop drawn, and the tier and boost left on the readout (`render/driftEffects.ts`, `kartPose`, `carView`, `driftReadout`). Browser helper `slideTo` and new screenshots `-drive-slide` and `-drive-boost`; pictures of seeds 1, 7, 42 and 2024 looked at. Two known issues added (the camera beside a steep slope, flower dabs from the chase camera). 2,134 unit tests pass; all 330 browser tests passed in one run (19.1 minutes). Next: 6e, camera swing and wider view.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6g, from Tane's first drive: a slide held for a second ran into the barrier. Slides now follow circles of 22, 45 or 160 m at any speed (key into the corner, none, the other key; were turn rates) and the nose points 15 degrees in (was 24), Tane's choices from measured options. New keyboard corner driver (`testing/cornerDriver.ts`) and test: a slide held from just after each corner's start to just before its end, on the road, through 95% of the corners of seeds 1 to 20 (hairpins and plain corners 100%). 2,153 unit tests pass; all 334 browser tests passed in one run (22.1 minutes). Next: step 7, planned in plan mode first.

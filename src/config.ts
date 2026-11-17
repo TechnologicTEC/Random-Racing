@@ -1391,13 +1391,18 @@ export interface DriftConfig {
   steerToStart: number;
   /** The hop at the start: how long and how high. Drawn only; the body stays on its springs. */
   hop: { time: number; height: number };
-  /** How far the nose turns into the corner from the line of travel, in radians. */
+  /** How far the nose turns into the corner from the line of travel, in radians (Tane, 2026-11-17: 15 degrees, was 24). */
   angle: number;
   /** How long the nose takes to swing in at the start of a slide, and back out at its end. */
   swing: number;
   recover: number;
-  /** How fast the path turns towards the corner, in radians per second: `wide` with the stick fully away from it, `tight` fully into it. */
-  turn: { wide: number; tight: number };
+  /**
+   * The circle the path of a slide follows, in metres, whatever the speed: `tight` with the stick fully into the
+   * corner (a key held), `middle` with it in the middle (no key), `wide` with it fully away (the other key), and
+   * evenly between them (in how much it curves) for a stick part way. Tane, 2026-11-17: it was a turn rate, which
+   * tightened the slide as the car slowed.
+   */
+  radius: { tight: number; middle: number; wide: number };
   /** The hardest the tyres push sideways while sliding, in metres per second per second (in place of `grip.side`). */
   grip: number;
   /** How quickly the tyres change the rate the car turns at while sliding, in radians per second per second (in place of `grip.turn`). */
@@ -1875,13 +1880,15 @@ export const config: GameConfig = {
       endSpeed: 0.3,
       steerToStart: 0.3,
       hop: { time: 0.15, height: 0.08 },
-      // 24 degrees.
-      angle: 0.42,
+      // 15 degrees (Tane, 2026-11-17: 24 looked like turning into the barrier).
+      angle: 0.2618,
       swing: 0.25,
       recover: 0.2,
-      // At top speed: circles of 120 m (stick away), 34 m (middle) and 20 m (stick in). The generator's drift corners are 20 to 90 m.
-      turn: { wide: 0.25, tight: 1.5 },
-      // Holds the tightest slide at top speed (45 m/s2) and just holds it at boost speed (58.5).
+      // Circles at any speed (Tane, 2026-11-17). Corners on seeds 1 to 40, by their tightest point: hairpins 26 m, plain
+      // corners 34 m and sweepers 101 m (medians). With these, a keyboard driver changing key at most every 0.15 s holds a
+      // slide through 95% of the corners of seeds 1 to 20 (30/50/110 m: 78%; src/sim/car/corners.test.ts).
+      radius: { tight: 22, middle: 45, wide: 160 },
+      // Holds the tightest slide at top speed (41 m/s2); at boost speed (69) the tightest slide runs a little wide.
       grip: 60,
       // 4 rad/s in one step: enough for the nose to swing in as a slide starts without the path turning away from the corner.
       turnGrip: 240,

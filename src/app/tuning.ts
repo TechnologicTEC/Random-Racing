@@ -32,14 +32,17 @@ function at(cfg: GameConfig, path: string): unknown {
  * A slider for every number in the panel's blocks, nested blocks and lists
  * included, in the config's own order. Each runs from 0 to three times its
  * value, in steps of about a hundredth of the value's size (0.1 for 30, 0.001
- * for 0.4), which the value itself lies on.
+ * for 0.4), or finer if the value has more decimals, so the value itself lies on one.
  */
 export function tuningFields(cfg: GameConfig): TuningField[] {
   const fields: TuningField[] = [];
   const walk = (value: unknown, path: string, group: string): void => {
     if (typeof value === 'number') {
       const size = Math.abs(value);
-      const step = size > 0 ? Math.pow(10, Math.floor(Math.log10(size)) - 2) : 0.01;
+      // About a hundredth of the value's size, and fine enough for the value's own decimals (0.2618 needs 0.0001).
+      const written = String(Number(size.toPrecision(10)));
+      const decimals = written.includes('.') ? written.length - written.indexOf('.') - 1 : 0;
+      const step = size > 0 ? Math.min(Math.pow(10, Math.floor(Math.log10(size)) - 2), Math.pow(10, -decimals)) : 0.01;
       fields.push({ path, group, value, min: 0, max: size > 0 ? 3 * size : 1, step });
     } else if (value && typeof value === 'object') {
       for (const [key, inner] of Object.entries(value)) walk(inner, `${path}.${key}`, group);

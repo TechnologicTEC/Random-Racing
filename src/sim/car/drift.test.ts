@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { STEER_STEPS } from '../input';
-import { driftSteps, NO_DRIFT, pathTurn, stepDrift, tierOf, type DriftAsk, type DriftState } from './drift';
+import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftAsk, type DriftState } from './drift';
 
 const car = config.car;
 const steps = driftSteps(car, config.sim.stepsPerSecond);
@@ -98,15 +98,30 @@ describe('stepDrift', () => {
     });
   });
 
-  describe('rule 4: pathTurn, how fast the path turns towards the corner', () => {
-    it('gives wide with the stick away, tight with it in, and evenly between', () => {
+  describe('rule 4: pathCurve, how tightly the path curves towards the corner', () => {
+    it('follows a circle of 160 m with the stick away, 45 m in the middle, 22 m with it in (Tane, 2026-11-17)', () => {
       const right = slidFor(5);
-      expect(pathTurn(right, -1, car)).toBeCloseTo(0.25, 12);
-      expect(pathTurn(right, 0, car)).toBeCloseTo(0.875, 12);
-      expect(pathTurn(right, 1, car)).toBeCloseTo(1.5, 12);
+      expect(1 / pathCurve(right, -1, car)).toBeCloseTo(160, 9);
+      expect(1 / pathCurve(right, 0, car)).toBeCloseTo(45, 9);
+      expect(1 / pathCurve(right, 1, car)).toBeCloseTo(22, 9);
       const left = slidFor(5, { steer: -1 });
-      expect(pathTurn(left, 1, car)).toBeCloseTo(0.25, 12);
-      expect(pathTurn(left, -1, car)).toBeCloseTo(1.5, 12);
+      expect(1 / pathCurve(left, 1, car)).toBeCloseTo(160, 9);
+      expect(1 / pathCurve(left, -1, car)).toBeCloseTo(22, 9);
+    });
+
+    it('curves evenly between them as the stick moves, never wider than the widest or tighter than the tightest', () => {
+      const right = slidFor(5);
+      const { tight, middle, wide } = car.drift.radius;
+      expect(pathCurve(right, 0.5, car)).toBeCloseTo((1 / tight + 1 / middle) / 2, 12);
+      expect(pathCurve(right, -0.5, car)).toBeCloseTo((1 / wide + 1 / middle) / 2, 12);
+      let last = 0;
+      for (let k = -10; k <= 10; k++) {
+        const curve = pathCurve(right, k / 10, car);
+        expect(curve).toBeGreaterThan(last);
+        expect(curve).toBeGreaterThanOrEqual(1 / wide - 1e-15);
+        expect(curve).toBeLessThanOrEqual(1 / tight + 1e-15);
+        last = curve;
+      }
     });
   });
 

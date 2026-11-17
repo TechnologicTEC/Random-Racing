@@ -29,6 +29,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **6d** Sparks, flame and hop
 - [x] **6e** Camera swing and wider view
 - [x] **6f** Tuning panel
+- [x] **6g** Drift turning from Tane's first drive: circles of 22, 45 and 160 m at any speed, the nose at 15 degrees; a keyboard driver holds a slide through 95% of the corners of seeds 1 to 20
 - [ ] **7a** Off the road
 - [ ] **7b** Walls
 - [ ] **7c** Trees and rocks
@@ -125,7 +126,7 @@ The check-ins are lines in the build order. Bring the page running, a short list
 **Check-in 2, after step 9** (drift, boost, surfaces, respawn, with the tuning panel open and step 9's table to hand). Same seeds, plus the corners the table names.
 
 1. Starting a drift: is 40% of top speed the right threshold? Is the hop right, drawn only?
-2. The slide: the angle (24 degrees), how tight and how wide it can go (20 m to 120 m at top speed).
+2. The slide: the angle (15 degrees since 6g), how tight and how wide it can go (circles of 22, 45 and 160 m at any speed since 6g).
 3. The tiers (1, 2 and 3 s) and the boosts (0.5, 1.0 and 1.6 s at 1.3 times top speed): worth the risk? Too strong?
 4. Is drifting the fastest way through each kind of corner when driving by hand, as the table says it is for the bot?
 5. Walls: does a glancing hit feel gentle enough? Does a head-on one feel fair?
