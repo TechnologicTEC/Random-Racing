@@ -25,8 +25,11 @@ export interface TrackConfig {
   /** Shortest and longest allowed lap, in metres. Some reliefs change these: see `byRelief`. */
   lapLengthMin: number;
   lapLengthMax: number;
-  /** Tightest allowed corner radius, in metres (brief: about 15). */
-  minCornerRadius: number;
+  /**
+   * Tightest allowed corner, as the distance from its centre to the road's inside edge, in metres: the radius limit is
+   * this plus half the road's width (brief: a radius of about 15 m on a 12 to 14 m road; 6h keeps the room inside).
+   */
+  minInsideRadius: number;
   /** Separate sections must stay at least this many road widths apart (brief: about 2.5). */
   sectionGapWidths: number;
   /**
@@ -41,7 +44,7 @@ export interface TrackConfig {
   sampleSpacing: number;
   /** Curvature is measured through points this far before and after a sample, in metres. */
   curvatureWindow: number;
-  layout: LayoutConfig;
+  layout: LayoutSettings;
   analysis: AnalysisConfig;
   score: ScoreConfig;
   /** How the rules above change with the seed's relief. */
@@ -234,6 +237,53 @@ export interface LayoutConfig {
   /** Each seed gets one style, which sets the character of its track. */
   styles: Record<LayoutStyle, StyleConfig>;
 }
+
+/**
+ * The layout builder's settings as the config keeps them (`track.layout`). The
+ * distances that set how close separate parts of the lap come, and the smallest
+ * corners, are given against the road's width, so a change of width carries
+ * through (step 6h). `trackRulesFor` works them out in metres (`LayoutConfig`).
+ */
+export type LayoutSettings = Omit<LayoutConfig, 'minCornerRadius' | 'clearance' | 'base' | 'fold' | 'jog' | 'radius'> & {
+  /**
+   * The builder never rounds a corner so tight that its inside edge comes nearer its centre than this, in metres:
+   * the smallest radius is this plus half the road's width. Kept above the hard limit (`track.minInsideRadius`) for safety.
+   */
+  minInsideRadius: number;
+  /** Separate parts of the skeleton stay at least this many road widths apart. */
+  clearanceWidths: number;
+  base: Omit<LayoutConfig['base'], 'stretchedHalfWidth'> & {
+    /** Half the width of a stretched base: at least `leastWidths` road widths, at most `most` metres. */
+    stretchedHalfWidth: { leastWidths: number; most: number };
+  };
+  fold: Omit<LayoutConfig['fold'], 'hairpinWidth'> & {
+    /** Width of a narrow fold, whose end becomes one hairpin, in road widths. */
+    hairpinWidths: Range;
+  };
+  jog: Omit<LayoutConfig['jog'], 'offset'> & {
+    /** Sideways step, in road widths. */
+    offsetWidths: Range;
+  };
+  radius: Omit<LayoutConfig['radius'], 'hairpin' | 'tip'> & {
+    /** Turns of 120 degrees or more, and the point of a pointed fold: the radius less half the road's width, in metres. */
+    hairpinInside: Range;
+    tipInside: Range;
+  };
+};
+
+/** The track rules that need no working out: the config's (`TrackConfig`) and a seed's (`TrackRules`) both have them. */
+export type TrackCommon = Omit<TrackConfig, 'minInsideRadius' | 'layout'>;
+
+/**
+ * The track rules for one seed, in metres: the config's (`TrackConfig`), with the
+ * limits the seed's relief changes and the road-width settings worked out
+ * (`trackRulesFor`). Everything that builds and judges layouts reads these.
+ */
+export type TrackRules = TrackCommon & {
+  /** Tightest allowed corner radius, in metres: `minInsideRadius` plus half the road's width. */
+  minCornerRadius: number;
+  layout: LayoutConfig;
+};
 
 export interface EllipseBaseConfig {
   /** Length divided by width. */
@@ -1525,7 +1575,8 @@ export const config: GameConfig = {
     roadWidth: 12,
     lapLengthMin: 1400,
     lapLengthMax: 2400,
-    minCornerRadius: 15,
+    // A radius of 15 m on a 12 m road (brief), 19 m on a 20 m one.
+    minInsideRadius: 9,
     sectionGapWidths: 2.5,
     sectionGapMinArc: 90,
     buildableRadius: 500,
@@ -1546,8 +1597,10 @@ export const config: GameConfig = {
       controlPointsMin: 10,
       controlPointsMax: 18,
       maxAttempts: 8,
-      minCornerRadius: 18,
-      clearance: 40,
+      // 18 m radius on a 12 m road, 22 m on a 20 m one.
+      minInsideRadius: 12,
+      // 40 m on a 12 m road.
+      clearanceWidths: 40 / 12,
       clearanceMinArc: 110,
       minEdge: 30,
       lapPerPerimeter: 0.93,
@@ -1558,7 +1611,8 @@ export const config: GameConfig = {
         round: { aspect: [1, 1.5], corners: [5, 7], perimeterShare: [0.7, 0.9] },
         folded: { aspect: [1.2, 2.4], corners: [4, 6], perimeterShare: [0.58, 0.8] },
         stretchedHalfLength: [300, 430],
-        stretchedHalfWidth: [24, 110],
+        // At least 24 m on a 12 m road: the two long sides are then at least 4 road widths apart.
+        stretchedHalfWidth: { leastWidths: 2, most: 110 },
         angleJitter: 0.3,
         radialJitter: 0.18,
       },
@@ -1566,17 +1620,20 @@ export const config: GameConfig = {
         shoulder: 55,
         depthMin: 110,
         outwardReach: 240,
-        hairpinWidth: [44, 66],
+        // 44 to 66 m on a 12 m road.
+        hairpinWidths: [44 / 12, 66 / 12],
         tipWidth: [90, 170],
         wideWidth: [100, 230],
         tipChance: 0.35,
         skew: 0.3,
       },
-      jog: { minEdge: 170, length: [34, 50], offset: [13, 22], margin: 65 },
+      // A sideways step of 13 to 22 m on a 12 m road.
+      jog: { minEdge: 170, length: [34, 50], offsetWidths: [13 / 12, 22 / 12], margin: 65 },
       bow: { minEdge: 200, push: [0.06, 0.16], outwardChance: 0.7 },
       radius: {
-        hairpin: [18, 32],
-        tip: [18, 30],
+        // Radii of 18 to 32 m and 18 to 30 m on a 12 m road.
+        hairpinInside: [12, 26],
+        tipInside: [12, 24],
         jog: [26, 42],
         bow: [140, 280],
         medium: [24, 60],

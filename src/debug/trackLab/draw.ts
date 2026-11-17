@@ -1,4 +1,4 @@
-import type { TrackConfig } from '../../config';
+import type { TrackRules } from '../../config';
 import type { Vec2 } from '../../core/vec2';
 import type { Candidate, CenterLine, CornerKind, Decor, Scatter, Section, Violation, WallSpan } from '../../gen/types';
 import { screenToWorld, worldToScreen, type View } from './view';
@@ -74,7 +74,7 @@ const BOULDER = 2;
 const LABEL_FONT = '11px ui-monospace, "Cascadia Mono", Consolas, monospace';
 
 /** Draws the whole lab view. The context is expected to be scaled so one unit is one CSS pixel. */
-export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabScene | null, cfg: TrackConfig): void {
+export function drawLab(ctx: CanvasRenderingContext2D, view: View, scene: LabScene | null, cfg: TrackRules): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, view.width, view.height);
 
@@ -106,7 +106,7 @@ export function drawThumbnail(
   ctx: CanvasRenderingContext2D,
   view: View,
   candidate: Candidate,
-  cfg: TrackConfig,
+  cfg: TrackRules,
   terrain: TerrainPicture | null = null,
   width: Float64Array | null = null,
 ): void {

@@ -35,8 +35,40 @@ describe('trackRulesFor', () => {
   it('leaves everything else as it was', () => {
     const rules = trackRulesFor(track, 'mountain');
     expect(rules.roadWidth).toBe(track.roadWidth);
-    expect(rules.layout).toBe(track.layout);
+    expect(rules.layout.styles).toBe(track.layout.styles);
+    expect(rules.layout.bow).toBe(track.layout.bow);
     expect(rules.score.elevation).toBe(track.score.elevation);
-    expect(trackRulesFor(track, 'flat')).toEqual(track);
+    const flat = trackRulesFor(track, 'flat');
+    expect(flat.lapLengthMin).toBe(track.lapLengthMin);
+    expect(flat.sectionGapWidths).toBe(track.sectionGapWidths);
+    expect(flat.layout.radius.medium).toBe(track.layout.radius.medium);
+  });
+
+  it('works out the closest the layout brings sections, and its smallest corners, from the road width', () => {
+    for (const roadWidth of [12, 16, 20, 24]) {
+      const rules = trackRulesFor({ ...track, roadWidth }, 'flat');
+      const half = roadWidth / 2;
+      const { layout } = track;
+      expect(rules.minCornerRadius).toBe(track.minInsideRadius + half);
+      expect(rules.layout.minCornerRadius).toBe(layout.minInsideRadius + half);
+      expect(rules.layout.clearance).toBe(layout.clearanceWidths * roadWidth);
+      expect(rules.layout.base.stretchedHalfWidth).toEqual([layout.base.stretchedHalfWidth.leastWidths * roadWidth, layout.base.stretchedHalfWidth.most]);
+      expect(rules.layout.fold.hairpinWidth).toEqual([layout.fold.hairpinWidths[0] * roadWidth, layout.fold.hairpinWidths[1] * roadWidth]);
+      expect(rules.layout.jog.offset).toEqual([layout.jog.offsetWidths[0] * roadWidth, layout.jog.offsetWidths[1] * roadWidth]);
+      expect(rules.layout.radius.hairpin).toEqual([layout.radius.hairpinInside[0] + half, layout.radius.hairpinInside[1] + half]);
+      expect(rules.layout.radius.tip).toEqual([layout.radius.tipInside[0] + half, layout.radius.tipInside[1] + half]);
+    }
+  });
+
+  it('gives exactly the metres the layout had before 6h on a 12 m road', () => {
+    const rules = trackRulesFor({ ...track, roadWidth: 12 }, 'flat');
+    expect(rules.minCornerRadius).toBe(15);
+    expect(rules.layout.minCornerRadius).toBe(18);
+    expect(rules.layout.clearance).toBe(40);
+    expect(rules.layout.base.stretchedHalfWidth).toEqual([24, 110]);
+    expect(rules.layout.fold.hairpinWidth).toEqual([44, 66]);
+    expect(rules.layout.jog.offset).toEqual([13, 22]);
+    expect(rules.layout.radius.hairpin).toEqual([18, 32]);
+    expect(rules.layout.radius.tip).toEqual([18, 30]);
   });
 });

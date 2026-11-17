@@ -170,7 +170,7 @@ describe('generateTrack turning candidates to fit the ground', () => {
     expect(Math.max(...mountain.map((r) => winnerOf(r).line.length))).toBeGreaterThan(2400);
     for (const r of others) {
       expect(winnerOf(r).line.length, `seed ${r.seed}`).toBeLessThanOrEqual(2400);
-      expect(validateLayout(winnerOf(r).line, cfg), `seed ${r.seed}`).toEqual([]);
+      expect(validateLayout(winnerOf(r).line, trackRulesFor(cfg, r.character.relief)), `seed ${r.seed}`).toEqual([]);
     }
   });
 
@@ -220,8 +220,29 @@ describe('variety across 20 seeds', () => {
   });
 });
 
+describe('generateTrack on a 20 m road', () => {
+  const wide = withTrack({ ...cfg, roadWidth: 20 });
+  const results = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, wide));
+
+  it('finds a valid winner for seeds 1 to 20, with no fallback', () => {
+    for (const r of results) expect(r.fallback, `seed ${r.seed}`).toBe(false);
+  });
+
+  it('keeps every winning corner 19 m or wider: 9 m from its centre to the inside edge, as 15 m is on a 12 m road', () => {
+    for (const r of results) {
+      expect(trackRulesFor(wide.track, r.character.relief).minCornerRadius).toBe(19);
+      for (const corner of cornersOf(r)) expect(corner.minRadius, `seed ${r.seed}`).toBeGreaterThanOrEqual(19);
+    }
+  });
+
+  it('builds mostly valid candidates, as on a 12 m road: at least 25 of 30 for the middle seed', () => {
+    const valid = results.map((r) => r.candidates.filter((c) => c.violations.length === 0).length).sort((a, b) => a - b);
+    expect(valid[valid.length >> 1]).toBeGreaterThanOrEqual(25);
+  });
+});
+
 describe('generateTrack when nothing is valid', () => {
-  const impossible: TrackConfig = { ...cfg, minCornerRadius: 5000 };
+  const impossible: TrackConfig = { ...cfg, minInsideRadius: 5000 };
   const result = generateTrack(5, withTrack(impossible));
 
   it('tries more rounds, then falls back to a plain oval and says so', () => {
@@ -231,7 +252,7 @@ describe('generateTrack when nothing is valid', () => {
   });
 
   it('returns a fallback oval that is valid under the normal rules', () => {
-    expect(validateLayout(winnerOf(result).line, cfg)).toEqual([]);
+    expect(validateLayout(winnerOf(result).line, trackRulesFor(cfg, result.character.relief))).toEqual([]);
   });
 });
 

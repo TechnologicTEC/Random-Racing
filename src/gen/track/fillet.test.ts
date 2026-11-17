@@ -3,10 +3,11 @@ import { config } from '../../config';
 import type { CornerSection, Section, StraightSection } from '../types';
 import { analyseSections } from './analysis';
 import { roundCorners, type Corner } from './fillet';
+import { trackRulesFor } from './rules';
 import { resampleClosedPath } from './spline';
 import { validateLayout } from './validate';
 
-const cfg = config.track;
+const cfg = trackRulesFor(config.track, 'flat');
 const cornersOf = (sections: Section[]) => sections.filter((s): s is CornerSection => s.type === 'corner');
 const straightsOf = (sections: Section[]) => sections.filter((s): s is StraightSection => s.type === 'straight');
 

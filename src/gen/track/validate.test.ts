@@ -8,10 +8,11 @@ import {
   stadiumLine,
 } from '../../testing/trackFixtures';
 import type { Violation } from '../types';
+import { trackRulesFor } from './rules';
 import { resampleClosedPath } from './spline';
 import { validateLayout } from './validate';
 
-const cfg = config.track;
+const cfg = trackRulesFor(config.track, 'flat');
 const kinds = (violations: Violation[]) => violations.map((v) => v.kind);
 const find = (violations: Violation[], kind: Violation['kind']) => violations.find((v) => v.kind === kind);
 
@@ -58,38 +59,48 @@ describe('validateLayout: self-intersection', () => {
   });
 });
 
+/** The rules on a road of this width; each limit below is read from them, so the tests hold at any width. */
+const rulesAt = (roadWidth: number) => trackRulesFor({ ...config.track, roadWidth }, 'flat');
+
 describe('validateLayout: corner radius', () => {
-  it('uses the 15 m minimum from the brief', () => {
-    expect(cfg.minCornerRadius).toBe(15);
+  it('allows corners whose inside edge is 9 m from their centre: 15 m on a 12 m road, as the brief has it', () => {
+    expect(config.track.minInsideRadius).toBe(9);
+    expect(rulesAt(12).minCornerRadius).toBe(15);
+    expect(cfg.minCornerRadius).toBe(config.track.minInsideRadius + config.track.roadWidth / 2);
   });
 
-  it('rejects a 10 m radius corner', () => {
-    expect(kinds(validateLayout(roundedSquareLine(450, 10), cfg))).toEqual(['corner-too-tight']);
-  });
+  describe.each([12, 20])('on a %i m road', (roadWidth) => {
+    const rules = rulesAt(roadWidth);
+    const limit = rules.minCornerRadius;
 
-  it('accepts a 20 m radius corner', () => {
-    expect(validateLayout(roundedSquareLine(450, 20), cfg)).toEqual([]);
-  });
+    it('rejects a corner 5 m tighter than the limit', () => {
+      expect(kinds(validateLayout(roundedSquareLine(450, limit - 5), rules))).toEqual(['corner-too-tight']);
+    });
 
-  it('rejects just under the limit and accepts just over it', () => {
-    expect(kinds(validateLayout(roundedSquareLine(450, 14), cfg))).toEqual(['corner-too-tight']);
-    expect(validateLayout(roundedSquareLine(450, 16), cfg)).toEqual([]);
-  });
+    it('accepts a corner 5 m wider than the limit', () => {
+      expect(validateLayout(roundedSquareLine(450, limit + 5), rules)).toEqual([]);
+    });
 
-  it('reports the tightest radius and marks the corner', () => {
-    const tight = find(validateLayout(roundedSquareLine(450, 10), cfg), 'corner-too-tight')!;
-    expect(tight.value).toBeGreaterThan(9.5);
-    expect(tight.value).toBeLessThan(10.5);
-    expect(tight.limit).toBe(15);
-    // Corners of a 450 m square with 10 m radius sit about 222 m out on each axis.
-    expect(Math.abs(tight.x)).toBeGreaterThan(215);
-    expect(Math.abs(tight.z)).toBeGreaterThan(215);
-  });
+    it('rejects just under the limit and accepts just over it', () => {
+      expect(kinds(validateLayout(roundedSquareLine(450, limit - 1), rules))).toEqual(['corner-too-tight']);
+      expect(validateLayout(roundedSquareLine(450, limit + 1), rules)).toEqual([]);
+    });
 
-  it('checks left turns as well as right turns', () => {
-    const line = roundedSquareLine(450, 10);
-    const mirrored = { ...line, z: line.z.map((v) => -v), tz: line.tz.map((v) => -v), curvature: line.curvature.map((v) => -v) };
-    expect(kinds(validateLayout(mirrored, cfg))).toEqual(['corner-too-tight']);
+    it('reports the tightest radius and marks the corner', () => {
+      const tight = find(validateLayout(roundedSquareLine(450, limit - 5), rules), 'corner-too-tight')!;
+      expect(tight.value).toBeGreaterThan(limit - 5.5);
+      expect(tight.value).toBeLessThan(limit - 4.5);
+      expect(tight.limit).toBe(limit);
+      // The corners of a 450 m square sit more than 215 m out on each axis.
+      expect(Math.abs(tight.x)).toBeGreaterThan(215);
+      expect(Math.abs(tight.z)).toBeGreaterThan(215);
+    });
+
+    it('checks left turns as well as right turns', () => {
+      const line = roundedSquareLine(450, limit - 5);
+      const mirrored = { ...line, z: line.z.map((v) => -v), tz: line.tz.map((v) => -v), curvature: line.curvature.map((v) => -v) };
+      expect(kinds(validateLayout(mirrored, rules))).toEqual(['corner-too-tight']);
+    });
   });
 });
 
@@ -98,30 +109,35 @@ describe('validateLayout: sections too close', () => {
     expect(cfg.sectionGapWidths).toBe(2.5);
   });
 
-  it('rejects separate sections 20 m apart', () => {
-    expect(kinds(validateLayout(hourglassLine(20), cfg))).toEqual(['sections-too-close']);
-  });
+  describe.each([12, 20])('on a %i m road', (roadWidth) => {
+    const rules = rulesAt(roadWidth);
+    const gap = roadWidth * rules.sectionGapWidths;
 
-  it('accepts separate sections 40 m apart', () => {
-    expect(validateLayout(hourglassLine(40), cfg)).toEqual([]);
-  });
+    it('rejects separate sections 10 m closer than 2.5 widths', () => {
+      expect(kinds(validateLayout(hourglassLine(gap - 10), rules))).toEqual(['sections-too-close']);
+    });
 
-  it('reports the gap and marks the pinch point', () => {
-    const close = find(validateLayout(hourglassLine(20), cfg), 'sections-too-close')!;
-    expect(close.value).toBeGreaterThan(19);
-    expect(close.value).toBeLessThan(21);
-    expect(close.limit).toBeCloseTo(cfg.roadWidth * 2.5, 9);
-    expect(Math.abs(close.x)).toBeLessThan(15);
-    expect(Math.abs(close.z)).toBeLessThan(15);
-  });
+    it('accepts separate sections 10 m further apart than 2.5 widths', () => {
+      expect(validateLayout(hourglassLine(gap + 10), rules)).toEqual([]);
+    });
 
-  it('does not count the two sides of one hairpin as separate sections', () => {
-    // A 20 m radius hairpin has legs 40 m apart, and points around its apex much closer than that.
-    expect(validateLayout(stadiumLine(700, 20), cfg)).toEqual([]);
-  });
+    it('reports the gap and marks the pinch point', () => {
+      const close = find(validateLayout(hourglassLine(gap - 10), rules), 'sections-too-close')!;
+      expect(close.value).toBeGreaterThan(gap - 11);
+      expect(close.value).toBeLessThan(gap - 9);
+      expect(close.limit).toBeCloseTo(gap, 9);
+      expect(Math.abs(close.x)).toBeLessThan(15);
+      expect(Math.abs(close.z)).toBeLessThan(15);
+    });
 
-  it('rejects a hairpin whose legs run only 24 m apart', () => {
-    expect(kinds(validateLayout(stadiumLine(700, 12), cfg))).toEqual(['corner-too-tight', 'sections-too-close']);
+    it('does not count the two sides of one hairpin as separate sections', () => {
+      // Legs a third further apart than the gap, and points around the apex much closer than that.
+      expect(validateLayout(stadiumLine(700, (2 / 3) * gap), rules)).toEqual([]);
+    });
+
+    it('rejects a hairpin 3 m tighter than the limit, whose legs run too close', () => {
+      expect(kinds(validateLayout(stadiumLine(700, rules.minCornerRadius - 3), rules))).toEqual(['corner-too-tight', 'sections-too-close']);
+    });
   });
 });
 

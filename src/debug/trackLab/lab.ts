@@ -118,7 +118,8 @@ function readRuleOverrides(params: URLSearchParams): { values: Partial<TrackConf
   const notes: string[] = [];
   const minRadius = Number(params.get('minRadius'));
   if (params.has('minRadius') && minRadius > 0 && minRadius < 1000) {
-    values.minCornerRadius = minRadius;
+    // The rule is kept as the room inside a corner; the address gives the corner's radius.
+    values.minInsideRadius = minRadius - config.track.roadWidth / 2;
     notes.push(`minimum corner radius ${minRadius} m`);
   }
   const gapWidths = Number(params.get('gapWidths'));
@@ -187,7 +188,7 @@ export function mountTrackLab(root: HTMLElement): void {
     const dpr = window.devicePixelRatio || 1;
     ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!result) {
-      drawLab(ctx!, view, null, cfg);
+      drawLab(ctx!, view, null, trackRulesFor(cfg, 'flat'));
       return;
     }
     const ghosts = ghostsBox.checked

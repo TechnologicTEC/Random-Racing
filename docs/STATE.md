@@ -8,8 +8,9 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6h-1, the measurements for the drift rework (see "Step 6h"): the slide circles chosen (30, 61 and 218 m on a 20 m road) and the new boost shown to stay on the road. Nothing the player sees has changed yet
-- **Next:** `docs/PLAN.md`, "The build order": **6h-2**, the track at 20 m. 6h is planned and approved (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`); its parts are in `docs/plan/M3-driving.md`, "Step 6h". Step 7 waits until 6h is done
+- **Last finished part:** 6h-2, the track rules given against the road's width (see "Step 6h"), so a 20 m road builds tracks as varied as a 12 m one. Nothing the player sees has changed yet: the road is still 12 m and every track is as it was
+- **Next:** `docs/PLAN.md`, "The build order": **6h-3**, the road and the island at 20 m (the width switched, with narrower hairpin folds: see "6h-2").
+- **Before 6h-3:** in 6h-2 the plan said `track.roadWidth: 20`; it moved to 6h-3, because the road and island checks of 6h-3 must pass in the same commit as the width. 6h is planned and approved (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`); its parts are in `docs/plan/M3-driving.md`, "Step 6h". Step 7 waits until 6h is done
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -319,7 +320,7 @@ Planned in plan mode and approved by Tane on 2026-11-17 (plan file: `C:\Users\ta
 | Part | What | Status |
 | --- | --- | --- |
 | 6h-1 | **Measure, then fix the numbers.** The corner driver's holder style and drive out of the corner; the grid of widths, circles and boosts | Done |
-| 6h-2 | **The track at 20 m** | |
+| 6h-2 | **The track at 20 m**: the layout's distances and smallest corners given against the road's width (`LayoutSettings`, `TrackRules`) | Done |
 | 6h-3 | **The road and the island at 20 m**; the reference pictures taken again | |
 | 6h-4 | **Drift and boost**: circles of 30, 61 and 218 m, the boost of 1.15 at 12 m/s², the steering cap | |
 | 6h-5 | **The look**: sprites and bloom | |
@@ -384,6 +385,50 @@ Planned in plan mode and approved by Tane on 2026-11-17 (plan file: `C:\Users\ta
 - the holder changes no key.
 
 The first three and the holder test failed first, on the missing functions and `keyChanges`. The road-lane limit test was written after its code, so it was not seen failing. 2,158 unit tests pass.
+
+### 6h-2: the track rules against the road's width
+
+**What changed:**
+- **The config keeps the layout's road-dependent settings against the road's width** (`LayoutSettings` in `src/config.ts`, Claude's call, so a change of width carries through):
+  - `layout.clearanceWidths` (40/12, 40 m on a 12 m road);
+  - `base.stretchedHalfWidth.leastWidths` (2) and `most` (110 m);
+  - `fold.hairpinWidths` (44/12 to 66/12);
+  - `jog.offsetWidths` (13/12 to 22/12).
+- **The smallest corners are given as the room inside them**, from the corner's centre to the road's inside edge:
+  - `track.minInsideRadius` 9 (was `minCornerRadius` 15; the brief's 15 m radius on a 12 m road);
+  - `layout.minInsideRadius` 12 (was 18);
+  - `radius.hairpinInside` [12, 26] and `tipInside` [12, 24] (were radii of [18, 32] and [18, 30]).
+- **`trackRulesFor` works them out in metres** for the road's width (`TrackRules`), and everything that builds and judges layouts reads those. The analysis and the score take `TrackCommon`, the rules that need no working out.
+- **The lab's `?minRadius=` what-if** still takes a corner radius.
+
+**Proof that nothing moved at 12 m:** the track fingerprints of seeds 1 to 60 are identical before and after (throwaway check). The conversion is exact: 40/12 times 12 is 40 in floating point, and so for each value.
+
+**The track at 20 m** (throwaway, seeds 1 to 200, track only):
+
+| | 12 m (today) | 20 m, settings as they are | **20 m, hairpin folds of 3 to 4.5 widths** |
+| --- | --- | --- | --- |
+| Seeds with no valid layout (fallback) | 0 | 0 | 0 |
+| Valid candidates, middle seed (fewest) | 30 of 30 (1) | 30 of 30 (2) | 30 of 30 (2) |
+| Seeds with a hairpin, chicane, sweeper | 100%, 96%, 98% | 90%, 92%, 98% | 99%, 93%, 99% |
+| A lap: hairpins, chicanes, sweepers, plain corners | 1.61, 2.21, 1.43, 5.97 | 1.14, 2.08, 1.47, 6.33 | 1.32, 2.16, 1.42, 6.40 |
+| Lap length, middle (range) | 2,046 m (1,526 to 2,964) | 2,030 m (1,494 to 2,841) | 2,054 m (1,467 to 2,842) |
+| Time to build a track, middle (slowest) | 56 ms (266) | 52 ms (293) | 42 ms (140) |
+| Tightest corner, middle (least) | 18.1 m (18.0) | 22.0 m (21.9) | 22.0 m (21.9) |
+
+**Why fewer hairpins at first:** scaled with the road, a narrow fold is 73 to 110 m across, and its end turns on a radius of 37 to 55 m. The analysis calls a turn wider than 45 m a plain corner (`analysis.hairpinMaxRadius`). The 2.5-width gap only needs the fold to be about 57 m across (50 m after the layout is shrunk by up to 0.88). So **6h-3 sets `fold.hairpinWidths` to [3, 4.5]** (60 to 90 m on a 20 m road) with the width, which brings hairpins back on 99% of seeds. Claude's call, for Tane to judge.
+
+**Tests:**
+- `config.test.ts`: the skeleton keeps further apart than the section gap at any width; there is room inside the tightest corner for the apron, kerb, verge and 1.5 m more.
+- `rules.test.ts`: the metres worked out at 12, 16, 20 and 24 m; exactly the old metres at 12 m.
+- `validate.test.ts`: the corner and section-gap tests rewritten from the rules' limits and run on 12 and 20 m roads (for example "rejects separate sections 10 m closer than 2.5 widths", which was "20 m apart"). They keep their meaning.
+- `pipeline.test.ts`, "on a 20 m road": seeds 1 to 20 with no fallback, every winning corner 19 m or wider, and at least 25 of 30 candidates valid on the middle seed.
+- Tests that handed `config.track` to the builder now hand it `trackRulesFor(config.track, 'flat')`.
+
+**Seen failing first:**
+- the new config relations, `rules.test.ts`'s width test, and the 9 m inside test, on the missing settings;
+- the 20 m corner test, which old code fails with 18 m hairpins.
+
+The other 20 m pipeline tests and the validate tests at 20 m passed on the old code. They guard what must stay true, not a new behaviour. 2,175 unit tests pass.
 
 ## Working agreements
 
@@ -570,6 +615,7 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6g, from Tane's first drive: a slide held for a second ran into the barrier. Slides now follow circles of 22, 45 or 160 m at any speed (key into the corner, none, the other key; were turn rates) and the nose points 15 degrees in (was 24), Tane's choices from measured options. New keyboard corner driver (`testing/cornerDriver.ts`) and test: a slide held from just after each corner's start to just before its end, on the road, through 95% of the corners of seeds 1 to 20 (hairpins and plain corners 100%). 2,153 unit tests pass; all 334 browser tests passed in one run (22.1 minutes). Next: step 7, planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6h-2 done: the layout's distances and smallest corners are given against the road's width (`LayoutSettings`), worked out in metres by `trackRulesFor` (`TrackRules`). Seeds 1 to 60 have identical tracks at 12 m. At 20 m, seeds 1 to 200 all build with no fallback, with laps and build times as before. Hairpins fall to 90% of seeds unless the narrow folds are made 3 to 4.5 widths across, which gives 99%; 6h-3 sets that with the width. 2,175 unit tests pass; all 334 browser tests passed in one run (19.9 minutes). Next: 6h-3.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6h planned in plan mode and approved. Tane's choices: a 20 m road, a boost of 1.15 at 12 m/s², the steering cap above top speed, sprites and bloom. 6h-1 done:
   - The corner driver gains a holder style and a drive out of the corner that brakes for what is coming.
   - The measured grid chose slide circles of 30, 61 and 218 m.

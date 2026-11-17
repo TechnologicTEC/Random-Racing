@@ -1,4 +1,4 @@
-import type { TrackConfig } from '../../config';
+import type { TrackRules } from '../../config';
 import { Grid } from '../../core/grid';
 import type { CenterLine, Violation } from '../types';
 
@@ -6,7 +6,7 @@ import type { CenterLine, Violation } from '../types';
  * Checks a layout against the hard rules. Returns one entry per broken rule,
  * most serious first; an empty list means the layout is valid.
  */
-export function validateLayout(line: CenterLine, cfg: TrackConfig): Violation[] {
+export function validateLayout(line: CenterLine, cfg: TrackRules): Violation[] {
   const violations: Violation[] = [];
   const push = (violation: Violation | null): void => {
     if (violation) violations.push(violation);

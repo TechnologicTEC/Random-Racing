@@ -1,4 +1,4 @@
-import type { EllipseBaseConfig, LayoutConfig, Range, StyleConfig, TrackConfig } from '../../config';
+import type { EllipseBaseConfig, LayoutConfig, Range, StyleConfig, TrackRules } from '../../config';
 import { dcos, dsin, length2, TAU } from '../../core/dmath';
 import { pickWeighted, type Rng } from '../../core/rng';
 import type { Vec2 } from '../../core/vec2';
@@ -48,7 +48,7 @@ export function pickStyle(rng: Rng, layout: LayoutConfig): LayoutStyle {
 }
 
 /** Builds one candidate layout in the given style. */
-export function generateLayout(rng: Rng, cfg: TrackConfig, style: LayoutStyle): Layout {
+export function generateLayout(rng: Rng, cfg: TrackRules, style: LayoutStyle): Layout {
   for (let attempt = 0; attempt < cfg.layout.maxAttempts; attempt++) {
     const layout = tryBuild(rng.fork(`attempt-${attempt}`), cfg, style);
     if (layout) return { ...layout, attempts: attempt + 1 };
@@ -56,7 +56,7 @@ export function generateLayout(rng: Rng, cfg: TrackConfig, style: LayoutStyle): 
   return plainLoop(cfg, style);
 }
 
-function tryBuild(rng: Rng, cfg: TrackConfig, style: LayoutStyle): Layout | null {
+function tryBuild(rng: Rng, cfg: TrackRules, style: LayoutStyle): Layout | null {
   const rules = cfg.layout;
   const plan = rules.styles[style];
   // The skeleton may grow until its perimeter reaches this budget.
@@ -155,7 +155,7 @@ function tryBuild(rng: Rng, cfg: TrackConfig, style: LayoutStyle): Layout | null
 // ---------- Base shapes ----------
 
 /** Corners spaced unevenly around an ellipse, listed clockwise on the map. */
-function ellipseBase(rng: Rng, cfg: TrackConfig, base: EllipseBaseConfig, budget: number): Vertex[] {
+function ellipseBase(rng: Rng, cfg: TrackRules, base: EllipseBaseConfig, budget: number): Vertex[] {
   const rules = cfg.layout.base;
   const aspect = between(rng, base.aspect);
   const count = countIn(rng, base.corners);
@@ -195,7 +195,7 @@ function stretchedBase(rng: Rng, rules: LayoutConfig): Vertex[] {
 }
 
 /** A dull but usable loop, for the rare candidate that cannot be built any other way. */
-function plainLoop(cfg: TrackConfig, style: LayoutStyle): Layout {
+function plainLoop(cfg: TrackRules, style: LayoutStyle): Layout {
   const wanted: Corner[] = [];
   for (let i = 0; i < 12; i++) {
     const angle = (i * TAU) / 12;
@@ -230,7 +230,7 @@ function splice(shape: readonly Vertex[], index: number, inserted: Vertex[]): Ve
 }
 
 /** Basic health checks every skeleton must pass after each change. */
-function shapeOk(shape: readonly Vertex[], cfg: TrackConfig): boolean {
+function shapeOk(shape: readonly Vertex[], cfg: TrackRules): boolean {
   const rules = cfg.layout;
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < shape.length; i++) {
@@ -250,7 +250,7 @@ function shapeOk(shape: readonly Vertex[], cfg: TrackConfig): boolean {
  * Pushes an inlet into the shape or a finger out of it, from somewhere along
  * one edge. Narrow folds end in a hairpin; wide folds end in two corners.
  */
-function tryFold(rng: Rng, shape: readonly Vertex[], plan: StyleConfig, budget: number, cfg: TrackConfig): Vertex[] | null {
+function tryFold(rng: Rng, shape: readonly Vertex[], plan: StyleConfig, budget: number, cfg: TrackRules): Vertex[] | null {
   const rules = cfg.layout;
   const fold = rules.fold;
   const spare = budget - perimeter(shape);
@@ -319,7 +319,7 @@ function tryFold(rng: Rng, shape: readonly Vertex[], plan: StyleConfig, budget: 
 }
 
 /** Steps an edge sideways part way along, making a quick left-right or right-left flick. */
-function tryJog(rng: Rng, shape: readonly Vertex[], cfg: TrackConfig): Vertex[] | null {
+function tryJog(rng: Rng, shape: readonly Vertex[], cfg: TrackRules): Vertex[] | null {
   const jog = cfg.layout.jog;
   const index = pickWeighted(rng, shape.map((_, i) => {
     const length = edgeAt(shape, i).length;
@@ -344,7 +344,7 @@ function tryJog(rng: Rng, shape: readonly Vertex[], cfg: TrackConfig): Vertex[] 
 }
 
 /** Pushes the middle of a long edge sideways, so a straight becomes a long gentle curve. */
-function tryBow(rng: Rng, shape: readonly Vertex[], cfg: TrackConfig): Vertex[] | null {
+function tryBow(rng: Rng, shape: readonly Vertex[], cfg: TrackRules): Vertex[] | null {
   const bow = cfg.layout.bow;
   const index = pickWeighted(rng, shape.map((_, i) => {
     const length = edgeAt(shape, i).length;

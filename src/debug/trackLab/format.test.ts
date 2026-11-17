@@ -244,7 +244,7 @@ describe('summariseTracks', () => {
 
   it('mentions fallbacks only when there are some', () => {
     expect(summary).not.toContain('fallback');
-    const forced = generateTrack(1, { ...config, track: { ...config.track, minCornerRadius: 5000 } });
+    const forced = generateTrack(1, { ...config, track: { ...config.track, minInsideRadius: 5000 } });
     expect(summariseTracks([forced])).toContain('1 fell back to a plain oval');
   });
 

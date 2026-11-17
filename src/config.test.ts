@@ -18,6 +18,23 @@ describe('config', () => {
     expect(config.road.width.min).toBeLessThan(config.road.width.max);
   });
 
+  it('keeps the skeleton parts further apart than the brief section gap, even after the layout is shrunk to fit, at any road width', () => {
+    const { layout, sectionGapWidths } = config.track;
+    expect(layout.clearanceWidths * layout.scale[0]).toBeGreaterThan(sectionGapWidths);
+    // The two straights of a stretched base, and the two legs of a narrow fold, are separate sections.
+    expect(2 * layout.base.stretchedHalfWidth.leastWidths * layout.scale[0]).toBeGreaterThanOrEqual(sectionGapWidths);
+    expect(layout.fold.hairpinWidths[0] * layout.scale[0]).toBeGreaterThan(sectionGapWidths);
+  });
+
+  it('leaves room inside the tightest corner for the apron, the kerb, the verge and 1.5 m more, and keeps the builder above the hard limit', () => {
+    const { road, track } = config;
+    const { layout } = track;
+    expect(layout.minInsideRadius).toBeGreaterThanOrEqual(road.apronWidth + road.kerbWidth + road.verge + 1.5);
+    expect(track.minInsideRadius).toBeLessThan(layout.minInsideRadius);
+    expect(layout.radius.hairpinInside[0]).toBeGreaterThanOrEqual(layout.minInsideRadius);
+    expect(layout.radius.tipInside[0]).toBeGreaterThanOrEqual(layout.minInsideRadius);
+  });
+
   it('keeps widened road clear of other sections: further apart than sections that share a bank', () => {
     expect(config.road.width.clearance).toBeGreaterThan(config.road.coupleDistance);
   });

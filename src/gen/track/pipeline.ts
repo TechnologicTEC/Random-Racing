@@ -1,4 +1,4 @@
-import type { GenConfig, RoadConfig, TrackConfig } from '../../config';
+import type { GenConfig, RoadConfig, TrackRules } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createRng } from '../../core/rng';
 import { pickCharacter } from '../character';
@@ -94,7 +94,7 @@ function buildCandidate(
   controlPoints: Corner[],
   buildAttempts: number,
   line: CenterLine,
-  cfg: TrackConfig,
+  cfg: TrackRules,
   terrain: Terrain,
   alwaysScore: boolean,
 ): Candidate {
@@ -162,7 +162,7 @@ function bestCandidate(candidates: readonly Candidate[]): number {
 }
 
 /** A plain circle sized for a mid-length lap. Used only if no candidate is valid. */
-function fallbackOval(cfg: TrackConfig): Corner[] {
+function fallbackOval(cfg: TrackRules): Corner[] {
   const lap = (cfg.lapLengthMin + cfg.lapLengthMax) / 2;
   const radius = Math.min(lap / TAU, cfg.buildableRadius * 0.8);
   const points: Corner[] = [];
@@ -177,7 +177,7 @@ function fallbackOval(cfg: TrackConfig): Corner[] {
  * Moves the start of the lap onto the longest straight, so sample 0 is the
  * start/finish line with most of that straight ahead of it.
  */
-function placeStartLine(candidate: Candidate, cfg: TrackConfig): Candidate {
+function placeStartLine(candidate: Candidate, cfg: TrackRules): Candidate {
   let longest: StraightSection | null = null;
   for (const section of candidate.sections) {
     if (section.type === 'straight' && (!longest || section.length > longest.length)) longest = section;
