@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished part:** 6g, the drift's turning from Tane's first drive (see "Step 6"): a slide now follows a circle of 22, 45 or 160 m whatever the speed, and the nose points 15 degrees into the corner. Before that, 6f, the tuning panel, which ended step 6
-- **Next:** `docs/PLAN.md`, "The build order": **7a**, off the road. Step 7 is a new step, so plan it in plan mode first. Check-in 2 comes after step 9
+- **Next:** `docs/PLAN.md`, "The build order": **6h**, the drift rework from Tane's second drive (see "Tane's second drive" under "Step 6"). It is a new step and a big one (the road gets much wider, so every island changes): plan it in plan mode in a new session and wait for Tane's approval. Step 7 waits until it is done
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -284,6 +284,25 @@ The sweepers that fail are wider than the widest slide follows well; they are ta
 
 **Tests changed with the behaviour, as Tane asked:** `pathCurve` (circles of 160, 45 and 22 m, evenly between) replaced the `pathTurn` test (0.25, 0.875, 1.5 rad/s); the slide circles on the flat are now 22, 45 and 160 m within 5% (were 20, 34 and 120 m), and a new test finds the same circles at 20 m/s; the nose 15 degrees within 1. Seen failing first: the new `drift.test.ts` and `drifting.test.ts` tests on the missing code; the corner test's measure failed at 78% with the first circles. Every other drift test (the boost, the wall at about 20 degrees, the 1 m drop, snapshots) passes unchanged. The drift pictures of seeds 7 and 42 looked at again: the kart now points only a little into the turn. Found on the way: the tuning panel's slider step for the new angle (0.001) did not hold 0.2618, so a slider's step is now also fine enough for its value's own decimals (the panel test caught it). 2,153 unit tests pass.
 
+### Tane's second drive (2026-11-17, after 6g): the drift needs reworking
+
+Tane drove 6g and found:
+
+- "Something's still wrong with the drift."
+- **The boost after a drift accelerates the car too much** after the button is let go, and sends it flying: several times into a crash or over the edge or a wall.
+- **The drift and boost graphics can be greatly improved.**
+
+Tane's four changes, to be planned as one step (6h) in a new session:
+
+1. **Tone down the boost** after a drift (today 1.3 times top speed, 39 m/s, reached at 30 m/s2, for 0.5, 1.0 or 1.6 s).
+2. **Make the track much wider**, as in kart racers like Mario Kart, whose tracks are much wider, so a drift has room and does not end in a wall. The road (today about 12 m, `road.width`) and possibly the island must change with it: walls, verges, earthworks, the fit to the ground, sections that run close together, and the Milestone 2 checks on seeds 1 to 20 and the 20 fresh seeds.
+3. **Lower the drift's turning further**, so a slide does not hit the inner wall. With the wider road, completing a drift should be easier.
+4. **Make the sparks and the boost look more realistic.** Tane offered to install something or download better sprites if that helps. The visual bar today forbids image files and glow; a change to that is Tane's call, made in the plan.
+
+Tane: "the best way to think about building this is to look at how Mario Kart does it". Take its design lessons (wide roads, gentle drift arcs, short mild boosts, readable spark tiers); do not recreate its look, tracks or art.
+
+Starting points for the plan: the keyboard corner driver (`src/testing/cornerDriver.ts`, `src/sim/car/corners.test.ts`) measures how many corners a slide can be held through, and can be run against wider roads and other circles; the tuning panel (T) changes the drift and boost live; `docs/plan/M3-driving.md` "Step 6" has the rules.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -467,3 +486,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6g, from Tane's first drive: a slide held for a second ran into the barrier. Slides now follow circles of 22, 45 or 160 m at any speed (key into the corner, none, the other key; were turn rates) and the nose points 15 degrees in (was 24), Tane's choices from measured options. New keyboard corner driver (`testing/cornerDriver.ts`) and test: a slide held from just after each corner's start to just before its end, on the road, through 95% of the corners of seeds 1 to 20 (hairpins and plain corners 100%). 2,153 unit tests pass; all 334 browser tests passed in one run (22.1 minutes). Next: step 7, planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** Tane's second drive, after 6g: the drift still feels wrong, the boost after it throws the car into walls and off edges, and the effects can look much better. Tane's four changes recorded under "Tane's second drive" (a milder boost, a much wider road, gentler drift turning, better sparks and flame) as part 6h, to be planned in a new session. Docs only. Next: plan 6h.
