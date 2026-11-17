@@ -132,4 +132,39 @@ describe('kartPose', () => {
     expect(pose.position).toEqual(resting.position);
     expect(pose.rotation).toEqual(resting.rotation);
   });
+
+  it('lifts the whole kart along its roof during the hop, drawn only', () => {
+    const hopping = kartPose({ ...resting, drift: { ...resting.drift, phase: 'hop', hop: 0.5 } }, config);
+    const up = rotate(resting.rotation, { x: 0, y: 1, z: 0 });
+    const lift = car.drift.hop.height;
+    expect(hopping.position.x).toBeCloseTo(resting.position.x + up.x * lift, 9);
+    expect(hopping.position.y).toBeCloseTo(resting.position.y + up.y * lift, 9);
+    expect(hopping.position.z).toBeCloseTo(resting.position.z + up.z * lift, 9);
+    // The wheels go up with it.
+    expect(hopping.wheels).toEqual(kartPose(resting, config).wheels);
+  });
+
+  it('gives no sparks and no flame with no drift', () => {
+    const pose = kartPose(resting, config);
+    expect(pose.sparks.positions).toHaveLength(0);
+    expect(pose.flame).toBe(0);
+  });
+
+  it('throws sparks from where the rear tyres meet the road while sliding from the first tier', () => {
+    const pose = kartPose({ ...resting, drift: { ...resting.drift, phase: 'slide', dir: 1, tier: 2, angle: 0.42 } }, config);
+    const { positions } = pose.sparks;
+    expect(positions.length).toBeGreaterThan(0);
+    const rear = [pose.wheels[2]!, pose.wheels[3]!];
+    // Every spark near one rear tyre's bottom, within a wheel's size of it.
+    for (let i = 0; i < positions.length; i += 3) {
+      const near = rear.some((wheel) => Math.hypot(positions[i]! - wheel.at.x, positions[i + 1]! - (wheel.at.y - look.wheelRadius), positions[i + 2]! - wheel.at.z) <= 2 * look.wheelRadius);
+      expect(near).toBe(true);
+    }
+  });
+
+  it('gives the flame its length while a boost runs', () => {
+    const pose = kartPose({ ...resting, drift: { ...resting.drift, boostLeft: 0.4, boostTier: 3 } }, config);
+    expect(pose.flame).toBeGreaterThan(look.flame.lengths[2] * (1 - look.flame.flicker) - 1e-9);
+    expect(pose.flame).toBeLessThan(look.flame.lengths[2] * (1 + look.flame.flicker) + 1e-9);
+  });
 });

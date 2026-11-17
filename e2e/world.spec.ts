@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { letGo, slideTo } from './drifting';
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -797,6 +798,8 @@ test.describe('3D screenshots', () => {
    * for example: $env:TIMES = "07:00,13:00,19:30"
    */
   const times = process.env.TIMES ? process.env.TIMES.split(',') : [];
+  /** Slides charged to earlier tiers, photographed as well as tier 3's, for example: $env:TIERS = "1,2" */
+  const tiers = (process.env.TIERS ? process.env.TIERS.split(',').map(Number) : []).filter((tier): tier is 1 | 2 => tier === 1 || tier === 2);
 
   for (const seed of seeds) {
     const name = String(seed).padStart(5, '0');
@@ -818,6 +821,21 @@ test.describe('3D screenshots', () => {
       await page.screenshot({ path: `test-results/screens/world-${name}-drive-start.png` });
       await page.evaluate(() => window.seedCircuit.drive!.run(300, { throttle: 1 }));
       await page.screenshot({ path: `test-results/screens/world-${name}-drive-5s.png` });
+    });
+    test(`island ${seed}, drifting: a slide with tier 3 sparks, then the boost's flame`, async ({ page }) => {
+      // A slide may take several tries from the start line (`slideTo`), each drawing frames in software.
+      test.setTimeout(180_000);
+      await openWorld(page, `seed=${seed}&still=1`);
+      await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
+      // Earlier tiers too with TIERS, for example: $env:TIERS = "1,2"
+      for (const tier of tiers) {
+        expect(await slideTo(page, tier), `a slide reaching tier ${tier}`).toBe(true);
+        await page.screenshot({ path: `test-results/screens/world-${name}-drive-slide-${tier}.png` });
+      }
+      expect(await slideTo(page, 3), 'a slide reaching tier 3').toBe(true);
+      await page.screenshot({ path: `test-results/screens/world-${name}-drive-slide.png` });
+      await letGo(page);
+      await page.screenshot({ path: `test-results/screens/world-${name}-drive-boost.png` });
     });
     test(`island ${seed} from above`, async ({ page }) => {
       await openWorld(page, `seed=${seed}&still=1&cam=orbit`);

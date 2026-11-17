@@ -1067,6 +1067,18 @@ export interface KartViewConfig {
   wheelWidth: number;
   /** How far the front wheels are drawn turned with the stick right over. Drawn only: the steering itself is `car.steer`. */
   steerAngle: number;
+  /**
+   * The sparks thrown back and out from both rear wheels while sliding from the first tier, in the tier's colour:
+   * `perStep` new ones a wheel each step, each living `life` seconds, flying at most `reach` metres, each a flat
+   * triangle `size` metres across that shrinks as it flies. A burst never grows bigger than its wheel.
+   */
+  sparks: { perStep: number; life: number; reach: number; size: number };
+  /**
+   * The boost flame: two cones pointing back from the engine, `lengths` long for the three tiers, flickering by
+   * `flicker` of that either way, step by step. The pale core runs the whole length and is `core` of `radius` wide
+   * at its base; the orange cone round it is `radius` wide and `outer` of the length, so the core's tip shows past it.
+   */
+  flame: { lengths: readonly [number, number, number]; radius: number; core: number; outer: number; flicker: number };
 }
 
 /** How the clouds are drawn. */
@@ -1961,7 +1973,14 @@ export const config: GameConfig = {
       stillTime: 0,
     },
     decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: ROCK_SINK, shade: [0.8, 1.12] },
-    car: { wheelRadius: 0.28, wheelWidth: 0.24, steerAngle: 0.35 },
+    car: {
+      wheelRadius: 0.28,
+      wheelWidth: 0.24,
+      steerAngle: 0.35,
+      // 30 a wheel at once, within 0.5 m of it with their size: never bigger than the 0.56 m wheel.
+      sparks: { perStep: 2, life: 0.25, reach: 0.45, size: 0.09 },
+      flame: { lengths: [0.6, 0.9, 1.2], radius: 0.13, core: 0.55, outer: 0.7, flicker: 1 / 6 },
+    },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [

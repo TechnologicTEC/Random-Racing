@@ -19,7 +19,7 @@ import type { Rapier } from '../sim/physics/rapier';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { genClient } from '../worker/client';
-import { mainSurface } from './drive';
+import { driftReadout, mainSurface } from './drive';
 import { createDriving } from './driving';
 import { nextCamera, openingCamera, switchAddress, type CameraMode } from './route';
 
@@ -89,6 +89,7 @@ const TEMPLATE = `
     <div class="world-card world-dash" data-ref="dash" data-testid="world-readout" hidden>
       <p class="world-speed-line"><span class="world-speed" data-ref="speed" data-testid="world-speed">0</span><span class="world-unit">km/h</span></p>
       <p class="world-surface" data-ref="surface" data-testid="world-surface"></p>
+      <p class="world-drift" data-ref="drift" data-testid="world-drift"><span class="world-tier" data-ref="tier" hidden></span><span data-ref="boost"></span></p>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
@@ -238,6 +239,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (ref('speed').textContent !== speed) ref('speed').textContent = speed;
       const surface = mainSurface(state.wheels) ?? 'in the air';
       if (ref('surface').textContent !== surface) ref('surface').textContent = surface;
+      // The drift: a dot in the tier's colour, and the boost left.
+      const drift = driftReadout(state.drift);
+      const tier = ref('tier');
+      tier.hidden = drift.colour === null;
+      if (drift.colour !== null && tier.style.backgroundColor !== drift.colour) tier.style.backgroundColor = drift.colour;
+      if (ref('boost').textContent !== drift.boost) ref('boost').textContent = drift.boost;
+      document.body.dataset.driveTier = String(drift.tier);
       document.body.dataset.driveStep = String(state.step);
     }
     dirty = true;

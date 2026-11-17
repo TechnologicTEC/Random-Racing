@@ -3,6 +3,7 @@ import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
 import { rotate } from '../src/sim/quat';
 import { startPose } from '../src/sim/start';
+import { letGo, slideTo } from './drifting';
 
 /**
  * The simulation on the 3D page (Milestone 3, step 5). Tests step it with
@@ -176,5 +177,37 @@ test.describe('driving on the page', () => {
     await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.drive!.state()))!.step).toBe(0);
     expect(fromStart(7, (await page.evaluate(() => window.seedCircuit.drive!.state()))!.position)).toBeLessThan(0.5);
     expect(errors).toEqual([]);
+  });
+});
+
+test.describe('drifting on the page', () => {
+  test('shows the tier as a dot in the readout while sliding, and the boost left once let go', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=42&still=1');
+    await expect(page.getByTestId('world-drift').locator('.world-tier')).toBeHidden();
+    expect(await slideTo(page, 2)).toBe(true);
+    await expect(page.locator('body')).toHaveAttribute('data-drive-tier', '2');
+    const dot = page.getByTestId('world-drift').locator('.world-tier');
+    await expect(dot).toBeVisible();
+    await expect(dot).toHaveCSS('background-color', 'rgb(255, 153, 31)');
+    await letGo(page, 1);
+    await expect(page.getByTestId('world-drift')).toContainText('boost 1.0 s');
+    await letGo(page, 70);
+    await expect(page.getByTestId('world-drift').locator('.world-tier')).toBeHidden();
+    await expect(page.getByTestId('world-drift')).toHaveText('');
+    expect(errors).toEqual([]);
+  });
+
+  test('gives the same picture of a slide and of a boost twice', async ({ page }) => {
+    const pictures: Buffer[][] = [];
+    for (let k = 0; k < 2; k++) {
+      await openDriving(page, 'seed=42&still=1');
+      expect(await slideTo(page, 3)).toBe(true);
+      const slide = await page.screenshot();
+      await letGo(page);
+      pictures.push([slide, await page.screenshot()]);
+    }
+    expect(pictures[1]![0]!.equals(pictures[0]![0]!)).toBe(true);
+    expect(pictures[1]![1]!.equals(pictures[0]![1]!)).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import type { GameConfig, KartViewConfig } from '../config';
 import { STEER_STEPS } from '../sim/input';
 import { rotate, type Quat, type Vec3 } from '../sim/quat';
 import type { CarState } from '../sim/sim';
+import { flameLength, hopLift, sparkTriangles, type Sparks } from './driftEffects';
 import { KART, type Rgb } from './palette';
 import { createShapeBuilder, type Shape } from './treeShapes';
 
@@ -147,6 +148,10 @@ export interface KartPose {
    * and how far it is turned about the body's up (radians, positive to the left).
    */
   wheels: Array<{ at: Vec3; turn: number }>;
+  /** The drift's sparks, in the body's own directions (`sparkTriangles`). */
+  sparks: Sparks;
+  /** How long the boost flame is drawn, in metres; 0 with none. */
+  flame: number;
 }
 
 /**
@@ -154,21 +159,31 @@ export interface KartPose {
  * where the simulation's wheel is (the middle of the small ball it casts, so
  * the springs show), lifted so the bottom of the drawn tyre is where the
  * ball's bottom is: on the ground, with no gap and no sinking. The front
- * wheels are turned with the stick.
+ * wheels are turned with the stick. The drift adds the hop, the sparks and
+ * the boost flame (`driftEffects.ts`).
  */
-export function kartPose(state: CarState, cfg: Pick<GameConfig, 'car' | 'render'>): KartPose {
-  const { position, rotation } = state;
+export function kartPose(state: CarState, cfg: Pick<GameConfig, 'car' | 'render' | 'sim'>): KartPose {
+  const { rotation } = state;
   const back = { x: -rotation.x, y: -rotation.y, z: -rotation.z, w: rotation.w };
+  const look = cfg.render.car;
   const lift = cfg.render.car.wheelRadius - cfg.car.wheels.radius;
   const steer = state.input.steer / STEER_STEPS;
   // A stick to the right turns the wheels clockwise seen from above: negative about the roof.
-  const frontTurn = steer === 0 ? 0 : -steer * cfg.render.car.steerAngle;
+  const frontTurn = steer === 0 ? 0 : -steer * look.steerAngle;
+  const wheels = state.wheels.map((wheel, i) => {
+    const local = rotate(back, { x: wheel.at.x - state.position.x, y: wheel.at.y - state.position.y, z: wheel.at.z - state.position.z });
+    return { at: { x: local.x, y: local.y + lift, z: local.z }, turn: i < 2 ? frontTurn : 0 };
+  });
+  // The hop lifts the whole kart along its roof, drawn only: the simulation keeps it on its springs.
+  const hop = hopLift(state.drift.hop, cfg.car.drift.hop.height);
+  const up = hop === 0 ? null : rotate(rotation, { x: 0, y: 1, z: 0 });
+  const position = up ? { x: state.position.x + up.x * hop, y: state.position.y + up.y * hop, z: state.position.z + up.z * hop } : state.position;
+  const ground = (wheel: { at: Vec3 }): Vec3 => ({ x: wheel.at.x, y: wheel.at.y - look.wheelRadius, z: wheel.at.z });
   return {
     position,
     rotation,
-    wheels: state.wheels.map((wheel, i) => {
-      const local = rotate(back, { x: wheel.at.x - position.x, y: wheel.at.y - position.y, z: wheel.at.z - position.z });
-      return { at: { x: local.x, y: local.y + lift, z: local.z }, turn: i < 2 ? frontTurn : 0 };
-    }),
+    wheels,
+    sparks: sparkTriangles(state.drift, state.step, [ground(wheels[2]!), ground(wheels[3]!)], look, cfg.sim.stepsPerSecond),
+    flame: flameLength(state.drift, state.step, look),
   };
 }

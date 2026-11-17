@@ -118,6 +118,28 @@ body,
   font-weight: 600;
 }
 
+/* The drift line: a dot in the colour of the tier charged (or of the boost running), and the boost's time left. */
+.world-drift {
+  min-height: 18px;
+  color: #15302b;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-tier {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+.world-tier[hidden] {
+  display: none;
+}
+
 .world-loading {
   position: absolute;
   inset: 0;

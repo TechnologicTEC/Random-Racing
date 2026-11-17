@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { NEUTRAL_INPUT } from '../sim/input';
 import type { CarState } from '../sim/sim';
-import { advance, blendState, mainSurface } from './drive';
+import { advance, blendState, driftReadout, mainSurface } from './drive';
 
 const cfg = config.sim;
 const STEP = 1 / cfg.stepsPerSecond;
@@ -141,5 +141,23 @@ describe('mainSurface', () => {
   it('breaks a tie the same way every time: the road first', () => {
     expect(mainSurface([wheel('grass'), wheel('road'), wheel('grass'), wheel('road')])).toBe('road');
     expect(mainSurface([wheel('road'), wheel('grass'), wheel('road'), wheel('grass')])).toBe('road');
+  });
+});
+
+describe('driftReadout', () => {
+  const none = { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 } as const;
+
+  it('shows no dot and no boost with no drift', () => {
+    expect(driftReadout(none)).toEqual({ tier: 0, colour: null, boost: '' });
+  });
+
+  it('shows a dot in the colour of the tier reached while sliding', () => {
+    expect(driftReadout({ ...none, phase: 'slide', tier: 1 })).toEqual({ tier: 1, colour: 'rgb(64, 166, 255)', boost: '' });
+    expect(driftReadout({ ...none, phase: 'slide', tier: 3 }).colour).toBe('rgb(179, 89, 255)');
+  });
+
+  it('shows the boost left, to a tenth of a second, in the colour of its tier', () => {
+    expect(driftReadout({ ...none, boostLeft: 0.6, boostTier: 2 })).toEqual({ tier: 2, colour: 'rgb(255, 153, 31)', boost: 'boost 0.6 s' });
+    expect(driftReadout({ ...none, boostLeft: 1 / 60, boostTier: 1 }).boost).toBe('boost 0.0 s');
   });
 });

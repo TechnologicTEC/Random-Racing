@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6c, hits cancel a drift (see "Step 6"). Touching a wall, the gate, a tree or a rock ends a slide with no boost. Nothing of the drift is drawn yet (6d)
-- **Next:** `docs/PLAN.md`, "The build order": **6d**, sparks, flame and hop. Step 6's plan is approved (see "Step 6")
+- **Last finished part:** 6d, sparks, flame and hop (see "Step 6"). A slide throws sparks in its tier's colour, a boost shows a flame, the kart hops as a drift starts, and the readout shows the tier and the boost left
+- **Next:** `docs/PLAN.md`, "The build order": **6e**, camera swing and wider view. Step 6's plan is approved (see "Step 6")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -171,7 +171,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | 6a | **The drift rules, pure.** `src/sim/car/drift.ts`: `DriftState`, `NO_DRIFT`, `driftSteps`, `stepDrift`, `tierOf`, `pathTurn`; `car.drift`, `car.boost`, `car.engine.shed` | Done |
 | 6b | **Drift and boost in the car.** `car.ts`, `drive.ts`, `grip.ts`, `sim.ts` | Done |
 | 6c | **Hits cancel a drift.** `touching()` in `carBody.ts`; solid things on plain courses; `wallGround` | Done |
-| 6d | **Sparks, flame and hop**, drawn; the readout | |
+| 6d | **Sparks, flame and hop**, drawn (`render/driftEffects.ts`, `carShape.ts`, `carView.ts`); the readout | Done |
 | 6e | **Camera swing and wider view** | |
 | 6f | **Tuning panel** | |
 
@@ -221,6 +221,23 @@ Tests seen failing first: `drifting.test.ts` (20 tests: the car did not drift) a
 - **Plain test courses** (`PlainCourse`) can now have `walls` (upright boxes), `posts` (hit as trees) and `balls` (hit as rocks), added in the same fixed order as an island's. New **`wallGround()`** in `testGrounds.ts`: the flat ground with a wall 0.8 m high along its right-hand side, 30 m from the start.
 
 Tests: `touching()` names nothing on the start line or while the body rests on the road; on seed 7 it names a wall piece, a gate post, a tree and the biggest rock the body is placed in, and the same after a restore; on `wallGround` it gives the wall's normal. On the car: a slide that meets the wall at 19 degrees (started 10 m from it, facing 3 degrees towards it, with the first tier charged) ends at the wall with no boost, then or when the button is let go; a slide off `stepGround`'s 1 m drop flies (all four wheels off the ground), lands and carries on. The new `touching()` and `wallGround` tests failed on their missing code first; the drop test passed from the start, since nothing on the ground ever cancelled a slide. 2,116 unit tests pass.
+
+### 6d: sparks, flame and hop
+
+- **The sums** are plain numbers in `src/render/driftEffects.ts`, drawn from the simulation's state and step count only, so `still=1` repeats (a browser test takes the same slide and boost twice and compares the pictures byte for byte):
+  - `sparkTriangles`: while sliding from tier 1, each rear wheel throws 2 sparks a step, each living 15 steps (30 a wheel at once), out, up and back from where the tyre meets the road, at most 0.45 m, each a flat triangle 9 cm across that shrinks as it flies. Which way each flies comes from a small integer hash of its birth step and number. In the tier's colour (`SPARK` in `palette.ts`: the visual bar's blue, orange and purple).
+  - `flameLength`: 0.6, 0.9 or 1.2 m for the boost's tier, flickering by a sixth of that either way from step to step; never longer than the car.
+  - `hopLift`: an arc 8 cm high over the hop's 9 steps.
+- **`kartPose`** now gives the sparks and the flame's length, and lifts the whole kart along its roof by the hop. **`carView`** draws the sparks as one mesh of loose triangles and the flame as two 8-sided cones pointing back from the engine block, all with `MeshBasicMaterial` (unlit, so bright by colour alone), casting no shadow.
+- **The flame's shape (Claude's call, for Tane to judge):** a cone wholly inside another can never be seen, so the pale core runs the whole length and is 0.55 of the width, and the orange cone round it is 0.7 of the length: from behind, the pale tip shows past the orange (`render.car.flame.outer`).
+- **Sizes and colours:** `render.car.sparks: { perStep: 2, life: 0.25, reach: 0.45, size: 0.09 }`, `render.car.flame: { lengths: [0.6, 0.9, 1.2], radius: 0.13, core: 0.55, outer: 0.7, flicker: 1/6 }`; `SPARK` and `FLAME` in `palette.ts`. The first pictures had 5 cm sparks thrown mostly backwards, which the rear tyres hid from the chase camera; they now fly more out and up, and are 9 cm.
+- **The readout** gains a line: a dot in the colour of the tier the slide has charged (or of the boost running), and "boost 1.4 s" while a boost runs (`driftReadout` in `app/drive.ts`). The body's `data-drive-tier` gives the tier.
+- **Browser helper** `e2e/drifting.ts`: `slideTo(page, tier)` brings the car into a slide that has charged a tier, and `letGo(page)` releases it. One held input runs a 3 s slide off the road, and on some islands into a wall or a tree; so it tries run-ups of 120 and 240 steps, the stick in the middle or away, and both sides, from the start line each time, until one reaches the tier (measured on eight seeds first: no single choice worked on all of them).
+- **New screenshots** in the loop: `world-<seed>-drive-slide.png` (tier 3) and `-drive-boost.png`; `TIERS="1,2"` adds `-drive-slide-1.png` and `-2.png`. That test has 3 minutes, since a slide can take several tries, each drawing frames in software (seed 1 needs seven).
+
+Pictures looked at: tiers 1, 2 and 3 and the boost on seeds 1, 7 (07:27, a low sun), 42 and 2024. The sparks are small and in the tier's colour beside both rear wheels, the flame is an orange cone with a pale tip shorter than the car, nothing glows or is outlined, the car casts no shadow, and nothing covers the road ahead. Not 6d's, seen on the way (known issues): on seed 1 the slide ran onto a steep hillside and the chase camera's view is cut by the slope beside it; in long meadow grass (seed 7) the flower dabs look large and busy from the low chase camera; the readout says "in the air" when the car flies off the road's edge at speed (seed 2024), which is true. `drive-slide.jpg` and `drive-boost.jpg` join `docs/visual-bar/` once Tane has seen them (check-in 2).
+
+Tests seen failing first: `driftEffects.test.ts` (missing module), the new `kartPose` and `carView` tests, `driftReadout`. One `carView` test changed with the behaviour: "takes the shadows" now checks the five lit meshes, since the sparks and flame are unlit. 2,134 unit tests pass.
 
 ## Working agreements
 
@@ -308,6 +325,8 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 
 ## Known issues and risks
 
+- **The chase camera can be cut by a steep slope beside it** (seed 1, sliding onto a hillside, step 6d's pictures): it keeps clear of the ground under it, not beside it. For check-in 2 and step 8 (off the road).
+- **From the chase camera in long meadow grass, the flower dabs look large and busy** (seed 7, 6d's pictures). `render.grass.flowers` has their size; for check-in 2 or M6.3.
 - **No person has driven with a controller yet** (5a, 5e): the controller is read and tested by numbers only. Tane does not use one (check-in 1). The dead zone (0.15) and the triggers are untried by hand.
 - **The car drives up a 45% grass slope at 26 m/s from rest** (4e): nothing limits the engine's push by grip. 7a's grass slowdown caps it at 18 m/s. If it should not climb such slopes, the plan's lever is `grip.drive` (the push held to what the wheels' load allows). For step 8 and check-in 1.
 - **One hillside crossing in 261 still rolls the car** (4e, at 26 cm ride height; worst 44 degrees). A body with rounded edges fixed every crossing in a trial but jolted the car on the banked ring; worth another look if rolls show up in step 9's laps.
@@ -398,3 +417,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** Step 6 planned in plan mode and approved (see "Step 6"). 6a done: the drift rules as a pure function (`src/sim/car/drift.ts`: `stepDrift`, `tierOf`, `pathTurn`, `driftSteps`), with `car.drift`, `car.boost` and `car.engine.shed` in the config. Three Claude's calls (the 0.3 stick read from the record, a cancel during the hop, a slide to the other side waiting for the nose). 2,084 unit tests pass; all 320 browser tests passed in one run (18.1 minutes). Next: 6b, drift and boost in the car.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6b done: the car drifts and boosts (`car.ts` follows the plan's step line by line; `speedChange` takes the step's top speed and the boost, and sheds 9 m/s2 above top speed; the drift state in the fingerprint and the snapshot). Slide circles of 19.7, 34.1 and 119.9 m at top speed; 29.5 m/s in the tightest slide; a 2.1 s slide gives 39 m/s in 0.32 s for 1 s. 2,109 unit tests pass; all 320 browser tests passed in one run (18.4 minutes), the scripted run's fingerprint across Node, Chromium and Firefox included, now with drift live. Next: 6c, hits cancel a drift.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6c done: hits cancel a drift. `touching()` in `carBody.ts` names the wall, gate, tree or rock the body is against (with the contact's slope); the simulation reads it after each physics step and the car's next step cancels a slide on it. Plain test courses can have walls, posts and balls; new `wallGround()`. 2,116 unit tests pass; all 320 browser tests passed in one run (17.2 minutes). Next: 6d, sparks, flame and hop.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6d done: sparks in the tier's colour at both rear wheels, an orange flame with a pale tip while a boost runs, the hop drawn, and the tier and boost left on the readout (`render/driftEffects.ts`, `kartPose`, `carView`, `driftReadout`). Browser helper `slideTo` and new screenshots `-drive-slide` and `-drive-boost`; pictures of seeds 1, 7, 42 and 2024 looked at. Two known issues added (the camera beside a steep slope, flower dabs from the chase camera). 2,134 unit tests pass; all 330 browser tests passed in one run (19.1 minutes). Next: 6e, camera swing and wider view.

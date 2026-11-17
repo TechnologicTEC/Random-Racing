@@ -1,7 +1,8 @@
 import type { SimConfig } from '../config';
 import type { Quat, Vec3 } from '../sim/quat';
 import type { Surface } from '../sim/car/surface';
-import type { WheelState } from '../sim/car/car';
+import type { DriftView, WheelState } from '../sim/car/car';
+import { SPARK } from '../render/palette';
 import type { CarState } from '../sim/sim';
 
 /** What one frame of the page does with the simulation's clock. */
@@ -92,4 +93,23 @@ export function mainSurface(wheels: readonly WheelState[]): Surface | null {
     if (count > most) [best, most] = [surface, count];
   }
   return best;
+}
+
+/** What the readout shows of the drift: the tier's dot (its colour as CSS, null for none) and the boost left. */
+export interface DriftReadout {
+  tier: 0 | 1 | 2 | 3;
+  colour: string | null;
+  boost: string;
+}
+
+/**
+ * The readout's drift line: a dot in the colour of the tier the slide has
+ * charged, or of the boost running once it is let go, and the boost's time
+ * left to a tenth of a second.
+ */
+export function driftReadout(drift: DriftView): DriftReadout {
+  const boosting = drift.boostLeft > 0 && drift.boostTier > 0;
+  const tier = drift.phase === 'slide' && drift.tier > 0 ? drift.tier : boosting ? drift.boostTier : 0;
+  const colour = tier === 0 ? null : `rgb(${SPARK[tier - 1]!.map((c) => Math.round(c * 255)).join(', ')})`;
+  return { tier, colour, boost: boosting ? `boost ${drift.boostLeft.toFixed(1)} s` : '' };
 }

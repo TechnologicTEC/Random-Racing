@@ -155,6 +155,19 @@ export const KART = {
   hub: [0.78, 0.78, 0.75] as Rgb,
 };
 
+/** The drift sparks of the three tiers (docs/VISUAL_BAR.md): blue, orange, purple. Drawn unlit, so they are bright by their colour alone. */
+export const SPARK: readonly [Rgb, Rgb, Rgb] = [
+  [0.25, 0.65, 1.0],
+  [1.0, 0.6, 0.12],
+  [0.7, 0.35, 1.0],
+];
+
+/** The boost flame: a pale yellow core inside an orange cone, unlit. */
+export const FLAME = {
+  core: [1, 0.95, 0.7] as Rgb,
+  outer: [1, 0.55, 0.1] as Rgb,
+};
+
 /** Converts one channel of a screen colour to linear light. */
 export function toLinear(channel: number): number {
   return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
