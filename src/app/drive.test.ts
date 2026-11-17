@@ -76,6 +76,7 @@ function stateAt(k: number, rotation = { x: 0, y: 0, z: 0, w: 1 }): CarState {
     drift: { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 },
     step: k,
     input: NEUTRAL_INPUT,
+    touch: null,
   };
 }
 

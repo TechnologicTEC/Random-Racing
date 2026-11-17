@@ -42,6 +42,8 @@ export interface CarState extends BodyMotion, CarReading {
   step: number;
   /** What the driver asked for during the last step. */
   input: InputRecord;
+  /** What the body touched on the last physics step (a wall, the gate, a tree or a rock), or null. */
+  touch: Hit;
 }
 
 /** A saved moment of a simulation. */
@@ -93,7 +95,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       touch = physics.touching()?.thing ?? null;
       step++;
     },
-    state: () => ({ ...physics.motion(), ...car.read(), step, input }),
+    state: () => ({ ...physics.motion(), ...car.read(), step, input, touch }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
       const d = car.save().drift;

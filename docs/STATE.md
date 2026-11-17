@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6g, the drift's turning from Tane's first drive (see "Step 6"): a slide now follows a circle of 22, 45 or 160 m whatever the speed, and the nose points 15 degrees into the corner. Before that, 6f, the tuning panel, which ended step 6
-- **Next:** `docs/PLAN.md`, "The build order": **6h**, the drift rework from Tane's second drive (see "Tane's second drive" under "Step 6"). It is a new step and a big one (the road gets much wider, so every island changes): plan it in plan mode in a new session and wait for Tane's approval. Step 7 waits until it is done
+- **Last finished part:** 6h-1, the measurements for the drift rework (see "Step 6h"): the slide circles chosen (30, 61 and 218 m on a 20 m road) and the new boost shown to stay on the road. Nothing the player sees has changed yet
+- **Next:** `docs/PLAN.md`, "The build order": **6h-2**, the track at 20 m. 6h is planned and approved (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`); its parts are in `docs/plan/M3-driving.md`, "Step 6h". Step 7 waits until 6h is done
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -303,6 +303,88 @@ Tane: "the best way to think about building this is to look at how Mario Kart do
 
 Starting points for the plan: the keyboard corner driver (`src/testing/cornerDriver.ts`, `src/sim/car/corners.test.ts`) measures how many corners a slide can be held through, and can be run against wider roads and other circles; the tuning panel (T) changes the drift and boost live; `docs/plan/M3-driving.md` "Step 6" has the rules.
 
+## Step 6h: the drift rework (2026-11-17)
+
+Planned in plan mode and approved by Tane on 2026-11-17 (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`; the parts in `docs/plan/M3-driving.md`, "Step 6h").
+
+**Tane's choices:**
+- a road 20 m wide at the corners (was 12);
+- a short, mild boost: 1.15 times top speed at 12 m/s², the times unchanged;
+- steering that keeps its top-speed circle (60 m) above top speed;
+- sparks and boost with CC0 sprites (Kenney's Particle Pack) and bloom on the effects only;
+- gentler slide circles: the gentlest that pass the bars.
+
+**Found while planning:** steering is held to 15 m/s² sideways, so at the old boost speed (39 m/s) full stick turned only a 101 m circle, and a boosted car could not follow the road out of a hairpin.
+
+| Part | What | Status |
+| --- | --- | --- |
+| 6h-1 | **Measure, then fix the numbers.** The corner driver's holder style and drive out of the corner; the grid of widths, circles and boosts | Done |
+| 6h-2 | **The track at 20 m** | |
+| 6h-3 | **The road and the island at 20 m**; the reference pictures taken again | |
+| 6h-4 | **Drift and boost**: circles of 30, 61 and 218 m, the boost of 1.15 at 12 m/s², the steering cap | |
+| 6h-5 | **The look**: sprites and bloom | |
+
+### 6h-1: the measurements
+
+**The corner driver** (`src/testing/cornerDriver.ts`, test code) gains:
+- a second style, `holder`, which keeps the key into the corner from the drift button to letting go;
+- `driveOut`: after letting go, 100 m more on the line driver with whatever boost the slide earned, **braking for what is coming within 80 m**, as step 9a's bot will (the speed 90% of the steering grip holds there, braking at 0.7 of the brake's strength);
+- lanes to follow: `roadLane` on an island, `straightLane` on a test ground;
+- new fields on `CornerRun`: `keyChanges`, `exitTier`, `exitClean`, `exitHit` and `exitTravelled`.
+
+**Elsewhere:**
+- **`CarState.touch`** gives what the body touched on the last physics step.
+- **The line driver's full-stick circle** now comes from `turnWanted`, so it will follow the steering cap once 6h-4 adds it. It gives the same stick today.
+
+**The grid** (throwaway code, seeds 1 to 20):
+- Every run used Tane's boost and the steering cap, with the layout's distances scaled with the width as 6h-2 will set them.
+- Each figure is the share of corners where the slide was held from 4 m in to 4 m before the end, on the road. The car arrived at 201 to 218 of 208 to 225 corners.
+- "Careful" changes key as often as every 0.15 s; "holder" never changes key.
+- Every width built every seed with no fallback.
+
+| Road | Tight circle (no key, other key) | Careful: all | Hairpins | Plain | Chicanes | Sweepers | Holder: hairpins and plain |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 12 m | 22 (45, 160), today | 95% | 100% | 100% | 98% | 63% | 25% |
+| 12 m | 30 (61, 218) | 86% | 55% | 88% | 100% | 89% | 30% |
+| 16 m | 30 (61, 218) | 96% | 96% | 97% | 100% | 86% | 48% |
+| 20 m | 22 (45, 160) | 94% | 100% | 98% | 95% | 75% | 40% |
+| 20 m | 26 (53, 189) | 98% | 100% | 99% | 97% | 91% | 42% |
+| **20 m** | **30 (61, 218), chosen** | **97%** | **100%** | **97%** | **95%** | **97%** | **45%** |
+| 20 m | 34 (70, 247) | 97% | 100% | 96% | 95% | 97% | 54% |
+
+**The drive out of the corner**, on the 20 m road with the careful driver. "Made unclean by the boost" counts exits that were clean with no boost but touched something, or left the road, with it.
+
+| Tight circle | Slides held | Clean, no boost | Clean, old boost (1.3 at 30, no cap) | Clean, Tane's boost (1.15 at 12) with the cap | Made unclean by the old boost | By Tane's |
+| --- | --- | --- | --- | --- | --- | --- |
+| 22 | 189 | 184 | 183 | 185 | 2 | 0 |
+| **30** | **195** | **187** | **180** | **188 (96%)** | **8** | **0** |
+| 34 | 194 | 163 | 156 | 164 (85%) | 8 | 0 |
+
+- **On the 12 m road** with today's circles, the old boost made 2 of 206 exits unclean and Tane's boost none.
+- **On grip alone**, the same driver goes from 100 m before each corner to 100 m after it cleanly through 204 of 208 corners on the 20 m road (217 of 225 on 12 m).
+- **At 34 m the slide does not turn enough**: the car comes out wide and the clean exits fall to 85%.
+
+**How often a driver changes key** (20 m road, circles of 30, 61 and 218 m; the median changes a second while sliding):
+
+| Keeps each key at least | Changes a second | Hairpins | Plain | Chicanes | Sweepers | Clean exits |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.15 s | 2.5 | 100% | 97% | 95% | 97% | 96% |
+| 0.3 s | 1.6 | 100% | 95% | 92% | 69% | 95% |
+| 0.5 s | 1.0 | 90% | 96% | 90% | 22% | 95% |
+
+**What was chosen:**
+- **Circles of 30, 61 and 218 m** (the key into the corner, no key, the other key), by the rule in the plan: the gentlest that meet 6h-4's bars on the 20 m road.
+- **The holder bar changed (Tane, 2026-11-17).** The plan asked for a holder through 80% of hairpins and plain corners, and no circles can give it: the best is 54%, at 34 m. Holding one key asks for one circle, but corners run from 22 m to 100 m, so every corner wider than the circle is cut on the inside. That is what Tane met on the second drive. From three options, Tane chose to ask instead for **a driver who keeps each key at least 0.5 s (about one change a second) to get through 90% of hairpins, plain corners and chicanes**. The holder's rate is reported, not tested.
+
+**Tests:** `cornerDriver.test.ts` has 5:
+- a drive out along a clear lane is clean;
+- one along a lane through the wall names the wall;
+- one that strays off its lane is not clean;
+- the speed a road lane allows is 90% of the grip at the lap's tightest point, and no more than braking allows 40 m before it;
+- the holder changes no key.
+
+The first three and the holder test failed first, on the missing functions and `keyChanges`. The road-lane limit test was written after its code, so it was not seen failing. 2,158 unit tests pass.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -374,6 +456,8 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-17 | **6h, Tane's choices after the second drive:** a road 20 m wide at the corners (was 12; the brief said 12 to 14); a boost of 1.15 times top speed at 12 m/s² (was 1.3 at 30), times unchanged; steering keeps its top-speed circle above top speed; sparks and boost with CC0 sprites and bloom on the effects only (a change to the visual bar) | Tane, from options in plan mode. A boosted car at 39 m/s could steer no tighter than a 101 m circle. Measured in 6h-1: the old boost made 8 of 195 drives out of a corner unclean, the new boost with the cap none |
+| 2026-11-17 | **Slide circles of 30, 61 and 218 m** (6h-1); the corner test asks for a driver who changes key about once a second, not one who holds the key | The gentlest circles that pass every bar on the 20 m road. Tane chose the new bar: no circles let a driver who holds one key through 80% of hairpins and plain corners (best 54%) |
 | 2026-11-17 | **A slide follows a circle of 22, 45 or 160 m whatever the speed** (key into the corner, no key, the other key), not a turn rate; **the nose points 15 degrees into the corner** (was 24) | Tane's choices after the first drive (6g): a held slide ran into the barrier within a second. A keyboard corner driver holds a slide through 95% of the corners of seeds 1 to 20 with these circles, 78% with the 30/50/110 m Tane chose first |
 
 ## Notes for later milestones
@@ -486,4 +570,11 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6g, from Tane's first drive: a slide held for a second ran into the barrier. Slides now follow circles of 22, 45 or 160 m at any speed (key into the corner, none, the other key; were turn rates) and the nose points 15 degrees in (was 24), Tane's choices from measured options. New keyboard corner driver (`testing/cornerDriver.ts`) and test: a slide held from just after each corner's start to just before its end, on the road, through 95% of the corners of seeds 1 to 20 (hairpins and plain corners 100%). 2,153 unit tests pass; all 334 browser tests passed in one run (22.1 minutes). Next: step 7, planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6h planned in plan mode and approved. Tane's choices: a 20 m road, a boost of 1.15 at 12 m/s², the steering cap above top speed, sprites and bloom. 6h-1 done:
+  - The corner driver gains a holder style and a drive out of the corner that brakes for what is coming.
+  - The measured grid chose slide circles of 30, 61 and 218 m.
+  - Tane's boost with the cap made no drive out of a corner unclean, where the old boost made 8 of 195 unclean.
+  - No circles let a driver who holds one key through 80% of corners (best 54%), so Tane chose a bar for a driver who changes key once a second instead.
+
+  2,158 unit tests pass; all 334 browser tests passed in one run (20.0 minutes). Next: 6h-2, the track at 20 m.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Tane's second drive, after 6g: the drift still feels wrong, the boost after it throws the car into walls and off edges, and the effects can look much better. Tane's four changes recorded under "Tane's second drive" (a milder boost, a much wider road, gentler drift turning, better sparks and flame) as part 6h, to be planned in a new session. Docs only. Next: plan 6h.

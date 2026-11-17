@@ -10,6 +10,7 @@
  */
 import type { CarConfig } from '../config';
 import type { BodyMotion } from '../sim/physics/carBody';
+import { turnWanted } from '../sim/car/steer';
 import { rotate } from '../sim/quat';
 
 const FORWARD = { x: 0, y: 0, z: -1 };
@@ -25,9 +26,9 @@ export interface MapPoint {
  * circle through the point ahead.
  *
  * The circle's curvature is `2 * (right . d) / |d|^2`, with `d` from the car to
- * the point and `right` the car's right on the map. Full stick turns at
- * `speed / max(minRadius, speed^2 / sideForce)` (`turnWanted`), so the stick
- * that turns at `speed * curvature` is the curvature times that larger radius.
+ * the point and `right` the car's right on the map. Full stick turns on the
+ * circle the car's own steering gives at its speed (`turnWanted`), so the stick
+ * that turns at `speed * curvature` is the curvature times that circle's radius.
  */
 export function stickToward(state: Pick<BodyMotion, 'position' | 'rotation' | 'velocity'>, point: MapPoint, car: CarConfig): number {
   const nose = rotate(state.rotation, FORWARD);
@@ -40,7 +41,9 @@ export function stickToward(state: Pick<BodyMotion, 'position' | 'rotation' | 'v
   if (reach === 0) return 0;
   const curvature = (2 * (-fz * dx + fx * dz)) / reach;
   const speed = Math.abs(state.velocity.x * fx + state.velocity.z * fz);
-  const radius = Math.max(car.steer.minRadius, (speed * speed) / car.steer.sideForce);
+  // Full stick's circle at this speed, from the car's own steering: speed over the turn rate it gives.
+  const rate = Math.abs(turnWanted(1, speed, car));
+  const radius = rate > 0 ? speed / rate : car.steer.minRadius;
   return Math.max(-1, Math.min(1, curvature * radius));
 }
 

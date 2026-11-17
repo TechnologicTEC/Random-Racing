@@ -30,7 +30,12 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **6e** Camera swing and wider view
 - [x] **6f** Tuning panel
 - [x] **6g** Drift turning from Tane's first drive: circles of 22, 45 and 160 m at any speed, the nose at 15 degrees; a keyboard driver holds a slide through 95% of the corners of seeds 1 to 20
-- [ ] **6h** Drift rework from Tane's second drive: a milder boost, a much wider road (every island changes), gentler drift turning, better sparks and boost (STATE.md, "Tane's second drive"). Plan in plan mode first, in a new session
+- **6h** Drift rework from Tane's second drive (STATE.md, "Tane's second drive"; planned and approved 2026-11-17, the parts in `docs/plan/M3-driving.md`, "Step 6h"):
+  - [x] **6h-1** Measure, then fix the numbers: the corner driver's holder style and drive out of the corner; the grid of road widths, circles and boosts
+  - [ ] **6h-2** The track at 20 m
+  - [ ] **6h-3** The road and the island at 20 m; the reference pictures taken again
+  - [ ] **6h-4** Drift and boost: the gentler circles, a boost of 1.15 times at 12 m/s², steering that keeps its top-speed circle above top speed
+  - [ ] **6h-5** Sparks, boost and the drift's look: sprites and bloom
 - [ ] **7a** Off the road
 - [ ] **7b** Walls
 - [ ] **7c** Trees and rocks
