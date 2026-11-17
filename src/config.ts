@@ -1274,6 +1274,16 @@ export interface ChaseConfig {
   fieldOfView: number;
   /** Below this speed on the map, in metres per second, it follows the car's nose instead of the way it travels. */
   travelBelow: number;
+  /**
+   * In a slide it swings round the car this far to the outside of the corner, in radians, easing there with a time of
+   * `swingTime` seconds (two thirds of the way in that time), and back the same way when the slide ends.
+   */
+  swing: number;
+  swingTime: number;
+  /** While a boost runs its view widens to this, in degrees, easing with a time of `boostIn` seconds, and back with `boostOut`. */
+  boostFieldOfView: number;
+  boostIn: number;
+  boostOut: number;
 }
 
 export interface FlyConfig {
@@ -2022,6 +2032,21 @@ export const config: GameConfig = {
     summit: { back: 70, lift: 15, spread: 0.6, ahead: 300, clearance: 4 },
     climb: { window: 40, distance: 80, side: 0.3, tilt: 0.12, clearance: 4 },
     fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },
-    chase: { back: 6.5, height: 2.4, lookAhead: 5, lookHeight: 1, follow: 0.15, clearance: 0.8, fieldOfView: 60, travelBelow: 2 },
+    chase: {
+      back: 6.5,
+      height: 2.4,
+      lookAhead: 5,
+      lookHeight: 1,
+      follow: 0.15,
+      clearance: 0.8,
+      fieldOfView: 60,
+      travelBelow: 2,
+      // About 7 degrees round to the outside of a slide; 10 degrees wider while a boost runs.
+      swing: 0.12,
+      swingTime: 0.3,
+      boostFieldOfView: 70,
+      boostIn: 0.25,
+      boostOut: 0.5,
+    },
   },
 };

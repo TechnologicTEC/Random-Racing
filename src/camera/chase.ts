@@ -1,4 +1,5 @@
 import type { ChaseConfig } from '../config';
+import type { DriftView } from '../sim/car/car';
 import { rotate, type Quat, type Vec3 } from '../sim/quat';
 import type { Point3 } from './flyAlong';
 
@@ -7,6 +8,8 @@ export interface ChaseCar {
   position: Vec3;
   rotation: Quat;
   velocity: Vec3;
+  /** The drift (`CarState.drift`): a slide swings the camera out of the corner, a boost widens its view. None is no drift. */
+  drift?: Pick<DriftView, 'phase' | 'dir' | 'boostLeft'>;
 }
 
 /** The chase camera at one frame. */
@@ -20,6 +23,10 @@ export interface ChaseView {
   target: number;
   eye: Point3;
   look: Point3;
+  /** How far round the car the eye has swung from straight behind it, in radians: positive to its right. */
+  swing: number;
+  /** How tall its view is, in degrees. */
+  fieldOfView: number;
 }
 
 /**
@@ -38,30 +45,57 @@ export interface ChaseView {
  */
 export function chaseStart(car: ChaseCar, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
   const target = travelAngle(car, cfg, 0);
-  return place(car, target, target, groundAt, cfg);
+  return place(car, target, target, swingWanted(car, cfg), fieldWanted(car, cfg), groundAt, cfg);
 }
 
 /** The chase camera one frame on, `frameSeconds` after `prev`. */
 export function chaseNext(prev: ChaseView, car: ChaseCar, frameSeconds: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
   // The new target, unwrapped to lie within a half turn of the last one.
   const target = prev.target + wrap(travelAngle(car, cfg, prev.target) - prev.target);
-  if (!(frameSeconds > 0)) return place(car, prev.heading, target, groundAt, cfg);
+  if (!(frameSeconds > 0)) return place(car, prev.heading, target, prev.swing, prev.fieldOfView, groundAt, cfg);
   // The target taken as turning evenly from the last frame's to this one's: the exact answer for easing towards it.
   const rate = (target - prev.target) / frameSeconds;
   const keep = Math.exp(-frameSeconds / cfg.follow);
   const lead = rate * cfg.follow;
   const heading = target - lead + (prev.heading - prev.target + lead) * keep;
-  return place(car, heading, target, groundAt, cfg);
+  // The swing and the field of view ease towards what the drift asks, the same at any frame rate.
+  const swing = ease(prev.swing, swingWanted(car, cfg), frameSeconds, cfg.swingTime);
+  const wanted = fieldWanted(car, cfg);
+  const fieldOfView = ease(prev.fieldOfView, wanted, frameSeconds, wanted > prev.fieldOfView ? cfg.boostIn : cfg.boostOut);
+  return place(car, heading, target, swing, fieldOfView, groundAt, cfg);
 }
 
-/** Where the camera stands and looks for a heading. */
-function place(car: ChaseCar, heading: number, target: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
+/** A value eased towards a target over a frame, two thirds of the way in `time`; exactly the target once there. */
+function ease(from: number, to: number, frameSeconds: number, time: number): number {
+  if (from === to || !(time > 0)) return to;
+  return to + (from - to) * Math.exp(-frameSeconds / time);
+}
+
+/** The swing a slide asks for: out of the corner, so to the left (negative) in a slide to the right. */
+function swingWanted(car: ChaseCar, cfg: ChaseConfig): number {
+  return car.drift?.phase === 'slide' && car.drift.dir !== 0 ? -car.drift.dir * cfg.swing : 0;
+}
+
+/** The field of view asked for: wider while a boost runs. */
+function fieldWanted(car: ChaseCar, cfg: ChaseConfig): number {
+  return car.drift && car.drift.boostLeft > 0 ? cfg.boostFieldOfView : cfg.fieldOfView;
+}
+
+/**
+ * Where the camera stands and looks for a heading. The eye stands round the
+ * car by the swing, and still looks ahead along the line of travel, so a
+ * swung camera sees across the corner.
+ */
+function place(car: ChaseCar, heading: number, target: number, swing: number, fieldOfView: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
   const ax = Math.sin(heading);
   const az = Math.cos(heading);
   const { x, y, z } = car.position;
-  const eye = { x: x - ax * cfg.back, y: y + cfg.height, z: z - az * cfg.back };
+  // Turning the eye's own heading by the swing moves it round the car: a positive swing to the car's right.
+  const ex = swing === 0 ? ax : Math.sin(heading + swing);
+  const ez = swing === 0 ? az : Math.cos(heading + swing);
+  const eye = { x: x - ex * cfg.back, y: y + cfg.height, z: z - ez * cfg.back };
   eye.y = Math.max(eye.y, groundAt(eye.x, eye.z) + cfg.clearance);
-  return { heading, target, eye, look: { x: x + ax * cfg.lookAhead, y: y + cfg.lookHeight, z: z + az * cfg.lookAhead } };
+  return { heading, target, eye, look: { x: x + ax * cfg.lookAhead, y: y + cfg.lookHeight, z: z + az * cfg.lookAhead }, swing, fieldOfView };
 }
 
 /**

@@ -156,3 +156,95 @@ describe('the chase camera', () => {
     expect(lowest).toBeGreaterThanOrEqual(cfg.clearance - 1e-9);
   });
 });
+
+describe('the chase camera in a drift', () => {
+  const dt = 1 / 60;
+  const SPEED = 30;
+  /** A car driving along -z at 30 m/s; sliding to one side, or with a boost running, or neither. */
+  const driving = (z: number, drift?: ChaseCar['drift']): ChaseCar => ({ ...car({ x: 0, y: 0.56, z }, [0, -1], { x: 0, y: 0, z: -SPEED }), drift });
+  const slide = (dir: -1 | 1): ChaseCar['drift'] => ({ phase: 'slide', dir, boostLeft: 0 });
+  const boost: ChaseCar['drift'] = { phase: 'none', dir: 0, boostLeft: 0.5 };
+  /** How far round the car the eye stands from straight behind its line of travel, in radians: positive to its right. */
+  const round = (view: ChaseView, at: Vec3): number => {
+    // The car travels along -z, so its right is +x and behind it is +z.
+    return Math.atan2(view.eye.x - at.x, view.eye.z - at.z);
+  };
+  /** Follows the car for `seconds` at a frame rate, from `view`. */
+  function follow(view: ChaseView, seconds: number, frames: number, drift?: ChaseCar['drift']): { view: ChaseView; at: Vec3 } {
+    let z = 0;
+    const step = 1 / frames;
+    for (let k = 0; k < Math.round(seconds * frames); k++) {
+      z -= SPEED * step;
+      view = chaseNext(view, driving(z, drift), step, flat, cfg);
+    }
+    return { view, at: driving(z).position };
+  }
+
+  it('changes nothing when not drifting: no swing and the usual field of view', () => {
+    const view = chaseStart(driving(0), flat, cfg);
+    expect(view.swing).toBe(0);
+    expect(view.fieldOfView).toBe(cfg.fieldOfView);
+    const { view: later, at } = follow(view, 1, 60, { phase: 'none', dir: 0, boostLeft: 0 });
+    expect(later.swing).toBe(0);
+    expect(later.fieldOfView).toBe(cfg.fieldOfView);
+    expect(round(later, at)).toBeCloseTo(0, 9);
+  });
+
+  it('swings out to the left while sliding right, and to the right while sliding left, by the set swing', () => {
+    for (const dir of [1, -1] as const) {
+      const { view, at } = follow(chaseStart(driving(0), flat, cfg), 3, 60, slide(dir));
+      // Three seconds is ten easing times: within e^-10 of the swing.
+      expect(view.swing).toBeCloseTo(-dir * cfg.swing, 4);
+      expect(round(view, at)).toBeCloseTo(view.swing, 9);
+    }
+  });
+
+  it('eases the swing in over its time: about 63% of the way there after 0.3 s', () => {
+    expect(cfg.swingTime).toBe(0.3);
+    const { view } = follow(chaseStart(driving(0), flat, cfg), cfg.swingTime, 60, slide(1));
+    expect(-view.swing / cfg.swing).toBeCloseTo(1 - Math.exp(-1), 6);
+  });
+
+  it('swings back behind the car once the slide ends', () => {
+    const swung = follow(chaseStart(driving(0), flat, cfg), 2, 60, slide(1)).view;
+    const back = follow(swung, 3, 60, { phase: 'none', dir: 0, boostLeft: 0 }).view;
+    expect(Math.abs(back.swing)).toBeLessThan(cfg.swing * 0.001);
+  });
+
+  it('widens its view to the boost field of view during a boost, easing in over 0.25 s and out over 0.5 s', () => {
+    expect(cfg.boostFieldOfView).toBe(70);
+    const start = chaseStart(driving(0), flat, cfg);
+    const widening = follow(start, cfg.boostIn, 60, boost).view;
+    expect((widening.fieldOfView - cfg.fieldOfView) / (cfg.boostFieldOfView - cfg.fieldOfView)).toBeCloseTo(1 - Math.exp(-1), 6);
+    const wide = follow(start, 3, 60, boost).view;
+    expect(wide.fieldOfView).toBeCloseTo(cfg.boostFieldOfView, 3);
+    const narrowing = follow(wide, cfg.boostOut, 60).view;
+    expect((narrowing.fieldOfView - cfg.fieldOfView) / (wide.fieldOfView - cfg.fieldOfView)).toBeCloseTo(Math.exp(-1), 6);
+  });
+
+  it('swings and widens the same at 30, 60 and 144 frames a second', () => {
+    const at = (frames: number) => follow(chaseStart(driving(0), flat, cfg), 0.5, frames, { phase: 'slide', dir: 1, boostLeft: 0.5 }).view;
+    const [a, b, c] = [at(30), at(60), at(144)];
+    expect(b.swing).toBeCloseTo(a.swing, 9);
+    expect(c.swing).toBeCloseTo(a.swing, 9);
+    expect(b.fieldOfView).toBeCloseTo(a.fieldOfView, 9);
+    expect(c.fieldOfView).toBeCloseTo(a.fieldOfView, 9);
+  });
+
+  it('starts already swung and widened for a car that is sliding with a boost running', () => {
+    const view = chaseStart(driving(0, { phase: 'slide', dir: -1, boostLeft: 0.3 }), flat, cfg);
+    expect(view.swing).toBeCloseTo(cfg.swing, 12);
+    expect(view.fieldOfView).toBe(cfg.boostFieldOfView);
+  });
+
+  it('still keeps clear of the ground when swung', () => {
+    const bank = (x: number): number => (x < -2 ? 5 : 0);
+    let view = chaseStart(driving(0), (x) => bank(x), cfg);
+    let z = 0;
+    for (let k = 0; k < 120; k++) {
+      z -= SPEED * dt;
+      view = chaseNext(view, driving(z, slide(1)), dt, (x) => bank(x), cfg);
+      expect(view.eye.y).toBeGreaterThanOrEqual(bank(view.eye.x) + cfg.clearance - 1e-9);
+    }
+  });
+});

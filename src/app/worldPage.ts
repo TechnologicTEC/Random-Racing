@@ -349,6 +349,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const chase = mode === 'chase' ? (driving.view() ?? waitingView) : null;
     if (chase) {
       view.setCamera(chase.eye, chase.look);
+      // Wider while a boost runs (the view only changes its projection when the angle does).
+      view.setFieldOfView(chase.fieldOfView);
+      document.body.dataset.driveFieldOfView = chase.fieldOfView.toFixed(1);
     } else if (mode === 'fly' && flight) {
       const pose = flight.poseAt(distance);
       view.setCamera(pose.eye, pose.look);

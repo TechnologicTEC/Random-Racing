@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6d, sparks, flame and hop (see "Step 6"). A slide throws sparks in its tier's colour, a boost shows a flame, the kart hops as a drift starts, and the readout shows the tier and the boost left
-- **Next:** `docs/PLAN.md`, "The build order": **6e**, camera swing and wider view. Step 6's plan is approved (see "Step 6")
+- **Last finished part:** 6e, the camera swing and wider view (see "Step 6"). In a slide the chase camera swings round to the outside of the corner; during a boost its view widens from 60 to 70 degrees
+- **Next:** `docs/PLAN.md`, "The build order": **6f**, the tuning panel, which ends step 6. Step 6's plan is approved (see "Step 6")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -172,7 +172,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | 6b | **Drift and boost in the car.** `car.ts`, `drive.ts`, `grip.ts`, `sim.ts` | Done |
 | 6c | **Hits cancel a drift.** `touching()` in `carBody.ts`; solid things on plain courses; `wallGround` | Done |
 | 6d | **Sparks, flame and hop**, drawn (`render/driftEffects.ts`, `carShape.ts`, `carView.ts`); the readout | Done |
-| 6e | **Camera swing and wider view** | |
+| 6e | **Camera swing and wider view** (`camera/chase.ts`) | Done |
 | 6f | **Tuning panel** | |
 
 ### 6a: the drift rules
@@ -238,6 +238,16 @@ Tests: `touching()` names nothing on the start line or while the body rests on t
 Pictures looked at: tiers 1, 2 and 3 and the boost on seeds 1, 7 (07:27, a low sun), 42 and 2024. The sparks are small and in the tier's colour beside both rear wheels, the flame is an orange cone with a pale tip shorter than the car, nothing glows or is outlined, the car casts no shadow, and nothing covers the road ahead. Not 6d's, seen on the way (known issues): on seed 1 the slide ran onto a steep hillside and the chase camera's view is cut by the slope beside it; in long meadow grass (seed 7) the flower dabs look large and busy from the low chase camera; the readout says "in the air" when the car flies off the road's edge at speed (seed 2024), which is true. `drive-slide.jpg` and `drive-boost.jpg` join `docs/visual-bar/` once Tane has seen them (check-in 2).
 
 Tests seen failing first: `driftEffects.test.ts` (missing module), the new `kartPose` and `carView` tests, `driftReadout`. One `carView` test changed with the behaviour: "takes the shadows" now checks the five lit meshes, since the sparks and flame are unlit. 2,134 unit tests pass.
+
+### 6e: camera swing and wider view
+
+- **`chase.ts`**: `ChaseCar` gains the drift (`phase`, `dir`, `boostLeft`) and `ChaseView` gains `swing` and `fieldOfView`. While the car slides, the eye swings round it by `swing` (0.12 rad, about 7 degrees) to the outside of the corner: to the car's left in a slide to the right. It still looks ahead along the line of travel, so it sees across the corner. While a boost runs, the view widens to `boostFieldOfView` (70 degrees). Each eases with `exp(-frame / time)`, two thirds of the way in its time (`swingTime` 0.3 s; `boostIn` 0.25 s, `boostOut` 0.5 s), so a camera at 30, 60 or 144 frames a second agrees to 1e-9 (test). A camera started on a car already sliding or boosting (a new simulation, or after `drive.run`) starts swung and widened.
+- **The page** sets the camera's field of view from the chase view each frame (the view changes its projection only when the angle changes); the body's `data-drive-field-of-view` gives it.
+- **Settings:** `camera.chase.swing: 0.12, swingTime: 0.3, boostFieldOfView: 70, boostIn: 0.25, boostOut: 0.5`.
+
+Pictures looked at again (`-drive-slide` and `-drive-boost` on seeds 1, 7, 42 and 2024): the sliding car is seen a little from the outside of its corner, and with a boost the view is wider and the car smaller, its flame clear of the road ahead.
+
+`chase.test.ts` gained 8 tests (no change without a drift, the swing's side and size, its easing in and back, the boost's view in and out, the same at three frame rates, starting swung, clearance while swung); 7 failed on the missing code first. One was then given a looser decimal place, because three seconds is ten easing times and leaves the swing e^-10 short of its target: the precision was the test's mistake, not a number of the plan. 2,142 unit tests pass.
 
 ## Working agreements
 
@@ -418,3 +428,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6b done: the car drifts and boosts (`car.ts` follows the plan's step line by line; `speedChange` takes the step's top speed and the boost, and sheds 9 m/s2 above top speed; the drift state in the fingerprint and the snapshot). Slide circles of 19.7, 34.1 and 119.9 m at top speed; 29.5 m/s in the tightest slide; a 2.1 s slide gives 39 m/s in 0.32 s for 1 s. 2,109 unit tests pass; all 320 browser tests passed in one run (18.4 minutes), the scripted run's fingerprint across Node, Chromium and Firefox included, now with drift live. Next: 6c, hits cancel a drift.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6c done: hits cancel a drift. `touching()` in `carBody.ts` names the wall, gate, tree or rock the body is against (with the contact's slope); the simulation reads it after each physics step and the car's next step cancels a slide on it. Plain test courses can have walls, posts and balls; new `wallGround()`. 2,116 unit tests pass; all 320 browser tests passed in one run (17.2 minutes). Next: 6d, sparks, flame and hop.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6d done: sparks in the tier's colour at both rear wheels, an orange flame with a pale tip while a boost runs, the hop drawn, and the tier and boost left on the readout (`render/driftEffects.ts`, `kartPose`, `carView`, `driftReadout`). Browser helper `slideTo` and new screenshots `-drive-slide` and `-drive-boost`; pictures of seeds 1, 7, 42 and 2024 looked at. Two known issues added (the camera beside a steep slope, flower dabs from the chase camera). 2,134 unit tests pass; all 330 browser tests passed in one run (19.1 minutes). Next: 6e, camera swing and wider view.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.

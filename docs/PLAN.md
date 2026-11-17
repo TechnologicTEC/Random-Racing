@@ -27,7 +27,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **6b** Drift and boost in the car
 - [x] **6c** Hits cancel a drift
 - [x] **6d** Sparks, flame and hop
-- [ ] **6e** Camera swing and wider view
+- [x] **6e** Camera swing and wider view
 - [ ] **6f** Tuning panel
 - [ ] **7a** Off the road
 - [ ] **7b** Walls
