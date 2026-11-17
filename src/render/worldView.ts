@@ -4,8 +4,11 @@ import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { HeightField, WorldResult } from '../gen/types';
 import { sampleField } from '../gen/world/heightfield';
+import { createBloom } from './bloom';
 import type { KartPose } from './carShape';
-import { createCarView } from './carView';
+import { createCarView, type EffectTextures } from './carView';
+import type { SpeedLine } from './driftEffects';
+import { createSpeedLinesView } from './speedLinesView';
 import { createCloudView } from './cloudView';
 import { cloudDrift } from './clouds';
 import type { Daylight } from './daylight';
@@ -103,6 +106,12 @@ export interface WorldView {
   setFieldOfView(degrees: number): void;
   /** Draws the kart where the pose says (`kartPose`), or hides it for null. */
   setCar(pose: KartPose | null): void;
+  /** The pictures the drift's effects are drawn with, once loaded (`loadEffectTextures`). */
+  setEffectTextures(textures: EffectTextures): void;
+  /** The speed lines over the picture while a boost runs (`speedLines`); none for an empty list. */
+  setSpeedLines(lines: SpeedLine[]): void;
+  /** Turns the glow round the drift's effects on or off (`render.bloom`, `bloom=0` in the address). */
+  setBloom(on: boolean): void;
   /** Fits the picture to the window: `pixelRatio` is the screen's pixels for each of the page's. No more than the view's budget of pixels is drawn. */
   resize(width: number, height: number, pixelRatio: number): void;
   render(): void;
@@ -128,6 +137,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // A frame is several draws (the scene, the bloom, the speed lines): what it drew is counted from the start of `render`, not of the last draw.
+  renderer.info.autoReset = false;
   const scene = new THREE.Scene();
   // The haze and the background share the colour of the sky at the horizon, set with the daylight.
   const haze = new THREE.Color();
@@ -189,6 +200,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   // The kart, hidden until it is given a pose; it takes the land's and clouds' shadows like the road.
   const car = createCarView(cfg.car, (material) => shade.patch(material));
   scene.add(car.object);
+  // The glow round the drift's effects, and the speed lines over the picture (6h-5).
+  const bloom = createBloom(renderer, cfg.bloom);
+  const speedLinesView = createSpeedLinesView();
+  const smokeLight = new THREE.Color();
   const clouds = createCloudView(cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade), cfg.clouds.glow, cfg.daylight.skyStrength, cfg.clouds.thin);
   scene.add(clouds.object);
 
@@ -275,6 +290,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       skyLight.intensity = light.skyStrength;
       linear(sun.color, light.sunColour);
       sun.intensity = light.sunStrength;
+      // The smoke is not lit by the sun's shader: it is given the sky's light and half the sun's, as a pale grey takes them.
+      smokeLight.copy(skyLight.color).multiplyScalar(light.skyStrength).add(new THREE.Color().copy(sun.color).multiplyScalar(light.sunStrength * 0.5));
+      smokeLight.setRGB(Math.min(1, smokeLight.r), Math.min(1, smokeLight.g), Math.min(1, smokeLight.b));
+      car.setLight(smokeLight);
       sun.position.set(light.sun.x, light.sun.y, light.sun.z).multiplyScalar(1000);
       sky.update(light);
       shade.setSun(light.sun);
@@ -333,16 +352,33 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       car.set(pose);
     },
 
+    setEffectTextures(textures) {
+      car.setTextures(textures);
+    },
+
+    setSpeedLines(lines) {
+      speedLinesView.set(lines);
+    },
+
+    setBloom(on) {
+      bloom.setOn(on);
+    },
+
     resize(width, height, pixelRatio) {
       renderer.setPixelRatio(pixelRatioFor(width, height, pixelRatio, pixels, cfg.maxPixelRatio));
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      const drawing = renderer.getDrawingBufferSize(new THREE.Vector2());
+      bloom.setSize(drawing.x, drawing.y);
     },
 
     render() {
       follow();
+      renderer.info.reset();
       renderer.render(scene, camera);
+      bloom.render(scene, camera, car);
+      speedLinesView.render(renderer);
     },
 
     finish() {
@@ -373,6 +409,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
     pixelCounts() {
       // Draw and read back in one go: the picture is only guaranteed to be there until the browser shows it.
       follow();
+      renderer.info.reset();
       renderer.render(scene, camera);
       const gl = renderer.getContext();
       const width = gl.drawingBufferWidth;
@@ -458,6 +495,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       sky.dispose();
       decor.dispose();
       car.dispose();
+      bloom.dispose();
+      speedLinesView.dispose();
       clouds.dispose();
       grass.dispose();
       renderer.dispose();

@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6h-4, drift and boost (see "Step 6h"): slides follow circles of 28, 57 and 203 m, the boost is 1.15 times top speed at 12 m/s², and steering keeps its top-speed circle above top speed
-- **Next:** `docs/PLAN.md`, "The build order": **6h-5**, the look of the sparks and boost (sprites and bloom) 6h is planned and approved (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`); its parts are in `docs/plan/M3-driving.md`, "Step 6h". Step 7 waits until 6h is done
+- **Last finished part:** 6h-5, the look of the drift (see "Step 6h"): sprites and bloom for the sparks, the burst, the smoke and the flame, the kart's lean, and speed lines. **This ends 6h**, the drift rework from Tane's second drive
+- **Next:** `docs/PLAN.md`, "The build order": **step 7**, surfaces and bumps, **planned in plan mode first**. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -322,7 +322,7 @@ Planned in plan mode and approved by Tane on 2026-11-17 (plan file: `C:\Users\ta
 | 6h-2 | **The track at 20 m**: the layout's distances and smallest corners given against the road's width (`LayoutSettings`, `TrackRules`) | Done |
 | 6h-3 | **The road and the island at 20 m**; the reference pictures taken again | Done |
 | 6h-4 | **Drift and boost**: circles of 28, 57 and 203 m, the boost of 1.15 at 12 m/s², the steering cap | Done |
-| 6h-5 | **The look**: sprites and bloom | |
+| 6h-5 | **The look**: sprites and bloom | Done |
 
 ### 6h-1: the measurements
 
@@ -527,6 +527,46 @@ The sweepers the slower driver misses are the widest, taken flat out on grip.
 
 2,189 unit tests pass. The browser suite's run failed only seed 42's drift pictures (out of time), and they and the drift tests passed run again after the fixes above.
 
+### 6h-5: the look of the drift (2026-11-18)
+
+**What changed** (Tane's choice: sprites and bloom; sizes and counts in `render.car`, the bloom in `render.bloom`):
+- **Sprites.** Five PNGs from Kenney's Particle Pack (CC0) in `public/effects/`: a trace, a star, a circle, a muzzle flash and a smoke puff. `public/effects/LICENSE.md` gives the source, the licence and each file's SHA-256. Loaded by `render/effectTextures.ts`; no package added. Until they load, or if they fail, the effects are drawn as soft dots.
+- **What is drawn** (`render/driftEffects.ts`, from the simulation's state and step only, so `still=1` repeats):
+  - sparks from both rear wheels from tier 1: 15 a wheel at tier 1 up to 45 at tier 3, reaching 0.6 to 1.1 m and fanning wider each tier, white-hot (`SPARK_HOT`) as they leave the tyre and in the tier's colour from a third of their flight;
+  - a burst of 14 stars in the tier's colour on letting go, for 0.2 s;
+  - tyre smoke (`SMOKE`), lit by the world's light, never a glow;
+  - twin flame jets in the boost's tier colour, with a pale core and a flare at the exhaust, never longer than the car;
+  - drawn only: the body leans 4 degrees out of a slide, the front wheels are counter-steered 14 degrees, the hop squashes the body 6% as it lands (`kartPose`);
+  - speed lines near the picture's edges while a boost runs (`render/speedLinesView.ts`), never over its middle.
+- **One `ShaderMaterial` mesh per kind of sprite** (`render/carView.ts`); nothing casts a shadow, and the smoke takes the light.
+- **The bloom** (`render/bloom.ts`): the effects alone are drawn into a half-float picture at half the screen's size, with the kart in depth only so it hides what is behind it, spread by Three.js's `UnrealBloomPass` (strength 0.7, radius 0.5), and the spread light alone is added on top of the finished picture. With no effect on screen it draws nothing, so the island is byte for byte the same with `bloom=0`. `data-effects` and `data-bloom` on `<body>` say what the page has.
+- **`docs/VISUAL_BAR.md`** rewritten for sprites and bloom; `drive-slide.jpg` and `drive-boost.jpg` (seed 7, tier 3, and 10 steps after letting go) added to `docs/visual-bar/` as proposed references.
+
+**Found on the way:**
+- **The sprites first drew nothing.** The side vector mirrored each quad, so its triangles faced away and were culled as back faces. Fixed with the right-hand perpendicular and `DoubleSide`.
+- **Effects drawn brighter than the screen can show clipped to white.** They are now drawn in their own colour on screen, and at full brightness (`sparks.glow` 2) only in the bloom's own picture.
+- **The view's triangle and draw counts read 0 whenever the bloom or the speed lines drew** (the `fps=1` readout, and the perf table's "0k, 1 call"): Three.js resets its counts on every draw, and the bloom's overlay was the last draw. The counts are now reset once at the start of each frame (`renderer.info.autoReset` off). Test first: the bloom browser test now checks that the bloomed frame counts at least the plain frame's triangles; it failed at 2 against 357,932 and passes since.
+- **Tuned by eye** on seeds 7 and 42: `sparks.glow` 2, `perStep` [1, 2, 3], `width` 0.03, smaller heads near the wheel, the flare 0.12 in 70% tier colour, the burst in 90% tier colour, bloom strength 0.7.
+- My own new spark-colour test was changed before any commit, to "the tier's colour from a third of the flight".
+- **Two browser tests were written after their code**, not seen failing first: "loads the effect pictures with no errors" and "draws the island exactly the same with the bloom on or off...". The triangle-count check added to the second was seen failing.
+- **One Firefox failure that would not come back.** A full browser run failed "gives the same picture of a slide and of a boost twice" in Firefox once (Chromium passed); its error message was lost to the next run. It then passed 31 times in Firefox: alone, six times over, 12 and 10 times at six and eight workers, and in a full run, with a copy that also compared each picture with one taken two frames later (always the same). Fonts (system only), the clock (nothing drawn depends on it), automatic quality (there is none) and a frame not yet shown at the screenshot were ruled out. Cause unknown; nothing in the code was changed for it. The test now says which check failed (the slide reaching tier 3, the slide's picture or the boost's), and attaches all four pictures to the report if they differ.
+
+**The bloom's cost** (`npm run perf` with `SEEDS=7`, `PARTS=0`; Intel Arc, Direct3D 11, 1920 by 1080, seed 7, `time=13:00`). The perf run gains a held tier 3 slide with the bloom and without it (`still=1` holds the car; the clock is set each frame so each frame is drawn):
+
+| View | Median ms | 95th ms | Worst ms | Over 16.7 ms |
+| --- | --- | --- | --- | --- |
+| A tier 3 slide, bloom | 9.6 | 10.8 | 13.1 | 0% |
+| The same slide, `bloom=0` | 7.4 | 8.0 | 9.4 | 0% |
+| Flying the lap (no effects) | 6.0 | 7.3 | 8.3 | 0% |
+| Circling | 7.2 | 7.7 | 8.7 | 0% |
+| Summit | 7.8 | 8.4 | 9.0 | 0% |
+
+**The bloom costs about 2.2 ms a frame at 1080p** (2.8 ms at the 95th), only while an effect shows. No frame went over 16.7 ms. At 2116 by 1322 (the laptop's screen, capped by the pixel budget) the views without effects took 9.6 to 13.1 ms. The slide row's triangle and call counts in that run were the bug above; the frame times are unaffected.
+
+**Pictures looked at:** tiers 1, 2 and 3 and the boost on seeds 1, 7, 42, 100 and 2024 (`TIERS=1,2`), seed 7 at its own 07:27 low sun. The island, road and trees stay crisp in every one; each tier reads by its colour, matching the readout's dot; the smoke sits in the light; the speed lines keep to the top corners. Nothing fails the bar. For Tane: tier 3's purple reads lilac at the spray's white-hot heads; from the side (seeds 1 and 2024, the car in the air) the flame is a bright pale jet about half the car's length; and `slideTo`'s long slides end on grass or sand on most seeds, so most pictures show the sparks off the road.
+
+2,200 unit tests pass and the type check is clean. The browser suite's final run passed 335 and failed 1: [chromium] "opens flying the lap, and keeps moving". The flying camera moved 4.2 m of the 5 m asked within 15 s, because the flight moves by at most 0.05 s a frame and a frame took about 3.5 s in software with three browsers busy. 6h-5 adds nothing to that view (no car, so no effect, bloom or speed lines). It passed 4 of 4 run again alone. The two 3-second budget tests, which run only after the rest pass, were run on their own afterwards and passed. In both full runs today the Firefox drift picture test and the bloom test passed in both browsers.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -598,6 +638,8 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-18 | **Only the drift's effects are bloomed, drawn on their own layer** (6h-5), not the whole picture above a brightness threshold | Claude's call, the plan's fallback taken from the start. The island is then untouched byte for byte, whatever the sun's glint on the sea does, and nothing is drawn when no effect shows. Costs about 2.2 ms a frame at 1080p on the Arc graphics while an effect shows |
+| 2026-11-18 | **The view's triangle and draw counts are the whole frame's**, the bloom's and speed lines' passes included (6h-5) | Claude's call. Three.js counted only the last draw, which read 0 once the bloom drew |
 | 2026-11-17 | **6h, Tane's choices after the second drive:** a road 20 m wide at the corners (was 12; the brief said 12 to 14); a boost of 1.15 times top speed at 12 m/s² (was 1.3 at 30), times unchanged; steering keeps its top-speed circle above top speed; sparks and boost with CC0 sprites and bloom on the effects only (a change to the visual bar) | Tane, from options in plan mode. A boosted car at 39 m/s could steer no tighter than a 101 m circle. Measured in 6h-1: the old boost made 8 of 195 drives out of a corner unclean, the new boost with the cap none |
 | 2026-11-17 | **Slide circles of 28, 57 and 203 m; the once-a-second driver's bar on chicanes 85%** (6h-4) | Tane chose the 85% bar from options. I had rounded 30 m's 84.8% (39 of 46) to 85% when asking; by the plan's rule (the gentlest that meet the bars) the circles are 28, 57 and 203 m, 2 m tighter than offered |
 | 2026-11-17 | **6h-3, Tane's choices:** walls beside ground steeper than 45% (was 40%); the sea beside 15 to 30% of the lap on islands that only touch it (was 40%); mountain placement near-misses listed in the test like the gorges; the near-shadow budget 210,000 triangles (was 200,000) | Each from options with the numbers, when the 20 m road's new worlds broke a check that config could not fix without changing something Tane had chosen |
@@ -619,6 +661,8 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 
 ## Known issues and risks
 
+- **"Gives the same picture of a slide and of a boost twice" failed once in Firefox** (6h-5, in a full run) and passed 31 times after; the cause is unknown (see "6h-5"). If it fails again, its report names the check that failed and holds all four pictures: look at them before running anything else, since every Playwright run empties `test-results/`.
+- **The drift's look waits for Tane** (check-in 2): tier 3's purple reads lilac at the spray's white-hot heads, and `drive-slide.jpg` and `drive-boost.jpg` are only proposed references.
 - **The chase camera can be cut by a steep slope beside it** (seed 1, sliding onto a hillside, step 6d's pictures): it keeps clear of the ground under it, not beside it. For check-in 2 and step 8 (off the road).
 - **From the chase camera in long meadow grass, the flower dabs look large and busy** (seed 7, 6d's pictures). `render.grass.flowers` has their size; for check-in 2 or M6.3.
 - **No person has driven with a controller yet** (5a, 5e): the controller is read and tested by numbers only. Tane does not use one (check-in 1). The dead zone (0.15) and the triggers are untried by hand.
@@ -715,6 +759,7 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6g, from Tane's first drive: a slide held for a second ran into the barrier. Slides now follow circles of 22, 45 or 160 m at any speed (key into the corner, none, the other key; were turn rates) and the nose points 15 degrees in (was 24), Tane's choices from measured options. New keyboard corner driver (`testing/cornerDriver.ts`) and test: a slide held from just after each corner's start to just before its end, on the road, through 95% of the corners of seeds 1 to 20 (hairpins and plain corners 100%). 2,153 unit tests pass; all 334 browser tests passed in one run (22.1 minutes). Next: step 7, planned in plan mode first.
+- **2026-11-18 (Milestone 3, Opus 5.5):** 6h-5 done, which ends 6h (see "6h-5"). The drift's effects are CC0 sprites (Kenney's Particle Pack, five PNGs in `public/effects/`) with a bloom on the effects alone: sparks that grow with the tier and cool from white-hot into its colour, a burst on letting go, tyre smoke, twin flames in the boost's tier colour, the kart's lean, counter-steer and squash, and speed lines. The bloom costs about 2.2 ms a frame at 1080p on the Arc graphics; no frame over 16.7 ms. Found: the view's counts read 0 once the bloom drew (fixed, test first). A Firefox picture test failed once and not in 31 runs after; cause unknown, the test now reports which check failed with the pictures. Pictures of tiers 1 to 3 and the boost on seeds 1, 7, 42, 100 and 2024 looked at; `drive-slide.jpg` and `drive-boost.jpg` proposed. 2,200 unit tests pass; the browser suite passed 335 of 336 (the flying test out of time under load, then 4 of 4 alone), and the budget tests on their own. Next: step 7, planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6h-4 done: the boost is 1.15 times top speed at 12 m/s², a boosted car steers on its top-speed circle, and slides follow circles of 28, 57 and 203 m. On the final 20 m worlds: the careful driver gets through 97% of corners, the once-a-second driver every hairpin, 96% of plain corners and 87% of chicanes; 97% of slides drive out clean with their boost. Tane chose 85% for that driver on chicanes; I had rounded 30 m's 84.8% when asking, so the circles are 2 m tighter than offered (decisions). Seed 42 can be brought to tier 3 from its start again, so its drift pictures are back. 2,189 unit tests pass. The browser suite failed one test (seed 42's drift pictures, out of time: the slide was searched for twice); the search now runs once, the repeat-picture drift test has 3 minutes, and the drift tests passed run again. Next: 6h-5.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6h-3 done: the road is 20 m wide and every island changed with it.
   - Distances between sections are measured between road edges, and straights widen 4 to 10 m.

@@ -162,7 +162,13 @@ export const SPARK: readonly [Rgb, Rgb, Rgb] = [
   [0.7, 0.35, 1.0],
 ];
 
-/** The boost flame: a pale yellow core inside an orange cone, unlit. */
+/** A spark's head as it leaves the tyre, white-hot, before it cools into its tier's colour (6h-5). */
+export const SPARK_HOT: Rgb = [1, 0.97, 0.88];
+
+/** Tyre smoke while sliding: pale, a little warm, lit by the world's light (6h-5). */
+export const SMOKE: Rgb = [0.9, 0.89, 0.86];
+
+/** The boost flame: a pale yellow core inside the jet, which takes the boost's tier colour since 6h-5. */
 export const FLAME = {
   core: [1, 0.95, 0.7] as Rgb,
   outer: [1, 0.55, 0.1] as Rgb,

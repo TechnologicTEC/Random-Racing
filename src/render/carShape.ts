@@ -2,7 +2,7 @@ import type { GameConfig, KartViewConfig } from '../config';
 import { STEER_STEPS } from '../sim/input';
 import { rotate, type Quat, type Vec3 } from '../sim/quat';
 import type { CarState } from '../sim/sim';
-import { flameLength, hopLift, sparkTriangles, type Sparks } from './driftEffects';
+import { driftSprites, hopLift, hopSquash, leanAngle, type Sprite } from './driftEffects';
 import { KART, type Rgb } from './palette';
 import { createShapeBuilder, type Shape } from './treeShapes';
 
@@ -148,10 +148,12 @@ export interface KartPose {
    * and how far it is turned about the body's up (radians, positive to the left).
    */
   wheels: Array<{ at: Vec3; turn: number }>;
-  /** The drift's sparks, in the body's own directions (`sparkTriangles`). */
-  sparks: Sparks;
-  /** How long the boost flame is drawn, in metres; 0 with none. */
-  flame: number;
+  /** The drift's effects (sparks, burst, smoke, flame), in the body's own directions (`driftSprites`). */
+  sprites: Sprite[];
+  /** How far the body is drawn leaned out of a slide, in radians about its front, positive to the left (`leanAngle`); the wheels stay on the road. */
+  lean: number;
+  /** The share of its height the body is drawn at: 1, less as the hop lands (`hopSquash`). */
+  squash: number;
 }
 
 /**
@@ -159,8 +161,9 @@ export interface KartPose {
  * where the simulation's wheel is (the middle of the small ball it casts, so
  * the springs show), lifted so the bottom of the drawn tyre is where the
  * ball's bottom is: on the ground, with no gap and no sinking. The front
- * wheels are turned with the stick. The drift adds the hop, the sparks and
- * the boost flame (`driftEffects.ts`).
+ * wheels are turned with the stick, and against the slide while the nose is
+ * swung in. The drift adds the hop, the body's lean and squash, and the
+ * sparks, burst, smoke and boost flame (`driftEffects.ts`).
  */
 export function kartPose(state: CarState, cfg: Pick<GameConfig, 'car' | 'render' | 'sim'>): KartPose {
   const { rotation } = state;
@@ -168,8 +171,11 @@ export function kartPose(state: CarState, cfg: Pick<GameConfig, 'car' | 'render'
   const look = cfg.render.car;
   const lift = cfg.render.car.wheelRadius - cfg.car.wheels.radius;
   const steer = state.input.steer / STEER_STEPS;
-  // A stick to the right turns the wheels clockwise seen from above: negative about the roof.
-  const frontTurn = steer === 0 ? 0 : -steer * look.steerAngle;
+  // A stick to the right turns the wheels clockwise seen from above: negative about the roof. In a slide they are
+  // drawn turned against it, out of the corner, as far as the nose has swung in: positive in a slide to the right.
+  const swung = cfg.car.drift.angle > 0 ? state.drift.angle / cfg.car.drift.angle : 0;
+  const stickTurn = steer === 0 ? 0 : -steer * look.steerAngle;
+  const frontTurn = swung > 0 && state.drift.dir !== 0 ? stickTurn * (1 - swung) + state.drift.dir * look.counterSteer * swung : stickTurn;
   const wheels = state.wheels.map((wheel, i) => {
     const local = rotate(back, { x: wheel.at.x - state.position.x, y: wheel.at.y - state.position.y, z: wheel.at.z - state.position.z });
     return { at: { x: local.x, y: local.y + lift, z: local.z }, turn: i < 2 ? frontTurn : 0 };
@@ -179,11 +185,13 @@ export function kartPose(state: CarState, cfg: Pick<GameConfig, 'car' | 'render'
   const up = hop === 0 ? null : rotate(rotation, { x: 0, y: 1, z: 0 });
   const position = up ? { x: state.position.x + up.x * hop, y: state.position.y + up.y * hop, z: state.position.z + up.z * hop } : state.position;
   const ground = (wheel: { at: Vec3 }): Vec3 => ({ x: wheel.at.x, y: wheel.at.y - look.wheelRadius, z: wheel.at.z });
+  const motion = rotate(back, state.velocity);
   return {
     position,
     rotation,
     wheels,
-    sparks: sparkTriangles(state.drift, state.step, [ground(wheels[2]!), ground(wheels[3]!)], look, cfg.sim.stepsPerSecond),
-    flame: flameLength(state.drift, state.step, look),
+    sprites: driftSprites({ drift: state.drift, step: state.step, rear: [ground(wheels[2]!), ground(wheels[3]!)], motion }, look, cfg.car.drift.boosts, cfg.sim.stepsPerSecond),
+    lean: leanAngle(state.drift, cfg.car.drift.angle, look),
+    squash: hopSquash(state.drift.hop, look.squash),
   };
 }

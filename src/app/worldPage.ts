@@ -11,6 +11,9 @@ import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from
 import { daylightAt } from '../render/daylight';
 import { parseQuality, qualitySettings, type QualityLevel } from '../render/quality';
 import { kartPose } from '../render/carShape';
+import type { EffectTextures } from '../render/carView';
+import { speedLines } from '../render/driftEffects';
+import { loadEffectTextures } from '../render/effectTextures';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
 import { createDevices } from '../input/devices';
@@ -163,7 +166,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     grass: params.get('grass') !== 'off',
     water: params.get('water') !== 'off',
     shadows: params.get('shadows') !== 'off',
+    // `bloom=0` (or `off`) turns off the glow round the drift's effects (6h-5).
+    bloom: params.get('bloom') !== '0' && params.get('bloom') !== 'off',
   };
+  /** The drift effects' pictures, once loaded: kept, so a view rebuilt for another quality level has them too. */
+  let effectTextures: EffectTextures | null = null;
   /** Builds the 3D view for a quality level, with the parts the address asked for. */
   // `shadowSky=0.5` tries another share of the sky's light for shadows to take, for judging by eye.
   const askedSky = Number(params.get('shadowSky'));
@@ -177,10 +184,24 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     made.setGrassShown(shownParts.grass);
     made.setWaterShown(shownParts.water);
     made.setShadowsShown(shownParts.shadows);
+    made.setBloom(shownParts.bloom);
+    if (effectTextures) made.setEffectTextures(effectTextures);
     document.body.dataset.worldQuality = level;
     return made;
   };
   let view = makeView(quality);
+  document.body.dataset.effects = 'loading';
+  document.body.dataset.bloom = String(shownParts.bloom);
+  loadEffectTextures(import.meta.env.BASE_URL)
+    .then((textures) => {
+      effectTextures = textures;
+      view.setEffectTextures(textures);
+      document.body.dataset.effects = 'ready';
+    })
+    .catch(() => {
+      // The effects are still drawn, as soft dots.
+      document.body.dataset.effects = 'failed';
+    });
   const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
   const readout = ref('frames');
   readout.hidden = params.get('fps') !== '1';
@@ -240,6 +261,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const drawCar = (): void => {
     const state = sim && (mode === 'chase' || lookingAtCar || driven) ? carState() : null;
     view.setCar(state ? kartPose(state, tuned) : null);
+    // Speed lines while a boost runs, in the driving view only.
+    view.setSpeedLines(state && mode === 'chase' ? speedLines(state.drift, state.step, tuned.render.car, tuned.sim.stepsPerSecond) : []);
     document.body.dataset.driveCar = state ? 'shown' : 'hidden';
     if (state) {
       const speed = String(Math.round(Math.abs(state.speed) * 3.6));

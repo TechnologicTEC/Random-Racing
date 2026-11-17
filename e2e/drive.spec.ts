@@ -198,20 +198,61 @@ test.describe('drifting on the page', () => {
     expect(errors).toEqual([]);
   });
 
-  test('gives the same picture of a slide and of a boost twice', async ({ page }) => {
+  test('gives the same picture of a slide and of a boost twice', async ({ page }, testInfo) => {
     // A slide may take several tries from the start line (`slideTo`), each drawing frames in software, and this takes it twice.
     test.setTimeout(180_000);
     const pictures: Buffer[][] = [];
     for (let k = 0; k < 2; k++) {
       // Seed 7: its start straight takes a slide to tier 3 in fewer tries than seed 42's since the 20 m road.
       await openDriving(page, 'seed=7&still=1');
-      expect(await slideTo(page, 3)).toBe(true);
+      expect(await slideTo(page, 3), `round ${k + 1}: a slide reaching tier 3`).toBe(true);
       const slide = await page.screenshot();
       await letGo(page);
       pictures.push([slide, await page.screenshot()]);
     }
-    expect(pictures[1]![0]!.equals(pictures[0]![0]!)).toBe(true);
-    expect(pictures[1]![1]!.equals(pictures[0]![1]!)).toBe(true);
+    // Failed once in Firefox in a full run (6h-5) and never again in 31 tries: should it fail, the report keeps all four pictures.
+    for (const [j, name] of ['slide', 'boost'].entries()) {
+      if (pictures[1]![j]!.equals(pictures[0]![j]!)) continue;
+      for (let k = 0; k < 2; k++) await testInfo.attach(`${name}-round-${k + 1}.png`, { body: pictures[k]![j]!, contentType: 'image/png' });
+    }
+    expect(pictures[1]![0]!.equals(pictures[0]![0]!), 'the slide drawn the same both times').toBe(true);
+    expect(pictures[1]![1]!.equals(pictures[0]![1]!), 'the boost drawn the same both times').toBe(true);
+  });
+});
+
+test.describe('the look of the drift (6h-5: sprites and bloom)', () => {
+  test('loads the effect pictures with no errors', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=7&still=1');
+    await expect(page.locator('body')).toHaveAttribute('data-effects', 'ready', { timeout: 30_000 });
+    expect(errors).toEqual([]);
+  });
+
+  test('draws the island exactly the same with the bloom on or off when no effect is shown, and blooms a slide', async ({ page }) => {
+    test.setTimeout(180_000);
+    const still = async (query: string): Promise<Buffer> => {
+      await openDriving(page, query);
+      await expect(page.locator('body')).toHaveAttribute('data-effects', 'ready', { timeout: 30_000 });
+      return page.screenshot();
+    };
+    // The start, and a view of the island with no car: byte for byte the same.
+    expect((await still('seed=7&still=1')).equals(await still('seed=7&still=1&bloom=0'))).toBe(true);
+    expect((await still('seed=7&still=1&look=start')).equals(await still('seed=7&still=1&look=start&bloom=0'))).toBe(true);
+    // A slide at tier 3: the bloom adds a glow round the sparks.
+    const sliding = async (query: string): Promise<{ picture: Buffer; triangles: number; calls: number }> => {
+      await openDriving(page, query);
+      expect(await slideTo(page, 3)).toBe(true);
+      const { triangles, calls } = await page.evaluate(() => window.seedCircuit.view!.stats());
+      return { picture: await page.screenshot(), triangles, calls };
+    };
+    await expect(page.locator('body')).toHaveAttribute('data-bloom', 'false');
+    const plain = await sliding('seed=7&still=1&bloom=0');
+    const bloomed = await sliding('seed=7&still=1');
+    await expect(page.locator('body')).toHaveAttribute('data-bloom', 'true');
+    expect(bloomed.picture.equals(plain.picture)).toBe(false);
+    // What the frame drew counts the island as well as the bloom's own passes (the perf run read 0 once the bloom drew last).
+    expect(bloomed.triangles).toBeGreaterThanOrEqual(plain.triangles);
+    expect(bloomed.calls).toBeGreaterThan(plain.calls);
   });
 });
 

@@ -35,7 +35,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **6h-2** The track at 20 m
   - [x] **6h-3** The road and the island at 20 m; the reference pictures taken again
   - [x] **6h-4** Drift and boost: the gentler circles (28, 57 and 203 m), a boost of 1.15 times at 12 m/s², steering that keeps its top-speed circle above top speed
-  - [ ] **6h-5** Sparks, boost and the drift's look: sprites and bloom
+  - [x] **6h-5** Sparks, boost and the drift's look: sprites and bloom
 - [ ] **7a** Off the road
 - [ ] **7b** Walls
 - [ ] **7c** Trees and rocks

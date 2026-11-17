@@ -925,6 +925,7 @@ export interface RenderConfig {
   decor: DecorViewConfig;
   /** How the car is drawn. */
   car: KartViewConfig;
+  bloom: BloomConfig;
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -1124,17 +1125,62 @@ export interface KartViewConfig {
   /** How far the front wheels are drawn turned with the stick right over. Drawn only: the steering itself is `car.steer`. */
   steerAngle: number;
   /**
-   * The sparks thrown back and out from both rear wheels while sliding from the first tier, in the tier's colour:
-   * `perStep` new ones a wheel each step, each living `life` seconds, flying at most `reach` metres, each a flat
-   * triangle `size` metres across that shrinks as it flies. A burst never grows bigger than its wheel.
+   * The sparks sprayed back, out and up from both rear wheels while sliding from the first tier (6h-5, sprites and
+   * bloom): for the three tiers, `perStep` new ones a wheel each step, flying at most `reach` metres, fanned out by
+   * `spread` (how far sideways, as a share). Each lives `life` seconds, a streak `length` long and `width` wide (both
+   * halves) stretched along its flight, with a bright head `head` across (half), white-hot as it leaves the tyre and
+   * cooling into the tier's colour. The glowing effects are drawn `glow` times brighter than the screen can show, so
+   * the bloom has something to spread (`render.bloom`).
    */
-  sparks: { perStep: number; life: number; reach: number; size: number };
+  sparks: {
+    perStep: readonly [number, number, number];
+    life: number;
+    reach: readonly [number, number, number];
+    spread: readonly [number, number, number];
+    length: number;
+    width: number;
+    head: number;
+    glow: number;
+  };
+  /** On letting go of a slide with a tier: a ring of `count` stars in the tier's colour, `size` across (half), spreading out to `reach` metres and fading over `life` seconds. */
+  burst: { life: number; count: number; reach: number; size: number };
   /**
-   * The boost flame: two cones pointing back from the engine, `lengths` long for the three tiers, flickering by
-   * `flicker` of that either way, step by step. The pale core runs the whole length and is `core` of `radius` wide
-   * at its base; the orange cone round it is `radius` wide and `outer` of the length, so the core's tip shows past it.
+   * Tyre smoke while sliding: a puff from each rear wheel every `every` steps, living `life` seconds, growing from
+   * `size[0]` to `size[1]` (half sizes) and rising `rise` metres as it fades from `alpha`. A puff is left behind at
+   * `drag` of the car's speed, so the smoke trails a few metres, not the whole way back to the camera.
    */
-  flame: { lengths: readonly [number, number, number]; radius: number; core: number; outer: number; flicker: number };
+  smoke: { every: number; life: number; size: readonly [number, number]; rise: number; alpha: number; drag: number };
+  /**
+   * The boost flame: two jets pointing back from the engine, `spread` metres either side of its middle, in the boost's
+   * tier colour, `lengths` long for the three tiers and `width` wide (half), flickering by `flicker` of the length
+   * either way, step by step; a pale core `core` of the width inside each, and a flare `flare` across (half) where
+   * each leaves the exhaust. Never longer than the car.
+   */
+  flame: { lengths: readonly [number, number, number]; width: number; core: number; flicker: number; spread: number; flare: number };
+  /** In a slide the body leans out of the corner by up to `lean` radians, and the front wheels are drawn turned `counterSteer` radians against it; the hop squashes the body by up to `squash` of its height as it lands. All drawn only. */
+  lean: number;
+  counterSteer: number;
+  squash: number;
+  /**
+   * Thin pale streaks near the picture's edges while a boost runs: `count` of them, each living `life` seconds as it
+   * runs outwards, `length` long (a share of the half picture, least and most), never inside `inner` of the way from
+   * the middle to the edge, at most `alpha` opaque.
+   */
+  speedLines: { count: number; life: number; length: readonly [number, number]; inner: number; alpha: number };
+}
+
+/**
+ * The glow round the drift's effects (Tane, 6h-5: sprites and bloom). Only the effects are bloomed: they are drawn
+ * on their own (with the kart, which hides what is behind it) into a picture `scale` of the screen's size, spread
+ * by Three.js's `UnrealBloomPass` with `strength` and `radius`, and the spread light alone is added on top of the
+ * finished picture. With no effect on screen nothing is added, so the island is never softened. `bloom=0` in the
+ * address turns it off.
+ */
+export interface BloomConfig {
+  enabled: boolean;
+  strength: number;
+  radius: number;
+  scale: number;
 }
 
 /** How the clouds are drawn. */
@@ -2068,10 +2114,19 @@ export const config: GameConfig = {
       wheelRadius: 0.28,
       wheelWidth: 0.24,
       steerAngle: 0.35,
-      // 30 a wheel at once, within 0.5 m of it with their size: never bigger than the 0.56 m wheel.
-      sparks: { perStep: 2, life: 0.25, reach: 0.45, size: 0.09 },
-      flame: { lengths: [0.6, 0.9, 1.2], radius: 0.13, core: 0.55, outer: 0.7, flicker: 1 / 6 },
+      // 6h-5 (Tane: sprites and bloom): a trickle of 15 a wheel at the first tier, a spray of 45 at the third. Twice as
+      // bright as the screen shows for the bloom: at 3 the many sparks where they are born summed to a white glow.
+      sparks: { perStep: [1, 2, 3], life: 0.25, reach: [0.6, 0.85, 1.1], spread: [0.35, 0.6, 0.9], length: 0.14, width: 0.03, head: 0.05, glow: 2 },
+      burst: { life: 0.2, count: 14, reach: 1.8, size: 0.22 },
+      smoke: { every: 2, life: 0.5, size: [0.2, 0.7], rise: 0.5, alpha: 0.35, drag: 0.15 },
+      flame: { lengths: [0.6, 0.9, 1.2], width: 0.12, core: 0.5, flicker: 1 / 6, spread: 0.2, flare: 0.12 },
+      // About 4 degrees of lean, 14 of counter-steer, 6% of squash.
+      lean: 0.07,
+      counterSteer: 0.25,
+      squash: 0.06,
+      speedLines: { count: 14, life: 0.25, length: [0.08, 0.2], inner: 0.6, alpha: 0.35 },
     },
+    bloom: { enabled: true, strength: 0.7, radius: 0.5, scale: 0.5 },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [

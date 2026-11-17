@@ -57,6 +57,18 @@ describe('config', () => {
     expect(config.world.coast.clear).toBeGreaterThanOrEqual(config.road.verge + config.world.tile.cell);
   });
 
+  it('blooms the drift effects only, softly, at half the picture size (Tane, 6h-5: sprites and bloom)', () => {
+    const { bloom } = config.render;
+    expect(bloom.enabled).toBe(true);
+    expect(bloom.strength).toBeGreaterThan(0);
+    expect(bloom.strength).toBeLessThanOrEqual(2);
+    expect(bloom.radius).toBeGreaterThanOrEqual(0);
+    expect(bloom.radius).toBeLessThanOrEqual(1);
+    expect(bloom.scale).toBe(0.5);
+    // How much brighter than the screen can show the glowing effects are drawn, so the bloom has something to spread.
+    expect(config.render.car.sparks.glow).toBeGreaterThan(1);
+  });
+
   it('generates about 30 candidates per seed', () => {
     expect(config.track.candidatesPerRound).toBe(30);
   });

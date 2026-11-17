@@ -144,27 +144,38 @@ describe('kartPose', () => {
     expect(hopping.wheels).toEqual(kartPose(resting, config).wheels);
   });
 
-  it('gives no sparks and no flame with no drift', () => {
+  it('gives no sprites, no lean and no squash with no drift', () => {
     const pose = kartPose(resting, config);
-    expect(pose.sparks.positions).toHaveLength(0);
-    expect(pose.flame).toBe(0);
+    expect(pose.sprites).toHaveLength(0);
+    expect(pose.lean).toBe(0);
+    expect(pose.squash).toBe(1);
   });
 
-  it('throws sparks from where the rear tyres meet the road while sliding from the first tier', () => {
-    const pose = kartPose({ ...resting, drift: { ...resting.drift, phase: 'slide', dir: 1, tier: 2, angle: 0.42 } }, config);
-    const { positions } = pose.sparks;
-    expect(positions.length).toBeGreaterThan(0);
+  it('throws sparks from where the rear tyres meet the road while sliding from the first tier, and smoke from the start of the slide', () => {
+    const slide = { ...resting.drift, phase: 'slide' as const, dir: 1 as const, tier: 2 as const, angle: car.drift.angle };
+    const pose = kartPose({ ...resting, drift: slide }, config);
     const rear = [pose.wheels[2]!, pose.wheels[3]!];
-    // Every spark near one rear tyre's bottom, within a wheel's size of it.
-    for (let i = 0; i < positions.length; i += 3) {
-      const near = rear.some((wheel) => Math.hypot(positions[i]! - wheel.at.x, positions[i + 1]! - (wheel.at.y - look.wheelRadius), positions[i + 2]! - wheel.at.z) <= 2 * look.wheelRadius);
+    const streaks = pose.sprites.filter((s) => s.kind === 'streak');
+    expect(streaks.length).toBeGreaterThan(0);
+    for (const s of streaks) {
+      const near = rear.some((wheel) => Math.hypot(s.at.x - wheel.at.x, s.at.y - (wheel.at.y - look.wheelRadius), s.at.z - wheel.at.z) <= look.sparks.reach[1] + 1e-9);
       expect(near).toBe(true);
     }
+    expect(kartPose({ ...resting, drift: { ...slide, tier: 0 } }, config).sprites.some((s) => s.kind === 'smoke')).toBe(true);
   });
 
-  it('gives the flame its length while a boost runs', () => {
+  it('leans the body out of the corner while sliding and turns the front wheels against it, the rear wheels straight', () => {
+    const slide = { ...resting.drift, phase: 'slide' as const, dir: 1 as const, tier: 0 as const, angle: car.drift.angle };
+    const pose = kartPose({ ...resting, drift: slide, input: makeInput({ steer: 1, drift: true }) }, config);
+    // Sliding right: the body leans left, and the front wheels point left, out of the corner (positive about the roof).
+    expect(pose.lean).toBeCloseTo(look.lean, 9);
+    expect(pose.wheels[0]!.turn).toBeCloseTo(look.counterSteer, 9);
+    expect(pose.wheels[1]!.turn).toBeCloseTo(look.counterSteer, 9);
+    expect(pose.wheels[2]!.turn).toBe(0);
+  });
+
+  it('draws the boost flame while a boost runs', () => {
     const pose = kartPose({ ...resting, drift: { ...resting.drift, boostLeft: 0.4, boostTier: 3 } }, config);
-    expect(pose.flame).toBeGreaterThan(look.flame.lengths[2] * (1 - look.flame.flicker) - 1e-9);
-    expect(pose.flame).toBeLessThan(look.flame.lengths[2] * (1 + look.flame.flicker) + 1e-9);
+    expect(pose.sprites.filter((s) => s.kind === 'flame').length).toBeGreaterThan(0);
   });
 });

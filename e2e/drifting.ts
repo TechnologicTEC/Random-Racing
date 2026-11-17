@@ -14,6 +14,8 @@ export async function slideTo(page: Page, tier: 1 | 2 | 3): Promise<boolean> {
   const perSecond = config.sim.stepsPerSecond;
   // A few steps past the tier, so it is safely reached.
   const steps = Math.round(config.car.drift.tiers[tier - 1] * perSecond) + 5;
+  // The effects' pictures load beside the world: wait for them, so pictures of the slide show them, not stand-ins.
+  await page.waitForFunction(() => document.body.dataset.effects !== 'loading', null, { timeout: 30_000 });
   return page.evaluate(
     ({ steps, tier }) => {
       const drive = window.seedCircuit.drive!;

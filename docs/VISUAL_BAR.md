@@ -8,10 +8,10 @@ What the game looks like, in terms that can be checked, with pictures to lay new
 ## The rules that make it
 
 - **Flat shading everywhere.** Each triangle has one colour and its own light; nothing is rounded off by smooth shading. Trees are faceted lumps, clouds are clusters of faceted puffs, rocks are faceted boulders.
-- **No image files.** Colour comes from `src/render/palette.ts` (ordinary screen colours from 0 to 1) and from the ground's cover. A new thing takes its colours from that file, or adds to it.
+- **No image files**, but for the five pictures the drift's effects are drawn with (Tane, 6h-5): CC0 sprites from Kenney's Particle Pack in `public/effects/`, white shapes on transparency, each listed with its SHA-256 in `public/effects/LICENSE.md`. Everything else, the effects' colours included, comes from `src/render/palette.ts` (ordinary screen colours from 0 to 1) and from the ground's cover. A new thing takes its colours from that file, or adds to it.
 - **One light for everything.** A sun and a sky light worked out from the time of day (`render/daylight.ts`), the same for ground, road, trees and anything new. Shadows keep 60% of the sky's light (`render.shadows.skyShare`), so a shadow is a darker tint of the surface, never black.
 - **Haze** from 1,500 m to 6,600 m, in the horizon's colour, so far land and sea melt into the sky.
-- **No glow, bloom, outlines or film effects.** There is no post-processing at all. Bright things (sparks, a flame) are bright because they are drawn unlit in a light colour.
+- **No glow, bloom, outlines or film effects on the world.** The only glow is round the drift's effects (Tane, 6h-5: `render.bloom`): the effects alone are spread by a bloom and the spread light is added on top of the finished picture, so the island, the road and the car are never softened. A picture with no effect on screen is exactly the same, byte for byte, with the bloom on or off (`bloom=0`; a browser test checks it).
 - **The view** is 50 degrees tall for the flying and circling cameras; the chase camera is planned at 60.
 - **The cards** on top are pale, slightly see-through rounded panels (`rgba(246, 250, 247, 0.86)`, 14 px corners, a soft shadow) with dark green-black text (`#15302b`) and one teal accent (`#1a7d77`). They sit in the corners and along the bottom, never over the middle of the road.
 
@@ -51,6 +51,8 @@ Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Whe
 | `sunrise.jpg` | `seed=7&still=1&look=sun&time=07:00` | with `TIMES=07:00`: `world-00007-at-0700-sun.png` |
 | `drive-start.jpg` | `seed=42&still=1` | `world-00042-drive-start.png` |
 | `car-close.jpg` | `seed=42&still=1&look=car` | `world-00042-car.png` |
+| `drive-slide.jpg` (proposed, 6h-5) | `seed=7&still=1`, then a slide to tier 3 (`slideTo` in `e2e/drifting.ts`) | `world-00007-drive-slide.png` |
+| `drive-boost.jpg` (proposed, 6h-5) | the same, 10 steps after letting go | `world-00007-drive-boost.png` |
 
 The page opens driving since step 5e; `cam=fly` keeps these addresses on the flying camera, and the car is not drawn in them. The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
 
@@ -58,21 +60,25 @@ The page opens driving since step 5e; `cam=fly` keeps these addresses on the fly
 
 ## The car, sparks and flame
 
-The car was drawn in step 5c, to the proposal below, and Tane approved it at check-in 1 (2026-11-17) "for now": a proper design, and perhaps other car styles, may come later. Its pictures are `drive-start.jpg` and `car-close.jpg`. **The car casts no shadow** (Tane's choice at check-in 1: it was distracting to drive behind); it still takes the shadows of trees, walls and the gate. The sparks and the flame were built in step 6d (sizes in `render.car.sparks` and `render.car.flame`); their pictures come from `npm run e2e` as `world-<seed>-drive-slide.png` and `-drive-boost.png`.
+The car was drawn in step 5c, to the proposal below, and Tane approved it at check-in 1 (2026-11-17) "for now": a proper design, and perhaps other car styles, may come later. Its pictures are `drive-start.jpg` and `car-close.jpg`. **The car casts no shadow** (Tane's choice at check-in 1: it was distracting to drive behind); it still takes the shadows of trees, walls and the gate. The drift's effects were first built in step 6d, and redrawn in 6h-5 as sprites with a bloom (Tane's choice after the second drive; sizes and counts in `render.car`, the bloom in `render.bloom`). Their pictures come from `npm run e2e` as `world-<seed>-drive-slide.png` and `-drive-boost.png`; **`drive-slide.jpg` and `drive-boost.jpg` (seed 7, tier 3) are proposed as references, for Tane to accept at check-in 2.**
 
 - **The car** is a small open kart with a driver, built in code from flat-shaded facets, 300 to 600 triangles: a wedge nose, a low floor, side pods, a seat back, a driver's body and a round helmet, and four fat wheels that stand clear of the body. The helmet and the open wheels are what make it read as a kart and give it scale. It fits the simulated body: 1.4 m wide, 2.2 m long, about 1 m to the top of the helmet.
 - **Colours** (to add to `palette.ts`): body a warm yellow-orange, about `[0.98, 0.72, 0.12]`, which stands out from the green grass, the dark road, the blue sea and the red of the kerbs; chassis and seat the gate's dark grey `[0.16, 0.17, 0.2]`; helmet off-white `[0.94, 0.94, 0.92]`; tyres near black `[0.07, 0.07, 0.08]` with pale hubs.
 - **It sits in the world's light**: lit by the same sun and sky as the road and shaded by trees and walls, but casting no shadow of its own. Its wheels touch the road: no gap and no sinking that can be seen.
 - **From the chase camera** it is about an eighth of the picture's width, low in the middle, with the road ahead clear above it.
-- **Sparks** are small flat triangles, like the flower dabs, thrown back and out from the two rear wheels, 20 to 30 a wheel, each living about a quarter of a second, drawn unlit: blue `[0.25, 0.65, 1.0]`, orange `[1.0, 0.6, 0.12]`, purple `[0.7, 0.35, 1.0]`. A burst never grows bigger than the wheel it comes from.
-- **The boost flame** is two faceted cones behind the car, pale yellow at the core `[1, 0.95, 0.7]` and orange outside `[1, 0.55, 0.1]`, unlit, 0.6, 0.9 and 1.2 m long for the three tiers and flickering by a sixth of that. Never longer than the car. The pale core runs the whole length and the orange cone round it 0.7 of it, so the pale tip shows from behind.
+- **Sparks** are thin streaks, each with a bright star at its head, sprayed back, out and up from the two rear wheels while sliding from the first tier: a trickle of 15 a wheel at tier 1, a spray of 45 at tier 3, reaching up to 0.6, 0.85 and 1.1 m. Each lives a quarter of a second, white-hot as it leaves the tyre (`SPARK_HOT`) and in its tier's colour from a third of its flight, so the tier reads at a glance: blue `[0.25, 0.65, 1.0]`, orange `[1.0, 0.6, 0.12]`, purple `[0.7, 0.35, 1.0]`. They are light added to the picture, with a soft glow round them.
+- **The burst** on letting go of a slide with a tier: a ring of 14 stars in the tier's colour, spreading to 1.8 m and fading in a fifth of a second.
+- **Tyre smoke**: pale puffs (`SMOKE`) from both rear wheels from the start of a slide, growing and rising as they fade over half a second and trailing a couple of metres behind; lit by the world's light, see-through, never a glow.
+- **The boost flame** is two jets from the exhaust in the boost's tier colour, with a pale core `[1, 0.95, 0.7]` and a flare where each leaves the engine, 0.6, 0.9 and 1.2 m long for the three tiers and flickering by a sixth of that. Never longer than the car. Seen from straight behind a jet is foreshortened to its flare.
+- **The drift on the kart**, drawn only: the body leans about 4 degrees out of a slide and the front wheels are drawn counter-steered; the hop squashes the body a little as it lands.
+- **Speed lines** while a boost runs: thin pale streaks near the picture's edges, never over its middle.
 - **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the drift tier as a dot of the tier's colour.
 
-`drive-slide.jpg` and `drive-boost.jpg` join `drive-start.jpg` in `docs/visual-bar/` and the table above once Tane has seen the sparks and the flame (step 6d).
+`drive-slide.jpg` and `drive-boost.jpg` were taken on 2026-11-18 (6h-5) from the browser suite's `world-00007-drive-slide.png` and `-drive-boost.png` (headless Chromium, 1280 by 720, saved as JPEG at quality 85 like the others). They stay "proposed" in the table above until Tane accepts them at check-in 2. Seed 7's long slide runs onto the grass beside the road, so the sparks are seen over grass.
 
 ## What fails the bar
 
-- Smooth-shaded or textured surfaces, or anything with an outline, a glow or a blur.
+- Smooth-shaded or textured surfaces, or anything with an outline, a glow or a blur, but for the drift's effects (6h-5).
 - A colour that is not in `palette.ts`, or a thing lit by its own light so that it looks pasted on (compare its shadowed side with the wall in `road-morning-shadows.jpg`).
 - A car that floats above the road or sinks into it, or that casts a shadow (Tane, check-in 1).
 - An effect that hides the road ahead, or a card over the middle of the picture.
