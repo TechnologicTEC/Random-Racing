@@ -108,4 +108,22 @@ describe('the driving session', () => {
     expect(driving.sim()).toBeNull();
     expect(driving.frame(STEP, THROTTLE, true, flat)).toBe(false);
   });
+
+  it('drives a simulation that replaces the last one at the same moment, keeping the camera where it was', () => {
+    const driving = createDriving(config);
+    const sim = newSim();
+    driving.setSim(sim);
+    for (let k = 0; k < 60; k++) driving.frame(STEP, THROTTLE, true, flat);
+    const view = driving.view()!;
+    const next = newSim();
+    next.restore(sim.snapshot());
+    driving.replaceSim(next);
+    expect(driving.sim()).toBe(next);
+    expect(driving.view()).toBe(view);
+    driving.frame(STEP, THROTTLE, true, flat);
+    expect(next.state().step).toBe(61);
+    // Eased on from where it was, not put straight behind the car again: the heading carries on.
+    expect(driving.view()!.heading).toBeCloseTo(view.heading, 6);
+    expect(driving.view()).not.toBe(view);
+  });
 });

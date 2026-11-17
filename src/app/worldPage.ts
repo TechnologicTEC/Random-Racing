@@ -21,6 +21,8 @@ import { startPose } from '../sim/start';
 import { genClient } from '../worker/client';
 import { driftReadout, mainSurface } from './drive';
 import { createDriving } from './driving';
+import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
+import { createTuningPanel } from './tuningPanel';
 import { nextCamera, openingCamera, switchAddress, type CameraMode } from './route';
 
 export type { CameraMode };
@@ -102,7 +104,7 @@ const QUALITY_KEY = 'seedCircuit.quality';
 
 const HINTS: Record<CameraMode, string> = {
   chase:
-    'W or up drives, S or down brakes and reverses, A and D steer, R starts again. C changes the camera, N makes a new island. L opens the lab. A controller works too, once a button on it is pressed.',
+    'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R starts again. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.',
   fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one. L opens the lab.',
   orbit: 'Drag to turn, scroll to zoom. C drives, N makes a new island. L opens the lab.',
 };
@@ -216,8 +218,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const engine: Promise<Rapier> = import('../sim/physics/rapier').then(({ loadRapier }) => loadRapier());
   let rapier: Rapier | null = null;
   let sim: Sim | null = null;
+  /**
+   * The page's own copy of the config, which the tuning panel (T) changes: the simulation, the chase camera and the
+   * car's drawing use it. The shared config, and every fingerprint made from it, never change.
+   */
+  const tuned = tunedCopy(config);
   /** The simulation moved on by the fixed-step loop, and the chase camera. */
-  const driving = createDriving(config);
+  const driving = createDriving(tuned);
   /** The keyboard and any controller. Keys drive only in the driving view. */
   const devices = createDevices(window, config.input, () => mode === 'chase');
   /** Whether the car is drawn in the views other than driving: in the close view of it, or once it has been driven. */
@@ -232,7 +239,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   /** Draws the car, or hides it, and writes the readout. */
   const drawCar = (): void => {
     const state = sim && (mode === 'chase' || lookingAtCar || driven) ? carState() : null;
-    view.setCar(state ? kartPose(state, config) : null);
+    view.setCar(state ? kartPose(state, tuned) : null);
     document.body.dataset.driveCar = state ? 'shown' : 'hidden';
     if (state) {
       const speed = String(Math.round(Math.abs(state.speed) * 3.6));
@@ -261,7 +268,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const startSim = (world: WorldResult, engine: Rapier): void => {
     const started = performance.now();
     dropSim();
-    sim = createSim(engine, world, config);
+    sim = createSim(engine, world, tuned);
     driving.setSim(sim);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
     document.body.dataset.driveStep = String(sim.state().step);
@@ -272,6 +279,27 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     rapier = await engine;
     if (wantedSeed !== world.seed || shown !== world) return;
     startSim(world, rapier);
+  };
+  /** Whether a car setting has been moved on the tuning panel since the simulation was last built, and how many times it has been. */
+  let rebuildWanted = false;
+  let rebuilds = 0;
+  document.body.dataset.tuningBuilds = '0';
+  const panel = createTuningPanel(ref('dash').parentElement!, tuned, (path) => {
+    // The camera reads its settings afresh each frame; the car's are built into its simulation.
+    if (needsRebuild(path)) rebuildWanted = true;
+    dirty = true;
+  });
+  /** Builds the simulation again with the tuned settings, carrying on from where the car is: at most once a frame. */
+  const applyTuning = (): void => {
+    if (!rebuildWanted || !sim || !shown || !rapier) return;
+    rebuildWanted = false;
+    const started = performance.now();
+    const [world, engine] = [shown, rapier];
+    sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg), tuned);
+    driving.replaceSim(sim);
+    rebuilds++;
+    document.body.dataset.tuningBuilds = String(rebuilds);
+    document.body.dataset.tuningMs = (performance.now() - started).toFixed(0);
   };
   /** Puts the car back on the start line (R, or the controller's Back): a new simulation of the same island. */
   const resetCar = (): void => {
@@ -379,6 +407,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const seconds = Math.min(0.05, gap / 1000);
     last = now;
     // The controller's buttons for the page: Y changes the camera in any view, Back starts again while driving.
+    applyTuning();
     const pressed = devices.presses();
     if (pressed.camera) setMode(nextCamera(mode));
     if (pressed.reset && mode === 'chase') resetCar();
@@ -573,6 +602,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (!event.repeat) resetCar();
     }
     else if (key === 'n') void show(randomSeed(), false);
+    else if (key === 't') panel.toggle();
     else if (key === 'q') setQuality(quality === 'high' ? 'low' : 'high');
     // The address already holds the seed being shown, so the lab opens on it.
     else if (key === 'l') window.location.assign(switchAddress(window.location.href, 'lab'));
@@ -621,6 +651,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       hash: () => sim?.hash() ?? null,
       run(steps, raw = {}) {
         if (!sim) throw new Error('The simulation is not built yet');
+        applyTuning();
         const state = driving.run(steps, makeInput(raw));
         // Drawn at once, with no step of the page's own and the camera straight behind the car.
         driving.frame(0, makeInput({}), false, groundAt);

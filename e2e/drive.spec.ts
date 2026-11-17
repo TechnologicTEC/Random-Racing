@@ -211,3 +211,48 @@ test.describe('drifting on the page', () => {
     expect(pictures[1]![1]!.equals(pictures[0]![1]!)).toBe(true);
   });
 });
+
+test.describe('the tuning panel', () => {
+  test('T opens it; moving the top speed changes the speed the car reaches; the copied text holds the value; the shared config is untouched', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=42&still=1');
+    const fingerprint = await page.evaluate(() => window.seedCircuit.simHashFor(7));
+    const panel = page.getByTestId('tuning-panel');
+    await expect(panel).toBeHidden();
+    await page.keyboard.press('t');
+    await expect(panel).toBeVisible();
+    const slider = panel.locator('input[data-path="car.engine.topSpeed"]');
+    await expect(slider).toHaveValue('30');
+    await slider.fill('20');
+    await expect(panel.locator('output[data-path="car.engine.topSpeed"]')).toHaveText('20');
+    // The slider gives the focus back, so the keys drive at once.
+    await expect(slider).not.toBeFocused();
+    // Four seconds of full throttle, still on the start straight: about 19.9 m/s, where 30 would give about 27.
+    const state = await page.evaluate(() => window.seedCircuit.drive!.run(240, { throttle: 1 }));
+    expect(state.speed).toBeGreaterThan(19);
+    expect(state.speed).toBeLessThan(20.05);
+    await panel.getByTestId('tuning-copy').click();
+    await expect(panel.getByTestId('tuning-text')).toHaveValue(/topSpeed: 20,/);
+    // Every fingerprint is made from the shared config, which the panel never touches.
+    expect(await page.evaluate(() => window.seedCircuit.simHashFor(7))).toBe(fingerprint);
+    await page.keyboard.press('t');
+    await expect(panel).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
+  test('builds a new simulation for a car setting, and none for a camera setting', async ({ page }) => {
+    await openDriving(page, 'seed=42&still=1');
+    await page.keyboard.press('t');
+    const body = page.locator('body');
+    await expect(body).toHaveAttribute('data-tuning-builds', '0');
+    await page.getByTestId('tuning-panel').locator('input[data-path="camera.chase.boostFieldOfView"]').fill('90');
+    await page.evaluate(() => window.seedCircuit.drive!.run(1, {}));
+    await expect(body).toHaveAttribute('data-tuning-builds', '0');
+    await page.getByTestId('tuning-panel').locator('input[data-path="car.drift.angle"]').fill('0.3');
+    const state = await page.evaluate(() => window.seedCircuit.drive!.run(1, {}));
+    await expect(body).toHaveAttribute('data-tuning-builds', '1');
+    // The new simulation carried on from where the old one was.
+    expect(state.step).toBe(2);
+    expect(Number(await body.getAttribute('data-tuning-ms'))).toBeGreaterThanOrEqual(0);
+  });
+});

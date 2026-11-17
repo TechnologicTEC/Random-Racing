@@ -12,6 +12,11 @@ import { advance, blendState } from './drive';
 export interface Driving {
   /** Drives a new simulation, or none. The camera starts straight behind the car. */
   setSim(sim: Sim | null): void;
+  /**
+   * Drives a simulation that takes over from the last one at the same moment (the tuning panel's rebuild: a
+   * snapshot of the old restored into the new). The camera carries on easing from where it was.
+   */
+  replaceSim(sim: Sim): void;
   sim(): Sim | null;
   /**
    * One frame of the page, `seconds` after the last. While `stepping`, the simulation takes the steps the loop
@@ -51,6 +56,11 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
       carried = 0;
       snapNext = true;
       holdNext = false;
+    },
+    replaceSim(next) {
+      sim = next;
+      before = after = next.state();
+      carried = 0;
     },
     sim: () => sim,
 

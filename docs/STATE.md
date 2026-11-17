@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6e, the camera swing and wider view (see "Step 6"). In a slide the chase camera swings round to the outside of the corner; during a boost its view widens from 60 to 70 degrees
-- **Next:** `docs/PLAN.md`, "The build order": **6f**, the tuning panel, which ends step 6. Step 6's plan is approved (see "Step 6")
+- **Last finished part:** 6f, the tuning panel, which ends step 6 (see "Step 6"). The car drifts and boosts, with sparks, a flame, a hopping kart, a camera that swings out and widens, and a panel (T) to tune all of it on the page
+- **Next:** `docs/PLAN.md`, "The build order": **7a**, off the road. Step 7 is a new step, so plan it in plan mode first. Check-in 2 comes after step 9
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -27,7 +27,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 4 | **Springs, engine, steering, grip** (no drift yet) | Tests on simple test grounds (flat, 15% ramp, banked bend, 200 m crest, kerb, 45% bank): top speed, time to top speed, braking, reverse, at most 10% slower up 15%, steady cornering, wheels stay down over the crest, never flips | |
 | 5 | **Drive it.** Keyboard and controller, fixed-step loop, the car drawn (low-poly, built in code), chase camera, readout; the page opens driving | Browser tests: car on the start line, W moves it, C switches cameras, old addresses still work, no console errors. Screenshots of the car on several seeds checked by eye | |
 | | **Check-in 1 with Tane:** drive a few seeds. Speed, steering, camera, where the walls are | Feedback | |
-| 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | |
+| 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | Done |
 | 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | |
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | |
 | 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | |
@@ -173,7 +173,7 @@ Planned in plan mode and approved 2026-11-17 (plan file: `C:\Users\tanee\.claude
 | 6c | **Hits cancel a drift.** `touching()` in `carBody.ts`; solid things on plain courses; `wallGround` | Done |
 | 6d | **Sparks, flame and hop**, drawn (`render/driftEffects.ts`, `carShape.ts`, `carView.ts`); the readout | Done |
 | 6e | **Camera swing and wider view** (`camera/chase.ts`) | Done |
-| 6f | **Tuning panel** | |
+| 6f | **Tuning panel** (`app/tuning.ts`, `app/tuningPanel.ts`) | Done |
 
 ### 6a: the drift rules
 
@@ -248,6 +248,18 @@ Tests seen failing first: `driftEffects.test.ts` (missing module), the new `kart
 Pictures looked at again (`-drive-slide` and `-drive-boost` on seeds 1, 7, 42 and 2024): the sliding car is seen a little from the outside of its corner, and with a boost the view is wider and the car smaller, its flame clear of the road ahead.
 
 `chase.test.ts` gained 8 tests (no change without a drift, the swing's side and size, its easing in and back, the boost's view in and out, the same at three frame rates, starting swung, clearance while swung); 7 failed on the missing code first. One was then given a looser decimal place, because three seconds is ten easing times and leaves the swing e^-10 short of its target: the precision was the test's mistake, not a number of the plan. 2,142 unit tests pass.
+
+### 6f: the tuning panel
+
+- **T** (while the page is open, in any view) shows and hides a card down the right-hand side with a slider for every number of `car.engine`, `car.steer`, `car.grip`, `car.drift`, `car.boost` and `camera.chase` (44 in all, each tier and each boost its own), grouped under the block's name, each with its value beside it. **"Copy for config.ts"** puts the blocks, as text to paste over the same lines of `src/config.ts`, on the clipboard and in a box under the button (the clipboard can be refused; the box always has the text).
+- **The page works on its own copy of the config** (`tunedCopy`): the simulation, R, new islands, the chase camera and the car's drawing use it. The shared `config`, and every fingerprint made from it, never change (a browser test checks `simHashFor(7)` before and after). Tuned values last until the page is reloaded (Claude's call).
+- **A car setting** builds the simulation again with the tuned values, carrying on from where the car is (`rebuildSim`: a snapshot of the old restored into the new), at most once a frame and before any `drive.run`; `driving.replaceSim` keeps the camera easing from where it was. It takes 30 ms on seed 7 and 43 ms on seed 8, the most wooded (median of 6, Node). **A camera setting** needs no rebuild: the chase camera reads its settings each frame. The body's `data-tuning-builds` counts rebuilds and `data-tuning-ms` gives the last one's time.
+- **Sliders** run from 0 to three times the starting value, in steps of about a hundredth of the value's size (0.1 for 30, 0.001 for 0.4), which the starting value lies on (Claude's call). A slider gives the focus back when let go, so W, A, S and D drive at once; while it has the focus, its arrow keys move it.
+- **The driving hint** now names the drift (Space or Shift held while steering) and T.
+
+Tests: `tuning.test.ts` (7: the fields cover exactly the six blocks, the ranges and steps, the copy changes and the shared config does not, a path not on the panel is refused, which changes rebuild, the text reads back as the same values, a rebuild carries on with the new settings) failed on the missing module first; `replaceSim` in `driving.test.ts` failed on the missing function; two browser tests (the top-speed slider at 20 gives 19 to 20.05 m/s after 240 steps where 30 gives about 27, the copied text, the fingerprint untouched, the focus given back; a camera setting does not rebuild and a car setting rebuilds once) failed on the missing panel. Found on the way: the first browser test drove 600 steps, and on seed 42 ten seconds of full throttle reaches the end of the start straight and hits something whatever the top speed, so it now drives 240. The panel was looked at in a picture; its copy button was then given the page's button style. 2,150 unit tests pass.
+
+**Step 6 is done.** What it gives Tane at check-in 2: hold Space or Shift with A or D at 43 km/h or more, let go after 1, 2 or 3 s for a boost of 0.5, 1.0 or 1.6 s; T to tune.
 
 ## Working agreements
 
@@ -429,3 +441,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6c done: hits cancel a drift. `touching()` in `carBody.ts` names the wall, gate, tree or rock the body is against (with the contact's slope); the simulation reads it after each physics step and the car's next step cancels a slide on it. Plain test courses can have walls, posts and balls; new `wallGround()`. 2,116 unit tests pass; all 320 browser tests passed in one run (17.2 minutes). Next: 6d, sparks, flame and hop.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6d done: sparks in the tier's colour at both rear wheels, an orange flame with a pale tip while a boost runs, the hop drawn, and the tier and boost left on the readout (`render/driftEffects.ts`, `kartPose`, `carView`, `driftReadout`). Browser helper `slideTo` and new screenshots `-drive-slide` and `-drive-boost`; pictures of seeds 1, 7, 42 and 2024 looked at. Two known issues added (the camera beside a steep slope, flower dabs from the chase camera). 2,134 unit tests pass; all 330 browser tests passed in one run (19.1 minutes). Next: 6e, camera swing and wider view.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
