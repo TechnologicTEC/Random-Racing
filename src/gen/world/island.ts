@@ -521,13 +521,15 @@ function chooseFeatures(
     return ix < 0 || iz < 0 || ix > last || iz > last ? -1 : iz * field.size + ix;
   };
 
-  // A sample faces the open sea if, straight out from one side of it, there is neither infield nor more track.
-  const lookOut = 80;
+  // A sample faces the open sea if, straight out from one side of it, there is neither infield nor more track:
+  // looking out this far beyond the road's edge (80 m from the middle of a 12 m road).
+  const lookOutBeyond = 74;
   const seaward: number[] = [];
   const seaSide = new Int8Array(line.count);
   for (let i = 0; i < line.count; i += 4) {
     // Where the hinterland covers the road there is no coast beside it to shape.
     if (seaside[i] === 0) continue;
+    const lookOut = width[i]! / 2 + lookOutBeyond;
     for (const side of [1, -1]) {
       // Right of the direction of travel is (-tz, tx) on the map.
       const nx = -line.tz[i]! * side;

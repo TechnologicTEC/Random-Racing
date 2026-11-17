@@ -19,7 +19,7 @@ What the game looks like, in terms that can be checked, with pictures to lay new
 
 | Part | What it must look like | Picture |
 | --- | --- | --- |
-| **Road** | Dark blue-grey asphalt (`[0.26, 0.265, 0.275]`), off-white dashed centre line and solid edge lines with crisp edges, a brown earth shoulder that fades into the grass. Banked in corners | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
+| **Road** | 20 m wide (Tane, 6h: room for a drift), wider on some straights. Dark blue-grey asphalt (`[0.26, 0.265, 0.275]`), off-white dashed centre line and solid edge lines with crisp edges, a brown earth shoulder that fades into the grass. Banked in corners | `road-straight-meadow.jpg`, `road-corner-kerb.jpg` |
 | **Kerbs** | Red and off-white blocks on the inside of corners, low and flat, each block one clean colour | `road-corner-kerb.jpg`, `hairpin-and-beach.jpg` |
 | **The car** | A small open kart with a driver, flat-shaded facets: yellow-orange body, dark grey chassis and seat, off-white helmet, teal driver, near-black tyres with pale hubs. Its wheels touch the road. Lit by the same sun and sky as the road and shaded by trees, walls and the gate, but **it casts no shadow** (Tane, check-in 1). From the chase camera it is about an eighth of the picture's width, low in the middle, with the road ahead clear above it | `drive-start.jpg`, `car-close.jpg` |
 | **Walls** | Low pale-grey blocks, red and white on the outside of corners, plain elsewhere. A wall's end slopes down to the ground. No gap under a wall | `road-morning-shadows.jpg`, `road-corner-woods.jpg` (a sloping end), `mountain-road.jpg` |
@@ -53,6 +53,8 @@ Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Whe
 | `car-close.jpg` | `seed=42&still=1&look=car` | `world-00042-car.png` |
 
 The page opens driving since step 5e; `cam=fly` keeps these addresses on the flying camera, and the car is not drawn in them. The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
+
+**All 13 were taken again on 2026-11-17 (6h-3)**, when the road became 20 m wide and every island changed. Since then seed 8's "straight meadow" begins a corner, and seed 42's start is level, by the sea, with its gate's posts out of the chase camera's view. To take them again: `node scripts/visual-bar-pictures.mjs` with `npm run dev` running (or name some: `node scripts/visual-bar-pictures.mjs shore.jpg,mountain.jpg`).
 
 ## The car, sparks and flame
 
@@ -89,5 +91,5 @@ The car was drawn in step 5c, to the proposal below, and Tane approved it at che
 
 1. `$env:SEEDS = "1,7,42,100,2024"; npm run e2e` (or `npx playwright test --project=chromium -g "screenshots"` for the pictures alone), then copy `test-results/screens/` somewhere, because the next run empties it.
 2. Open each new picture beside the reference of the same address. Nothing that was not meant to change should have changed.
-3. Look at what is new against "What fails the bar", on at least seeds 1 (mountain), 7 (hilly, by the sea), 42 (sloped start) and 2024 (rolling, wooded), and at a low sun (`time=07:30`).
+3. Look at what is new against "What fails the bar", on at least seeds 1 (mountain), 7 (hilly, by the sea), 42 (a gorge since 6h-3) and 2024 (rolling, wooded), and at a low sun (`time=07:30`).
 4. Say in the report which pictures were looked at.

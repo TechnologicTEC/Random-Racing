@@ -360,7 +360,7 @@ export function mountTrackLab(root: HTMLElement): void {
   /** Lists how the winning road sits in its island. */
   function renderFit(report: FitReport): void {
     const fitEl = ref('fitFacts');
-    const { clean, facts } = describeFit(report, gameConfig.road.coupleDistance);
+    const { clean, facts } = describeFit(report, gameConfig.road.coupleGap + gameConfig.track.roadWidth);
     fitEl.innerHTML = '';
     fitEl.dataset.clean = String(clean);
     for (const [label, value] of facts) {

@@ -60,13 +60,11 @@ describe('trackRulesFor', () => {
     }
   });
 
-  it('gives exactly the metres the layout had before 6h on a 12 m road', () => {
+  it('gives exactly the metres the layout had before 6h on a 12 m road, but for the hairpin folds and stretched bases 6h-3 narrowed', () => {
     const rules = trackRulesFor({ ...track, roadWidth: 12 }, 'flat');
     expect(rules.minCornerRadius).toBe(15);
     expect(rules.layout.minCornerRadius).toBe(18);
     expect(rules.layout.clearance).toBe(40);
-    expect(rules.layout.base.stretchedHalfWidth).toEqual([24, 110]);
-    expect(rules.layout.fold.hairpinWidth).toEqual([44, 66]);
     expect(rules.layout.jog.offset).toEqual([13, 22]);
     expect(rules.layout.radius.hairpin).toEqual([18, 32]);
     expect(rules.layout.radius.tip).toEqual([18, 30]);

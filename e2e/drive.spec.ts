@@ -201,7 +201,8 @@ test.describe('drifting on the page', () => {
   test('gives the same picture of a slide and of a boost twice', async ({ page }) => {
     const pictures: Buffer[][] = [];
     for (let k = 0; k < 2; k++) {
-      await openDriving(page, 'seed=42&still=1');
+      // Seed 7: since the 20 m road (6h-3), seed 42's start has no room for a slide held on one input to reach tier 3.
+      await openDriving(page, 'seed=7&still=1');
       expect(await slideTo(page, 3)).toBe(true);
       const slide = await page.screenshot();
       await letGo(page);

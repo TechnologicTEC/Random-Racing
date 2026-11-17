@@ -6,6 +6,52 @@ import type { CenterLine, ProfileStats, RoadProfile } from '../types';
 const TIE_TOLERANCE = 0.05;
 
 /**
+ * What the earthworks rule measures besides the middle of the road (6h-3): the ground under each edge of
+ * the usual width, and the banking that tips the road between them. On a 20 m road a banked edge stands
+ * 1.4 m above the middle, so the middle alone no longer tells how much fill the road needs.
+ */
+export interface RoadEdges {
+  /** Half the usual width, in metres. */
+  half: number;
+  /** The ground under the left and right edges at each sample, in metres above the sea. */
+  left: Float64Array;
+  right: Float64Array;
+  /** How much the road rises per metre to the right at each sample (`solveBanking`). */
+  cross: Float64Array;
+}
+
+/** The ground under both edges of a road `roadWidth` wide along a line, with the banking it will have. */
+export function roadEdges(line: CenterLine, ground: (x: number, z: number) => number, roadWidth: number, cross: Float64Array): RoadEdges {
+  const n = line.count;
+  const half = roadWidth / 2;
+  const left = new Float64Array(n);
+  const right = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    // Right of the direction of travel is (-tz, tx) on the map.
+    const rx = -line.tz[i]! * half;
+    const rz = line.tx[i]! * half;
+    left[i] = ground(line.x[i]! - rx, line.z[i]! - rz);
+    right[i] = ground(line.x[i]! + rx, line.z[i]! + rz);
+  }
+  return { half, left, right, cross };
+}
+
+/** The deepest cut and the tallest fill the road needs at one sample: in its middle, and at its two edges when they are given. */
+export function cutAndFill(i: number, profile: RoadProfile, edges?: RoadEdges): { cut: number; fill: number } {
+  const here = profile.height[i]!;
+  let cut = profile.ground[i]! - here;
+  let fill = here - profile.ground[i]!;
+  if (edges) {
+    const rise = edges.cross[i]! * edges.half;
+    const leftSurface = here - rise;
+    const rightSurface = here + rise;
+    cut = Math.max(cut, edges.left[i]! - leftSurface, edges.right[i]! - rightSurface);
+    fill = Math.max(fill, leftSurface - edges.left[i]!, rightSurface - edges.right[i]!);
+  }
+  return { cut, fill };
+}
+
+/**
  * Chooses the road's height at every sample of a layout.
  *
  * The road starts at ground level, then is reshaped until it obeys the rules:
@@ -46,16 +92,21 @@ export function solveProfile(
   return { height, ground: groundAt };
 }
 
-/** Measures a road profile: how much it climbs, how steep it gets and how well it fits the ground. */
+/**
+ * Measures a road profile: how much it climbs, how steep it gets and how well it fits the ground.
+ *
+ * @param edges when given, the cut and fill are measured at the road's banked edges too, not only in its middle
+ */
 export function measureProfile(
   line: CenterLine,
   profile: RoadProfile,
   cfg: RoadConfig,
   roadWidth: number,
   neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
+  edges?: RoadEdges,
 ): ProfileStats {
   const n = line.count;
-  const { height, ground } = profile;
+  const { height } = profile;
   let min = Infinity;
   let max = -Infinity;
   let climb = 0;
@@ -72,8 +123,9 @@ export function measureProfile(
     if (next > here) climb += next - here;
     steepest = Math.max(steepest, Math.abs(next - here) / line.spacing);
     sharpest = Math.max(sharpest, Math.abs(prev - 2 * here + next) / (line.spacing * line.spacing));
-    maxFill = Math.max(maxFill, here - ground[i]!);
-    maxCut = Math.max(maxCut, ground[i]! - here);
+    const { cut, fill } = cutAndFill(i, profile, edges);
+    maxFill = Math.max(maxFill, fill);
+    maxCut = Math.max(maxCut, cut);
   }
 
   const steepestBank = findSteepestBank(line, height, cfg, roadWidth, neighbours).slope;
@@ -131,7 +183,7 @@ export function findNeighbours(line: CenterLine, cfg: RoadConfig, roadWidth: num
   const { x, z } = line;
   const index = new Int32Array(n).fill(-1);
   const bankRun = new Float64Array(n);
-  const reach = cfg.coupleDistance;
+  const reach = cfg.coupleGap + roadWidth;
   if (reach <= 0) return { index, bankRun };
 
   const grid = new Grid(reach);

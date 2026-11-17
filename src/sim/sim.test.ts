@@ -9,8 +9,8 @@ import { bankedBend, crestGround, flatGround, hillsideGround, kerbGround, rampGr
 import { createSim, createSimOn, type Sim } from './sim';
 import { startPose } from './start';
 
-/** Seed 42 starts on a slope; seed 7 is a hilly seed with a different start. */
-const SEEDS = [42, 7];
+/** Seed 42 and seed 7, a hilly seed, have different starts; seed 5 starts on an 8% slope (since the 20 m road of 6h-3; seed 42 did before). */
+const SEEDS = [42, 7, 5];
 
 let rapier: Rapier;
 const worlds = new Map<number, WorldResult>();
@@ -89,10 +89,10 @@ describe('createSim', () => {
     sim.free();
   });
 
-  it('settles on a sloped start and stays put for 10 seconds (seed 42)', () => {
-    const world = worlds.get(42)!;
+  it('settles on a sloped start and stays put for 10 seconds (seed 5)', () => {
+    const world = worlds.get(5)!;
     const { line, profile } = winner(world);
-    // The start of seed 42 really is on a slope.
+    // The start of seed 5 really is on a slope.
     const slope = (profile.height[0]! - profile.height[line.count - 1]!) / line.spacing;
     expect(Math.abs(slope)).toBeGreaterThan(0.04);
 

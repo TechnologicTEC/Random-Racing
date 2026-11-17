@@ -38,6 +38,21 @@ const cellOf = (island: Island, x: number, z: number): number => {
   const { size, cell, origin } = island.natural;
   return Math.round((z - origin) / cell) * size + Math.round((x - origin) / cell);
 };
+/**
+ * Near-misses of mountain placement, which checks a foot at 32 points round its outline and the land round it
+ * coarsely, as a gorge's range does (`GORGE_SEEDS`). Tane, 6h-3: allowed, like the gorges (a known issue for M6.3).
+ * - Seed 5 asked for three ranges on rolling ground: since the road became 20 m wide, the second comes 50 m
+ *   from it, 686 m from its summit, out in the sea (`feet` and `land`).
+ * - Seed 5 asked for three peaks on rolling ground: the first one's land overlaps the land beside the road by
+ *   about 2 m, which a 5 m grid sees as a strip of sea (`land`).
+ */
+const NEAR_MISSES: Array<{ seed: number; relief: Character['relief']; landform: LandformKind; checks: Array<'feet' | 'land'> }> = [
+  { seed: 5, relief: 'rolling', landform: 'range', checks: ['feet', 'land'] },
+  { seed: 5, relief: 'rolling', landform: 'peak', checks: ['land'] },
+];
+const nearMiss = ({ seed, character }: Built, check: 'feet' | 'land'): boolean =>
+  NEAR_MISSES.some((miss) => miss.seed === seed && miss.relief === character.relief && miss.landform === character.landform && miss.checks.includes(check));
+
 /** The plain numbers of a mountain, for comparing two runs. */
 const plain = ({ x, z, radius, summit, base }: Mountain) => ({ x, z, radius, summit, base });
 
@@ -103,6 +118,7 @@ describe('placing mountains', () => {
   it('keeps every part of their feet at least 60 m from the road, apart from a massif the road climbs', () => {
     expect(rules.clearance).toBe(60);
     for (const built of all) {
+      if (nearMiss(built, 'feet')) continue;
       const { island, seed } = built;
       for (const { mountain } of builtMountains(built)) {
         let closest = Infinity;
@@ -152,7 +168,9 @@ describe('placing mountains', () => {
   });
 
   it('joins every mountain to the land the road is on: no mountain stands on an island of its own', () => {
-    for (const { island, seed } of all) {
+    for (const built of all) {
+      if (nearMiss(built, 'land')) continue;
+      const { island, seed } = built;
       const { size, height } = island.natural;
       // Flood the land outwards from the road.
       const reached = new Uint8Array(height.length);

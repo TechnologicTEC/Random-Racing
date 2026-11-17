@@ -8,9 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6h-2, the track rules given against the road's width (see "Step 6h"), so a 20 m road builds tracks as varied as a 12 m one. Nothing the player sees has changed yet: the road is still 12 m and every track is as it was
-- **Next:** `docs/PLAN.md`, "The build order": **6h-3**, the road and the island at 20 m (the width switched, with narrower hairpin folds: see "6h-2").
-- **Before 6h-3:** in 6h-2 the plan said `track.roadWidth: 20`; it moved to 6h-3, because the road and island checks of 6h-3 must pass in the same commit as the width. 6h is planned and approved (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`); its parts are in `docs/plan/M3-driving.md`, "Step 6h". Step 7 waits until 6h is done
+- **Last finished part:** 6h-3, the road is 20 m wide (see "Step 6h"): every island changed, the Milestone 2 checks pass, and the visual bar's reference pictures were taken again. The drift itself is unchanged until 6h-4
+- **Next:** `docs/PLAN.md`, "The build order": **6h-4**, drift and boost (the circles of 30, 61 and 218 m, the boost of 1.15 at 12 m/s², the steering cap) 6h is planned and approved (plan file: `C:\Users\tanee\.claude\plans\random-racing-branch-milestone-3-driving-shiny-hamster.md`); its parts are in `docs/plan/M3-driving.md`, "Step 6h". Step 7 waits until 6h is done
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -321,7 +320,7 @@ Planned in plan mode and approved by Tane on 2026-11-17 (plan file: `C:\Users\ta
 | --- | --- | --- |
 | 6h-1 | **Measure, then fix the numbers.** The corner driver's holder style and drive out of the corner; the grid of widths, circles and boosts | Done |
 | 6h-2 | **The track at 20 m**: the layout's distances and smallest corners given against the road's width (`LayoutSettings`, `TrackRules`) | Done |
-| 6h-3 | **The road and the island at 20 m**; the reference pictures taken again | |
+| 6h-3 | **The road and the island at 20 m**; the reference pictures taken again | Done |
 | 6h-4 | **Drift and boost**: circles of 30, 61 and 218 m, the boost of 1.15 at 12 m/s², the steering cap | |
 | 6h-5 | **The look**: sprites and bloom | |
 
@@ -430,6 +429,66 @@ The first three and the holder test failed first, on the missing functions and `
 
 The other 20 m pipeline tests and the validate tests at 20 m passed on the old code. They guard what must stay true, not a new behaviour. 2,175 unit tests pass.
 
+### 6h-3: the road and the island at 20 m
+
+**What changed (Tane's choices in this part marked):**
+- **`track.roadWidth: 20`** (was 12). The brief's step 7 says 20 m now, and its corner limit is given as the room inside a corner (9 m, a 19 m radius on the 20 m road).
+- **Distances between sections are measured between the road edges** of the usual width, so they hold at any width. Each gives exactly its old value on a 12 m road:
+  - `road.coupleGap` 43 (was `coupleDistance` 55 centre to centre);
+  - `road.walls.closeGap` 68 (was `closeDistance` 80);
+  - `road.width.clearanceGap` 58 (was `clearance` 70);
+  - the island's look-out for bays and headlands, 74 m beyond the edge (was 80 m from the middle, hard-coded in `chooseFeatures`).
+- **Widened straights** are `road.width.extraMin` 4 to `extraMax` 10 m wider than the usual width: 24 to 30 m.
+- **The layout's narrow folds** are 2.9 to 4 road widths across (58 to 80 m). 6h-2 found 3 to 4.5; once a layout is enlarged by up to 1.14 to fit the lap, 4.5 could turn on more than a hairpin's 45 m, and the layout tests found only 69 of 120 folded layouts with a hairpin. **Stretched bases** are at least 1.5 widths across, half each side (30 m), down from 2: at 40 m stretched tracks came out too round.
+- **The earthworks rule is held at the road's banked edges** (`roadEdges`, `cutAndFill` in `road/profile.ts`; `checkEarthworks` and `measureProfile` take them), except on mountain seeds (`byRelief.mountain.earthworksOnCentre`, C4's rock cuttings). Found on fresh seed 32534: banked at 8 degrees, a 20 m road's outer edge stands 1.4 m above its middle (0.84 m on a 12 m road), and the edge needed 6.2 m of fill where the middle needed 4.6, past the 6 m limit, which the rule only checked in the middle. It costs about 30 ms a track.
+- **Walls beside steep ground from 45%** (`road.walls.maxSlope`, was 40%; **Tane's choice**). The earthworks blend banks at 40%, and on a 20 m road taller cuttings left mountain laps 18 to 48% open (seed 13: 18%). At 45% mountain laps are 33 to 65% open, about what they were at 12 m (41% on the middle seed).
+- **Sea beside the road on islands that only touch it: 15 to 30% of the lap** (`hinterland.seaside.touches`, was 15 to 40%; **Tane's choice**). Seed 4's coast ran beside 54% of its outside, against the test's "less than half".
+- **Mountain placement near-misses are listed like the gorges** (**Tane's choice**). On test islands asking for three ranges and three peaks on rolling ground (seed 5), a range comes 50 m from the road and a peak's land overlaps the road's by about 2 m, which a 5 m grid sees as sea. Checking a foot at 64 points instead of 32 removed every gorge but not these. Every config change tried (the join distance, a wider skirt of land) moved the near-miss to another test island.
+- **The shadow budget is 210,000 triangles** (was 200,000; **Tane's choice**). Seed 20's forest view from the start line adds 204,974: trees cast shadows a whole 450 m square at a time, and on the 20 m road this view takes in one more. A smaller shadow reach made no difference (204,118 at 340 m).
+
+**Fixtures that changed with the worlds** (none loosened):
+- **Gorge seeds:** 39898 and 42 (seed 42 gained a range over its road, 31.9 m deep; built with no mountains it cuts 1.6 m). 28496 lost its gorge.
+- **The camera's gorge test** drives through seed 42's gorge (was seed 28496's start).
+- **The sloped start:** seed 5 (8.0%), as seed 42 was; seed 42's start is now nearly level.
+- **The grass-sways test** looks at seed 1's start: seed 7's start now has the sea in the bottom of the picture.
+- **The summit view** counts the road with the land as ground.
+- **The pin of seeds 1 to 40's tracks** in `sky.test.ts` was taken again.
+
+**The world at 20 m, seeds 1 to 20** (throwaway):
+
+| Relief (seeds) | Roadside open: middle seed (least) | Deepest cut | Tallest fill | Steepest bank |
+| --- | --- | --- | --- | --- |
+| Flat (4) | 47% (40%) | 1.5 m | 1.5 m | 0.36 |
+| Rolling (6) | 43% (39%) | 2.9 m | 3.1 m | 0.61 |
+| Hilly (4) | 38% (28%) | 4.2 m | 4.0 m | 0.61 |
+| Mountain (6) | 45% (39%) | 12.9 m (edges; the centre holds 8) | 8.5 m (edges) | 1.63 |
+
+- **The sea** comes 10.0 m from the road at the nearest (the limit is 10).
+- **Widened straights** reach 24 to 30 m.
+- **A world builds** in a median 0.97 s in Node (slowest 1.23 s). The same code at 12 m takes the same time: 1.02 to 1.11 s against 1.01 to 1.05 s, track 73 to 76 ms against 81 to 84 ms. The laptop is slower today than when Milestone 2 measured 0.43 to 0.64 s. The 3 s budget tests in the browsers pass.
+
+**Pictures looked at:**
+- In the browser suite's screenshots: seeds 1, 7, 42, 100, 2024 and 48213 from the start, flying, close views and from above.
+- **All 13 reference pictures taken again** (`docs/visual-bar/`, 1280 by 720, headless Chromium, by a one-off script) and looked at: the road reads clearly, kerbs and walls sit at its edges with no gaps, the gate spans it, and the car stands on it.
+- **Seed 42's drift pictures can no longer be taken.** Its start straight now runs into a walled corner, and the browser helper's slide, held on one input from the start line, cannot reach tier 3 there. The screenshot test skips them for seed 42 only, with a note. The "same picture twice" drift test uses seed 7.
+
+**Tests:**
+- New and seen failing first:
+  - sections tie, wall and report closeness by the gap between their edges (profile, walls, report);
+  - the config's width and widening;
+  - the earthworks at the banked edges, and by relief;
+  - most of seeds 1 to 20 have a hairpin at the config's width (which passed first, as a guard).
+- Rewritten to the config's width, each keeping its meaning: the fit stadium (2.5 widths and 10 m apart), the wider road (base + 8), `width.test.ts` (in extras over the base), the fillet strip (the narrowest fold), the walls' stadium.
+- A test's own rounding changed: a sampled ring's edge is 3.00002 m from the middle, so it is checked to three places.
+
+2,186 unit tests pass. In the browser suite:
+- The first run at 20 m failed 9 tests in 5 kinds, each fixed above.
+- The second run failed 3:
+  - two drift tests ran out of time, the slide helper now trying 30 slides before the old ones (reordered);
+  - seed 42's close view of a cutting did not load within 45 s.
+
+  All three passed run again alone, with the other drift tests.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -502,6 +561,8 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
 | 2026-11-17 | **6h, Tane's choices after the second drive:** a road 20 m wide at the corners (was 12; the brief said 12 to 14); a boost of 1.15 times top speed at 12 m/s² (was 1.3 at 30), times unchanged; steering keeps its top-speed circle above top speed; sparks and boost with CC0 sprites and bloom on the effects only (a change to the visual bar) | Tane, from options in plan mode. A boosted car at 39 m/s could steer no tighter than a 101 m circle. Measured in 6h-1: the old boost made 8 of 195 drives out of a corner unclean, the new boost with the cap none |
+| 2026-11-17 | **6h-3, Tane's choices:** walls beside ground steeper than 45% (was 40%); the sea beside 15 to 30% of the lap on islands that only touch it (was 40%); mountain placement near-misses listed in the test like the gorges; the near-shadow budget 210,000 triangles (was 200,000) | Each from options with the numbers, when the 20 m road's new worlds broke a check that config could not fix without changing something Tane had chosen |
+| 2026-11-17 | **The earthworks rule holds at the road's banked edges**, except on mountain seeds; **distances between sections are measured between road edges**; **the layout's road-dependent settings are given in road widths** (6h-2, 6h-3) | Claude's calls. A 20 m road's banked edge stands 1.4 m above its middle, so the middle alone no longer tells the fill; centre-to-centre distances shrink the gap between sections as the road widens; and a later width change then carries through |
 | 2026-11-17 | **Slide circles of 30, 61 and 218 m** (6h-1); the corner test asks for a driver who changes key about once a second, not one who holds the key | The gentlest circles that pass every bar on the 20 m road. Tane chose the new bar: no circles let a driver who holds one key through 80% of hairpins and plain corners (best 54%) |
 | 2026-11-17 | **A slide follows a circle of 22, 45 or 160 m whatever the speed** (key into the corner, no key, the other key), not a turn rate; **the nose points 15 degrees into the corner** (was 24) | Tane's choices after the first drive (6g): a held slide ran into the barrier within a second. A keyboard corner driver holds a slide through 95% of the corners of seeds 1 to 20 with these circles, 78% with the 30/50/110 m Tane chose first |
 
@@ -547,7 +608,8 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 
 - **Not every island gets a peak.** Narrow tracks have no infield point far enough from the road (4 of 24 seeds surveyed: 2, 1234, 77777, 43950). Tane asked for one interior peak at least 60 m from the track; those two wishes cannot both be met there.
 - **A bay only reaches 10 m beside low road facing the open sea.** Where every seaward stretch of road is high, the nearest water is further out (seed 2: 13.4 m), because the drop may not be steeper than 250%. Since the rework many seeds touch the sea along only a stretch or two: on 12 of the 40 seeds checked in step 17 the sea comes no nearer than 13.8 m (up to 28.2 m, and 226 m on seed 39898). Tane chose to check only the 10 m minimum.
-- **A ridged range can stand over the road, which then runs through it in a gorge** (seeds 28496 and 39898; about 1 seed in 40). Mountain placement checks a foot at 32 points round its outline. Tane chose to keep the gorges (step 17); the start gate can stand in one (seed 28496).
+- **A ridged range can stand over the road, which then runs through it in a gorge** (seeds 39898 and 42 since the 20 m road; 28496 before; about 1 seed in 40). Mountain placement checks a foot at 32 points round its outline. Tane chose to keep the gorges (step 17). The same coarse check lets a range's foot come 50 m from the road, or a mountain's land only just meet the road's, on test islands of seed 5 (6h-3, listed in `mountains.test.ts`). For M6.3: checking feet at 64 points removes the gorges too.
+- **Seed 42 has no drift pictures** (6h-3): its start runs into a walled corner too soon for the browser helper's slide, held on one input from the start line, to reach tier 3. A helper that slides along the road (as `cornerDriver.ts` does) would take them.
 - **The circling camera frames only part of the lap on the biggest islands** (seed 10 from above).
 - Enclosed water is possible where a fold in the track is closed off by land at its mouth. None seen yet; it would be a lagoon.
 - In 3D the sea cliffs read well as rock faces. The peak is craggy and a bit lumpy from the ridge texture on its sides; worth a look once lighting and shadows are in.
@@ -573,7 +635,7 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 - 10:00 is called "midday light" on the title card (morning ends at 10:00 in `lightName`).
 - A whole world (track, island, fit, cover, report) takes 430 to 640 ms in Node and about the same in a Chromium worker. Budget is 3 s.
 - For two test files (`cover.test.ts`, `report.test.ts`) the tests were written first but only run once the code existed, so they were never seen failing for a reason other than the missing module.
-- **The start line can sit on a steep slope** (seed 42 starts on an 8% descent). The solver does not yet know where the start is. Worth flattening the start area before Milestone 4 puts a grid there.
+- **The start line can sit on a steep slope** (seed 5 starts on 8% since the 20 m road; mountain seeds up to 15%; seed 42 did before). The solver does not yet know where the start is. Worth flattening the start area before Milestone 4 puts a grid there.
 - Lap height range is 13 to 24 m for most layouts (median 19 m, up to 29 m), a little under the top of the 15 to 30 m target. `world.relief.hillHeight` raises it; cut and fill grow with it.
 - **Almost every track has a hairpin** (about 98% of seeds). Tane asked for "most", not all. The scorer rewards a hairpin, a sweeper and a chicane, so the winner nearly always has one. Could be loosened with a hairpin-free style if wanted.
 - **Folds are still modest.** Tracks fold back on themselves, but the very long double straights of a Sepang-style layout are rare, because the lap limit (2.4 km) caps how deep folds can go.
@@ -615,6 +677,15 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6e done: the chase camera swings 0.12 rad to the outside of a slide and widens to 70 degrees during a boost, eased the same at any frame rate (`camera/chase.ts`, `camera.chase`). Pictures of seeds 1, 7, 42 and 2024 looked at again. 2,142 unit tests pass; all 330 browser tests passed in one run (19.2 minutes). Next: 6f, the tuning panel.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6f done, which ends step 6: the tuning panel (T) with a slider for each number of the engine, steering, grip, drift, boost and chase camera, working on the page's own copy of the config; a car setting rebuilds the simulation from a snapshot (30 to 43 ms), a camera setting needs none; "Copy for config.ts" gives the values as text. The driving hint names the drift and T. 2,150 unit tests pass; all 334 browser tests passed in one run (19.6 minutes). Next: step 7 (surfaces and bumps), planned in plan mode first.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6g, from Tane's first drive: a slide held for a second ran into the barrier. Slides now follow circles of 22, 45 or 160 m at any speed (key into the corner, none, the other key; were turn rates) and the nose points 15 degrees in (was 24), Tane's choices from measured options. New keyboard corner driver (`testing/cornerDriver.ts`) and test: a slide held from just after each corner's start to just before its end, on the road, through 95% of the corners of seeds 1 to 20 (hairpins and plain corners 100%). 2,153 unit tests pass; all 334 browser tests passed in one run (22.1 minutes). Next: step 7, planned in plan mode first.
+- **2026-11-17 (Milestone 3, Opus 5.5):** 6h-3 done: the road is 20 m wide and every island changed with it.
+  - Distances between sections are measured between road edges, and straights widen 4 to 10 m.
+  - The narrow folds are 2.9 to 4 widths and stretched bases at least 1.5.
+  - The earthworks rule holds at the banked edges (but on mountain seeds).
+  - Tane chose walls from 45%, sea beside 15 to 30% of touching islands, near-misses listed like gorges, and a shadow budget of 210,000.
+  - The gorge, sloped-start and other seed fixtures moved with the worlds.
+  - All 13 reference pictures were taken again and looked at; seed 42 has no drift pictures.
+
+  2,186 unit tests pass. The browser suite's second run failed 3 (two timeouts and one load), and those passed run again alone. Next: 6h-4.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6h-2 done: the layout's distances and smallest corners are given against the road's width (`LayoutSettings`), worked out in metres by `trackRulesFor` (`TrackRules`). Seeds 1 to 60 have identical tracks at 12 m. At 20 m, seeds 1 to 200 all build with no fallback, with laps and build times as before. Hairpins fall to 90% of seeds unless the narrow folds are made 3 to 4.5 widths across, which gives 99%; 6h-3 sets that with the width. 2,175 unit tests pass; all 334 browser tests passed in one run (19.9 minutes). Next: 6h-3.
 - **2026-11-17 (Milestone 3, Opus 5.5):** 6h planned in plan mode and approved. Tane's choices: a 20 m road, a boost of 1.15 at 12 m/s², the steering cap above top speed, sprites and bloom. 6h-1 done:
   - The corner driver gains a holder style and a drive out of the corner that brakes for what is coming.

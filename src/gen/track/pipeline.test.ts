@@ -220,6 +220,13 @@ describe('variety across 20 seeds', () => {
   });
 });
 
+describe('generateTrack at the config road width', () => {
+  it('gives at least 18 of seeds 1 to 20 a hairpin (Tane asked for most)', () => {
+    const withHairpin = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, config)).filter((r) => cornersOf(r).some((c) => c.kind === 'hairpin'));
+    expect(withHairpin.length).toBeGreaterThanOrEqual(18);
+  });
+});
+
 describe('generateTrack on a 20 m road', () => {
   const wide = withTrack({ ...cfg, roadWidth: 20 });
   const results = Array.from({ length: 20 }, (_, i) => generateTrack(i + 1, wide));

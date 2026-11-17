@@ -166,9 +166,9 @@ describe('findWalls beside steep ground', () => {
 
 describe('findWalls where two parts of the lap run close together', () => {
   it('walls the sides that face each other, and leaves the far sides open', () => {
-    // Two 300 m straights 60 m apart, joined by half circles: driven clockwise, each straight has the other on its right.
-    const line = stadiumLine(300, 30);
-    expect(rules.closeDistance).toBeGreaterThan(60);
+    // Two 300 m straights 20 m closer than the wall distance, joined by half circles: driven clockwise, each straight has the other on its right.
+    const apart = rules.closeGap + ROAD - 20;
+    const line = stadiumLine(300, apart / 2);
     const { left, right } = wallsOn(line, flat);
     for (const section of analyseSections(line, config.track)) {
       if (section.type !== 'straight') continue;
@@ -178,8 +178,17 @@ describe('findWalls where two parts of the lap run close together', () => {
       }
     }
     // The far side of the back straight, in its middle, well away from the corners and the gate.
-    const back = Math.round((300 + Math.PI * 30 + 150) / line.spacing);
+    const back = Math.round((300 + (Math.PI * apart) / 2 + 150) / line.spacing);
     expect(left[back]).toBe(0);
+  });
+
+  it('walls a side whose edge is within closeGap of the other part of the lap, and not one a little further', () => {
+    for (const [apart, walled] of [[rules.closeGap + ROAD - 4, 1], [rules.closeGap + ROAD + 4, 0]] as const) {
+      const line = stadiumLine(300, apart / 2);
+      const { right } = wallsOn(line, flat);
+      const back = Math.round((300 + (Math.PI * apart) / 2 + 150) / line.spacing);
+      expect(right[back], `${apart} m apart`).toBe(walled);
+    }
   });
 
   it('leaves both sides open where the other part of the lap is far away', () => {

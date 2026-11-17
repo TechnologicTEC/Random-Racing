@@ -18,7 +18,7 @@ export interface TrackConfig {
   /** The start line sits this far along the longest straight (0 = its start, 1 = its end). */
   startLineFraction: number;
   /**
-   * Road width in metres (brief: 12 to 14). Layouts are built and judged at this
+   * Road width in metres (brief: 20, Tane's change in 6h; it was 12 to 14). Layouts are built and judged at this
    * width. On some seeds the finished road is wider in places: see `road.width`.
    */
   roadWidth: number;
@@ -58,6 +58,11 @@ export interface TrackConfig {
  */
 export interface ReliefTrackRules {
   turns: number;
+  /**
+   * The earthworks rule holds on the centre line only: the road's edges may be cut deeper and built up higher, as rock
+   * cuttings across a mountainside (C4). Otherwise it holds at the road's banked edges too (6h-3).
+   */
+  earthworksOnCentre?: boolean;
   lapLength?: Range;
   buildableRadius?: number;
   weights?: ScoreWeights;
@@ -322,10 +327,11 @@ export interface RoadConfig {
   /** Flat strip kept beside each road edge, in metres. Kerbs and barriers sit on it. */
   verge: number;
   /**
-   * Two separate sections closer than this (centre to centre, in metres) share
-   * the ground between them, so their heights are tied together.
+   * Two separate sections whose road edges come closer than this, in metres, share the ground
+   * between them, so their heights are tied together. Measured from the usual width's edges: the
+   * centres are then this plus the road's width apart (55 m on a 12 m road).
    */
-  coupleDistance: number;
+  coupleGap: number;
   /** Points count as separate sections when they are more than this far apart along the lap, in metres. */
   coupleMinArc: number;
   /** Steepest grass bank allowed between two tied sections, as a fraction (0.45 is a 45% slope). */
@@ -398,8 +404,8 @@ export interface WallConfig {
   cornerLead: number;
   /** ...and runs this far past its end, where a car that has run wide is still drifting out. */
   cornerTrail: number;
-  /** A wall stands wherever another part of the lap is within this distance on that side, centre to centre. */
-  closeDistance: number;
+  /** A wall stands wherever another part of the lap comes within this distance on that side, from road edge to road edge (the usual width's). */
+  closeGap: number;
   /** The ground beside the road is looked at from the outer edge of the verge out to this distance... */
   probeReach: number;
   /** ...at steps of this. */
@@ -424,9 +430,9 @@ export interface WallConfig {
  * hairpin sometimes. Distances and widths in metres.
  */
 export interface WidthConfig {
-  /** A widened stretch is between this wide and this wide. */
-  min: number;
-  max: number;
+  /** A widened stretch is between this much and this much wider than the usual width (`track.roadWidth`). */
+  extraMin: number;
+  extraMax: number;
   /** The width changes over this length, and is back to the usual width before the straight ends. */
   ease: number;
   /** A straight at least this long may be widened. */
@@ -435,8 +441,8 @@ export interface WidthConfig {
   hairpinExitMin: number;
   /** Chance that such a straight is widened. The start straight always is. */
   chance: number;
-  /** The road is never widened where a separate part of the lap passes within this distance, centre to centre. */
-  clearance: number;
+  /** The road is never widened where a separate part of the lap passes within this distance of the usual width's edge. */
+  clearanceGap: number;
 }
 
 /** The ground the track is laid over. It depends only on the seed, never on the track. */
@@ -1572,7 +1578,8 @@ export const config: GameConfig = {
     candidatesPerRound: 30,
     maxRounds: 5,
     startLineFraction: 0.4,
-    roadWidth: 12,
+    // Tane, 6h (2026-11-17): room for a drift, as kart racers have (was 12; the brief said 12 to 14).
+    roadWidth: 20,
     lapLengthMin: 1400,
     lapLengthMax: 2400,
     // A radius of 15 m on a 12 m road (brief), 19 m on a 20 m one.
@@ -1588,6 +1595,7 @@ export const config: GameConfig = {
       hilly: { turns: 4 },
       mountain: {
         turns: 8,
+        earthworksOnCentre: true,
         lapLength: [1600, 3000],
         buildableRadius: 600,
         weights: { straights: 0.1875, cornerMix: 0.1875, drift: 0.1875, flow: 0.1875, elevation: 0.25 },
@@ -1611,8 +1619,9 @@ export const config: GameConfig = {
         round: { aspect: [1, 1.5], corners: [5, 7], perimeterShare: [0.7, 0.9] },
         folded: { aspect: [1.2, 2.4], corners: [4, 6], perimeterShare: [0.58, 0.8] },
         stretchedHalfLength: [300, 430],
-        // At least 24 m on a 12 m road: the two long sides are then at least 4 road widths apart.
-        stretchedHalfWidth: { leastWidths: 2, most: 110 },
+        // At least 30 m on a 20 m road: the long sides 3 widths apart, 2.64 once shrunk to fit (6h-3; 24 m on a 12 m road before,
+        // which left stretched tracks too round on a wide road).
+        stretchedHalfWidth: { leastWidths: 1.5, most: 110 },
         angleJitter: 0.3,
         radialJitter: 0.18,
       },
@@ -1620,8 +1629,9 @@ export const config: GameConfig = {
         shoulder: 55,
         depthMin: 110,
         outwardReach: 240,
-        // 44 to 66 m on a 12 m road.
-        hairpinWidths: [44 / 12, 66 / 12],
+        // 58 to 80 m on a 20 m road: legs at least 2.5 widths apart once shrunk to fit, and an end that turns no wider
+        // than a hairpin (45 m) once enlarged to fit (6h-3: scaled from 44 to 66 m on a 12 m road, only 90% of seeds kept one).
+        hairpinWidths: [2.9, 4],
         tipWidth: [90, 170],
         wideWidth: [100, 230],
         tipChance: 0.35,
@@ -1690,9 +1700,11 @@ export const config: GameConfig = {
     maxGradient: { flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 },
     crestMinRadius: 200,
     minHeight: 2,
-    width: { min: 16, max: 22, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearance: 70 },
+    // 24 to 30 m on a 20 m road; kept 58 m from another section's edge (70 m centre to centre on a 12 m road).
+    width: { extraMin: 4, extraMax: 10, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearanceGap: 58 },
     verge: 4,
-    coupleDistance: 55,
+    // 55 m centre to centre on a 12 m road, 63 m on a 20 m one.
+    coupleGap: 43,
     coupleMinArc: 110,
     maxBankSlope: 0.45,
     bankSlack: 0.02,
@@ -1718,10 +1730,12 @@ export const config: GameConfig = {
     walls: {
       cornerLead: 15,
       cornerTrail: 30,
-      closeDistance: 80,
+      // 80 m centre to centre on a 12 m road, 88 m on a 20 m one.
+      closeGap: 68,
       probeReach: 16,
       probeStep: 4,
-      maxSlope: 0.4,
+      // Tane, 6h-3: 45% on a 20 m road (40% before), whose taller cuttings left mountain laps under a quarter open.
+      maxSlope: 0.45,
       minRise: 0.6,
       gate: 14,
       minGap: 40,
@@ -1804,7 +1818,8 @@ export const config: GameConfig = {
       reach: [120, 600],
       scale: 1400,
       seasideDistance: 35,
-      seaside: { touches: [0.15, 0.4], coastal: [0.7, 0.95] },
+      // Tane, 6h-3: 15 to 30% on islands that touch the sea (was 15 to 40%; on a 20 m road seed 4's coast ran beside half its lap).
+      seaside: { touches: [0.15, 0.3], coastal: [0.7, 0.95] },
       inlandClear: 70,
       rise: 500,
       ramp: 0.18,

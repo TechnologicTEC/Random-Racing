@@ -131,18 +131,25 @@ describe('the chase camera', () => {
     expect(view.eye.y).toBeCloseTo(5 + cfg.clearance, 9);
   });
 
-  it('never comes within 0.8 m of the ground round the start of seed 28496, whose gate stands in a gorge', () => {
-    const world = generateWorld(28496, config);
+  it('never comes within 0.8 m of the ground through the gorge of seed 42, where a range stands over the road', () => {
+    const world = generateWorld(42, config);
     const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
+    // The middle of the gorge: the sample nearest the deepest cutting.
+    const cut = world.report.deepestCut;
+    expect(cut.value).toBeGreaterThan(config.road.maxCut);
+    let middle = 0;
+    for (let i = 0; i < line.count; i++) {
+      if (Math.hypot(line.x[i]! - cut.x, line.z[i]! - cut.z) < Math.hypot(line.x[middle]! - cut.x, line.z[middle]! - cut.z)) middle = i;
+    }
     const groundAt = (x: number, z: number): number => sampleField(world.ground, x, z, 0);
     const n = line.count;
     const reach = Math.round(300 / line.spacing);
     const dt = 1 / 60;
     let view: ChaseView | null = null;
     let lowest = Infinity;
-    // Driven at 30 m/s along the centre line, from 300 m before the start line to 300 m after it.
+    // Driven at 30 m/s along the centre line, from 300 m before the middle of the gorge to 300 m after it.
     for (let d = -300; d <= 300; d += 30 * dt) {
-      const along = d / line.spacing;
+      const along = middle + d / line.spacing;
       const i = ((Math.floor(along) % n) + n) % n;
       const j = (i + 1) % n;
       const t = along - Math.floor(along);

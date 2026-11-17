@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config, type RoadConfig } from '../../config';
 import { circleLine, stadiumLine } from '../../testing/trackFixtures';
 import { generateTrack } from '../track/pipeline';
-import { measureProfile, solveProfile } from './profile';
+import { findNeighbours, measureProfile, solveProfile } from './profile';
 
 const road = config.road;
 const WIDTH = config.track.roadWidth;
@@ -72,6 +72,15 @@ describe('solveProfile on hand-made ground', () => {
   });
 });
 
+describe('findNeighbours: which sections share ground', () => {
+  it.each([12, 20])('ties two sections whose edges are closer than coupleGap on a %i m road, and not two a little further apart', (width) => {
+    const near = stadiumLine(600, (road.coupleGap + width - 2) / 2);
+    const far = stadiumLine(600, (road.coupleGap + width + 2) / 2);
+    expect(findNeighbours(near, road, width).index.some((i) => i >= 0)).toBe(true);
+    expect(findNeighbours(far, road, width).index.some((i) => i >= 0)).toBe(false);
+  });
+});
+
 describe('solveProfile with two sections side by side', () => {
   // Two 600 m straights 40 m apart. The ground under the far one rises to a 15 m hill in the middle.
   const line = stadiumLine(600, 20);
@@ -79,7 +88,8 @@ describe('solveProfile with two sections side by side', () => {
   const ground = (x: number, z: number): number => 5 + (z > 0 ? hill(x) : 0);
 
   it('would leave a bank far too steep if the sections were not tied together', () => {
-    const untied: RoadConfig = { ...road, coupleDistance: 0 };
+    // A gap of minus the road's width: sections never share ground.
+    const untied: RoadConfig = { ...road, coupleGap: -WIDTH };
     const stats = measureProfile(line, solveProfile(line, ground, untied, WIDTH, GRADIENT), road, WIDTH);
     expect(stats.steepestBank).toBeGreaterThan(road.maxBankSlope + 0.15);
   });

@@ -33,7 +33,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **6h** Drift rework from Tane's second drive (STATE.md, "Tane's second drive"; planned and approved 2026-11-17, the parts in `docs/plan/M3-driving.md`, "Step 6h"):
   - [x] **6h-1** Measure, then fix the numbers: the corner driver's holder style and drive out of the corner; the grid of road widths, circles and boosts
   - [x] **6h-2** The track at 20 m
-  - [ ] **6h-3** The road and the island at 20 m; the reference pictures taken again
+  - [x] **6h-3** The road and the island at 20 m; the reference pictures taken again
   - [ ] **6h-4** Drift and boost: the gentler circles, a boost of 1.15 times at 12 m/s², steering that keeps its top-speed circle above top speed
   - [ ] **6h-5** Sparks, boost and the drift's look: sprites and bloom
 - [ ] **7a** Off the road
@@ -158,8 +158,9 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 
 | Issue (STATE.md) | Dealt with in |
 | --- | --- |
-| The start line can sit on a steep slope (seed 42, 8%) | **M4.1** |
-| A gorge can hold the start gate (seed 28496) | M4.1 checks it; 5d's camera clearance is tested there |
+| The start line can sit on a steep slope (seed 5, 8%, since the 20 m road; seed 42 before) | **M4.1** |
+| A gorge can hold the start gate (seed 28496 at 12 m; on the 20 m road the gorges are seeds 39898 and 42, not at the start) | M4.1 checks it; 5d's camera clearance is tested through seed 42's gorge |
+| Mountain placement near-misses on test islands of seed 5; no drift pictures for seed 42 (6h-3) | **M6.3** (Tane picks); the drift pictures when a road-following slide helper is written |
 | Wall ends are ramps; hillsides of up to 40% open beside mountain roads | **7b** (the wall end met head on), **4e** and **8** (climbing back up, sliding down) |
 | Few roadsides open onto the sea; beaches open; the 40% wall rule | Tane, **check-in 1** (question 6): answered 2026-11-17, the walls are fine as they are |
 | Nobody has watched the grass move; from the road it reads as a fine texture | Tane, **check-in 1** (the chase camera is lower and closer than the flying one) |

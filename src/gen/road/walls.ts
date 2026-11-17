@@ -37,7 +37,7 @@ export function findWalls(input: WallInput, cfg: GenConfig): WallSpan[] {
   const { line, sections } = input;
   const n = line.count;
   const rules = cfg.road.walls;
-  const beside = besideOtherSections(line, cfg.road.coupleMinArc, rules.closeDistance);
+  const beside = besideOtherSections(line, cfg.road.coupleMinArc, rules.closeGap + cfg.track.roadWidth);
   const lead = Math.floor(rules.cornerLead / line.spacing);
   const trail = Math.floor(rules.cornerTrail / line.spacing);
   const gate = Math.ceil(rules.gate / line.spacing);
