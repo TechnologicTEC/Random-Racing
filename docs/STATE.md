@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 6h-5, the look of the drift (see "Step 6h"): sprites and bloom for the sparks, the burst, the smoke and the flame, the kart's lean, and speed lines. **This ends 6h**, the drift rework from Tane's second drive
-- **Next:** `docs/PLAN.md`, "The build order": **step 7**, surfaces and bumps, **planned in plan mode first**. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
+- **Last finished part:** 7a, off the road (see "Step 7"): grass, sand, rock and snow hold the car to 60% of its top speed
+- **Next:** `docs/PLAN.md`, "The build order": **7b**, walls. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -28,7 +28,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 5 | **Drive it.** Keyboard and controller, fixed-step loop, the car drawn (low-poly, built in code), chase camera, readout; the page opens driving | Browser tests: car on the start line, W moves it, C switches cameras, old addresses still work, no console errors. Screenshots of the car on several seeds checked by eye | |
 | | **Check-in 1 with Tane:** drive a few seeds. Speed, steering, camera, where the walls are | Feedback | |
 | 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | Done |
-| 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | |
+| 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | In progress (7a done) |
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | |
 | 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | |
 | | **Check-in 2 with Tane:** drift feel, with the tuning panel | Feedback | |
@@ -567,6 +567,42 @@ The sweepers the slower driver misses are the widest, taken flat out on grip.
 
 2,200 unit tests pass and the type check is clean. The browser suite's final run passed 335 and failed 1: [chromium] "opens flying the lap, and keeps moving". The flying camera moved 4.2 m of the 5 m asked within 15 s, because the flight moves by at most 0.05 s a frame and a frame took about 3.5 s in software with three browsers busy. 6h-5 adds nothing to that view (no car, so no effect, bloom or speed lines). It passed 4 of 4 run again alone. The two 3-second budget tests, which run only after the rest pass, were run on their own afterwards and passed. In both full runs today the Firefox drift picture test and the bloom test passed in both browsers.
 
+## Step 7: surfaces and bumps (2026-11-20)
+
+Planned in plan mode and approved by Tane on 2026-11-20 (plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-f7a1-random-racing-bubbly-journal.md`). The rules and tests are those of `docs/plan/M3-driving.md`, "Step 7".
+
+| Part | What | Status |
+| --- | --- | --- |
+| 7a | **Off the road**: `car.surfaces`, `surfaceShare`, `CarReading.top` | Done |
+| 7b | **Walls**: the whole touch kept; the wall's turn and push (`car.bump`), if the tests need them; the sloping wall end | |
+| 7c | **Trees and rocks**: tests, no new rule unless one is needed | |
+| 7d | **Kerbs**: tests, no new rule | |
+
+### 7a: off the road
+
+- **`car.surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 }`** (`SurfaceConfig`): each surface's share of top speed.
+- **`surfaceShare(wheels, car)`** (`sim/car/surface.ts`) averages the shares over the wheels on the ground (1 with none down). The car's step multiplies its top speed by it, a boost's included, and rule 9 brings a faster car down to it at `engine.shed` (9 m/s²). On the road the share is exactly 1, so the sums are exactly as before and no fingerprint changes.
+- **`CarReading.top`** (so `CarState.top`): the top speed for the wheels as they are now, for tests and the readout.
+- **Reversing is not slowed** off the road (Claude's call, for Tane to judge): 8 m/s anywhere, so a car can always back out.
+- New test ground **`grassGround()`**: road on the left for its whole length; on the right, road for 300 m, then grass.
+
+Measured (tests, and throwaway code for the hillside):
+
+| What | Asked | Measured |
+| --- | --- | --- |
+| Top speed on grass | 18 m/s within 1% | 18 (test) |
+| From 30 m/s on the road onto grass | under 19 m/s within 1.5 s of all four wheels on it | passes: shedding 12 m/s at 9 m/s² takes 1.33 s, and starts as the front wheels arrive |
+| Two wheels on the road, two on grass | 24 m/s | 24 (test) |
+| A tier 3 boost on grass | 20.7 m/s (0.6 × 30 × 1.15; the plan's 23.4 was for the old 1.3 boost) | 20.7 (test) |
+| On a beach on seed 7 | reads sand, top speed 18 | yes (test) |
+| Up the 45% grass hillside from rest, full throttle | under 18 m/s (known issue) | 16.8 m/s, was 26.2 |
+
+The corner tests (`corners.test.ts`) pass unchanged: their slides and drives out are judged on the road.
+
+Tests seen failing first: `surfaceShare` (missing function), and the five `offroad.test.ts` tests (no `top`; 30 m/s kept on grass). One check of my own was corrected before the commit: the speed "from 30 m/s" is now read when the first wheel reaches the grass, since the front wheels start the slowdown before the rear ones arrive. 2,210 unit tests pass; all 338 browser tests passed in one run (25.4 minutes), the budget tests included.
+
+Pictures looked at (the browser suite's drive pictures, seeds 1, 7, 42, 100, 2024 and 48213): `slideTo`'s long slides that run onto grass now read 60 to 95 km/h with "grass" on the readout, where they read about 105 before; the road views (`-drive-start`, `-drive-5s`) are unchanged. Nothing drawn changed, and nothing fails the visual bar.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -666,7 +702,7 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 - **The chase camera can be cut by a steep slope beside it** (seed 1, sliding onto a hillside, step 6d's pictures): it keeps clear of the ground under it, not beside it. For check-in 2 and step 8 (off the road).
 - **From the chase camera in long meadow grass, the flower dabs look large and busy** (seed 7, 6d's pictures). `render.grass.flowers` has their size; for check-in 2 or M6.3.
 - **No person has driven with a controller yet** (5a, 5e): the controller is read and tested by numbers only. Tane does not use one (check-in 1). The dead zone (0.15) and the triggers are untried by hand.
-- **The car drives up a 45% grass slope at 26 m/s from rest** (4e): nothing limits the engine's push by grip. 7a's grass slowdown caps it at 18 m/s. If it should not climb such slopes, the plan's lever is `grip.drive` (the push held to what the wheels' load allows). For step 8 and check-in 1.
+- **The car drives up a 45% grass slope from rest** (4e), at 16.8 m/s since 7a's grass slowdown (26 m/s before): nothing limits the engine's push by grip. If it should not climb such slopes, the plan's lever is `grip.drive` (the push held to what the wheels' load allows). For step 8 and check-in 2.
 - **One hillside crossing in 261 still rolls the car** (4e, at 26 cm ride height; worst 44 degrees). A body with rounded edges fixed every crossing in a trial but jolted the car on the banked ring; worth another look if rolls show up in step 9's laps.
 - **Wall ends are ramps** (0.8 m up over 6 m), and hillsides of up to 40% beside mountain roads are open: both wait for the car (steps 4, 7 and 8; see "Step 2" in `docs/archive/STATE-milestone-3-design-and-steps-1-3.md`).
 
@@ -779,3 +815,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 
   2,158 unit tests pass; all 334 browser tests passed in one run (20.0 minutes). Next: 6h-2, the track at 20 m.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Tane's second drive, after 6g: the drift still feels wrong, the boost after it throws the car into walls and off edges, and the effects can look much better. Tane's four changes recorded under "Tane's second drive" (a milder boost, a much wider road, gentler drift turning, better sparks and flame) as part 6h, to be planned in a new session. Docs only. Next: plan 6h.
+- **2026-11-20 (Milestone 3, Opus 5.5):** Step 7 planned in plan mode and approved (see "Step 7"). 7a done: off the road the car's top speed is the average of each wheel's surface share (`car.surfaces`: grass, sand, rock and snow 0.6), so 18 m/s on grass, 24 with two wheels on it, 20.7 boosting on it; a car faster than that sheds 9 m/s². Reversing is not slowed (Claude's call). The 45% grass hillside is now climbed at 16.8 m/s (was 26.2). 2,210 unit tests pass; all 338 browser tests passed in one run (25.4 minutes). Next: 7b, walls.

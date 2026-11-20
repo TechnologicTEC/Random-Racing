@@ -10,7 +10,7 @@ import { sideGrip, turnGrip } from './grip';
 import { twistFor, uprightChange } from './stability';
 import { turnWanted } from './steer';
 import { springOf, springPush, wheelMounts } from './suspension';
-import type { Surface } from './surface';
+import { surfaceShare, type Surface } from './surface';
 
 /** One wheel, as it is now. */
 export interface WheelState {
@@ -48,6 +48,8 @@ export interface CarReading {
   /** The car's speed along itself, in metres per second: negative when it rolls backwards. */
   speed: number;
   drift: DriftView;
+  /** The top speed for the wheels as they are now, in metres per second: lower off the road (step 7a), higher while a boost runs. */
+  top: number;
 }
 
 /** Everything the car remembers from one step to the next, as plain numbers: it goes into the fingerprint and the snapshot. */
@@ -118,6 +120,11 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   }
 
   const speedOf = (motion: BodyMotion): number => dot(motion.velocity, rotate(motion.rotation, FORWARD));
+  /** The top speed with these wheels down and this drift: off the road it is lower, and a boost raises it. */
+  const topFor = (wheels: ReadonlyArray<{ surface: Surface | null }>, state: DriftState): number => {
+    const top = car.engine.topSpeed * surfaceShare(wheels, car);
+    return state.boostLeft > 0 ? top * car.boost.speed : top;
+  };
 
   const view = (): DriftView => ({
     phase: drift.phase,
@@ -132,7 +139,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   return {
     read() {
       const motion = physics.motion();
-      return { wheels: feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at })), speed: speedOf(motion), drift: view() };
+      const wheels = feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at }));
+      return { wheels, speed: speedOf(motion), drift: view(), top: topFor(wheels, drift) };
     },
     save: () => ({ drift }),
     load(memory) {
@@ -180,7 +188,7 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const speed = dot(motion.velocity, travel);
       drift = stepDrift(old, ask(speed, grounded), car, steps);
       const boosting = drift.boostLeft > 0;
-      const top = boosting ? car.engine.topSpeed * car.boost.speed : car.engine.topSpeed;
+      const top = topFor(wheels, drift);
 
       // Through the body's middle, so they neither roll it nor pitch it. In a slide the tyres hold harder sideways.
       physics.push(scale(side, car.mass * sideGrip(dot(coming, side), share, car, dt, old.slide > 0 ? car.drift.grip : car.grip.side)));

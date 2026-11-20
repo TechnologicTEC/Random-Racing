@@ -104,6 +104,26 @@ export function flatGround(): TestGround {
   return { course: { kind: 'plain', road }, start: poseOn({ height }, 0, 0, AHEAD, config), height };
 }
 
+export interface GrassGround extends TestGround {
+  /** Right of x = 0 (+x), the road ends and the grass begins this far ahead of the start. Left of it, it is road all the way. */
+  grassFrom: number;
+}
+
+/**
+ * A level sheet, road on the left (x 0 or less) for its whole length; on the
+ * right, road for the first 300 m ahead of the start and grass after that.
+ * Driven at x = 50 the car runs off the road onto the grass; driven along
+ * x = 0 its left wheels stay on the road and its right wheels go onto the grass.
+ */
+export function grassGround(): GrassGround {
+  const height = (): number => 0;
+  const grassFrom = 300;
+  const right = steps(0, 300, 20);
+  const road = new Sheets().grid(steps(-300, 0, 20), steps(-1200, 100, 20), height).grid(right, steps(-grassFrom, 100, 20), height).mesh();
+  const grass = new Sheets().grid(right, steps(-1200, -grassFrom, 20), height).mesh();
+  return { course: { kind: 'plain', road, grass }, start: poseOn({ height }, 50, 0, AHEAD, config), height, grassFrom };
+}
+
 export interface WallGround extends TestGround {
   /** The wall's face, towards the car, is this far to the right of the start (+x). */
   wallAt: number;

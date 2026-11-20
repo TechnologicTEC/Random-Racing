@@ -1,3 +1,4 @@
+import type { CarConfig } from '../../config';
 import type { Cover, HeightField } from '../../gen/types';
 import { sampleGrid } from '../../gen/world/heightfield';
 import type { WorldColliders } from '../physics/colliders';
@@ -9,6 +10,23 @@ export type Surface = 'road' | 'kerb' | 'grass' | 'sand' | 'rock' | 'snow';
 export interface GroundCover {
   field: HeightField;
   cover: Cover;
+}
+
+/**
+ * The share of top speed the wheels allow (step 7a): the average of
+ * `car.surfaces` over the wheels on the ground, and 1 with none on it.
+ *
+ * @param wheels what each wheel stands on, or null off the ground
+ */
+export function surfaceShare(wheels: ReadonlyArray<{ surface: Surface | null }>, car: Pick<CarConfig, 'surfaces'>): number {
+  let total = 0;
+  let down = 0;
+  for (const { surface } of wheels) {
+    if (surface === null) continue;
+    total += car.surfaces[surface];
+    down++;
+  }
+  return down === 0 ? 1 : total / down;
 }
 
 /** Snow counts as lying where it covers more than this much of the ground, of 255. */

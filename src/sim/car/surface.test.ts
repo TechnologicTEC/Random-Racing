@@ -7,7 +7,7 @@ import { createCarPhysics } from '../physics/carBody';
 import { NO_COLLIDER, type WorldColliders } from '../physics/colliders';
 import { loadRapier } from '../physics/rapier';
 import { startPose } from '../start';
-import { surfaceFinder } from './surface';
+import { surfaceFinder, surfaceShare, type Surface } from './surface';
 
 const colliders: WorldColliders = { ground: 0, road: 1, kerbs: 2, walls: [3, 4], gate: [5, 6, 7], trees: [8], rocks: [9] };
 
@@ -52,6 +52,32 @@ describe('surfaceFinder on an island', () => {
   it('calls bare ground grass: the verge beside the road, and anywhere off the map', () => {
     expect(surfaceOf(colliders.ground, 0, 0)).toBe('grass');
     expect(surfaceOf(colliders.ground, 500, 500)).toBe('grass');
+  });
+});
+
+describe('surfaceShare: the share of top speed the wheels allow', () => {
+  const car = config.car;
+  const wheels = (...surfaces: Array<Surface | null>) => surfaces.map((surface) => ({ surface }));
+
+  it('is 1 with all four wheels on the road or a kerb', () => {
+    expect(surfaceShare(wheels('road', 'road', 'road', 'road'), car)).toBe(1);
+    expect(surfaceShare(wheels('road', 'kerb', 'road', 'kerb'), car)).toBe(1);
+  });
+
+  it('averages the shares of the wheels on the ground', () => {
+    const grass = car.surfaces.grass;
+    expect(surfaceShare(wheels('grass', 'grass', 'grass', 'grass'), car)).toBeCloseTo(grass, 12);
+    expect(surfaceShare(wheels('road', 'grass', 'road', 'grass'), car)).toBeCloseTo((2 + 2 * grass) / 4, 12);
+    expect(surfaceShare(wheels('sand', 'rock', 'snow', 'grass'), car)).toBeCloseTo((car.surfaces.sand + car.surfaces.rock + car.surfaces.snow + grass) / 4, 12);
+  });
+
+  it('counts only the wheels on the ground', () => {
+    expect(surfaceShare(wheels('grass', null, null, null), car)).toBeCloseTo(car.surfaces.grass, 12);
+    expect(surfaceShare(wheels('road', 'grass', null, null), car)).toBeCloseTo((1 + car.surfaces.grass) / 2, 12);
+  });
+
+  it('is 1 with no wheel on the ground', () => {
+    expect(surfaceShare(wheels(null, null, null, null), car)).toBe(1);
   });
 });
 

@@ -1444,6 +1444,8 @@ export interface CarConfig {
   drift: DriftConfig;
   /** The boost a drift gives when it is let go. */
   boost: BoostConfig;
+  /** How fast the car can go on each surface, as a share of top speed. */
+  surfaces: SurfaceConfig;
   /**
    * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
    * `holdBelow` is held still by the brake, so it stays put on a slope. With the brake pressed, a car slower than
@@ -1522,6 +1524,13 @@ export interface BoostConfig {
   speed: number;
   accel: number;
 }
+
+/**
+ * Off the road (step 7a): each surface's share of top speed. The car's share is the average over its wheels on the
+ * ground, so two wheels on a kerb or the grass cost little. It multiplies the top speed, a boost's included, and a car
+ * faster than that sheds `engine.shed` until it is down to it. Reversing is not slowed, so a car can always back out.
+ */
+export type SurfaceConfig = Record<'road' | 'kerb' | 'grass' | 'sand' | 'rock' | 'snow', number>;
 
 /** The engine. */
 export interface EngineConfig {
@@ -2018,6 +2027,8 @@ export const config: GameConfig = {
     // 34.5 m/s on the road while a boost runs, reached in about 0.4 s (Tane, 6h: short and mild; was 1.3 at 30, 39 m/s,
     // which threw the car into walls). Steering keeps its top-speed circle while boosting (steer.ts).
     boost: { speed: 1.15, accel: 12 },
+    // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 18 m/s.
+    surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },
