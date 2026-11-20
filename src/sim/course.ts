@@ -1,5 +1,5 @@
 import type { MeshData, WorldResult } from '../gen/types';
-import type { Vec3 } from './quat';
+import type { Quat, Vec3 } from './quat';
 
 /**
  * What a simulation runs on: a generated island, or a plain ground made of a
@@ -23,8 +23,8 @@ export interface PlainCourse {
   road: MeshData;
   kerbs?: MeshData;
   grass?: MeshData;
-  /** Upright boxes lined up with the map's axes: their middle, and half their size each way. */
-  walls?: Array<{ centre: Vec3; half: Vec3 }>;
+  /** Boxes: their middle, and half their size along each of their own axes; lined up with the map's unless a rotation is given. */
+  walls?: Array<{ centre: Vec3; half: Vec3; rotation?: Quat }>;
   /** Upright posts: where they stand, how wide, and their bottom and top heights. */
   posts?: Array<{ x: number; z: number; radius: number; bottom: number; top: number }>;
   balls?: Array<{ centre: Vec3; radius: number }>;

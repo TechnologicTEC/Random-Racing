@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 7a, off the road (see "Step 7"): grass, sand, rock and snow hold the car to 60% of its top speed
-- **Next:** `docs/PLAN.md`, "The build order": **7b**, walls. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
+- **Last finished part:** 7b, walls (see "Step 7"): a glancing hit turns the car along the wall and off it, a new hit pushes it off at 1.5 m/s, and the walls' sloping ends are blunt
+- **Next:** `docs/PLAN.md`, "The build order": **7c**, trees and rocks. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -28,7 +28,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 5 | **Drive it.** Keyboard and controller, fixed-step loop, the car drawn (low-poly, built in code), chase camera, readout; the page opens driving | Browser tests: car on the start line, W moves it, C switches cameras, old addresses still work, no console errors. Screenshots of the car on several seeds checked by eye | |
 | | **Check-in 1 with Tane:** drive a few seeds. Speed, steering, camera, where the walls are | Feedback | |
 | 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | Done |
-| 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | In progress (7a done) |
+| 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | In progress (7a, 7b done) |
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | |
 | 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | |
 | | **Check-in 2 with Tane:** drift feel, with the tuning panel | Feedback | |
@@ -574,7 +574,7 @@ Planned in plan mode and approved by Tane on 2026-11-20 (plan file: `C:\Users\ta
 | Part | What | Status |
 | --- | --- | --- |
 | 7a | **Off the road**: `car.surfaces`, `surfaceShare`, `CarReading.top` | Done |
-| 7b | **Walls**: the whole touch kept; the wall's turn and push (`car.bump`), if the tests need them; the sloping wall end | |
+| 7b | **Walls**: the whole touch kept; the wall's turn (aimed a little away) and push (`car.bump`); blunt wall ends | Done |
 | 7c | **Trees and rocks**: tests, no new rule unless one is needed | |
 | 7d | **Kerbs**: tests, no new rule | |
 
@@ -599,9 +599,38 @@ Measured (tests, and throwaway code for the hillside):
 
 The corner tests (`corners.test.ts`) pass unchanged: their slides and drives out are judged on the road.
 
-Tests seen failing first: `surfaceShare` (missing function), and the five `offroad.test.ts` tests (no `top`; 30 m/s kept on grass). One check of my own was corrected before the commit: the speed "from 30 m/s" is now read when the first wheel reaches the grass, since the front wheels start the slowdown before the rear ones arrive. 2,210 unit tests pass; all 338 browser tests passed in one run (25.4 minutes), the budget tests included.
+Tests seen failing first: `surfaceShare` (missing function), and the five `offroad.test.ts` tests (no `top`; 30 m/s kept on grass). One check of my own was corrected before the commit: the speed "from 30 m/s" is now read when the first wheel reaches the grass, since the front wheels start the slowdown before the rear ones arrive. 2,209 unit tests pass (the commit message says 2,210: that run also counted a throwaway measurement file); all 338 browser tests passed in one run (25.4 minutes), the budget tests included.
 
 Pictures looked at (the browser suite's drive pictures, seeds 1, 7, 42, 100, 2024 and 48213): `slideTo`'s long slides that run onto grass now read 60 to 95 km/h with "grass" on the readout, where they read about 105 before; the road views (`-drive-start`, `-drive-5s`) are unchanged. Nothing drawn changed, and nothing fails the visual bar.
+
+### 7b: walls
+
+- **The whole touch is kept** (`sim.ts`): the thing and the contact's slope from `touching()`, in `hash()` and `SimSnapshot.touch`, given to the car's next step. `CarState.touch` still names only the thing.
+- **`CarMemory.sinceWall`**: steps since the body last touched a wall or the gate, up to `bump.again` (30 steps); at that, the next touch is a new hit. In the fingerprint and the snapshot.
+- **`car.bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5 }`** (`BumpConfig`), the sums in `sim/car/bump.ts`. They act on walls and the gate (`bounces`), not on trees or rocks:
+  - **The wall's turn** (`wallTurn`), added to the turn asked for while touching: `bump.turn × (into + away) × along`. `into` is how far the nose points into the wall (a sine); `along` is how far it points along it (a cosine, signed by which way); `away` is new.
+  - **The push** (`wallPush`): on a new hit the car is brought to 1.5 m/s off the wall, flat on the map.
+- **The sloping ends of walls are blunt** (`wallBox` in `physics/colliders.ts`, used by the island and the test grounds; `WallPiece.rise` in `gen/road/barriers.ts`). Each sloping piece's box is level at its higher end, so a car meets an upright face. The lowest piece (0.21 m) is under the body's 26 cm clearance and is passed over. Only colliders changed: no world fingerprint moved. Where the drawn end rises, the box stands up to 0.38 m above it for one 2 m piece.
+- **Rapier averages the body's grip with the wall's** (Rapier's default friction 0.5, looked up in 0.21's code), so the body scrapes walls at 0.35, not 0.2.
+- New test ground **`wallEndGround()`**: a straight road with one wall, built by the island's own `wallPieces` and `wallBox`; plain courses' walls may now be turned.
+
+**Two changes to the plan's rule, Claude's calls, for Tane to judge:**
+- **`away`.** With the plan's rule, a 30-degree hit ended with the car pressed flat along the wall, scraping it with its side for as long as the throttle was held. Rapier itself turns the car parallel within 0.3 s. The push lasts a few hundredths of a second, because the tyres take sideways speed off at 22 m/s². With `away`, the nose is turned on to point about 3 degrees off the wall, and the car leaves it.
+- **The turn's size is continuous.** The plan's `turn × into`, signed by which way along the wall the nose points, gave the full 3 rad/s, with a sign that depends on rounding, to a car hitting dead head on. Times `along`, it fades to nothing there.
+
+**The blunt end is the plan's own fallback.** The ramp did not quite launch the car (0.46 m gained of the 0.5 allowed), but it stopped it from 29 m/s in 5 steps, lifted it onto the wall's end with no wheel down, and tipped it to 0.76 roof-up.
+
+Measured at top speed on `wallGround()`, stick centred, throttle held (throwaway code; speeds on the map):
+
+| Hit | Rapier alone | With the rules |
+| --- | --- | --- |
+| 10 degrees | touches 1 step; 29.5 m/s a second later | the same |
+| 30 degrees | parallel in 0.3 s; 26.1 m/s a second later; still scraping the wall 1.5 s on | leaves the wall after 37 steps, pointing 1.2 degrees off it; 26.2 m/s a second later (87%) |
+| 60 degrees | **spins round to face backwards (145 degrees)**, under 5 m/s a second later | the same (with the body's grip 0, the same too) |
+| Head on, then nothing pressed | rolls back at 0.77 m/s | rolls back at 1.45 m/s; reverses 10.3 m in 2 s on the brake |
+| The sloping end, head on | ramp: 0.46 m up, tipped to 0.76 roof-up, no wheel down | blunt: stops level, roof-up 1.00, four wheels down |
+
+Tests (`bump.test.ts`, `walls.test.ts`), seen failing first: the missing module; the head-on roll-back (0.77 m/s with Rapier alone); the 30-degree hit still touching a second later (with the plan's rule as written); the wall end tipped to 0.76; the slope and `sinceWall` missing from the fingerprint. **Changed with the behaviour:** `worldColliders.test.ts`'s wall height test now expects each sloping piece level at its higher end (seen failing on the old colliders, 0.10 m out). Corrected in my own new tests before the commit: the speed going into the wall is read on the step before the hit, since Rapier has already slowed the car on the step of it; and `wallTurn`'s tests were rewritten for `away` and `along` (the plan's form failed them dead head on).2,224 unit tests pass; all 338 browser tests passed in one run (24.2 minutes); the drive pictures of seeds 1, 7, 42, 100, 2024 and 48213 are byte for byte those of 7a (none of those runs touches a wall).
 
 ## Working agreements
 
@@ -674,6 +703,8 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-20 | **The wall's turn aims a little away from the wall** (`bump.away` 0.05, about 3 degrees) **and fades to nothing dead head on** (times how far the nose points along the wall); **the walls' sloping ends are blunt** (each piece's box level at its higher end) | Claude's calls, for Tane to judge (7b). With the plan's rule a 30-degree hit left the car scraping along the wall with its side; dead head on it turned at full rate either way by rounding; the ramp end stopped the car in 5 steps and tipped it to 0.76 roof-up. The blunt end is the plan's own fallback |
+| 2026-11-20 | **Reversing is not slowed off the road** (7a) | Claude's call, for Tane to judge: a car can always back out of the grass at 8 m/s |
 | 2026-11-18 | **Only the drift's effects are bloomed, drawn on their own layer** (6h-5), not the whole picture above a brightness threshold | Claude's call, the plan's fallback taken from the start. The island is then untouched byte for byte, whatever the sun's glint on the sea does, and nothing is drawn when no effect shows. Costs about 2.2 ms a frame at 1080p on the Arc graphics while an effect shows |
 | 2026-11-18 | **The view's triangle and draw counts are the whole frame's**, the bloom's and speed lines' passes included (6h-5) | Claude's call. Three.js counted only the last draw, which read 0 once the bloom drew |
 | 2026-11-17 | **6h, Tane's choices after the second drive:** a road 20 m wide at the corners (was 12; the brief said 12 to 14); a boost of 1.15 times top speed at 12 m/s² (was 1.3 at 30), times unchanged; steering keeps its top-speed circle above top speed; sparks and boost with CC0 sprites and bloom on the effects only (a change to the visual bar) | Tane, from options in plan mode. A boosted car at 39 m/s could steer no tighter than a 101 m circle. Measured in 6h-1: the old boost made 8 of 195 drives out of a corner unclean, the new boost with the cap none |
@@ -704,7 +735,9 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 - **No person has driven with a controller yet** (5a, 5e): the controller is read and tested by numbers only. Tane does not use one (check-in 1). The dead zone (0.15) and the triggers are untried by hand.
 - **The car drives up a 45% grass slope from rest** (4e), at 16.8 m/s since 7a's grass slowdown (26 m/s before): nothing limits the engine's push by grip. If it should not climb such slopes, the plan's lever is `grip.drive` (the push held to what the wheels' load allows). For step 8 and check-in 2.
 - **One hillside crossing in 261 still rolls the car** (4e, at 26 cm ride height; worst 44 degrees). A body with rounded edges fixed every crossing in a trial but jolted the car on the banked ring; worth another look if rolls show up in step 9's laps.
-- **Wall ends are ramps** (0.8 m up over 6 m), and hillsides of up to 40% beside mountain roads are open: both wait for the car (steps 4, 7 and 8; see "Step 2" in `docs/archive/STATE-milestone-3-design-and-steps-1-3.md`).
+- **A wall hit at about 60 degrees at top speed spins the car round to face backwards** (7b): the hit on the nose's corner turns it, and neither the body's grip nor the wall rules change that. Under 5 m/s a second later. For check-in 2 (question 5: does a head-on hit feel fair?).
+- **A wall's blunt end stands up to 0.38 m above the drawn wall for one 2 m piece** (7b), where the drawn end rises: a car can stop just short of the low drawn lip. For check-in 2.
+- **Hillsides of up to 45% beside mountain roads are open**: they wait for step 8 (climbing back up, sliding down). Wall ends are no longer ramps (7b).
 
 - **The verge still dips a little at its outer edge on steep banks** (about 0.3 m at worst, seed 1; was about 0.45 m before R5's 4 m verge). The road is unaffected and the barrier footing hides it; the barrier test asks for a third of the footing in the ground and passes. Holding the road's height one cell beyond the verge in `fit.ts` would remove the rest.
 - **Sea cliffs have a coarser saw-tooth edge on the 3 m grid** (visible in close views, for example seed 1 `look=bank` and seed 7 `look=water`). R6 left the coast beside the road unchanged. A finer grid near the coast, or smoothing the cliff's top edge, would help.
@@ -815,4 +848,5 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 
   2,158 unit tests pass; all 334 browser tests passed in one run (20.0 minutes). Next: 6h-2, the track at 20 m.
 - **2026-11-17 (Milestone 3, Opus 5.5):** Tane's second drive, after 6g: the drift still feels wrong, the boost after it throws the car into walls and off edges, and the effects can look much better. Tane's four changes recorded under "Tane's second drive" (a milder boost, a much wider road, gentler drift turning, better sparks and flame) as part 6h, to be planned in a new session. Docs only. Next: plan 6h.
-- **2026-11-20 (Milestone 3, Opus 5.5):** Step 7 planned in plan mode and approved (see "Step 7"). 7a done: off the road the car's top speed is the average of each wheel's surface share (`car.surfaces`: grass, sand, rock and snow 0.6), so 18 m/s on grass, 24 with two wheels on it, 20.7 boosting on it; a car faster than that sheds 9 m/s². Reversing is not slowed (Claude's call). The 45% grass hillside is now climbed at 16.8 m/s (was 26.2). 2,210 unit tests pass; all 338 browser tests passed in one run (25.4 minutes). Next: 7b, walls.
+- **2026-11-20 (Milestone 3, Opus 5.5):** Step 7 planned in plan mode and approved (see "Step 7"). 7a done: off the road the car's top speed is the average of each wheel's surface share (`car.surfaces`: grass, sand, rock and snow 0.6), so 18 m/s on grass, 24 with two wheels on it, 20.7 boosting on it; a car faster than that sheds 9 m/s². Reversing is not slowed (Claude's call). The 45% grass hillside is now climbed at 16.8 m/s (was 26.2). 2,209 unit tests pass; all 338 browser tests passed in one run (25.4 minutes). Next: 7b, walls.
+- **2026-11-20 (Milestone 3, Opus 5.5):** 7b done: the whole touch (thing and slope) and the time since the last hit are kept and fingerprinted; while touching a wall or the gate the nose is turned along it and on to about 3 degrees off it (`bump.away`, Claude's call), and a new hit sends the car off at 1.5 m/s; the walls' sloping ends are blunt (Claude's call, the plan's fallback). A 30-degree hit at top speed leaves the wall with 87% of its speed; head on the car rolls back at 1.45 m/s; the wall end met head on stops it level. Found: a 60-degree hit spins the car round (known issues). 2,224 unit tests pass; all 338 browser tests passed in one run (24.2 minutes); the drive pictures of seeds 1, 7, 42, 100, 2024 and 48213 are byte for byte those of 7a (none of those runs touches a wall). Next: 7c, trees and rocks.

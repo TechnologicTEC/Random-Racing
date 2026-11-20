@@ -90,19 +90,20 @@ describe('wallColliders', () => {
     physics.free();
   });
 
-  it('has the height of the wall as it is drawn all along it, sloping ends included', () => {
+  it('has the height of the wall as it is drawn all along it, and its sloping ends blunt: each piece level at its higher end (7b)', () => {
     const physics = worldOf(wallColliders(rapier, world, config));
     const { line, profile } = winner();
     const pieces = wallPieces(line, profile.height, world.road.cross, world.road.width, world.road.walls, config);
     let sloping = 0;
     for (let p = 0; p < pieces.length; p += 2) {
-      const { from, to } = pieces[p]!;
-      // The middle of the piece's top.
+      const { from, to, rise } = pieces[p]!;
+      // The middle of the piece's top as it is drawn, and as high as its higher end above the road's plane.
       const [x, y, z] = [(from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2];
-      const top = drop(physics, x, y, z);
+      const blunt = y + Math.max(rise[0], rise[1]) - (rise[0] + rise[1]) / 2;
+      const top = drop(physics, x, blunt, z);
       expect(top, `piece ${p}`).not.toBeNull();
-      expect(Math.abs(top! - y), `piece ${p}`).toBeLessThan(0.06);
-      if (Math.abs(to.y - from.y) > 0.15) sloping++;
+      expect(Math.abs(top! - blunt), `piece ${p}`).toBeLessThan(0.06);
+      if (Math.abs(rise[1] - rise[0]) > 0.15) sloping++;
     }
     // Some of those pieces were the sloping ends of walls.
     expect(sloping).toBeGreaterThan(4);

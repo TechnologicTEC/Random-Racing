@@ -1,10 +1,11 @@
 import type { PhysicsConfig } from '../../config';
 import { dcos, dsin } from '../../core/dmath';
 import { inputFractions, type InputRecord } from '../input';
-import type { BodyMotion, CarPhysics } from '../physics/carBody';
+import type { BodyMotion, CarPhysics, Touch } from '../physics/carBody';
 import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
-import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftPhase, type DriftState, type Hit } from './drift';
+import { bounces, pushDirection, wallPush, wallTurn } from './bump';
+import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftPhase, type DriftState } from './drift';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
 import { twistFor, uprightChange } from './stability';
@@ -55,6 +56,8 @@ export interface CarReading {
 /** Everything the car remembers from one step to the next, as plain numbers: it goes into the fingerprint and the snapshot. */
 export interface CarMemory {
   drift: DriftState;
+  /** Steps since the body last touched a wall or the gate, up to `bump.again` in steps: at that, the next touch is a new hit. */
+  sinceWall: number;
 }
 
 /** The handling of one car: the sums that turn what the driver asks for into pushes on its body. */
@@ -64,9 +67,9 @@ export interface Car {
   /**
    * Works out one step's pushes and gives them to the body. Call it once, just before the physics moves on a step.
    *
-   * @param hit what the body touched on the last physics step (`CarPhysics.touching`)
+   * @param touch what the body touched on the last physics step, and the contact's slope (`CarPhysics.touching`)
    */
-  step(input: InputRecord, hit?: Hit): void;
+  step(input: InputRecord, touch?: Touch | null): void;
   /** What the car remembers now. */
   save(): CarMemory;
   /** Goes back to what it remembered at a saved moment. */
@@ -79,8 +82,8 @@ const UP = { x: 0, y: 1, z: 0 };
 /**
  * Joins the car's handling to its body. Every sum here starts from the body's
  * motion and the four wheel casts as they are at that moment, and from the
- * drift state, which is all the car remembers from one step to the next
- * (`save`, `load`).
+ * drift state and the time since it last hit a wall, which are all the car
+ * remembers from one step to the next (`save`, `load`).
  *
  * @param surfaceOf names what a wheel met (`surfaceFinder`)
  */
@@ -91,6 +94,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   const mounts = wheelMounts(car);
   const steps = driftSteps(car, cfg.sim.stepsPerSecond);
   let drift: DriftState = NO_DRIFT;
+  const again = Math.round(car.bump.again * cfg.sim.stepsPerSecond);
+  let sinceWall = again;
 
   /** Feels for the ground under each wheel: a ball cast from the spring's mount, straight down in the car's own directions. */
   function feel(motion: BodyMotion): Array<WheelState & { normal: Vec3 }> {
@@ -142,12 +147,16 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const wheels = feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at }));
       return { wheels, speed: speedOf(motion), drift: view(), top: topFor(wheels, drift) };
     },
-    save: () => ({ drift }),
+    save: () => ({ drift, sinceWall }),
     load(memory) {
       drift = { ...memory.drift };
+      sinceWall = memory.sinceWall;
     },
 
-    step(input, hit = null) {
+    step(input, touch = null) {
+      const hit = touch?.thing ?? null;
+      // A wall or the gate (7b): it turns the nose along it while touching, and a new hit sends the car off it.
+      const wall = touch !== null && bounces(touch.thing) ? touch : null;
       const pedals = inputFractions(input);
       const motion = physics.motion();
       const wheels = feel(motion);
@@ -168,6 +177,12 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
         const moving = add(motion.velocity, cross(motion.spin, sub(wheel.at, motion.position)));
         const closing = -dot(moving, wheel.normal);
         physics.push(scale(wheel.normal, springPush(spring, wheel.squash, closing, dt)), wheel.at);
+      }
+      if (wall) {
+        if (sinceWall >= again) physics.push(scale(pushDirection(wall.normal), car.mass * wallPush(motion.velocity, wall.normal, car)));
+        sinceWall = 0;
+      } else {
+        sinceWall = Math.min(again, sinceWall + 1);
       }
       // The drift state as the last step left it: the line of travel is worked out from it, not from this step's.
       const old = drift;
@@ -201,7 +216,7 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const path = drift.phase === 'slide' ? (0 - drift.dir) * speed * pathCurve(drift, pedals.steer, car) : turnWanted(pedals.steer, speed, car);
       // The side of the slide, on its first and last steps too. Into the corner is -d (positive turning is to the left).
       const d = drift.dir !== 0 ? drift.dir : old.dir;
-      const wanted = path - d * swing;
+      const wanted = path - d * swing + (wall ? wallTurn(facing, up, wall.normal, car) : 0);
       const sliding = drift.phase === 'slide' || drift.slide > 0 || old.slide > 0;
       spinBy(scale(up, turnGrip(dot(motion.spin, up), wanted, share, car, dt, sliding ? car.drift.turnGrip : car.grip.turn)));
     },

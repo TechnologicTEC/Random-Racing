@@ -7,7 +7,9 @@
  * metres ahead is at z = -along.
  */
 import { config, type PhysicsConfig } from '../config';
-import type { MeshData } from '../gen/types';
+import { wallPieces } from '../gen/road/barriers';
+import type { CenterLine, MeshData } from '../gen/types';
+import { wallBox } from '../sim/physics/colliders';
 import type { PlainCourse } from '../sim/course';
 import { quatFromAxes, type Vec3 } from '../sim/quat';
 import type { Pose } from '../sim/start';
@@ -139,6 +141,44 @@ export function wallGround(): WallGround {
   const wallAt = 30;
   const wall = { centre: { x: wallAt + 0.5, y: 0.1, z: -400 }, half: { x: 0.5, y: 0.7, z: 500 } };
   return { ...flat, course: { ...flat.course, walls: [wall] }, wallAt };
+}
+
+export interface WallEndGround extends TestGround {
+  /** The x of the middle of the wall's top. The car starts on this line, facing the wall's end. */
+  wallX: number;
+  /** The wall's end, where it rises from the road's level, is this far ahead of the start. */
+  endAt: number;
+}
+
+/**
+ * A level road running straight ahead (-z) with a wall on its right that
+ * starts 200 m ahead, built by the island's own code (`wallPieces`, `wallBox`):
+ * it rises from the road's level over `road.walls.taper` at its end, as an
+ * island's walls do where the roadside opens. The car starts on the wall's own
+ * line, so it meets the sloping end head on.
+ */
+export function wallEndGround(): WallEndGround {
+  const height = (): number => 0;
+  const spacing = config.track.sampleSpacing;
+  const count = Math.round(1000 / spacing);
+  const along = (fill: (k: number) => number): Float64Array => Float64Array.from({ length: count }, (_, k) => fill(k));
+  const line: CenterLine = {
+    count,
+    spacing,
+    length: count * spacing,
+    x: along(() => 0),
+    z: along((k) => -k * spacing),
+    tx: along(() => 0),
+    tz: along(() => -1),
+    curvature: along(() => 0),
+  };
+  const endAt = 200;
+  const wall = { startIndex: Math.round(endAt / spacing), pieceCount: Math.round(100 / spacing), side: 1 as const };
+  const pieces = wallPieces(line, along(() => 0), null, along(() => config.track.roadWidth), [wall], config);
+  const wallX = pieces[0]!.from.x;
+  const road = new Sheets().grid(steps(-100, 100, 20), steps(-1100, 100, 20), height).mesh();
+  const walls = pieces.map((piece) => wallBox(piece, config));
+  return { course: { kind: 'plain', road, walls }, start: poseOn({ height }, wallX, 0, AHEAD, config), height, wallX, endAt };
 }
 
 /**

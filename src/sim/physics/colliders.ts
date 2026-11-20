@@ -1,11 +1,11 @@
 import type { PhysicsConfig } from '../../config';
 import { dcos, dsin } from '../../core/dmath';
-import { BARRIER_FOOTING, wallPieces } from '../../gen/road/barriers';
+import { BARRIER_FOOTING, wallPieces, type WallPiece } from '../../gen/road/barriers';
 import { gateBoxes } from '../../gen/road/startGate';
 import type { HeightField, MeshData, WorldResult } from '../../gen/types';
 import { TREE_KINDS } from '../../gen/world/decor';
 import type { Course } from '../course';
-import { quatFromAxes } from '../quat';
+import { quatFromAxes, type Quat, type Vec3 } from '../quat';
 import type { Rapier } from './rapier';
 
 type ColliderDesc = InstanceType<Rapier['ColliderDesc']>;
@@ -55,6 +55,47 @@ export const WHEEL_GROUPS = EVERYTHING * 0x10000 + DRIVABLE;
 /** Each box of a wall runs this far past both ends of its piece, in metres, so no slit opens between boxes where the wall bends. */
 const WALL_OVERLAP = 0.03;
 
+/** A solid box: its middle, half its size along each of its own axes, and how it is turned. */
+export interface SolidBox {
+  centre: Vec3;
+  half: Vec3;
+  rotation: Quat;
+}
+
+/**
+ * The solid box of one piece of a wall: its top runs along the top of the wall
+ * as it is drawn, and it reaches as far into the ground as the drawn wall does
+ * at its full height.
+ *
+ * On a wall's sloping end (step 7b) each piece is blunt: its top stands level
+ * with the road at the height of the piece's higher end, so its face towards
+ * the end is upright. A car meeting the end head on then runs into a face, as
+ * at any wall, instead of riding up a ramp onto the wall's top; the lowest
+ * piece stands under the car's body, which passes over it.
+ */
+export function wallBox(piece: WallPiece, cfg: Pick<PhysicsConfig, 'road'>): SolidBox {
+  const road = cfg.road;
+  const depth = road.barrierHeight + road.sink + BARRIER_FOOTING;
+  const [riseFrom, riseTo] = piece.rise;
+  const high = Math.max(riseFrom, riseTo);
+  const from = { ...piece.from, y: piece.from.y + high - riseFrom };
+  const to = { ...piece.to, y: piece.to.y + high - riseTo };
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dz = to.z - from.z;
+  const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  // The box's long side runs along the top of the wall; its width lies level, across the wall; its third side is square to both.
+  const along = { x: dx / length, y: dy / length, z: dz / length };
+  const flat = Math.sqrt(along.x * along.x + along.z * along.z);
+  const across = { x: along.z / flat, y: 0, z: -along.x / flat };
+  const up = { x: along.y * across.z, y: along.z * across.x - along.x * across.z, z: -along.y * across.x };
+  return {
+    centre: { x: (from.x + to.x) / 2 - (up.x * depth) / 2, y: (from.y + to.y) / 2 - (up.y * depth) / 2, z: (from.z + to.z) / 2 - (up.z * depth) / 2 },
+    half: { x: road.barrierWidth / 2, y: depth / 2, z: length / 2 + WALL_OVERLAP },
+    rotation: quatFromAxes(across, up, along),
+  };
+}
+
 /**
  * The walls as solid boxes, one for each piece of each wall, in the order of
  * `Road.walls` and then along each wall. A box's top runs along the top of the
@@ -65,22 +106,9 @@ const WALL_OVERLAP = 0.03;
  */
 export function wallColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): ColliderDesc[] {
   const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
-  const road = cfg.road;
-  const depth = road.barrierHeight + road.sink + BARRIER_FOOTING;
-  return wallPieces(line, profile.height, world.road.cross, world.road.width, world.road.walls, cfg).map(({ from, to }) => {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const dz = to.z - from.z;
-    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    // The box's long side runs along the top of the wall; its width lies level, across the wall; its third side is square to both.
-    const along = { x: dx / length, y: dy / length, z: dz / length };
-    const flat = Math.sqrt(along.x * along.x + along.z * along.z);
-    const across = { x: along.z / flat, y: 0, z: -along.x / flat };
-    const up = { x: along.y * across.z, y: along.z * across.x - along.x * across.z, z: -along.y * across.x };
-    return rapier.ColliderDesc.cuboid(road.barrierWidth / 2, depth / 2, length / 2 + WALL_OVERLAP)
-      .setTranslation((from.x + to.x) / 2 - (up.x * depth) / 2, (from.y + to.y) / 2 - (up.y * depth) / 2, (from.z + to.z) / 2 - (up.z * depth) / 2)
-      .setRotation(quatFromAxes(across, up, along))
-      .setCollisionGroups(STANDING);
+  return wallPieces(line, profile.height, world.road.cross, world.road.width, world.road.walls, cfg).map((piece) => {
+    const { centre, half, rotation } = wallBox(piece, cfg);
+    return rapier.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation(centre.x, centre.y, centre.z).setRotation(rotation).setCollisionGroups(STANDING);
   });
 }
 
@@ -195,7 +223,9 @@ export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course
     ground: add(course.grass),
     road: add(course.road),
     kerbs: add(course.kerbs),
-    walls: (course.walls ?? []).map(({ centre, half }) => solid(rapier.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation(centre.x, centre.y, centre.z))),
+    walls: (course.walls ?? []).map(({ centre, half, rotation }) =>
+      solid(rapier.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation(centre.x, centre.y, centre.z).setRotation(rotation ?? { x: 0, y: 0, z: 0, w: 1 })),
+    ),
     gate: [],
     trees: (course.posts ?? []).map(({ x, z, radius, bottom, top }) =>
       solid(rapier.ColliderDesc.cylinder((top - bottom) / 2, radius).setTranslation(x, (top + bottom) / 2, z)),

@@ -30,6 +30,8 @@ export interface WallPiece {
   side: 1 | -1;
   from: Point;
   to: Point;
+  /** How high the wall's top stands above the road's tilted plane at `from` and at `to`: less than full height on its sloping ends. */
+  rise: [number, number];
 }
 
 /**
@@ -68,7 +70,7 @@ export function wallPieces(
     let from = top(0);
     for (let k = 0; k < count; k++) {
       const to = top(k + 1);
-      pieces.push({ side: wall.side, from, to });
+      pieces.push({ side: wall.side, from, to, rise: [wallRise(wall, k, line, cfg), wallRise(wall, k + 1, line, cfg)] });
       from = to;
     }
   }

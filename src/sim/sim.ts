@@ -6,7 +6,7 @@ import type { Hit } from './car/drift';
 import { surfaceFinder } from './car/surface';
 import type { Course } from './course';
 import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input';
-import { createCarPhysics, type BodyMotion } from './physics/carBody';
+import { createCarPhysics, type BodyMotion, type Touch } from './physics/carBody';
 import type { Rapier } from './physics/rapier';
 import { startPose, type Pose } from './start';
 
@@ -53,15 +53,16 @@ export interface SimSnapshot {
   input: number;
   /** The physics engine's whole world. */
   physics: Uint8Array;
-  /** What the car remembers: its drift. */
+  /** What the car remembers: its drift, and how long since it last hit a wall. */
   car: CarMemory;
-  /** What the body touched on the last physics step, which the car's next step reads. */
-  touch: Hit;
+  /** What the body touched on the last physics step, and the contact's slope, which the car's next step reads. */
+  touch: Touch | null;
 }
 
 /** Each phase and each thing touched as a number for the fingerprint, in a fixed order. */
 const PHASES = ['none', 'hop', 'slide'] as const;
 const TOUCHES: readonly Hit[] = [null, 'wall', 'gate', 'tree', 'rock'];
+const NO_SLOPE = { x: 0, y: 0, z: 0 };
 
 /**
  * Starts a simulation: the island's ground, road, walls, gate, trees and rocks
@@ -83,7 +84,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
   const car = createCar(physics, cfg, surfaceFinder(physics.colliders, ground));
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
-  let touch: Hit = null;
+  let touch: Touch | null = null;
 
   return {
     step(next) {
@@ -91,26 +92,29 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       // The car's own pushes first, from where it is now; then the physics moves everything on.
       car.step(next, touch);
       physics.step();
-      // What the body is against now: the car's next step reads it (a hit cancels a drift).
-      touch = physics.touching()?.thing ?? null;
+      // What the body is against now: the car's next step reads it (a hit cancels a drift; a wall turns and pushes the car).
+      touch = physics.touching();
       step++;
     },
-    state: () => ({ ...physics.motion(), ...car.read(), step, input, touch }),
+    state: () => ({ ...physics.motion(), ...car.read(), step, input, touch: touch?.thing ?? null }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
-      const d = car.save().drift;
+      const memory = car.save();
+      const d = memory.drift;
+      const slope = touch?.normal ?? NO_SLOPE;
       return createHasher()
         .numbers([step, packInput(input)])
         .numbers([position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, rotation.w])
         .numbers([velocity.x, velocity.y, velocity.z, spin.x, spin.y, spin.z])
-        .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch)])
+        .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch?.thing ?? null)])
+        .numbers([slope.x, slope.y, slope.z, memory.sinceWall])
         .digest();
     },
     snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch }),
     restore(saved) {
       physics.restore(saved.physics);
       car.load(saved.car);
-      touch = saved.touch;
+      touch = saved.touch && { thing: saved.touch.thing, normal: { ...saved.touch.normal } };
       step = saved.step;
       input = unpackInput(saved.input);
     },

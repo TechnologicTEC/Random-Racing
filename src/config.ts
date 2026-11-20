@@ -1446,6 +1446,8 @@ export interface CarConfig {
   boost: BoostConfig;
   /** How fast the car can go on each surface, as a share of top speed. */
   surfaces: SurfaceConfig;
+  /** Walls and the start gate: how they turn the car along them and push it off (step 7b). */
+  bump: BumpConfig;
   /**
    * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
    * `holdBelow` is held still by the brake, so it stays put on a slope. With the brake pressed, a car slower than
@@ -1531,6 +1533,26 @@ export interface BoostConfig {
  * faster than that sheds `engine.shed` until it is down to it. Reversing is not slowed, so a car can always back out.
  */
 export type SurfaceConfig = Record<'road' | 'kerb' | 'grass' | 'sand' | 'rock' | 'snow', number>;
+
+/**
+ * Walls and the start gate (step 7b; brief: barriers bounce the car back gently instead of stopping it dead). The
+ * physics stops the car going through; these turn it along the wall and send it off. (Not `WallConfig`: that is the
+ * generator's `road.walls`.)
+ */
+export interface BumpConfig {
+  /**
+   * While the body touches a wall, the turn rate asked for gains this, in radians per second, times how far the nose
+   * points into the wall plus `away` (sines of angles) and times how far it points along it (a cosine): it turns the
+   * nose along the wall, and on until it points a little away from it, so a car pressed flat against a wall leaves it.
+   */
+  turn: number;
+  /** How far the nose is turned away from the wall, as the sine of the angle: 0.05 is about 3 degrees. */
+  away: number;
+  /** On a new hit the car is sent off the wall at this speed, in metres per second. */
+  push: number;
+  /** A hit is new when the body has touched no wall for this long, in seconds. */
+  again: number;
+}
 
 /** The engine. */
 export interface EngineConfig {
@@ -2029,6 +2051,7 @@ export const config: GameConfig = {
     boost: { speed: 1.15, accel: 12 },
     // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 18 m/s.
     surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
+    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },
