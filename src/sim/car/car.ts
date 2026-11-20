@@ -70,6 +70,12 @@ export interface Car {
    * @param touch what the body touched on the last physics step, and the contact's slope (`CarPhysics.touching`)
    */
   step(input: InputRecord, touch?: Touch | null): void;
+  /**
+   * Straight after a physics step: if the body touched a wall, the gate, a tree or a rock in it, holds the body's
+   * turning to `bump.spin` (Tane, 7c), so a hit off centre never spins the car faster than that. The whole turning is
+   * held, its roll and pitch with the spin about its up, in proportion.
+   */
+  settle(touch: Touch | null): void;
   /** What the car remembers now. */
   save(): CarMemory;
   /** Goes back to what it remembered at a saved moment. */
@@ -146,6 +152,13 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const motion = physics.motion();
       const wheels = feel(motion).map(({ touching, squash, surface, at }) => ({ touching, squash, surface, at }));
       return { wheels, speed: speedOf(motion), drift: view(), top: topFor(wheels, drift) };
+    },
+    settle(touch) {
+      if (touch === null) return;
+      const motion = physics.motion();
+      const turning = Math.sqrt(dot(motion.spin, motion.spin));
+      const limit = car.bump.spin;
+      if (turning > limit) physics.twist(twistFor(scale(motion.spin, limit / turning - 1), motion.rotation, car));
     },
     save: () => ({ drift, sinceWall }),
     load(memory) {

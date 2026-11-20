@@ -86,6 +86,17 @@ describe('hitting a wall at top speed, on the wall test ground', () => {
     expect(roofUp(last)).toBeGreaterThan(0.9);
   });
 
+  it('at 60 degrees: never turns faster than `bump.spin` (Tane, 7c: spin-outs capped)', () => {
+    const { sim } = towardsWall(60);
+    driveToWall(sim);
+    const after: CarState[] = [];
+    hold(sim, THROTTLE, 2, (state) => after.push(state));
+    sim.free();
+    const spin = (state: CarState): number => Math.abs(state.spin.y);
+    expect(Math.max(...after.map(spin))).toBeLessThanOrEqual(car.bump.spin + 1e-6);
+    expect(Math.min(...after.map(roofUp))).toBeGreaterThan(0.9);
+  });
+
   it('head on: stops, rolls back off the wall at 1 to 2 m/s, stays upright and can reverse away', () => {
     const { sim, wallAt } = towardsWall(90);
     const { hit } = driveToWall(sim);

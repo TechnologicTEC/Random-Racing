@@ -16,7 +16,7 @@ export interface IslandCourse {
 
 /**
  * Triangles to drive on, and solid things to hit. `road` counts as road, `kerbs` as kerb and `grass` as grass.
- * `walls` are hit as walls, `posts` as trees and `balls` as rocks; the wheels pass through them, as on an island.
+ * `walls` are hit as walls, `posts` as trees and `rocks` as an island's rocks are; the wheels pass through them, as on an island.
  */
 export interface PlainCourse {
   kind: 'plain';
@@ -27,5 +27,6 @@ export interface PlainCourse {
   walls?: Array<{ centre: Vec3; half: Vec3; rotation?: Quat }>;
   /** Upright posts: where they stand, how wide, and their bottom and top heights. */
   posts?: Array<{ x: number; z: number; radius: number; bottom: number; top: number }>;
-  balls?: Array<{ centre: Vec3; radius: number }>;
+  /** Rocks: the middle of each at the ground (`y`), how high it stands and how far out it reaches there (`rockPost`). */
+  rocks?: Array<{ x: number; y: number; z: number; height: number; reach: number }>;
 }

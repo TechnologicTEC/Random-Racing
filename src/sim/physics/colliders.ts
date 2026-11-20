@@ -145,29 +145,59 @@ export function treeColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
   return colliders;
 }
 
+/** An upright post: where it stands, how wide, and its bottom and top heights. */
+export interface Post {
+  x: number;
+  z: number;
+  radius: number;
+  bottom: number;
+  top: number;
+}
+
 /**
- * Every rock as part of a ball, in the order of the world's list of rocks. A
- * rock is drawn as a lumpy ball, squashed flat, tipped over and sunk into the
- * ground. It is hit as the ball that stands as high above the ground as the
- * drawn rock and is as wide where it meets the ground: a low rock is a wide,
- * shallow dome the car rides over, a tall one a boulder that stops it.
+ * What a rock is hit as (Tane, 7c): nothing if it is no higher than
+ * `sim.colliders.rockClear`, so the car's body passes over it; otherwise an
+ * upright post as wide as the rock at the ground, at least `rockPostHeight`
+ * tall and reaching `trunkRoot` into the ground, so the car meets an upright
+ * face and stops as at a trunk. (As domes, rocks of 0.3 to 1.2 m threw a car
+ * at top speed 0.7 to 5 m up.)
+ *
+ * @param y the height of the ground under the rock's middle
+ * @param height how high the rock stands above the ground
+ * @param reach how far out from its middle it reaches at the ground
  */
-export function rockColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): ColliderDesc[] {
+export function rockPost(x: number, y: number, z: number, height: number, reach: number, cfg: Pick<PhysicsConfig, 'sim'>): Post | null {
+  const rules = cfg.sim.colliders;
+  if (height <= rules.rockClear || reach <= 0) return null;
+  return { x, z, radius: reach, bottom: y - rules.trunkRoot, top: y + Math.max(height, rules.rockPostHeight) };
+}
+
+/** An upright post as a solid that stands on the ground. */
+function postCollider(rapier: Rapier, { x, z, radius, bottom, top }: Post): ColliderDesc {
+  return rapier.ColliderDesc.cylinder((top - bottom) / 2, radius).setTranslation(x, (top + bottom) / 2, z).setCollisionGroups(STANDING);
+}
+
+/**
+ * Every rock as `rockPost` makes it, in the order of the world's list of
+ * rocks: null for a rock too low to be hit. A rock is drawn as a lumpy ball,
+ * squashed flat, tipped over and sunk into the ground; its height and its
+ * reach at the ground are worked out from those.
+ */
+export function rockColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): Array<ColliderDesc | null> {
   const { rocks } = world.decor;
   const sink = cfg.sim.colliders.rockSink;
-  const colliders: ColliderDesc[] = [];
+  const colliders: Array<ColliderDesc | null> = [];
   for (let r = 0; r < rocks.count; r++) {
     const size = rocks.size[r]!;
     // Half the rock's height once it has been squashed to `tall` and tipped over by `lean`, as a share of its size.
     const flat = rocks.tall[r]! * dcos(rocks.lean[r]!);
     const tipped = dsin(rocks.lean[r]!);
     const up = Math.sqrt(flat * flat + tipped * tipped);
-    // How high it stands above the ground, and the square of how far out it reaches at the ground.
+    // How high it stands above the ground, and how far out it reaches at the ground.
     const height = size * (up - sink);
-    const reachSquared = size * size * Math.max(0, 1 - (sink * sink) / (up * up));
-    // The ball through its top and its rim at the ground.
-    const radius = (height + reachSquared / height) / 2;
-    colliders.push(rapier.ColliderDesc.ball(radius).setTranslation(rocks.x[r]!, rocks.y[r]! + height - radius, rocks.z[r]!).setCollisionGroups(STANDING));
+    const reach = size * Math.sqrt(Math.max(0, 1 - (sink * sink) / (up * up)));
+    const post = rockPost(rocks.x[r]!, rocks.y[r]!, rocks.z[r]!, height, reach, cfg);
+    colliders.push(post ? postCollider(rapier, post) : null);
   }
   return colliders;
 }
@@ -186,7 +216,7 @@ export interface WorldColliders {
   gate: number[];
   /** One for each tree, in the order of the world's list. */
   trees: number[];
-  /** One for each rock, in the order of the world's list. */
+  /** One for each rock, in the order of the world's list; `NO_COLLIDER` for a rock too low to be hit. */
   rocks: number[];
 }
 
@@ -206,14 +236,14 @@ export function addWorldColliders(rapier: Rapier, physics: PhysicsWorld, world: 
     walls: wallColliders(rapier, world, cfg).map(add),
     gate: gateColliders(rapier, world, cfg).map(add),
     trees: treeColliders(rapier, world, cfg).map(add),
-    rocks: rockColliders(rapier, world, cfg).map(add),
+    rocks: rockColliders(rapier, world, cfg).map((collider) => (collider ? add(collider) : NO_COLLIDER)),
   };
 }
 
 /**
  * Adds everything on a course that the car can touch: an island's colliders
  * (`addWorldColliders`), or a plain ground's meshes, its grass in the place of
- * the ground, and its walls, posts (as trees) and balls (as rocks), in the same fixed order.
+ * the ground, and its walls, posts (as trees) and rocks, in the same fixed order.
  */
 export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course: Course, cfg: PhysicsConfig): WorldColliders {
   if (course.kind === 'island') return addWorldColliders(rapier, physics, course.world, cfg);
@@ -230,6 +260,9 @@ export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course
     trees: (course.posts ?? []).map(({ x, z, radius, bottom, top }) =>
       solid(rapier.ColliderDesc.cylinder((top - bottom) / 2, radius).setTranslation(x, (top + bottom) / 2, z)),
     ),
-    rocks: (course.balls ?? []).map(({ centre, radius }) => solid(rapier.ColliderDesc.ball(radius).setTranslation(centre.x, centre.y, centre.z))),
+    rocks: (course.rocks ?? []).map(({ x, y, z, height, reach }) => {
+      const post = rockPost(x, y, z, height, reach, cfg);
+      return post ? physics.createCollider(postCollider(rapier, post)).handle : NO_COLLIDER;
+    }),
   };
 }

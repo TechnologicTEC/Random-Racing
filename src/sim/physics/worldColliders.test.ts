@@ -5,7 +5,7 @@ import { wallPieces } from '../../gen/road/barriers';
 import { gateBoxes } from '../../gen/road/startGate';
 import { walledPieces } from '../../gen/road/walls';
 import { TREE_KINDS } from '../../gen/world/decor';
-import { addWorldColliders, gateColliders, rockColliders, treeColliders, wallColliders } from './colliders';
+import { addWorldColliders, gateColliders, NO_COLLIDER, rockColliders, treeColliders, wallColliders } from './colliders';
 import { loadRapier, type Rapier } from './rapier';
 
 type PhysicsWorld = InstanceType<Rapier['World']>;
@@ -186,28 +186,47 @@ describe('treeColliders', () => {
 });
 
 describe('rockColliders', () => {
-  it('gives every rock a dome as high and as wide at the ground as the rock that is drawn', () => {
+  it('gives every rock the body can reach an upright post as wide as the drawn rock at the ground and at least 1 m tall, and lower rocks none (Tane, 7c)', () => {
     const { rocks } = world.decor;
     expect(rocks.count).toBeGreaterThan(50);
     const colliders = rockColliders(rapier, world, config);
     expect(colliders).toHaveLength(rocks.count);
-    const physics = worldOf(colliders);
-    const sink = config.sim.colliders.rockSink;
-    const step = Math.max(1, Math.floor(rocks.count / 150));
-    for (let r = 0; r < rocks.count; r += step) {
+    const physics = worldOf(colliders.filter((collider): collider is ColliderDesc => collider !== null));
+    const rules = config.sim.colliders;
+    const sink = rules.rockSink;
+    let posts = 0;
+    let none = 0;
+    for (let r = 0; r < rocks.count; r++) {
       const size = rocks.size[r]!;
       // A rock is a ball squashed to `tall` of its height and then tipped over by `lean`, so it stands this high about its middle.
       const lean = rocks.lean[r]!;
       const up = Math.sqrt((rocks.tall[r]! * Math.cos(lean)) ** 2 + Math.sin(lean) ** 2);
-      const top = rocks.y[r]! + size * (up - sink);
+      const height = size * (up - sink);
       const reach = size * Math.sqrt(Math.max(0, 1 - (sink / up) ** 2));
+      if (height <= rules.rockClear) {
+        expect(colliders[r], `rock ${r}`).toBeNull();
+        none++;
+        continue;
+      }
+      expect(colliders[r], `rock ${r}`).not.toBeNull();
+      if (posts++ % 10 !== 0) continue;
+      const top = rocks.y[r]! + Math.max(height, rules.rockPostHeight);
       expect(Math.abs(drop(physics, rocks.x[r]!, rocks.y[r]!, rocks.z[r]!)! - top), `rock ${r}`).toBeLessThan(0.01);
-      // At the level of the ground it reaches as far out as the drawn rock does.
-      const hit = cast(physics, { x: rocks.x[r]! - reach - 1, y: rocks.y[r]! + 0.001, z: rocks.z[r]! }, { x: 1, y: 0, z: 0 }, reach + 2);
-      expect(hit, `rock ${r}`).not.toBeNull();
-      expect(Math.abs(hit! - 1), `rock ${r}`).toBeLessThan(0.02);
+      // Its face is upright: as far out at the ground as a metre up.
+      for (const above of [0.001, 0.9]) {
+        const hit = cast(physics, { x: rocks.x[r]! - reach - 1, y: rocks.y[r]! + above, z: rocks.z[r]! }, { x: 1, y: 0, z: 0 }, reach + 2);
+        expect(hit, `rock ${r}`).not.toBeNull();
+        expect(Math.abs(hit! - 1), `rock ${r}`).toBeLessThan(0.02);
+      }
     }
+    // Seed 7 has both kinds.
+    expect(posts).toBeGreaterThan(20);
+    expect(none).toBeGreaterThan(5);
     physics.free();
+  });
+
+  it('lets the body pass over only rocks lower than it clears', () => {
+    expect(config.sim.colliders.rockClear).toBeLessThanOrEqual(config.car.suspension.rideHeight);
   });
 
   it('matches where rocks are drawn: sunk into the ground by the same share of their size', () => {
@@ -224,7 +243,8 @@ describe('addWorldColliders', () => {
     expect(added.gate).toHaveLength(3);
     expect(added.trees).toHaveLength(world.decor.trees.count);
     expect(added.rocks).toHaveLength(world.decor.rocks.count);
-    const all = [added.ground, added.road, added.kerbs, ...added.walls, ...added.gate, ...added.trees, ...added.rocks];
+    // A rock too low for the body to reach has no collider (7c).
+    const all = [added.ground, added.road, added.kerbs, ...added.walls, ...added.gate, ...added.trees, ...added.rocks.filter((handle) => handle !== NO_COLLIDER)];
     expect(physics.colliders.len()).toBe(all.length);
     // Handles are given out in the order colliders are made.
     for (let k = 1; k < all.length; k++) expect(all[k]!).toBeGreaterThan(all[k - 1]!);

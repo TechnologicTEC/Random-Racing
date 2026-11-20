@@ -94,6 +94,8 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       physics.step();
       // What the body is against now: the car's next step reads it (a hit cancels a drift; a wall turns and pushes the car).
       touch = physics.touching();
+      // A hit can spin the body; its turning is held to `bump.spin` at once.
+      car.settle(touch);
       step++;
     },
     state: () => ({ ...physics.motion(), ...car.read(), step, input, touch: touch?.thing ?? null }),

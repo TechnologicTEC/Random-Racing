@@ -2,7 +2,7 @@ import type { PhysicsConfig } from '../../config';
 import type { Course } from '../course';
 import type { Quat, Vec3 } from '../quat';
 import type { Pose } from '../start';
-import { addCourseColliders, WHEEL_GROUPS, type WorldColliders } from './colliders';
+import { addCourseColliders, NO_COLLIDER, WHEEL_GROUPS, type WorldColliders } from './colliders';
 import type { Rapier } from './rapier';
 
 type PhysicsWorld = InstanceType<Rapier['World']>;
@@ -122,7 +122,7 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
   for (const handle of colliders.walls) things.set(handle, 'wall');
   for (const handle of colliders.gate) things.set(handle, 'gate');
   for (const handle of colliders.trees) things.set(handle, 'tree');
-  for (const handle of colliders.rocks) things.set(handle, 'rock');
+  for (const handle of colliders.rocks) if (handle !== NO_COLLIDER) things.set(handle, 'rock');
   const wheel = new rapier.Ball(cfg.car.wheels.radius);
   const NO_TURN = { x: 0, y: 0, z: 0, w: 1 };
 

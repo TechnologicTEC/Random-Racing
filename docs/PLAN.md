@@ -38,7 +38,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **6h-5** Sparks, boost and the drift's look: sprites and bloom
 - [x] **7a** Off the road
 - [x] **7b** Walls
-- [ ] **7c** Trees and rocks
+- [x] **7c** Trees and rocks
 - [ ] **7d** Kerbs
 - [ ] **8a** Place on the lap and checkpoints
 - [ ] **8b** Respawn

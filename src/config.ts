@@ -1552,6 +1552,12 @@ export interface BumpConfig {
   push: number;
   /** A hit is new when the body has touched no wall for this long, in seconds. */
   again: number;
+  /**
+   * Straight after a physics step in which the body touched a wall, the gate, a tree or a rock, its turning (about its
+   * up, and its roll and pitch with it) is held to this, in radians per second (Tane, 7c): a trunk clipped off centre at
+   * top speed spun it at 8 to 10.
+   */
+  spin: number;
 }
 
 /** The engine. */
@@ -1619,6 +1625,13 @@ export interface ColliderConfig {
   trunkRoot: number;
   /** A rock's middle lies this share of its size under the ground. Must match how rocks are drawn (`render.decor.rockSink`). */
   rockSink: number;
+  /** A rock no higher than this above the ground is not hit: the car's body passes over it. Under the car's ride height. */
+  rockClear: number;
+  /**
+   * A taller rock is hit as an upright post as wide as the rock at the ground, at least this high (Tane, 7c), so the car
+   * meets an upright face and stops as at a trunk. As domes, rocks of 0.3 to 1.2 m threw a car at top speed 0.7 to 5 m up.
+   */
+  rockPostHeight: number;
 }
 
 /** How the keyboard and a controller are read. Nothing is smoothed (brief: input must feel instant). */
@@ -2007,6 +2020,10 @@ export const config: GameConfig = {
       trunkHeight: 2.5,
       trunkRoot: 1,
       rockSink: ROCK_SINK,
+      // 6 cm under the body's 26 cm ride height.
+      rockClear: 0.2,
+      // Over the top of the body (0.86 m), so it is always met on an upright face.
+      rockPostHeight: 1,
     },
   },
   car: {
@@ -2051,7 +2068,7 @@ export const config: GameConfig = {
     boost: { speed: 1.15, accel: 12 },
     // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 18 m/s.
     surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
-    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5 },
+    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 6 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },
