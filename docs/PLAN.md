@@ -39,7 +39,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **7a** Off the road
 - [x] **7b** Walls
 - [x] **7c** Trees and rocks
-- [ ] **7d** Kerbs
+- [x] **7d** Kerbs
 - [ ] **8a** Place on the lap and checkpoints
 - [ ] **8b** Respawn
 - [ ] **8c** Respawn on the page

@@ -17,6 +17,8 @@ const perSecond = config.sim.stepsPerSecond;
 const flatSpeed = (state: CarState): number => Math.sqrt(state.velocity.x * state.velocity.x + state.velocity.z * state.velocity.z);
 const roofUp = (state: CarState): number => rotate(state.rotation, { x: 0, y: 1, z: 0 }).y;
 const spinRate = (state: CarState): number => Math.sqrt(state.spin.x * state.spin.x + state.spin.y * state.spin.y + state.spin.z * state.spin.z);
+/** The physics engine rounds the turning held at `bump.spin` by a few ten-millionths of a radian a second either way. */
+const SPIN_ROUNDING = 1e-5;
 const inverse = (q: Quat): Quat => ({ x: -q.x, y: -q.y, z: -q.z, w: q.w });
 
 /** Whether an upright line at (x, z) passes through the body's box at the height of the body's middle. */
@@ -58,7 +60,7 @@ describe('a tree trunk at top speed', () => {
     expect(flatSpeed(before)).toBeGreaterThan(car.engine.topSpeed * 0.97);
     expect(flatSpeed(then.at(-1)!)).toBeLessThan(3);
     expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
-    expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6);
+    expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
     expect(then.some((state) => inside(state, 0, -200))).toBe(false);
   });
 
@@ -67,7 +69,7 @@ describe('a tree trunk at top speed', () => {
       const { before, then } = runInto(courseWith(post(off)), 1, 1);
       expect(flatSpeed(before)).toBeGreaterThan(car.engine.topSpeed * 0.97);
       expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
-      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6);
+      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
       expect(then.some((state) => inside(state, off, -200))).toBe(false);
     });
   }
@@ -100,7 +102,7 @@ describe('rocks', () => {
       expect(then[0]!.touch).toBe('rock');
       expect(flatSpeed(then.at(-1)!)).toBeLessThan(3);
       expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
-      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6);
+      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
       expect(then.some((state) => inside(state, 0, -200))).toBe(false);
     });
   }

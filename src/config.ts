@@ -2032,7 +2032,9 @@ export const config: GameConfig = {
     wheels: { radius: 0.05, halfTrack: 0.6, front: 0.8, rear: 0.8 },
     // About two bounces a second if nothing damped them: firm, for a kart. Ridden at 26 cm (was 18) so the body's corner
     // clears a 45% bank met at an angle at speed instead of digging in and rolling the car (step 4e; Tane's choice).
-    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.8 },
+    // Damped to 0.5 (Tane, 7d; was 0.8): at 0.8 the 9 cm upright face of a kerb, crossed from the grass at 30 m/s, threw
+    // the front wheels off the ground and turned the car 4.2 degrees.
+    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.5 },
     grip: { side: 22, turn: 30 },
     // Full stick: a 6 m circle up to 9.5 m/s, 15 m at 15 m/s, 60 m at top speed.
     steer: { minRadius: 6, sideForce: 15 },
