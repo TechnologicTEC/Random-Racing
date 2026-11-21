@@ -17,12 +17,14 @@ import { loadEffectTextures } from '../render/effectTextures';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
 import { createDevices } from '../input/devices';
-import { makeInput, type RawInput } from '../sim/input';
+import { RESPAWN_FADE } from '../render/palette';
+import { makeInput, unpackInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
+import { checkpointCount } from '../sim/track/progress';
 import { genClient } from '../worker/client';
-import { driftReadout, mainSurface } from './drive';
+import { driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
 import { createDriving } from './driving';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
@@ -41,7 +43,12 @@ export interface DriveHandle {
    * own loop takes no step until the frame after. For browser tests and the console: no waiting in real time.
    */
   run(steps: number, raw?: RawInput): CarState;
-  /** Puts the car back on the start line, as a new simulation. */
+  /**
+   * Takes one step for each input of a list, packed (`packInput`), then draws one frame, as `run` does: a drive worked
+   * out elsewhere (in Node, say) replayed exactly.
+   */
+  replay(inputs: number[]): CarState;
+  /** Puts the car back on the start line, as a new simulation. (R puts it back at the last checkpoint, through the simulation.) */
   reset(): void;
 }
 
@@ -71,6 +78,7 @@ export interface ViewHandle {
 const TEMPLATE = `
   <div class="world">
     <canvas class="world-canvas" data-ref="canvas" data-testid="world-canvas"></canvas>
+    <div class="world-fade" data-ref="fade" data-testid="world-fade" aria-hidden="true"></div>
     <div class="world-card world-title">
       <h1 data-ref="name" data-testid="world-name">Seed Circuit</h1>
       <p data-ref="code" data-testid="world-code"></p>
@@ -94,6 +102,7 @@ const TEMPLATE = `
     <div class="world-card world-dash" data-ref="dash" data-testid="world-readout" hidden>
       <p class="world-speed-line"><span class="world-speed" data-ref="speed" data-testid="world-speed">0</span><span class="world-unit">km/h</span></p>
       <p class="world-surface" data-ref="surface" data-testid="world-surface"></p>
+      <p class="world-place" data-ref="place" data-testid="world-place"></p>
       <p class="world-drift" data-ref="drift" data-testid="world-drift"><span class="world-tier" data-ref="tier" hidden></span><span data-ref="boost"></span></p>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
@@ -107,7 +116,7 @@ const QUALITY_KEY = 'seedCircuit.quality';
 
 const HINTS: Record<CameraMode, string> = {
   chase:
-    'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R starts again. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.',
+    'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R goes back to the last checkpoint. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.',
   fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one. L opens the lab.',
   orbit: 'Drag to turn, scroll to zoom. C drives, N makes a new island. L opens the lab.',
 };
@@ -277,7 +286,16 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (ref('boost').textContent !== drift.boost) ref('boost').textContent = drift.boost;
       document.body.dataset.driveTier = String(drift.tier);
       document.body.dataset.driveStep = String(state.step);
+      // The place on the lap, and the fade to white and back over a respawn.
+      const line = shown ? shown.track.candidates[shown.track.winnerIndex]!.line : null;
+      const place = line ? placeReadout(state.progress, line.length, checkpointCount(line, tuned.sim.progress)) : '';
+      if (ref('place').textContent !== place) ref('place').textContent = place;
+      document.body.dataset.driveRespawns = String(state.respawn.respawns);
     }
+    const fade = state && mode === 'chase' ? respawnFade(state.respawn, state.step, tuned.render.respawnFade, tuned.sim.stepsPerSecond) : 0;
+    const opacity = fade.toFixed(3);
+    if (ref('fade').style.opacity !== opacity) ref('fade').style.opacity = opacity;
+    document.body.dataset.driveFade = String(Number(opacity));
     dirty = true;
   };
   const dropSim = (): void => {
@@ -307,6 +325,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let rebuildWanted = false;
   let rebuilds = 0;
   document.body.dataset.tuningBuilds = '0';
+  // The fade over a respawn takes its colour from the palette.
+  ref('fade').style.backgroundColor = `rgb(${RESPAWN_FADE.map((c) => Math.round(c * 255)).join(', ')})`;
   const panel = createTuningPanel(ref('dash').parentElement!, tuned, (path) => {
     // The camera reads its settings afresh each frame; the car's are built into its simulation.
     if (needsRebuild(path)) rebuildWanted = true;
@@ -324,7 +344,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     document.body.dataset.tuningBuilds = String(rebuilds);
     document.body.dataset.tuningMs = (performance.now() - started).toFixed(0);
   };
-  /** Puts the car back on the start line (R, or the controller's Back): a new simulation of the same island. */
+  /** Puts the car back on the start line as a new simulation of the same island (`drive.reset`, for tests and the console). */
   const resetCar = (): void => {
     if (shown && rapier && sim) startSim(shown, rapier);
   };
@@ -433,7 +453,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     applyTuning();
     const pressed = devices.presses();
     if (pressed.camera) setMode(nextCamera(mode));
-    if (pressed.reset && mode === 'chase') resetCar();
+    // The controller's Back reaches the simulation in the input record, as R does: it puts the car back itself.
     // Driving: the fixed-step loop takes its own measure of the frame (at most five steps), unless the picture is held still.
     if (mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
     if (mode === 'fly' && playing && flight) {
@@ -621,9 +641,6 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const key = event.key.toLowerCase();
     if (key === ' ' && mode === 'fly') setPlaying(!playing);
     else if (key === 'c') setMode(nextCamera(mode));
-    else if (key === 'r' && mode === 'chase') {
-      if (!event.repeat) resetCar();
-    }
     else if (key === 'n') void show(randomSeed(), false);
     else if (key === 't') panel.toggle();
     else if (key === 'q') setQuality(quality === 'high' ? 'low' : 'high');
@@ -677,6 +694,18 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         applyTuning();
         const state = driving.run(steps, makeInput(raw));
         // Drawn at once, with no step of the page's own and the camera straight behind the car.
+        driving.frame(0, makeInput({}), false, groundAt);
+        drawCar();
+        aimCamera();
+        view.render();
+        dirty = false;
+        return state;
+      },
+      replay(inputs) {
+        if (!sim) throw new Error('The simulation is not built yet');
+        applyTuning();
+        let state = sim.state();
+        for (const packed of inputs) state = driving.run(1, unpackInput(packed));
         driving.frame(0, makeInput({}), false, groundAt);
         drawCar();
         aimCamera();

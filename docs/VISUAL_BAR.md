@@ -72,7 +72,8 @@ The car was drawn in step 5c, to the proposal below, and Tane approved it at che
 - **The boost flame** is two jets from the exhaust in the boost's tier colour, with a pale core `[1, 0.95, 0.7]` and a flare where each leaves the engine, 0.6, 0.9 and 1.2 m long for the three tiers and flickering by a sixth of that. Never longer than the car. Seen from straight behind a jet is foreshortened to its flare.
 - **The drift on the kart**, drawn only: the body leans about 4 degrees out of a slide and the front wheels are drawn counter-steered; the hop squashes the body a little as it lands.
 - **Speed lines** while a boost runs: thin pale streaks near the picture's edges, never over its middle.
-- **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the drift tier as a dot of the tier's colour.
+- **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the place on the lap in small figures ("1.23 of 2.61 km · next checkpoint 13 of 25"), the drift tier as a dot of the tier's colour.
+- **A respawn** (8c) whites the picture out into the cards' pale off-white (`RESPAWN_FADE`) over the last 0.3 s of the wait and clears it over 0.4 s with the car back on the road; the cards stay on top, readable. Nothing else is drawn for it.
 
 `drive-slide.jpg` and `drive-boost.jpg` were taken on 2026-11-18 (6h-5) from the browser suite's `world-00007-drive-slide.png` and `-drive-boost.png` (headless Chromium, 1280 by 720, saved as JPEG at quality 85 like the others). They stay "proposed" in the table above until Tane accepts them at check-in 2. Seed 7's long slide runs onto the grass beside the road, so the sparks are seen over grass.
 

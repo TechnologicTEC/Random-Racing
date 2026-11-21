@@ -277,7 +277,8 @@ describe('foothills', () => {
       }
       expect(most, `seed ${seed}`).toBeGreaterThan(scenery.foothills.height[0]);
     }
-  });
+    // Three islands built: it sat on the 20 s limit when the whole suite ran at once, as the snow test did.
+  }, 60_000);
 });
 
 describe('snow', () => {

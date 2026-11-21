@@ -178,3 +178,6 @@ export const FLAME = {
 export function toLinear(channel: number): number {
   return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
 }
+
+/** The fade over a respawn (step 8c): the cards' pale off-white, so the picture whites out into the page's own light. */
+export const RESPAWN_FADE: Rgb = [0.965, 0.98, 0.969];

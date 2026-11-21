@@ -76,6 +76,11 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
           sim.step(input);
           before = after;
           after = sim.state();
+          // Put back at a checkpoint: no blend from where the car was, and the camera straight behind it there.
+          if (before.respawn.respawns !== after.respawn.respawns) {
+            before = after;
+            snapNext = true;
+          }
         }
       } else {
         carried = 0;

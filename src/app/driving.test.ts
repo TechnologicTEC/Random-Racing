@@ -46,6 +46,19 @@ describe('the driving session', () => {
     expect(start.z - sim.state().position.z).toBeGreaterThan(3);
   });
 
+  it('draws the step after a respawn as it is, with no blend, and puts the camera straight behind the car', () => {
+    const driving = createDriving(config);
+    const sim = newSim();
+    driving.setSim(sim);
+    for (let k = 0; k < 120; k++) driving.frame(STEP, THROTTLE, true, flat);
+    // R on a frame of a step and a half: the car is put back on the step it takes, and half a step is carried.
+    driving.frame(STEP * 1.5, makeInput({ reset: true }), true, flat);
+    const state = sim.state();
+    expect(state.respawn.respawns).toBe(1);
+    expect(driving.shown()!.position).toEqual(state.position);
+    expect(driving.view()).toEqual(chaseStart(state, flat, config.camera.chase));
+  });
+
   it('shows the car between the last two steps', () => {
     const driving = createDriving(config);
     const sim = newSim();

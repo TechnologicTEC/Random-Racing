@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { NEUTRAL_INPUT } from '../sim/input';
 import type { CarState } from '../sim/sim';
-import { advance, blendState, driftReadout, mainSurface } from './drive';
+import { advance, blendState, driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
+import { NO_RESPAWN } from '../sim/respawn';
 
 const cfg = config.sim;
 const STEP = 1 / cfg.stepsPerSecond;
@@ -163,5 +164,51 @@ describe('driftReadout', () => {
   it('shows the boost left, to a tenth of a second, in the colour of its tier', () => {
     expect(driftReadout({ ...none, boostLeft: 0.6, boostTier: 2 })).toEqual({ tier: 2, colour: 'rgb(255, 153, 31)', boost: 'boost 0.6 s' });
     expect(driftReadout({ ...none, boostLeft: 1 / 60, boostTier: 1 }).boost).toBe('boost 0.0 s');
+  });
+});
+
+describe('respawnFade', () => {
+  const fade = config.render.respawnFade;
+  const perSecond = config.sim.stepsPerSecond;
+  const fadeIn = Math.round(fade.in * perSecond);
+  const fadeOut = Math.round(fade.out * perSecond);
+
+  it('is clear with no wait and no respawn', () => {
+    expect(respawnFade(NO_RESPAWN, 500, fade, perSecond)).toBe(0);
+  });
+
+  it('stays clear through the start of a wait, then rises evenly to white over its last 0.3 s', () => {
+    const waiting = (waitLeft: number) => respawnFade({ ...NO_RESPAWN, waitLeft, why: 'water' }, 100, fade, perSecond);
+    expect(waiting(60)).toBe(0);
+    expect(waiting(fadeIn + 1)).toBe(0);
+    expect(waiting(fadeIn)).toBeCloseTo(1 / fadeIn, 9);
+    expect(waiting(Math.round(fadeIn / 2))).toBeGreaterThan(0.4);
+    expect(waiting(1)).toBe(1);
+    for (let left = fadeIn; left > 1; left--) expect(waiting(left - 1)).toBeGreaterThan(waiting(left));
+  });
+
+  it('is white on the step the car is put back, and clears evenly over 0.4 s', () => {
+    const placed = { ...NO_RESPAWN, placedAt: 200, respawns: 1 };
+    // The state after the step of the respawn has the step count one on.
+    expect(respawnFade(placed, 201, fade, perSecond)).toBe(1);
+    expect(respawnFade(placed, 201 + fadeOut / 2, fade, perSecond)).toBeCloseTo(0.5, 9);
+    expect(respawnFade(placed, 201 + fadeOut, fade, perSecond)).toBe(0);
+    expect(respawnFade(placed, 900, fade, perSecond)).toBe(0);
+  });
+});
+
+describe('placeReadout', () => {
+  const progress = { near: 100, along: 1234.5, off: 0, next: 13, passed: 13 };
+
+  it('gives the place on the lap in kilometres, and the checkpoint to pass next', () => {
+    expect(placeReadout(progress, 2610, 26)).toBe('1.23 of 2.61 km · next checkpoint 13 of 25');
+  });
+
+  it('calls checkpoint 0 the line', () => {
+    expect(placeReadout({ ...progress, along: 2606, next: 0 }, 2610, 26)).toBe('2.61 of 2.61 km · next the line');
+  });
+
+  it('gives nothing without a lap', () => {
+    expect(placeReadout(null, 2610, 26)).toBe('');
   });
 });

@@ -18,7 +18,8 @@ const worlds = new Map<number, WorldResult>();
 beforeAll(async () => {
   rapier = await loadRapier();
   for (const seed of SEEDS) worlds.set(seed, generateWorld(seed, config));
-});
+  // Three islands: about 10 s when the whole suite runs at once, the time a hook is given by default.
+}, 60_000);
 
 /** How high the body's middle rides above the road at rest. */
 const riding = config.car.body.halfHeight + config.car.suspension.rideHeight;

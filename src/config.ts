@@ -926,6 +926,8 @@ export interface RenderConfig {
   /** How the car is drawn. */
   car: KartViewConfig;
   bloom: BloomConfig;
+  /** The fade to white and back over a respawn (step 8c), in seconds: up over the last `in` of the wait, back over `out` after. */
+  respawnFade: { in: number; out: number };
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -2223,6 +2225,8 @@ export const config: GameConfig = {
       speedLines: { count: 14, life: 0.25, length: [0.08, 0.2], inner: 0.6, alpha: 0.35 },
     },
     bloom: { enabled: true, strength: 0.7, radius: 0.5, scale: 0.5 },
+    // Short, so the car is seen going under and seen back on the road (step 8c, the plan's "a short fade").
+    respawnFade: { in: 0.3, out: 0.4 },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [

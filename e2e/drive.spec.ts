@@ -2,8 +2,14 @@ import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
+import { makeInput, NEUTRAL_INPUT, packInput } from '../src/sim/input';
+import { loadRapier } from '../src/sim/physics/rapier';
 import { rotate } from '../src/sim/quat';
-import { startPose } from '../src/sim/start';
+import { createSim } from '../src/sim/sim';
+import { checkpointPose, startPose } from '../src/sim/start';
+import { checkpointCount } from '../src/sim/track/progress';
+import { seaOpenings } from '../src/testing/checkSeeds';
+import { seaDriver } from '../src/testing/seaDriver';
 import { letGo, slideTo } from './drifting';
 
 /**
@@ -170,13 +176,88 @@ test.describe('driving on the page', () => {
     expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.step).toBe(0);
   });
 
-  test('R puts the car back on the start line', async ({ page }) => {
+  test('R puts the car back at the last checkpoint passed, through the simulation (8c): the start line here', async ({ page }) => {
+    // The page runs in real time here (no still=1), drawing every frame in software: slow beside the other tests.
+    test.setTimeout(120_000);
     const errors = collectErrors(page);
-    await openDriving(page, 'seed=7&still=1');
-    await page.evaluate(() => window.seedCircuit.drive!.run(120, { throttle: 1 }));
-    await page.keyboard.press('r');
-    await expect.poll(async () => (await page.evaluate(() => window.seedCircuit.drive!.state()))!.step).toBe(0);
-    expect(fromStart(7, (await page.evaluate(() => window.seedCircuit.drive!.state()))!.position)).toBeLessThan(0.5);
+    await openDriving(page, 'seed=7');
+    // Two seconds from the start: past the line (checkpoint 0), 4 m ahead of the start, and not yet the next.
+    const driven = await page.evaluate(() => window.seedCircuit.drive!.run(120, { throttle: 1 }));
+    expect(driven.progress!.passed).toBe(1);
+    await page.keyboard.down('r');
+    await expect(page.locator('body')).toHaveAttribute('data-drive-respawns', '1');
+    await page.keyboard.up('r');
+    const state = (await page.evaluate(() => window.seedCircuit.drive!.state()))!;
+    // The same simulation, carrying on: not a new one from step 0.
+    expect(state.step).toBeGreaterThan(120);
+    const line = checkpointPose(generateWorld(7, config), config, 0).position;
+    expect(Math.hypot(state.position.x - line.x, state.position.y - line.y, state.position.z - line.z)).toBeLessThan(0.5);
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('respawn on the page (8c)', () => {
+  /** Seed 18: the sea 36 m from the centre line, 250 m from the start (`seaOpenings`). */
+  const SEED = 18;
+  const perSecond = config.sim.stepsPerSecond;
+  const delay = Math.round(config.sim.respawn.delay * perSecond);
+  const fadeIn = Math.round(config.render.respawnFade.in * perSecond);
+  const fadeOut = Math.round(config.render.respawnFade.out * perSecond);
+
+  /** In Node: the inputs that drive seed 18 from its start line into the sea, up to the step the wait starts; the checkpoint it comes back to; the fingerprint after the wait and a second more. */
+  async function intoTheSea(): Promise<{ toWait: number[]; checkpoint: number; hash: string }> {
+    const world = generateWorld(SEED, config);
+    const sim = createSim(await loadRapier(), world, config);
+    const drive = seaDriver(world, seaOpenings(world).find((o) => o.reach < 40)!, config.car);
+    const toWait: number[] = [];
+    while (sim.state().respawn.waitLeft === 0 && toWait.length < 60 * perSecond) {
+      const input = makeInput(drive(sim.state()));
+      toWait.push(packInput(input));
+      sim.step(input);
+    }
+    const { progress } = sim.state();
+    const n = checkpointCount(world.track.candidates[world.track.winnerIndex]!.line, config.sim.progress);
+    for (let i = 0; i < delay + perSecond; i++) sim.step(NEUTRAL_INPUT);
+    const hash = sim.hash();
+    sim.free();
+    return { toWait, checkpoint: (progress!.next - 1 + n) % n, hash };
+  }
+
+  const fadeOf = async (page: Page): Promise<number> => Number(await page.locator('body').getAttribute('data-drive-fade'));
+
+  test('drives into the sea and back to the checkpoint, as in Node, with a fade to white and back', async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = collectErrors(page);
+    const run = await intoTheSea();
+    expect(run.toWait.length, 'the car reached the sea').toBeLessThan(60 * perSecond);
+    await openDriving(page, `seed=${SEED}&still=1`);
+    await expect(page.getByTestId('world-place')).toContainText('next the line');
+    expect(await fadeOf(page)).toBe(0);
+
+    const replay = (inputs: number[]) => page.evaluate((list) => window.seedCircuit.drive!.replay(list), inputs);
+    const neutral = (steps: number): number[] => Array.from({ length: steps }, () => packInput(NEUTRAL_INPUT));
+    let state = await replay(run.toWait);
+    expect(state.respawn.why).toBe('water');
+    // The start of the wait: still clear.
+    expect(await fadeOf(page)).toBe(0);
+    // Part way through the last 0.3 s: whiter.
+    state = await replay(neutral(delay - Math.round(fadeIn / 2)));
+    expect(await fadeOf(page)).toBeGreaterThan(0.3);
+    expect(await fadeOf(page)).toBeLessThan(1);
+    // Put back: white, at the checkpoint.
+    state = await replay(neutral(Math.round(fadeIn / 2)));
+    expect(state.respawn.respawns).toBe(1);
+    expect(await fadeOf(page)).toBe(1);
+    const pose = checkpointPose(generateWorld(SEED, config), config, run.checkpoint).position;
+    expect(Math.hypot(state.position.x - pose.x, state.position.y - pose.y, state.position.z - pose.z)).toBeLessThan(0.1);
+    await expect(page.locator('body')).toHaveAttribute('data-drive-respawns', '1');
+    // Clear again 0.4 s later.
+    state = await replay(neutral(fadeOut));
+    expect(await fadeOf(page)).toBe(0);
+    // A second after the wait in all: the same fingerprint as in Node.
+    await replay(neutral(perSecond - fadeOut));
+    expect(await page.evaluate(() => window.seedCircuit.drive!.hash())).toBe(run.hash);
+    await expect(page.getByTestId('world-place')).toContainText(`next checkpoint ${run.checkpoint + 1} of`);
     expect(errors).toEqual([]);
   });
 });

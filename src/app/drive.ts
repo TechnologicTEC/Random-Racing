@@ -3,7 +3,9 @@ import type { Quat, Vec3 } from '../sim/quat';
 import type { Surface } from '../sim/car/surface';
 import type { DriftView, WheelState } from '../sim/car/car';
 import { SPARK } from '../render/palette';
+import type { RespawnState } from '../sim/respawn';
 import type { CarState } from '../sim/sim';
+import type { ProgressState } from '../sim/track/progress';
 
 /** What one frame of the page does with the simulation's clock. */
 export interface Advance {
@@ -112,4 +114,31 @@ export function driftReadout(drift: DriftView): DriftReadout {
   const tier = drift.phase === 'slide' && drift.tier > 0 ? drift.tier : boosting ? drift.boostTier : 0;
   const colour = tier === 0 ? null : `rgb(${SPARK[tier - 1]!.map((c) => Math.round(c * 255)).join(', ')})`;
   return { tier, colour, boost: boosting ? `boost ${drift.boostLeft.toFixed(1)} s` : '' };
+}
+
+/**
+ * How white the picture is over a respawn, from 0 (clear) to 1: rising evenly over the last `fade.in` of the wait to
+ * white on its last step, white on the step the car is put back, and clearing evenly over `fade.out` after. Worked out
+ * from the simulation's state and step count alone, so a held picture (`still=1`) always shows the same.
+ *
+ * @param step the step count of the state shown (`CarState.step`)
+ */
+export function respawnFade(respawn: RespawnState, step: number, fade: { in: number; out: number }, stepsPerSecond: number): number {
+  const fadeIn = Math.max(1, Math.round(fade.in * stepsPerSecond));
+  const fadeOut = Math.max(1, Math.round(fade.out * stepsPerSecond));
+  const coming = respawn.waitLeft > 0 ? Math.max(0, (fadeIn + 1 - respawn.waitLeft) / fadeIn) : 0;
+  // The step the car was put back on is `placedAt`; the state after it counts one more.
+  const since = step - respawn.placedAt - 1;
+  const going = respawn.placedAt >= 0 && since >= 0 ? Math.max(0, 1 - since / fadeOut) : 0;
+  return Math.min(1, Math.max(coming, going));
+}
+
+/**
+ * The readout's place on the lap: how far round it is and the lap's length, in kilometres, and the checkpoint to pass
+ * next (checkpoint 0 is the line, the others counted from 1). Nothing off an island.
+ */
+export function placeReadout(progress: ProgressState | null, lapLength: number, checkpoints: number): string {
+  if (!progress) return '';
+  const next = progress.next === 0 ? 'next the line' : `next checkpoint ${progress.next} of ${checkpoints - 1}`;
+  return `${(progress.along / 1000).toFixed(2)} of ${(lapLength / 1000).toFixed(2)} km · ${next}`;
 }

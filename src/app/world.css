@@ -28,6 +28,14 @@ body,
   cursor: grabbing;
 }
 
+/* The fade over a respawn (8c): over the picture, under the cards, never in the way of the mouse. Its colour and how far it is faded are set from the page. */
+.world-fade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .world-card {
   background: rgba(246, 250, 247, 0.86);
   border: 1px solid rgba(22, 52, 47, 0.12);
@@ -116,6 +124,14 @@ body,
   color: #1a7d77;
   font-size: 13px;
   font-weight: 600;
+}
+
+/* The place on the lap: small, under the surface. */
+.world-place {
+  color: #15302b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* The drift line: a dot in the colour of the tier charged (or of the boost running), and the boost's time left. */

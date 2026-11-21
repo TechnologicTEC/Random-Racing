@@ -3,7 +3,7 @@ import { config } from '../config';
 import { generateWorld } from '../gen';
 import type { WorldResult } from '../gen/types';
 import { seaOpenings } from '../testing/checkSeeds';
-import { stickToward } from '../testing/lineDriver';
+import { seaDriver } from '../testing/seaDriver';
 import { flatGround } from '../testing/testGrounds';
 import { makeInput, NEUTRAL_INPUT, type RawInput } from './input';
 import { loadRapier, type Rapier } from './physics/rapier';
@@ -79,19 +79,10 @@ describe('into the sea', () => {
     expect(sim.state().progress!.next).toBe(k);
 
     const openingAlong = opening.sample * line.spacing;
-    const rx = -line.tz[opening.sample]! * opening.side;
-    const rz = line.tx[opening.sample]! * opening.side;
-    const sea = { x: line.x[opening.sample]! + rx * (opening.reach + 30), z: line.z[opening.sample]! + rz * (opening.reach + 30) };
-    const drive = (state: CarState): RawInput => {
-      const progress = state.progress!;
-      const left = (openingAlong - progress.along + line.length) % line.length;
-      const ahead = (progress.near + 8) % line.count;
-      const point = left > 20 && left < line.length / 2 ? { x: line.x[ahead]!, z: line.z[ahead]! } : sea;
-      return { throttle: speedOf(state) < 14 ? 1 : 0, steer: stickToward(state, point, config.car) };
-    };
+    const drive = seaDriver(world, opening, config.car);
 
     let under = -1;
-    const waited = untilWait(sim, (state) => drive(state), 40 * perSecond);
+    const waited = untilWait(sim, drive, 40 * perSecond);
     expect(waited, 'the wait started').toBeGreaterThan(0);
     const atWait = sim.state();
     expect(atWait.respawn.why).toBe('water');
