@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 9b, the bot drifts: the corner proof (see "Step 9")
-- **Next:** `docs/PLAN.md`, "The build order": **9c**, the same lap in every browser (planned and approved 2026-11-22, see "Step 9"). `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
+- **Last finished part:** 9c, the same lap in every browser (see "Step 9"). **This ends step 9**
+- **Next:** `docs/PLAN.md`, "The build order": **check-in 2 with Tane** (the questions are in `docs/PLAN.md`; step 9's tables are under "Step 9"). `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -30,7 +30,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | Done |
 | 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | Done |
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | Done |
-| 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | 9a, 9b done |
+| 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | Done |
 | | **Check-in 2 with Tane:** drift feel, with the tuning panel | Feedback | |
 | 10 | Tuning from feedback; `npm run perf` with the car; README, CLAUDE.md and this file; pull request | **Tane's playtest sign-off**, then merge | |
 
@@ -740,7 +740,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | --- | --- | --- |
 | 9a | **A bot that laps**: `testing/botDriver.ts`; the brake past top speed | Done |
 | 9b | **The bot drifts: the corner proof**: `passCorner`, `bestPass`; the sliding laps | Done |
-| 9c | **The same lap in every browser** | |
+| 9c | **The same lap in every browser**: the sliding laps of seeds 1 and 7 replayed on the page | Done |
 
 ### 9a: a bot that laps
 
@@ -851,6 +851,17 @@ Quicker on all 20 seeds, by 5.7 to 11.3 s (6 to 14%). The wall touches on seeds 
 
 Tests, seen failing first on the missing functions (and the sliding lap on the bot that ignored `slide`): `botDriver.test.ts` gains 4 (which corners slide, `stickForCurve` against `pathCurve` both ways, held to full stick, `turnLeft`); `cornerProof.test.ts` (3: three of each kind with a mountain seed, each slid clean, each quicker); `slidingLaps.test.ts` (2: finished on every seed, quicker on all 20). 9a's laps pass unchanged with the bot holding the car's own top speed. 2,321 unit tests pass; all 340 browser tests passed in one run (21.8 minutes). Nothing drawn changed.
 
+### 9c: the same lap in every browser
+
+- **`e2e/determinism.spec.ts`** gains one test per seed, 1 (mountain) and 7 (hilly). In Node, inside the Playwright process, the bot drives its lap with slides from the start line (`lapRun`, `createBot(..., { slide: true })`). Those inputs are stepped again in a fresh simulation to take the fingerprint after every 600 steps and at the end.
+- **On the 3D page** (`seed=<s>&still=1`) the same inputs go through `window.seedCircuit.drive.replay` 600 at a time. After each chunk `drive.hash()` must equal Node's, so a mismatch says when it went wrong, and at the end the page's car must have finished the lap (every checkpoint and the line again).
+- Seed 1's lap is 4,899 steps (9 chunks), seed 7's 3,899 (7 chunks). Each run takes 15 to 30 s in a browser.
+- **Seen failing first on a deliberate fault**: the Node side changed one step's input half way. It failed in the chunk holding that step (after 3,000 steps on seed 1, 2,400 on seed 7), in Chromium and Firefox, and matched in every chunk before it. With the fault taken out all four pass: **one fingerprint in Node, Chromium and Firefox** for a whole lap of slides, boosts, a kerb or two and every checkpoint.
+
+2,321 unit tests pass; all 344 browser tests passed in one run (22.7 minutes). Nothing drawn changed.
+
+**Step 9 is done.** What it gives Tane at check-in 2: the tables above (laps on grip and with slides, the corner proof by kind), and the brake that now works at top speed downhill.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -953,6 +964,8 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 ## Known issues and risks
 
 - **"Gives the same picture of a slide and of a boost twice" fails now and then in Firefox in a full run**: on the slide's picture in 6h-5, on the boost's in 8a (a run with the laptop in standby twice), passing in every run alone (33 so far); the cause is unknown (see "6h-5"). Since 8a the pictures that differ are written to the test's folder in `test-results/` (`slide-round-1.png` and so on): look at them before running anything else, since every Playwright run empties `test-results/`.
+- **A slide gains little in wide corners** (9b): 0.01 to 0.29 s in 65 to 90 m corners, where the car is nearly flat out on grip and the boost is the whole gain; seed 20's 65 m corner by 0.01 s, so a weaker boost at 10a would tip it. For check-in 2 (question 4).
+- **The bot's lap with slides touches a wall on seeds 7 (once) and 8 (four times)** (9b), and seed 7's 22 m, 101-degree corner is quicker with the slide but touches the wall at every margin. Recorded, not tested; nothing is respawned. Worth a look by hand at check-in 2.
 - **The drift's look waits for Tane** (check-in 2): tier 3's purple reads lilac at the spray's white-hot heads, and `drive-slide.jpg` and `drive-boost.jpg` are only proposed references.
 - **The chase camera can be cut by a steep slope beside it** (seed 1, sliding onto a hillside, step 6d's pictures): it keeps clear of the ground under it, not beside it. For check-in 2 and step 8 (off the road).
 - **From the chase camera in long meadow grass, the flower dabs look large and busy** (seed 7, 6d's pictures). `render.grass.flowers` has their size; for check-in 2 or M6.3.
@@ -1081,3 +1094,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-21 (Milestone 3, Opus 5.5):** 8c done, which ends step 8. R and the controller's Back go through the simulation (back to the last checkpoint); a short fade to white and back over a respawn, drawn from the simulation's state; no blend or camera swoop across a respawn; the readout shows the place on the lap; `drive.replay` replays packed inputs, and seed 18's drive into the sea gives the same fingerprint on the page as in Node. Pictures of five seeds looked at. Two slow waits given 60 s. 2,299 unit tests pass; all 340 browser tests passed in one run (22.4 minutes). Next: step 9, planned in plan mode first.
 - **2026-11-22 (Milestone 3, Opus 5.5):** Step 9 planned in plan mode and approved (see "Step 9"). 9a done: a bot (`testing/botDriver.ts`) that follows the centre line and brakes for what is coming laps seeds 1 to 20, from the line and flying, with 0 respawns, 0 wall touches and 99.6% or more of each lap on the road (table under "9a"). Found: the brake did nothing at top speed downhill (rule 9 stopped it at top speed); fixed in `speedChange`, test first (Claude's call, decisions). 2,312 unit tests pass; all 340 browser tests passed in one run (22.9 minutes). Next: 9b, the corner proof.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 9b done, the corner proof. The bot slides through the generator's drift corners (45 degrees or more, 90 m or less) and is quicker, cleanly, through all 12 picked corners (three each of hairpin, sweeper, chicane and plain corner, a mountain seed among each kind) and through 176 of the 177 slid corners of seeds 1 to 20; the lap with slides is quicker on all 20 seeds, by 6 to 14%. Saved per corner: hairpins 1.4 s, plain corners 0.7, chicanes 0.4, sweepers 0.2 (middles); seed 20's 65 m corner by only 0.01 s. Four bot habits and a like-for-like comparison came from wall touches on real seeds (decisions). 2,321 unit tests pass; all 340 browser tests passed in one run (21.8 minutes). Nothing drawn changed. Next: 9c.
+- **2026-11-22 (Milestone 3, Opus 5.5):** 9c done, which ends step 9. The bot's lap with slides on seeds 1 and 7, worked out in Node, replayed on the 3D page through `drive.replay` 600 steps at a time, gives the same fingerprint after every chunk in Chromium and Firefox, and finishes the lap there too (`e2e/determinism.spec.ts`). Seen failing first on a deliberate fault, in the chunk that held it. 2,321 unit tests pass; all 344 browser tests passed in one run (22.7 minutes). Nothing drawn changed. Next: check-in 2 with Tane.

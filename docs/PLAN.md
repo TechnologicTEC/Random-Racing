@@ -45,7 +45,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **8c** Respawn on the page
 - [x] **9a** A bot that laps
 - [x] **9b** The bot drifts: the corner proof
-- [ ] **9c** The same lap in every browser
+- [x] **9c** The same lap in every browser
 - [ ] **Check-in 2 with Tane** (questions below)
 - [ ] **10a** Tuning from check-in 2
 - [ ] **10b** Speed, with the car
