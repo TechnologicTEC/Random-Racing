@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
-import { aimDistance, pedalsFor, pointAlong, targetSpeed } from './botDriver';
-import { stadiumLine } from './trackFixtures';
+import type { CornerSection } from '../gen/types';
+import { NO_DRIFT, pathCurve } from '../sim/car/drift';
+import { aimDistance, pedalsFor, pointAlong, slideCorners, stickForCurve, targetSpeed, turnLeft } from './botDriver';
+import { circleLine, stadiumLine } from './trackFixtures';
 
 /** Two 200 m straights joined by half circles of 30 m, sampled about every 2 m. Sample 0 is where a half circle meets a straight; samples 10 to 95 are straight. */
 const line = stadiumLine(200, 30);
@@ -64,5 +66,45 @@ describe('the bot: where it aims and what it presses (step 9a)', () => {
     expect(pedalsFor(21, 20, config)).toEqual({ brake: 0.5 });
     expect(pedalsFor(19.8, 20, config)).toEqual({ throttle: 20 / top });
     expect(pedalsFor(20.4, 20, config)).toEqual({ throttle: 20 / top });
+  });
+});
+
+describe('the bot: drifting where told (step 9b)', () => {
+  const corner = (kind: CornerSection['kind'], turnDegrees: number, minRadius: number): CornerSection => ({
+    type: 'corner', startIndex: 0, sampleCount: 10, length: 20, direction: 'right', turnDegrees, minRadius, meanRadius: minRadius, apexIndex: 5, kind,
+  } as CornerSection);
+
+  it('slides through the corners that turn 45 degrees or more with a radius of 90 m or less, the generator own drift corners', () => {
+    const sections = [corner('hairpin', 180, 24), corner('sweeper', 90, 90), corner('sweeper', 90, 91), corner('chicane', 44, 40), corner('chicane', 45, 40), corner('corner', 60, 50)];
+    expect(slideCorners(sections, config)).toEqual([sections[0], sections[1], sections[4], sections[5]]);
+    expect(config.track.score.driftMinDegrees).toBe(45);
+    expect(config.track.score.driftMaxRadius).toBe(90);
+  });
+
+  it('asks for a slide circle with the stick that gives it, the inverse of pathCurve, either way round', () => {
+    for (const dir of [-1, 1] as const) {
+      const sliding = { ...NO_DRIFT, phase: 'slide' as const, dir };
+      for (let k = -10; k <= 10; k++) {
+        const stick = (k / 10) * dir;
+        expect(stickForCurve(pathCurve(sliding, stick, config.car), dir, config.car)).toBeCloseTo(stick, 9);
+      }
+    }
+  });
+
+  it('holds the stick to full for a circle tighter or wider than a slide can follow', () => {
+    const { tight, wide } = config.car.drift.radius;
+    expect(stickForCurve(2 / tight, 1, config.car)).toBe(1);
+    expect(stickForCurve(2 / tight, -1, config.car)).toBe(-1);
+    expect(stickForCurve(1 / (wide * 2), 1, config.car)).toBe(-1);
+    expect(stickForCurve(-0.1, 1, config.car)).toBe(-1);
+  });
+
+  it('counts the turn left in a corner from the curvature along the line to its end', () => {
+    // A 30 m circle: a whole turn round it, half a turn round half of it, nothing from a sample to itself.
+    const ring = circleLine(30);
+    expect(turnLeft(ring, 0, ring.count)).toBeCloseTo(2 * Math.PI, 2);
+    expect(turnLeft(ring, 10, 10 + ring.count / 2)).toBeCloseTo(Math.PI, 1);
+    expect(turnLeft(ring, ring.count - 5, ring.count + 5)).toBeCloseTo(turnLeft(ring, ring.count - 5, ring.count) + turnLeft(ring, 0, 5), 12);
+    expect(turnLeft(ring, 7, 7)).toBe(0);
   });
 });

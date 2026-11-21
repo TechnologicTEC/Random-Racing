@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 9a, a bot that laps (see "Step 9")
-- **Next:** `docs/PLAN.md`, "The build order": **9b**, the bot drifts: the corner proof (planned and approved 2026-11-22, see "Step 9"). `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
+- **Last finished part:** 9b, the bot drifts: the corner proof (see "Step 9")
+- **Next:** `docs/PLAN.md`, "The build order": **9c**, the same lap in every browser (planned and approved 2026-11-22, see "Step 9"). `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -30,7 +30,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | Done |
 | 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | Done |
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | Done |
-| 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | 9a done |
+| 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | 9a, 9b done |
 | | **Check-in 2 with Tane:** drift feel, with the tuning panel | Feedback | |
 | 10 | Tuning from feedback; `npm run perf` with the car; README, CLAUDE.md and this file; pull request | **Tane's playtest sign-off**, then merge | |
 
@@ -739,7 +739,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | Part | What | Status |
 | --- | --- | --- |
 | 9a | **A bot that laps**: `testing/botDriver.ts`; the brake past top speed | Done |
-| 9b | **The bot drifts: the corner proof** | |
+| 9b | **The bot drifts: the corner proof**: `passCorner`, `bestPass`; the sliding laps | Done |
 | 9c | **The same lap in every browser** | |
 
 ### 9a: a bot that laps
@@ -776,6 +776,80 @@ The laps (seeds 1 to 20, Node; lap 1 from standing 4 m behind the line, lap 2 fl
 The share under 100% is wheels in the air for a step or two over crests, never off the road. The 40 laps take 132 s in one worker (2.4 to 13.3 s a seed; seed 20, the most wooded, slowest).
 
 Tests, seen failing first: `testing/botDriver.test.ts` (8, the speed sum, aiming and pedals, on the missing module); `sim/car/laps.test.ts` (both laps finished, 0 respawns, 0 wall or gate touches, 98% on road or kerb each lap) on the missing module, then on wall touches on seed 1; the new `drive.test.ts` test (the brake at top speed downhill gave -0.02 m/s a step, not -0.33). Every other test passes unchanged, the corner tests included. 2,312 unit tests pass; all 340 browser tests passed in one run (22.9 minutes). Nothing drawn changed.
+
+### 9b: the bot drifts, and the corner proof
+
+**The bot told to slide** (`createBot(world, cfg, { slide: true })`, or `corners` for chosen ones) drifts through the generator's own drift corners, 45 degrees or more with a radius of 90 m or less (`slideCorners`, from `track.score.driftMinDegrees` and `driftMaxRadius`):
+- It presses the button 10 m before the corner, with at least 0.35 of stick into it.
+- In the slide it asks for the circle through the car, along its line of travel, and a point 12 m ahead on the centre line (`stickForCurve`, the inverse of `pathCurve`), with the throttle down.
+- It lets go when 15 degrees of the corner are left (`turnLeft`).
+- It does not brake for a corner it will slide through, and it holds the car's own top speed while a boost runs (`CarState.top`), so it does not brake the boost away.
+
+**What the first runs found in the bot, fixed in the bot (Claude's calls, test code only):**
+- **A slide to the other side pressed too early** (seed 4, a right into a left): the nose was still swinging back, so the press was lost. It now waits for the nose, as 6a makes a player wait.
+- **After a slide was cancelled by a wall** it kept pressing with full stick into the wall until the car was "stuck". It now drives the rest of the corner on grip.
+- **A slide started while the road still turned the other way** (seed 18's 90 m sweeper comes straight out of a 26 m left): a slide curves only its own way, so the car ran off the outside. It now presses before a corner only if the road there is not turning the other way tighter than a 500 m circle.
+- **A slide started heading for the corner's inside edge** (seed 15, carried out of a left into a right) cannot steer back out, even on the widest circle. It now presses only once its own line turns into the corner.
+- **The comparison was not like for like**: the pass without a slide picked the best of three margins (0.9, 1.0, 1.1) while the slide pass kept 0.9, and on seed 20 the next corner, 30 m and inside the 120 m timed, decided it. Both passes now take the best of the three margins for their driving on grip.
+
+**The corner proof** (`passCorner`, `bestPass`, `pickCorners`; `sim/car/cornerProof.test.ts`): the car at rest on the middle of the road 250 m before the corner, timed from 40 m before it to 120 m after it by its place on the lap, between steps. "Clean" is every wheel on road or kerb, nothing touched and no respawn over that stretch. The 12 corners are each kind's tightest, middle and widest by radius, with the middle swapped for a mountain seed's when none of the three is on one. All 12 pass:
+
+| Corner | Seed (relief) | Radius, turn | With the slide: time, exit speed, tier | Best without: time, exit speed | Saved |
+| --- | --- | --- | --- | --- | --- |
+| Hairpin | 6 (hilly) | 22 m, 184 deg | 9.72 s, 27.3 m/s, 3 | 11.12 s, 26.0 m/s | 1.40 s |
+| Hairpin | 1 (mountain) | 38 m, 180 deg | 10.50 s, 27.9 m/s, 3 | 11.78 s, 27.9 m/s | 1.28 s |
+| Hairpin | 15 (flat) | 43 m, 180 deg | 9.71 s, 30.0 m/s, 3 | 10.95 s, 30.0 m/s | 1.24 s |
+| Sweeper | 8 (rolling) | 73 m, 60 deg | 9.05 s, 25.3 m/s, 2 | 9.20 s, 25.4 m/s | 0.15 s |
+| Sweeper | 13 (mountain) | 86 m, 61 deg | 8.35 s, 30.0 m/s, 2 | 8.49 s, 30.0 m/s | 0.14 s |
+| Sweeper | 18 (flat) | 90 m, 84 deg | 10.51 s, 28.0 m/s, 3 | 10.75 s, 27.9 m/s | 0.24 s |
+| Chicane | 8 (rolling) | 22 m, 79 deg | 6.92 s, 25.3 m/s, 1 | 7.70 s, 25.4 m/s | 0.78 s |
+| Chicane | 14 (mountain) | 33 m, 47 deg | 7.05 s, 29.9 m/s, 0 | 7.30 s, 29.9 m/s | 0.25 s |
+| Chicane | 6 (hilly) | 46 m, 66 deg | 7.63 s, 27.4 m/s, 1 | 7.87 s, 27.4 m/s | 0.24 s |
+| Plain corner | 17 (rolling) | 22 m, 78 deg | 6.76 s, 25.0 m/s, 1 | 7.61 s, 25.0 m/s | 0.85 s |
+| Plain corner | 3 (mountain) | 31 m, 72 deg | 6.69 s, 29.9 m/s, 1 | 7.36 s, 29.8 m/s | 0.67 s |
+| Plain corner | 20 (rolling) | 65 m, 48 deg | 7.88 s, 29.4 m/s, 1 | 7.89 s, 29.5 m/s | **0.01 s** |
+
+**Every slid corner of seeds 1 to 20** (177; throwaway code, the same passes):
+
+| Kind | Corners | Quicker with the slide and clean | Time saved: middle (least, most) | Exit speed, with less without: middle (worst) |
+| --- | --- | --- | --- | --- |
+| Hairpin | 25 | 25 | 1.40 s (0.85, 1.68) | 0 (-0.1 m/s) |
+| Sweeper (70 to 90 m) | 11 | 11 | 0.23 s (0.14, 0.29) | 0 (0) |
+| Chicane | 24 | 24 | 0.44 s (0.16, 0.78) | 0 (0) |
+| Plain corner | 117 | 116 | 0.72 s (0.01, 1.31) | 0 (-2.5 m/s) |
+
+- The one that fails is a 22 m, 101-degree corner on seed 7: quicker with the slide at every margin (8.10 to 8.44 s against 8.72 s), but it touches the wall.
+- **For check-in 2:** the slide pays most in tight corners and least in wide ones. A 65 to 90 m corner gains 0.01 to 0.29 s, because the car takes it nearly flat out on grip; there the boost (1.15 times for 0.5 to 1.6 s) is the whole gain. Seed 20's 65 m corner passes by 0.01 s, so a weaker boost or a slower slide at 10a would tip it.
+- The exit speeds are the same with and without, because 120 m after the corner both cars are back at their speed for what comes next.
+
+**The laps with slides** (`sim/car/slidingLaps.test.ts`, one lap from the start line each):
+
+| Seed | On grip (s) | With slides (s) | Wall touches | Respawns | On road or kerb (%) |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 90.62 | 81.65 | 0 | 0 | 99.9 |
+| 2 | 73.63 | 65.60 | 0 | 0 | 99.9 |
+| 3 | 100.98 | 95.30 | 0 | 0 | 99.8 |
+| 4 | 86.32 | 76.80 | 0 | 0 | 99.6 |
+| 5 | 76.43 | 70.68 | 0 | 0 | 99.3 |
+| 6 | 78.80 | 67.82 | 0 | 0 | 99.8 |
+| 7 | 75.05 | 64.98 | 1 | 0 | 98.3 |
+| 8 | 67.60 | 60.50 | 4 | 0 | 95.2 |
+| 9 | 72.88 | 65.27 | 0 | 0 | 99.6 |
+| 10 | 73.58 | 65.85 | 0 | 0 | 99.9 |
+| 11 | 98.57 | 92.35 | 0 | 0 | 100 |
+| 12 | 79.60 | 71.75 | 0 | 0 | 99.0 |
+| 13 | 80.45 | 74.38 | 0 | 0 | 99.0 |
+| 14 | 90.00 | 82.00 | 0 | 0 | 99.4 |
+| 15 | 63.87 | 57.38 | 0 | 0 | 100 |
+| 16 | 81.58 | 70.27 | 0 | 0 | 99.8 |
+| 17 | 77.82 | 72.05 | 0 | 0 | 98.5 |
+| 18 | 82.48 | 72.20 | 0 | 0 | 99.5 |
+| 19 | 76.07 | 67.12 | 0 | 0 | 99.8 |
+| 20 | 80.05 | 70.97 | 0 | 0 | 99.7 |
+
+Quicker on all 20 seeds, by 5.7 to 11.3 s (6 to 14%). The wall touches on seeds 7 and 8 are recorded, not tested, as planned.
+
+Tests, seen failing first on the missing functions (and the sliding lap on the bot that ignored `slide`): `botDriver.test.ts` gains 4 (which corners slide, `stickForCurve` against `pathCurve` both ways, held to full stick, `turnLeft`); `cornerProof.test.ts` (3: three of each kind with a mountain seed, each slid clean, each quicker); `slidingLaps.test.ts` (2: finished on every seed, quicker on all 20). 9a's laps pass unchanged with the bot holding the car's own top speed. 2,321 unit tests pass; all 340 browser tests passed in one run (21.8 minutes). Nothing drawn changed.
 
 ## Working agreements
 
@@ -848,6 +922,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-22 | **The bot drives as a player would, and both passes of a corner take the best of three margins** (9b) | Claude's calls, test code only, for Tane to see. The slide follows the circle through a point 12 m ahead (as the keyboard corner driver), not the plan's curvature-plus-offset rule; it presses only when the road is not turning the other way and its line turns into the corner, waits for the nose before a slide the other way, gives up a corner after a hit. Each was found as a wall touch or a stuck car on a real seed, and none changes the car. The margins: the pass without a slide had its pick of three, the slide pass had one, and the next corner inside the 120 m decided seed 20 |
 | 2026-11-22 | **The brake takes a car on past top speed** (`speedChange`, 9a): above top speed the shed stops at top speed, the brake does not | Claude's call, for Tane to feel at check-in 2. Rule 9 as first written stopped the brake at top speed too, so downhill, where gravity takes the car a hair over top speed every step, the brake did nothing at 30 m/s. Found by step 9a's bot, which then touched walls on 8 of 20 seeds; with the fix, none |
 | 2026-11-21 | **Step 8, Claude's calls:** the place on the lap is taken between the two samples either side (it never steps back); a car far from every sample near its last place is looked for over the whole lap; before any checkpoint a respawn goes to the start line; a respawn's wait cancels any drift and boost; "stuck" counts the throttle or the brake; R gives only the fade back from white | For Tane to judge at check-in 2 (question 7). Details under "Step 8". The hillsides beside mountain roads need no respawn: the car climbs 45% back to the road in 5 s and stands still on it with nothing pressed |
 | 2026-11-20 | **The springs are damped 0.5** (`car.suspension.damping`, was 0.8; 7d) | Tane's choice, from options with the numbers. At 0.8 a kerb's upright face crossed at 30 m/s threw the front wheels up and turned the car 4.2 degrees; a bigger wheel ball fixed that but broke four other tests |
@@ -1005,3 +1080,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-21 (Milestone 3, Opus 5.5):** 8b done: the car is brought back to the last checkpoint passed 1 s after its middle goes 0.5 m under the sea, it nears the map's edge, it has been upside down for 1 s or stuck with a pedal down for 3 s; R does it at once (`sim/respawn.ts`, `sim.respawn`, `checkpointPose`, `CarPhysics.place`). Seed 7 has no open roadside near the sea on the 20 m road, so the sea tests use seeds 9 and 18. The car climbs the 45% grass hillside back to the road in 5 s and never slides down one. 2,292 unit tests pass; all 338 browser tests passed in one run (28.1 minutes). Next: 8c, respawn on the page.
 - **2026-11-21 (Milestone 3, Opus 5.5):** 8c done, which ends step 8. R and the controller's Back go through the simulation (back to the last checkpoint); a short fade to white and back over a respawn, drawn from the simulation's state; no blend or camera swoop across a respawn; the readout shows the place on the lap; `drive.replay` replays packed inputs, and seed 18's drive into the sea gives the same fingerprint on the page as in Node. Pictures of five seeds looked at. Two slow waits given 60 s. 2,299 unit tests pass; all 340 browser tests passed in one run (22.4 minutes). Next: step 9, planned in plan mode first.
 - **2026-11-22 (Milestone 3, Opus 5.5):** Step 9 planned in plan mode and approved (see "Step 9"). 9a done: a bot (`testing/botDriver.ts`) that follows the centre line and brakes for what is coming laps seeds 1 to 20, from the line and flying, with 0 respawns, 0 wall touches and 99.6% or more of each lap on the road (table under "9a"). Found: the brake did nothing at top speed downhill (rule 9 stopped it at top speed); fixed in `speedChange`, test first (Claude's call, decisions). 2,312 unit tests pass; all 340 browser tests passed in one run (22.9 minutes). Next: 9b, the corner proof.
+- **2026-11-22 (Milestone 3, Opus 5.5):** 9b done, the corner proof. The bot slides through the generator's drift corners (45 degrees or more, 90 m or less) and is quicker, cleanly, through all 12 picked corners (three each of hairpin, sweeper, chicane and plain corner, a mountain seed among each kind) and through 176 of the 177 slid corners of seeds 1 to 20; the lap with slides is quicker on all 20 seeds, by 6 to 14%. Saved per corner: hairpins 1.4 s, plain corners 0.7, chicanes 0.4, sweepers 0.2 (middles); seed 20's 65 m corner by only 0.01 s. Four bot habits and a like-for-like comparison came from wall touches on real seeds (decisions). 2,321 unit tests pass; all 340 browser tests passed in one run (21.8 minutes). Nothing drawn changed. Next: 9c.
