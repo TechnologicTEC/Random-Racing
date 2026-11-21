@@ -8,6 +8,7 @@ import { scriptedFingerprint, scriptedInput } from './script';
 import { bankedBend, crestGround, flatGround, hillsideGround, kerbGround, rampGround, stepGround, type TestGround } from '../testing/testGrounds';
 import { createSim, createSimOn, type Sim } from './sim';
 import { startPose } from './start';
+import type { ProgressState } from './track/progress';
 
 /** Seed 42 and seed 7, a hilly seed, have different starts; seed 5 starts on an 8% slope (since the 20 m road of 6h-3; seed 42 did before). */
 const SEEDS = [42, 7, 5];
@@ -251,5 +252,88 @@ describe('scriptedFingerprint', () => {
   it('presses something different as the steps go by', () => {
     const pressed = new Set(Array.from({ length: 600 }, (_, step) => JSON.stringify(scriptedInput(step))));
     expect(pressed.size).toBeGreaterThan(10);
+  });
+});
+
+describe('the place on the lap', () => {
+  const lapLength = (world: WorldResult): number => winner(world).line.length;
+
+  it.each(SEEDS)('seed %i: starts 4 m short of the start line, with the line the next checkpoint', (seed) => {
+    const world = worlds.get(seed)!;
+    const sim = createSim(rapier, world, config);
+    const progress = sim.state().progress!;
+    expect(progress.along).toBeGreaterThan(lapLength(world) - config.sim.start.back - 0.05);
+    expect(progress.along).toBeLessThan(lapLength(world) - config.sim.start.back + 0.05);
+    expect(Math.abs(progress.off)).toBeLessThan(0.05);
+    expect(progress.next).toBe(0);
+    expect(progress.passed).toBe(0);
+    sim.free();
+  });
+
+  it('seed 7: passes the start line, then the first checkpoint, driving down the road', () => {
+    const world = worlds.get(7)!;
+    const sim = createSim(rapier, world, config);
+    const passedAt: number[] = [];
+    let last = sim.state().progress!.passed;
+    for (let step = 0; step < 8 * config.sim.stepsPerSecond; step++) {
+      sim.step(makeInput({ throttle: 1 }));
+      const progress = sim.state().progress!;
+      if (progress.passed !== last) passedAt.push(progress.along);
+      last = progress.passed;
+    }
+    // The start line a metre or so past 0, the next checkpoint about 100 m on.
+    expect(passedAt.length).toBeGreaterThanOrEqual(2);
+    expect(passedAt[0]!).toBeLessThan(1);
+    const second = (1 * lapLength(world)) / Math.round(lapLength(world) / config.sim.progress.every);
+    expect(passedAt[1]!).toBeGreaterThanOrEqual(second);
+    expect(passedAt[1]!).toBeLessThan(second + 1);
+    sim.free();
+  });
+
+  it('is not kept on a plain test ground, which has no lap', () => {
+    const ground = flatGround();
+    const sim = createSimOn(rapier, ground.course, config, ground.start);
+    expect(sim.state().progress).toBeNull();
+    sim.free();
+  });
+
+  it('carries on exactly from a snapshot', () => {
+    const world = worlds.get(7)!;
+    const sim = createSim(rapier, world, config);
+    for (let step = 0; step < 120; step++) sim.step(scriptedInput(step));
+    const saved = sim.snapshot();
+    const atSave = sim.state().progress;
+    for (let step = 120; step < 300; step++) sim.step(scriptedInput(step));
+    const through = sim.hash();
+    const fresh = createSim(rapier, world, config);
+    fresh.restore(saved);
+    expect(fresh.state().progress).toEqual(atSave);
+    for (let step = 120; step < 300; step++) fresh.step(scriptedInput(step));
+    expect(fresh.hash()).toBe(through);
+    sim.free();
+    fresh.free();
+  });
+
+  it('gives a different fingerprint for any difference in the progress alone', () => {
+    const world = worlds.get(7)!;
+    const sim = createSim(rapier, world, config);
+    for (let step = 0; step < 120; step++) sim.step(scriptedInput(step));
+    const saved = sim.snapshot();
+    const base = sim.hash();
+    const progress = saved.progress!;
+    const changes: Array<Partial<ProgressState>> = [
+      { near: progress.near + 1 },
+      { along: progress.along + 0.001 },
+      { off: progress.off + 0.001 },
+      { next: progress.next + 1 },
+      { passed: progress.passed + 1 },
+    ];
+    for (const change of changes) {
+      sim.restore({ ...saved, progress: { ...progress, ...change } });
+      expect(sim.hash(), JSON.stringify(change)).not.toBe(base);
+    }
+    sim.restore(saved);
+    expect(sim.hash()).toBe(base);
+    sim.free();
   });
 });

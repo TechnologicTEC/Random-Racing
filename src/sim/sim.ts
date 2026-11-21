@@ -9,6 +9,7 @@ import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input
 import { createCarPhysics, type BodyMotion, type Touch } from './physics/carBody';
 import type { Rapier } from './physics/rapier';
 import { startPose, type Pose } from './start';
+import { startProgress, stepProgress, type ProgressState } from './track/progress';
 
 /**
  * The simulation of one car on one island. It moves on only when `step` is
@@ -44,6 +45,8 @@ export interface CarState extends BodyMotion, CarReading {
   input: InputRecord;
   /** What the body touched on the last physics step (a wall, the gate, a tree or a rock), or null. */
   touch: Hit;
+  /** The car's place on the lap and the checkpoints it has passed; null on a plain test ground, which has no lap. */
+  progress: ProgressState | null;
 }
 
 /** A saved moment of a simulation. */
@@ -57,6 +60,8 @@ export interface SimSnapshot {
   car: CarMemory;
   /** What the body touched on the last physics step, and the contact's slope, which the car's next step reads. */
   touch: Touch | null;
+  /** The car's place on the lap; null on a plain test ground. */
+  progress: ProgressState | null;
 }
 
 /** Each phase and each thing touched as a number for the fingerprint, in a fixed order. */
@@ -82,6 +87,9 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
   const physics = createCarPhysics(rapier, course, cfg, start);
   const ground = course.kind === 'island' ? { field: course.world.ground, cover: course.world.cover } : null;
   const car = createCar(physics, cfg, surfaceFinder(physics.colliders, ground));
+  // The lap, on an island: its centre line and the road's width along it.
+  const lap = course.kind === 'island' ? { line: course.world.track.candidates[course.world.track.winnerIndex]!.line, width: course.world.road.width } : null;
+  let progress: ProgressState | null = lap && startProgress(lap.line, start.position.x, start.position.z, cfg.sim.progress);
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
   let touch: Touch | null = null;
@@ -96,9 +104,13 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       touch = physics.touching();
       // A hit can spin the body; its turning is held to `bump.spin` at once.
       car.settle(touch);
+      if (lap && progress) {
+        const at = physics.motion().position;
+        progress = stepProgress(progress, lap.line, lap.width, at.x, at.z, cfg.sim.progress);
+      }
       step++;
     },
-    state: () => ({ ...physics.motion(), ...car.read(), step, input, touch: touch?.thing ?? null }),
+    state: () => ({ ...physics.motion(), ...car.read(), step, input, touch: touch?.thing ?? null, progress: progress && { ...progress } }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
       const memory = car.save();
@@ -110,13 +122,15 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
         .numbers([velocity.x, velocity.y, velocity.z, spin.x, spin.y, spin.z])
         .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch?.thing ?? null)])
         .numbers([slope.x, slope.y, slope.z, memory.sinceWall])
+        .numbers(progress ? [1, progress.near, progress.along, progress.off, progress.next, progress.passed] : [0])
         .digest();
     },
-    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch }),
+    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch, progress: progress && { ...progress } }),
     restore(saved) {
       physics.restore(saved.physics);
       car.load(saved.car);
       touch = saved.touch && { thing: saved.touch.thing, normal: { ...saved.touch.normal } };
+      progress = saved.progress && { ...saved.progress };
       step = saved.step;
       input = unpackInput(saved.input);
     },

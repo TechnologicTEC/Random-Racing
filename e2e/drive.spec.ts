@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
@@ -210,10 +211,15 @@ test.describe('drifting on the page', () => {
       await letGo(page);
       pictures.push([slide, await page.screenshot()]);
     }
-    // Failed once in Firefox in a full run (6h-5) and never again in 31 tries: should it fail, the report keeps all four pictures.
+    // Failed in Firefox in two full runs (6h-5, 8a) and passed in every other try: should it fail, the pictures that differ are
+    // written to this test's folder in test-results (the list reporter writes no attachment given only as bytes).
     for (const [j, name] of ['slide', 'boost'].entries()) {
       if (pictures[1]![j]!.equals(pictures[0]![j]!)) continue;
-      for (let k = 0; k < 2; k++) await testInfo.attach(`${name}-round-${k + 1}.png`, { body: pictures[k]![j]!, contentType: 'image/png' });
+      for (let k = 0; k < 2; k++) {
+        const path = testInfo.outputPath(`${name}-round-${k + 1}.png`);
+        writeFileSync(path, pictures[k]![j]!);
+        await testInfo.attach(`${name}-round-${k + 1}.png`, { path, contentType: 'image/png' });
+      }
     }
     expect(pictures[1]![0]!.equals(pictures[0]![0]!), 'the slide drawn the same both times').toBe(true);
     expect(pictures[1]![1]!.equals(pictures[0]![1]!), 'the boost drawn the same both times').toBe(true);

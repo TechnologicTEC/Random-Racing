@@ -1417,6 +1417,24 @@ export interface SimConfig {
   /** The car starts this far behind the start line, in metres, standing on its wheels at its ride height. */
   start: { back: number };
   colliders: ColliderConfig;
+  progress: ProgressConfig;
+}
+
+/**
+ * The car's place on the lap (step 8a): metres along the centre line from the start line, and metres to its right.
+ * Distances in metres.
+ */
+export interface ProgressConfig {
+  /** The place is looked for within this far along the lap, either way, of where it was found on the last step. */
+  window: number;
+  /** If the nearest point found there is further than this from the car, the whole lap is searched instead. */
+  lost: number;
+  /** Checkpoints stand about this far apart: the lap is divided evenly into the nearest whole number of them. */
+  every: number;
+  /** A checkpoint counts only with the car within half the road's width plus this much of the centre line. */
+  margin: number;
+  /** A checkpoint counts only when the place moves forwards by less than this in one step (not a jump to another section). */
+  stride: number;
 }
 
 /** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. */
@@ -2025,6 +2043,9 @@ export const config: GameConfig = {
       // Over the top of the body (0.86 m), so it is always met on an upright face.
       rockPostHeight: 1,
     },
+    // The plan's values (docs/plan/M3-driving.md, step 8). Sections of the lap stand at least 67 m apart centre to centre
+    // on the 20 m road (seed 147, the closest of seeds 1 to 200), so a 40 m window cannot reach the next one.
+    progress: { window: 40, lost: 30, every: 100, margin: 6, stride: 40 },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0 },

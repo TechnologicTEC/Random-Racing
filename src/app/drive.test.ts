@@ -78,6 +78,7 @@ function stateAt(k: number, rotation = { x: 0, y: 0, z: 0, w: 1 }): CarState {
     step: k,
     input: NEUTRAL_INPUT,
     touch: null,
+    progress: { near: k, along: 2 * k, off: 0.1 * k, next: k, passed: k },
   };
 }
 
