@@ -1418,6 +1418,26 @@ export interface SimConfig {
   start: { back: number };
   colliders: ColliderConfig;
   progress: ProgressConfig;
+  respawn: RespawnConfig;
+}
+
+/**
+ * When the car is brought back to the last checkpoint it passed (step 8b), and how soon. Times in seconds, distances
+ * in metres, heights against the sea (height 0).
+ */
+export interface RespawnConfig {
+  /** The wait between what starts a respawn and the car standing at the checkpoint; the pedals and stick do nothing meanwhile. */
+  delay: number;
+  /** The car's middle this far under the sea starts the wait. */
+  waterDepth: number;
+  /** The car's middle this close to the edge of the island's tile starts the wait. */
+  edge: number;
+  /** The car's middle this far under the sea starts the wait whatever is under it (it has fallen through something). */
+  deep: number;
+  /** Roof-up (the up of the car's roof, 1 upright, 0 on its side) under `roofUp` for `time` starts the wait. */
+  flipped: { roofUp: number; time: number };
+  /** The throttle or the brake down, with the car slower than `speed`, for `time` starts the wait. */
+  stuck: { speed: number; time: number };
 }
 
 /**
@@ -2046,6 +2066,8 @@ export const config: GameConfig = {
     // The plan's values (docs/plan/M3-driving.md, step 8). Sections of the lap stand at least 67 m apart centre to centre
     // on the 20 m road (seed 147, the closest of seeds 1 to 200), so a 40 m window cannot reach the next one.
     progress: { window: 40, lost: 30, every: 100, margin: 6, stride: 40 },
+    // The plan's values (docs/plan/M3-driving.md, step 8): the brief's "after about 1 second".
+    respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0 },

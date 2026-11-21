@@ -1,6 +1,7 @@
 import type { PhysicsConfig } from '../config';
 import type { WorldResult } from '../gen/types';
 import { quatFromAxes, type Quat, type Vec3 } from './quat';
+import { checkpointAt } from './track/progress';
 
 /** Where a car is and how it is turned. Its front is its -z side, its right its +x side and its roof its +y side. */
 export interface Pose {
@@ -15,21 +16,42 @@ export interface Pose {
  * springs carry it, so nothing moves when the simulation starts.
  */
 export function startPose(world: WorldResult, cfg: PhysicsConfig): Pose {
+  return poseBehind(world, cfg, 0, cfg.sim.start.back);
+}
+
+/**
+ * Where the car is put back at checkpoint `k` (step 8b): on the centre line where the checkpoint stands, facing along
+ * the lap, tipped with the road, at its ride height. Checkpoint 0 is the start line.
+ */
+export function checkpointPose(world: WorldResult, cfg: PhysicsConfig, k: number): Pose {
+  const { line } = world.track.candidates[world.track.winnerIndex]!;
+  const metres = checkpointAt(line, k, cfg.sim.progress);
+  // The sample at or just past the checkpoint, and the car that little way behind it.
+  const sample = Math.ceil(metres / line.spacing);
+  return poseBehind(world, cfg, sample % line.count, sample * line.spacing - metres);
+}
+
+/**
+ * The car on the centre line `back` metres behind sample `sample` (under one spacing, or a short straight like the
+ * start's), facing along the lap there and tipped with the road, at its ride height: `startPose` with sample 0 made a
+ * parameter, so `startPose` is exactly what it was. The road's height is read between the two samples either side; the
+ * climb from them; the bank at `sample`.
+ */
+export function poseBehind(world: WorldResult, cfg: PhysicsConfig, sample: number, back: number): Pose {
   const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
   const n = line.count;
-  const { back } = cfg.sim.start;
-  // The start line is at sample 0, on a straight, so the road behind it runs straight back.
-  const tx = line.tx[0]!;
-  const tz = line.tz[0]!;
+  // The road behind the sample runs straight back along its direction (the start line is on a straight).
+  const tx = line.tx[sample]!;
+  const tz = line.tz[sample]!;
   // The road's height that far back, read between the two samples either side of it.
   const behind = back / line.spacing;
   const whole = Math.floor(behind);
-  const near = profile.height[(((-whole) % n) + n) % n]!;
-  const far = profile.height[(((-whole - 1) % n) + n) % n]!;
+  const near = profile.height[(((sample - whole) % n) + n) % n]!;
+  const far = profile.height[(((sample - whole - 1) % n) + n) % n]!;
   const roadHeight = near + (far - near) * (behind - whole);
   // How steeply the road climbs there along the lap, and how it is tilted across (banking).
   const climb = (near - far) / line.spacing;
-  const tilt = world.road.cross[0]!;
+  const tilt = world.road.cross[sample]!;
 
   // The car's own directions: forward up the road, right across it, and its roof square to both.
   const forward = unit({ x: tx, y: climb, z: tz });
@@ -45,7 +67,7 @@ export function startPose(world: WorldResult, cfg: PhysicsConfig): Pose {
 
   const above = cfg.car.body.halfHeight + cfg.car.suspension.rideHeight;
   return {
-    position: { x: line.x[0]! - tx * back + up.x * above, y: roadHeight + up.y * above, z: line.z[0]! - tz * back + up.z * above },
+    position: { x: line.x[sample]! - tx * back + up.x * above, y: roadHeight + up.y * above, z: line.z[sample]! - tz * back + up.z * above },
     rotation: quatFromAxes(right, up, { x: -forward.x, y: -forward.y, z: -forward.z }),
   };
 }

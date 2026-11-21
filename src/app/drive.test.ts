@@ -79,6 +79,7 @@ function stateAt(k: number, rotation = { x: 0, y: 0, z: 0, w: 1 }): CarState {
     input: NEUTRAL_INPUT,
     touch: null,
     progress: { near: k, along: 2 * k, off: 0.1 * k, next: k, passed: k },
+    respawn: { waitLeft: 0, flippedFor: 0, stuckFor: 0, why: 'none', placedAt: -1, respawns: k },
   };
 }
 

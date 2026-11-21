@@ -67,6 +67,8 @@ export interface CarPhysics {
   push(impulse: Vec3, at?: Vec3): void;
   /** Twists the body about its middle: a turning impulse, which changes how fast it turns at once and does not move it. */
   twist(impulse: Vec3): void;
+  /** Stands the body at a pose, still: its place and turn set, its speed and spin 0 (a respawn, step 8b). */
+  place(pose: Pose): void;
   /**
    * The solid thing the body is against after the last step: a wall, the gate, a tree or a rock, or null. The
    * ground, the road and the kerbs never count. Read it straight after `step`: a restore leaves it to the simulation.
@@ -157,6 +159,12 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
       else body.applyImpulse(impulse, true);
     },
     twist: (impulse) => body.applyTorqueImpulse(impulse, true),
+    place(pose) {
+      body.setTranslation(pose.position, true);
+      body.setRotation(pose.rotation, true);
+      body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    },
     touching() {
       const own = physics.getCollider(bodyCollider);
       let found: Touch | null = null;

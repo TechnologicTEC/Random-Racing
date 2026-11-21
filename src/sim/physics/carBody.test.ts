@@ -253,3 +253,22 @@ describe('touching on a test ground', () => {
     physics.free();
   });
 });
+
+describe('place', () => {
+  it('stands the body at a pose, still, wherever it was and however it was moving', () => {
+    const ground = flatGround();
+    const physics = createCarPhysics(rapier, ground.course, config, ground.start);
+    physics.push({ x: 300 * 5, y: 300 * 2, z: -300 * 8 });
+    physics.twist({ x: 40, y: 90, z: -20 });
+    for (let i = 0; i < 30; i++) physics.step();
+    const pose = poseOn(ground, 40, -60, { x: 0.6, z: -0.8 }, config);
+    physics.place(pose);
+    const motion = physics.motion();
+    // The physics engine keeps positions as 32-bit numbers.
+    for (const axis of ['x', 'y', 'z'] as const) expect(motion.position[axis]).toBeCloseTo(pose.position[axis], 4);
+    for (const axis of ['x', 'y', 'z', 'w'] as const) expect(motion.rotation[axis]).toBeCloseTo(pose.rotation[axis], 6);
+    expect(motion.velocity).toEqual({ x: 0, y: 0, z: 0 });
+    expect(motion.spin).toEqual({ x: 0, y: 0, z: 0 });
+    physics.free();
+  });
+});

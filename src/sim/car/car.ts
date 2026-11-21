@@ -76,6 +76,13 @@ export interface Car {
    * held, its roll and pitch with the spin about its up, in proportion.
    */
   settle(touch: Touch | null): void;
+  /**
+   * A respawn's wait has begun (rule 7): any drift is cancelled with its charge lost, and any boost ends, so letting go
+   * of the button during the wait gives none. The nose swings back as after any cancel.
+   */
+  halt(): void;
+  /** The car has been put back (a respawn): nothing remembered, as on the start line. */
+  clear(): void;
   /** What the car remembers now. */
   save(): CarMemory;
   /** Goes back to what it remembered at a saved moment. */
@@ -159,6 +166,13 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const turning = Math.sqrt(dot(motion.spin, motion.spin));
       const limit = car.bump.spin;
       if (turning > limit) physics.twist(twistFor(scale(motion.spin, limit / turning - 1), motion.rotation, car));
+    },
+    halt() {
+      drift = { ...drift, phase: 'none', charge: 0, hopLeft: 0, boostLeft: 0, boostTier: 0 };
+    },
+    clear() {
+      drift = NO_DRIFT;
+      sinceWall = again;
     },
     save: () => ({ drift, sinceWall }),
     load(memory) {

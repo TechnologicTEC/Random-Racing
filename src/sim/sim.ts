@@ -8,8 +8,10 @@ import type { Course } from './course';
 import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input';
 import { createCarPhysics, type BodyMotion, type Touch } from './physics/carBody';
 import type { Rapier } from './physics/rapier';
-import { startPose, type Pose } from './start';
-import { startProgress, stepProgress, type ProgressState } from './track/progress';
+import { rotate } from './quat';
+import { NO_RESPAWN, RESPAWN_REASONS, respawnSteps, watchCar, type RespawnState } from './respawn';
+import { checkpointPose, startPose, type Pose } from './start';
+import { checkpointAt, checkpointCount, startProgress, stepProgress, type ProgressState } from './track/progress';
 
 /**
  * The simulation of one car on one island. It moves on only when `step` is
@@ -47,6 +49,8 @@ export interface CarState extends BodyMotion, CarReading {
   touch: Hit;
   /** The car's place on the lap and the checkpoints it has passed; null on a plain test ground, which has no lap. */
   progress: ProgressState | null;
+  /** Bringing the car back: the wait under way, if any, and the last time it was put back. */
+  respawn: RespawnState;
 }
 
 /** A saved moment of a simulation. */
@@ -62,12 +66,15 @@ export interface SimSnapshot {
   touch: Touch | null;
   /** The car's place on the lap; null on a plain test ground. */
   progress: ProgressState | null;
+  /** Bringing the car back. */
+  respawn: RespawnState;
 }
 
 /** Each phase and each thing touched as a number for the fingerprint, in a fixed order. */
 const PHASES = ['none', 'hop', 'slide'] as const;
 const TOUCHES: readonly Hit[] = [null, 'wall', 'gate', 'tree', 'rock'];
 const NO_SLOPE = { x: 0, y: 0, z: 0 };
+const UP = { x: 0, y: 1, z: 0 };
 
 /**
  * Starts a simulation: the island's ground, road, walls, gate, trees and rocks
@@ -82,35 +89,91 @@ export function createSim(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig
 /**
  * Starts a simulation on any course, with the car at rest wherever it is put.
  * The game uses `createSim`; tests of the handling use this with plain grounds.
+ *
+ * A respawn puts the car at the last checkpoint it passed. Before it has passed one it goes `home`: on an island the
+ * start pose behind the start line unless another is given, on a plain test ground the pose it started at unless
+ * another is given (a test of landing upside down starts the car upside down, and wants it back on its wheels).
  */
-export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose): Sim {
+export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose, home?: Pose): Sim {
   const physics = createCarPhysics(rapier, course, cfg, start);
   const ground = course.kind === 'island' ? { field: course.world.ground, cover: course.world.cover } : null;
   const car = createCar(physics, cfg, surfaceFinder(physics.colliders, ground));
   // The lap, on an island: its centre line and the road's width along it.
   const lap = course.kind === 'island' ? { line: course.world.track.candidates[course.world.track.winnerIndex]!.line, width: course.world.road.width } : null;
   let progress: ProgressState | null = lap && startProgress(lap.line, start.position.x, start.position.z, cfg.sim.progress);
+  const homePose = home ?? (course.kind === 'island' ? startPose(course.world, cfg) : start);
+  // Half the width of the island's tile, for the map's edge; null on a plain test ground, which has no sea.
+  const tile = course.kind === 'island' ? -course.world.ground.origin : null;
+  const rules = cfg.sim.respawn;
+  const waits = respawnSteps(rules, cfg.sim.stepsPerSecond);
+  let respawn: RespawnState = NO_RESPAWN;
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
   let touch: Touch | null = null;
 
+  /** Puts the car at the last checkpoint passed, or home before any: still, remembering nothing, its place on the lap there. */
+  function putBack(): void {
+    if (course.kind === 'island' && lap && progress && progress.passed > 0) {
+      const n = checkpointCount(lap.line, cfg.sim.progress);
+      const last = (progress.next - 1 + n) % n;
+      const metres = checkpointAt(lap.line, last, cfg.sim.progress);
+      physics.place(checkpointPose(course.world, cfg, last));
+      progress = { ...progress, near: Math.ceil(metres / lap.line.spacing) % lap.line.count, along: metres, off: 0 };
+    } else {
+      physics.place(homePose);
+      if (lap) progress = startProgress(lap.line, homePose.position.x, homePose.position.z, cfg.sim.progress);
+    }
+    car.clear();
+    touch = null;
+    respawn = { ...NO_RESPAWN, placedAt: step, respawns: respawn.respawns + 1 };
+  }
+
   return {
     step(next) {
+      // R, on the step it goes down: the car is put back at once, wait or no wait.
+      const reset = next.reset === 1 && input.reset === 0;
       input = next;
+      let waiting = respawn.waitLeft > 0;
+      if (waiting) respawn = { ...respawn, waitLeft: respawn.waitLeft - 1 };
+      const placing = reset || (waiting && respawn.waitLeft === 0);
+      if (placing) {
+        putBack();
+        waiting = false;
+      }
+      // While waiting, and on the step the car is put back, nothing the driver presses acts.
+      const driven = waiting || placing ? NEUTRAL_INPUT : next;
       // The car's own pushes first, from where it is now; then the physics moves everything on.
-      car.step(next, touch);
+      car.step(driven, touch);
       physics.step();
       // What the body is against now: the car's next step reads it (a hit cancels a drift; a wall turns and pushes the car).
       touch = physics.touching();
       // A hit can spin the body; its turning is held to `bump.spin` at once.
       car.settle(touch);
-      if (lap && progress) {
-        const at = physics.motion().position;
-        progress = stepProgress(progress, lap.line, lap.width, at.x, at.z, cfg.sim.progress);
+      if (!waiting) {
+        const motion = physics.motion();
+        const { position, velocity } = motion;
+        if (lap && progress) progress = stepProgress(progress, lap.line, lap.width, position.x, position.z, cfg.sim.progress);
+        const seen = {
+          position,
+          roofUp: rotate(motion.rotation, UP).y,
+          speed: Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z),
+          pedal: driven.throttle > 0 || driven.brake > 0,
+        };
+        respawn = watchCar(respawn, seen, tile, rules, waits);
+        // A wait has begun: the drift ends with no boost (rule 7).
+        if (respawn.waitLeft > 0) car.halt();
       }
       step++;
     },
-    state: () => ({ ...physics.motion(), ...car.read(), step, input, touch: touch?.thing ?? null, progress: progress && { ...progress } }),
+    state: () => ({
+      ...physics.motion(),
+      ...car.read(),
+      step,
+      input,
+      touch: touch?.thing ?? null,
+      progress: progress && { ...progress },
+      respawn: { ...respawn },
+    }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
       const memory = car.save();
@@ -123,14 +186,16 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
         .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch?.thing ?? null)])
         .numbers([slope.x, slope.y, slope.z, memory.sinceWall])
         .numbers(progress ? [1, progress.near, progress.along, progress.off, progress.next, progress.passed] : [0])
+        .numbers([respawn.waitLeft, respawn.flippedFor, respawn.stuckFor, RESPAWN_REASONS.indexOf(respawn.why), respawn.placedAt, respawn.respawns])
         .digest();
     },
-    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch, progress: progress && { ...progress } }),
+    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch, progress: progress && { ...progress }, respawn: { ...respawn } }),
     restore(saved) {
       physics.restore(saved.physics);
       car.load(saved.car);
       touch = saved.touch && { thing: saved.touch.thing, normal: { ...saved.touch.normal } };
       progress = saved.progress && { ...saved.progress };
+      respawn = { ...saved.respawn };
       step = saved.step;
       input = unpackInput(saved.input);
     },

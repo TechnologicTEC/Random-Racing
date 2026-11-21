@@ -41,7 +41,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **7c** Trees and rocks
 - [x] **7d** Kerbs
 - [x] **8a** Place on the lap and checkpoints
-- [ ] **8b** Respawn
+- [x] **8b** Respawn
 - [ ] **8c** Respawn on the page
 - [ ] **9a** A bot that laps
 - [ ] **9b** The bot drifts: the corner proof
