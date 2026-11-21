@@ -26,7 +26,7 @@ export interface Pedals {
  * what the pedals ask. Worked out from the speed, the pedals and the step's
  * top speed alone, so it keeps nothing from one step to the next.
  *
- * - Above the step's top speed: the car slows by `engine.shed`, or by the brake if that is harder, whatever the pedals, and no further than to top speed (step 6, rule 9).
+ * - Above the step's top speed: the car slows by `engine.shed`, whatever the pedals, and no further than to top speed (step 6, rule 9); or by the brake if that is harder, which takes it on past top speed (step 9a).
  * - A boost: the throttle counts as right down, and the engine pushes at `boost.accel` with no easing, never past top speed. The brake still brakes.
  * - No pedal: the car coasts, and is held once it is all but still (`restChange`).
  * - Throttle: the engine makes for top speed, easing off as it nears it. If the car is rolling backwards it is braked first.
@@ -46,7 +46,8 @@ export function speedChange(speed: number, pull: number, pedals: Pedals, share: 
   if (share === 0) return 0;
   const { engine, brake, reverse } = car;
   const coming = speed + pull;
-  if (coming > top) return Math.max(top - coming, 0 - Math.max(engine.shed, brake.strength * pedals.brake) * dt * share);
+  // The shed stops at top speed; the brake does not (step 9a: downhill, gravity takes the car a hair over top speed every step).
+  if (coming > top) return Math.min(Math.max(top - coming, 0 - engine.shed * dt * share), 0 - brake.strength * pedals.brake * dt * share);
   if (pedals.brake > 0) {
     if (coming > brake.holdBelow) return within(0 - coming, brake.strength * pedals.brake * dt * share);
     // Reversing is driving, seen backwards.

@@ -25,7 +25,7 @@ import type { Rapier } from '../sim/physics/rapier';
 import { quatFromAxes } from '../sim/quat';
 import { createSimOn, type CarState, type Sim } from '../sim/sim';
 import type { Pose } from '../sim/start';
-import { stickToward, type MapPoint } from './lineDriver';
+import { cornerLimit, stickToward, type MapPoint } from './lineDriver';
 
 /** Where a car stands on the middle of the road at one sample of the lap, facing along it and tipped with the road, at its ride height. */
 export function lapPose(world: WorldResult, index: number, cfg: PhysicsConfig): Pose {
@@ -69,9 +69,6 @@ export interface Lane {
   limit?(reach: number, cfg: PhysicsConfig): number;
 }
 
-/** How hard a test driver brakes for what is coming, as a share of the brake's strength, and how close to the grip's limit it corners (step 9a's bot). */
-const BRAKE_SHARE = 0.7;
-const CORNER_SHARE = 0.9;
 /** How far ahead a test driver looks for corners to brake for, in metres. */
 const LOOK_FOR_CORNERS = 80;
 
@@ -119,17 +116,7 @@ export function roadLane(world: WorldResult, from: number, cfg: PhysicsConfig): 
       const i = wrap(progress + Math.round(metres / ds));
       return { x: line.x[i]!, z: line.z[i]! };
     },
-    limit(reach, cfg) {
-      let speed = Infinity;
-      const braking = 2 * BRAKE_SHARE * cfg.car.brake.strength;
-      for (let k = 0; k * ds <= reach; k++) {
-        const curve = Math.abs(line.curvature[wrap(progress + k)]!);
-        if (curve === 0) continue;
-        const allowed = Math.sqrt((CORNER_SHARE * cfg.car.steer.sideForce) / curve);
-        speed = Math.min(speed, Math.sqrt(allowed * allowed + braking * k * ds));
-      }
-      return speed;
-    },
+    limit: (reach, cfg) => cornerLimit(line, progress, reach, cfg.car),
   };
 }
 

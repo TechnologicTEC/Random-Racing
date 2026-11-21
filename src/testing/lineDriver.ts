@@ -9,11 +9,39 @@
  * inputs in the browsers).
  */
 import type { CarConfig } from '../config';
+import type { CenterLine } from '../gen/types';
 import type { BodyMotion } from '../sim/physics/carBody';
 import { turnWanted } from '../sim/car/steer';
 import { rotate } from '../sim/quat';
 
 const FORWARD = { x: 0, y: 0, z: -1 };
+
+/** How hard a test driver brakes for what is coming, as a share of the brake's strength (step 9a's bot). */
+export const BRAKE_SHARE = 0.7;
+/** How close to the steering's grip a test driver corners, unless told otherwise (step 9a's bot). */
+export const CORNER_SHARE = 0.9;
+
+/**
+ * The speed a driver on grip may have now to take what is coming within `reach` metres of sample `from` (counted on
+ * without wrapping), braking in time: at distance `d` a corner of curvature `c` allows `sqrt(margin * sideForce / |c|)`,
+ * and to brake down to that at `BRAKE_SHARE` of the brake the car may have `sqrt(allowed^2 + 2 * share * strength * d)`
+ * now. The least of those; none (Infinity) with no corner in reach. Samples `skip` names are left out.
+ */
+export function cornerLimit(line: CenterLine, from: number, reach: number, car: CarConfig, margin = CORNER_SHARE, skip?: (sample: number) => boolean): number {
+  const n = line.count;
+  const ds = line.spacing;
+  const braking = 2 * BRAKE_SHARE * car.brake.strength;
+  let speed = Infinity;
+  for (let k = 0; k * ds <= reach; k++) {
+    const i = (((from + k) % n) + n) % n;
+    if (skip?.(i)) continue;
+    const curve = Math.abs(line.curvature[i]!);
+    if (curve === 0) continue;
+    const allowed = Math.sqrt((margin * car.steer.sideForce) / curve);
+    speed = Math.min(speed, Math.sqrt(allowed * allowed + braking * k * ds));
+  }
+  return speed;
+}
 
 /** A point on the map. */
 export interface MapPoint {

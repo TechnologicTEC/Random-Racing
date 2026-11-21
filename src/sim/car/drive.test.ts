@@ -81,6 +81,16 @@ describe('speedChange', () => {
       expect(shed).toBeGreaterThan(coast);
     });
 
+    it('lets the brake take the car on past top speed: at top speed downhill, the brake slows it by its full strength (step 9a)', () => {
+      // Found by step 9a's bot: downhill, gravity takes the car a hair over top speed every step, and "no further than to
+      // top speed" held a car with the brake right down at 30 m/s into a hairpin.
+      expect(speedChange(topSpeed, 0.02, brake(), 1, TOP, false, car, dt)).toBeCloseTo(-strength * dt, 12);
+      expect(speedChange(topSpeed + 0.01, FLAT, brake(0.5), 1, TOP, false, car, dt)).toBeCloseTo((-strength * dt) / 2, 12);
+      // While a boost runs too, and with fewer wheels down, less.
+      expect(speedChange(TOP * car.boost.speed, 0.02, brake(), 1, TOP * car.boost.speed, true, car, dt)).toBeCloseTo(-strength * dt, 12);
+      expect(speedChange(topSpeed, 0.02, brake(), 0.5, TOP, false, car, dt)).toBeCloseTo((-strength * dt) / 2, 12);
+    });
+
     it('below top speed nothing changes: half throttle at 20 m/s still eases off gently', () => {
       expect(speedChange(20, FLAT, throttle(0.5), 1, TOP, false, car, dt)).toBeCloseTo(Math.max(-coast, (accel * -5) / (topSpeed * taper)) * dt, 12);
       expect(speedChange(20, FLAT, throttle(0.5), 1, TOP, false, car, dt)).toBeGreaterThanOrEqual(-coast * dt);

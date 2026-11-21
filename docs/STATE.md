@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 8c, respawn on the page (see "Step 8"). **This ends step 8**
-- **Next:** `docs/PLAN.md`, "The build order": **step 9**, the bot and the corner proof, **planned in plan mode first**. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
+- **Last finished part:** 9a, a bot that laps (see "Step 9")
+- **Next:** `docs/PLAN.md`, "The build order": **9b**, the bot drifts: the corner proof (planned and approved 2026-11-22, see "Step 9"). `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -30,7 +30,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 6 | **Drift and boost.** The drift rules, hop, slide, tiers, boost; sparks in the tier's colour and a simple boost flame; camera swing and wider view; tuning panel | Tests: every rule in the brief's drift list; boost raises top speed for exactly its time | Done |
 | 7 | **Surfaces and bumps.** Off-road slowdown, gentle wall bounce (cancels a drift, keeps most speed along the wall), trees and rocks, kerbs | Tests: 40% slower on grass and sand; a 30° wall hit keeps the car moving and upright; a tree stops it without flipping | Done |
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | Done |
-| 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | |
+| 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | 9a done |
 | | **Check-in 2 with Tane:** drift feel, with the tuning panel | Feedback | |
 | 10 | Tuning from feedback; `npm run perf` with the car; README, CLAUDE.md and this file; pull request | **Tane's playtest sign-off**, then merge | |
 
@@ -732,6 +732,51 @@ Pictures looked at (a throwaway spec, Chromium, seeds 18, 9, 20, 2 and 8; six mo
 
 **Step 8 is done.** What it gives Tane at check-in 2: drive into the sea or off the map, roll the car or get it stuck, and it comes back at the last checkpoint after a second with a white fade; R does it at once; the readout shows the place on the lap.
 
+## Step 9: the bot and the corner proof (2026-11-22)
+
+Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-1f6b-random-toasty-unicorn-of-085b5350-b85d-4259-87b7-a9865d32c7c3.md`). The rules and tests are those of `docs/plan/M3-driving.md`, "Step 9".
+
+| Part | What | Status |
+| --- | --- | --- |
+| 9a | **A bot that laps**: `testing/botDriver.ts`; the brake past top speed | Done |
+| 9b | **The bot drifts: the corner proof** | |
+| 9c | **The same lap in every browser** | |
+
+### 9a: a bot that laps
+
+- **The bot** (`src/testing/botDriver.ts`, test code): `createBot(world, cfg, { margin })` gives what to press from the car's state. It steers with `stickToward` at the point on the centre line `6 + 0.5 x speed` m ahead of its place on the lap (`pointAlong`, between the samples). It brakes for what is coming within 80 m (`targetSpeed`): a corner allows `sqrt(0.9 x sideForce x radius)`, and braking at 0.7 of the brake brings it there in time. More than 0.5 m/s under that it presses right down, more than 0.5 m/s over it brakes (by how far over, a whole press for 2 m/s), and between it holds the throttle at the target's share of top speed. The sum is `cornerLimit` in `testing/lineDriver.ts`, now shared with the corner driver's `roadLane.limit` (same numbers, same results).
+- **`lapRun(rapier, world, cfg, bot, laps)`** drives laps from the start line; a lap ends when the car passes the line again having passed every checkpoint. It gives each lap's time, average speed, share of steps with four wheels on road or kerb, and seconds with any wheel off it; wall and gate touches, tree and rock touches, respawns, and every step's packed input.
+- **Found: the brake did nothing at top speed downhill** (`speedChange` in `sim/car/drive.ts`). Rule 9 (6b) slows a car above top speed by the shed or the brake, "no further than to top speed". Downhill, gravity takes the car a hair over top speed every step, so a car with the brake right down stayed at 30 m/s. The bot first touched walls on 8 of the 20 seeds, each time arriving at a corner at 30 m/s with the brake held for over a second (seed 5: 90 steps of full brake into a 22 m hairpin, still at 30 m/s). **Now the shed stops at top speed and the brake does not** (the plan's rule changed in the same commit; Claude's call, for Tane to feel at check-in 2: braking at top speed down a hill now works). On the flat, and with no brake, nothing changes. With it fixed, every lap below is clean with no change to the bot.
+
+The laps (seeds 1 to 20, Node; lap 1 from standing 4 m behind the line, lap 2 flying):
+
+| Seed | Relief | Lap (m) | Lap 1 (s) | Flying lap (s) | Average (km/h) | Four wheels on road or kerb (%) | Off the road (s) | Wall touches | Tree and rock touches | Respawns |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | mountain | 2,385 | 90.6 | 88.8 | 95 / 97 | 99.9 / 99.9 | 0 | 0 | 0 | 0 |
+| 2 | flat | 1,916 | 73.6 | 71.8 | 94 / 96 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 3 | mountain | 2,740 | 101.0 | 99.2 | 98 / 99 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 4 | rolling | 2,246 | 86.3 | 84.4 | 94 / 96 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 5 | hilly | 2,049 | 76.4 | 74.7 | 97 / 99 | 99.9 / 99.9 | 0 | 0 | 0 | 0 |
+| 6 | hilly | 1,998 | 78.8 | 77.0 | 91 / 93 | 99.7 / 99.8 | 0 | 0 | 0 | 0 |
+| 7 | hilly | 1,888 | 75.0 | 73.3 | 91 / 93 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 8 | rolling | 1,650 | 67.6 | 65.7 | 88 / 90 | 100 / 99.7 | 0 | 0 | 0 | 0 |
+| 9 | flat | 1,910 | 72.9 | 71.0 | 94 / 97 | 99.9 / 99.6 | 0 | 0 | 0 | 0 |
+| 10 | hilly | 1,901 | 73.6 | 71.7 | 93 / 96 | 100 / 99.9 | 0 | 0 | 0 | 0 |
+| 11 | mountain | 2,689 | 98.6 | 96.6 | 98 / 100 | 99.7 / 99.8 | 0 | 0 | 0 | 0 |
+| 12 | mountain | 2,116 | 79.6 | 77.7 | 96 / 98 | 99.9 / 99.7 | 0 | 0 | 0 | 0 |
+| 13 | mountain | 2,141 | 80.5 | 78.7 | 96 / 98 | 99.8 / 99.9 | 0 | 0 | 0 | 0 |
+| 14 | mountain | 2,394 | 90.0 | 88.1 | 96 / 98 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 15 | flat | 1,651 | 63.9 | 62.0 | 93 / 96 | 100 / 99.7 | 0 | 0 | 0 | 0 |
+| 16 | rolling | 2,050 | 81.6 | 79.7 | 90 / 93 | 99.9 / 100 | 0 | 0 | 0 | 0 |
+| 17 | rolling | 2,106 | 77.8 | 75.9 | 97 / 100 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 18 | flat | 2,123 | 82.5 | 80.6 | 93 / 95 | 100 / 99.9 | 0 | 0 | 0 | 0 |
+| 19 | rolling | 1,963 | 76.1 | 74.2 | 93 / 95 | 100 / 100 | 0 | 0 | 0 | 0 |
+| 20 | rolling | 2,074 | 80.0 | 78.2 | 93 / 95 | 99.8 / 100 | 0 | 0 | 0 | 0 |
+
+The share under 100% is wheels in the air for a step or two over crests, never off the road. The 40 laps take 132 s in one worker (2.4 to 13.3 s a seed; seed 20, the most wooded, slowest).
+
+Tests, seen failing first: `testing/botDriver.test.ts` (8, the speed sum, aiming and pedals, on the missing module); `sim/car/laps.test.ts` (both laps finished, 0 respawns, 0 wall or gate touches, 98% on road or kerb each lap) on the missing module, then on wall touches on seed 1; the new `drive.test.ts` test (the brake at top speed downhill gave -0.02 m/s a step, not -0.33). Every other test passes unchanged, the corner tests included. 2,312 unit tests pass; all 340 browser tests passed in one run (22.9 minutes). Nothing drawn changed.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -803,6 +848,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-22 | **The brake takes a car on past top speed** (`speedChange`, 9a): above top speed the shed stops at top speed, the brake does not | Claude's call, for Tane to feel at check-in 2. Rule 9 as first written stopped the brake at top speed too, so downhill, where gravity takes the car a hair over top speed every step, the brake did nothing at 30 m/s. Found by step 9a's bot, which then touched walls on 8 of 20 seeds; with the fix, none |
 | 2026-11-21 | **Step 8, Claude's calls:** the place on the lap is taken between the two samples either side (it never steps back); a car far from every sample near its last place is looked for over the whole lap; before any checkpoint a respawn goes to the start line; a respawn's wait cancels any drift and boost; "stuck" counts the throttle or the brake; R gives only the fade back from white | For Tane to judge at check-in 2 (question 7). Details under "Step 8". The hillsides beside mountain roads need no respawn: the car climbs 45% back to the road in 5 s and stands still on it with nothing pressed |
 | 2026-11-20 | **The springs are damped 0.5** (`car.suspension.damping`, was 0.8; 7d) | Tane's choice, from options with the numbers. At 0.8 a kerb's upright face crossed at 30 m/s threw the front wheels up and turned the car 4.2 degrees; a bigger wheel ball fixed that but broke four other tests |
 | 2026-11-20 | **Rocks the body can reach are upright posts, at least 1 m tall; rocks of 0.2 m or less are not hit. After a hit on a wall, the gate, a tree or a rock the car's turning is held to 6 rad/s** (7c) | Tane's choices, from options with the numbers. As domes, rocks of 0.3 to 1.2 m met at top speed threw the car 0.7 to 5 m up; a trunk clipped off centre spun it at 8 to 10 rad/s, and the body's grip and bounce only made it worse |
@@ -958,3 +1004,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-21 (Milestone 3, Opus 5.5):** Step 8 planned in plan mode and approved (see "Step 8"). 8a done: the car's place on the lap (metres along it, metres right of the centre line) and checkpoints every 100 m or so, passed only in order, forwards, near the road (`sim/track/progress.ts`, `sim.progress`), in the fingerprint and the snapshot. Claude's calls: the place is taken between the samples either side, so it never steps back (the plan's sum did, by up to 4 cm); "far from the line" is judged by distance to the nearest sample; the folded seed tested is 147, 67.5 m between sections on the 20 m road. 2,266 unit tests pass; the browser suite ran with the laptop in standby twice and 7 Firefox tests failed, all of which passed run again alone (see "8a"). Next: 8b, respawn.
 - **2026-11-21 (Milestone 3, Opus 5.5):** 8b done: the car is brought back to the last checkpoint passed 1 s after its middle goes 0.5 m under the sea, it nears the map's edge, it has been upside down for 1 s or stuck with a pedal down for 3 s; R does it at once (`sim/respawn.ts`, `sim.respawn`, `checkpointPose`, `CarPhysics.place`). Seed 7 has no open roadside near the sea on the 20 m road, so the sea tests use seeds 9 and 18. The car climbs the 45% grass hillside back to the road in 5 s and never slides down one. 2,292 unit tests pass; all 338 browser tests passed in one run (28.1 minutes). Next: 8c, respawn on the page.
 - **2026-11-21 (Milestone 3, Opus 5.5):** 8c done, which ends step 8. R and the controller's Back go through the simulation (back to the last checkpoint); a short fade to white and back over a respawn, drawn from the simulation's state; no blend or camera swoop across a respawn; the readout shows the place on the lap; `drive.replay` replays packed inputs, and seed 18's drive into the sea gives the same fingerprint on the page as in Node. Pictures of five seeds looked at. Two slow waits given 60 s. 2,299 unit tests pass; all 340 browser tests passed in one run (22.4 minutes). Next: step 9, planned in plan mode first.
+- **2026-11-22 (Milestone 3, Opus 5.5):** Step 9 planned in plan mode and approved (see "Step 9"). 9a done: a bot (`testing/botDriver.ts`) that follows the centre line and brakes for what is coming laps seeds 1 to 20, from the line and flying, with 0 respawns, 0 wall touches and 99.6% or more of each lap on the road (table under "9a"). Found: the brake did nothing at top speed downhill (rule 9 stopped it at top speed); fixed in `speedChange`, test first (Claude's call, decisions). 2,312 unit tests pass; all 340 browser tests passed in one run (22.9 minutes). Next: 9b, the corner proof.
