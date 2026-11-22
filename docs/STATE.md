@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished part:** 10a-2, the tests that follow the config (see "Step 10")
-- **Next:** `docs/PLAN.md`, "The build order": **10a-3**, measure at 53 m/s, then Tane picks. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Next:** `docs/PLAN.md`, "The build order": **10a-3**: the grid is measured (see "10a-3"); **waiting for Tane's picks**, then the bots taught to brake into tight slides and measured again. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -907,6 +907,43 @@ Every test that was sized for 30 m/s now works its sizes out from the config. **
 
 Tests: `simDriving.test.ts` (6, seen failing on the missing functions) and `lineDriver.test.ts` gains 1 (`reachFor`, seen failing). 2,338 unit tests pass.
 
+### 10a-3: measured at 53 m/s (2026-11-22)
+
+Throwaway code, Node, seeds 1 to 20; acceleration unchanged. "Downforce" is a trial only (not in the code): a pull towards the ground of 0.0025 per metre times the speed squared while any wheel is down, enough to keep the wheels down over a 200 m crest at 61 m/s (about 7 m/s² extra at 53).
+
+**Stage 1, the bot's laps on grip** (one lap from the line each; `steer.sideForce` with `grip.side` 7 above it):
+
+| Top speed, steering grip | Downforce | Laps finished | Respawns | Wall, tree, rock touches | Mean lap (s) | Mean average speed (km/h) | Crests the car leaves the ground on (longest in the air) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 30 m/s, 15 (today) | no | 20 | 0 | 0 | 80.3 | 94 | none |
+| 53 m/s, 15 | no | 20 | 0 | 0 | 68.9 | 110 | 3 (seeds 1, 3, 11; 0.6 s) |
+| 53 m/s, 15 | yes | 20 | 0 | 0 | 68.9 | 110 | none |
+| 53 m/s, 18 | no / yes | 20 | 0 | 0 | 65.1 / 65.0 | 116 | 3 (0.7 s) / none |
+| 53 m/s, 20 | no / yes | 20 | 0 | 0 | 63.0 | 120 | 4 (0.9 s) / none |
+| 53 m/s, 22 | no / yes | 20 | 0 | 0 | 61.2 | 123 | 5 (seeds 1, 3, 11, 13; 1.1 s) / none |
+
+Every lap on grip is clean at 53 m/s. Full stick at 53 m/s turns 187, 156, 140 and 128 m at steering grip 15, 18, 20, 22. Downforce changes no lap time.
+
+**Stage 2, slides** (downforce on; the sliding laps, the 12-corner proof, and `corners.test.ts`'s two keyboard drivers). Start and end speeds as shares of top speed (21 and 16 m/s) or at today's 12 and 9 m/s gave the same within a corner or two, so only the shares are shown; slides ending "too slow" were 1 to 3 in 20 laps either way.
+
+| Steering grip, drift grip | Sliding laps: finished, seeds with a wall touch, touches, respawns | Corner proof: quicker and clean (of 12) | Careful driver: corners held (bar 95%), drive-outs clean (bar 95%) | Half-second driver: hairpins, plain, chicanes (bars 90, 90, 85%) |
+| --- | --- | --- | --- | --- |
+| 30 m/s today (step 9) | 20, 2, 5, 0 | 12 | 97%, 97% | 100, 96, 87% |
+| 15, 60 | 20, 20, 133, 4 | 8 | 75%, 82% | 53, 63, 90% |
+| 15, 100 | 19, 19, 148, 4 | 9 | 94%, 78% | 63, 80, 87% |
+| 20, 60 | 20, 19, 105, 3 | 9 | 77%, 89% | 48, 66, 85% |
+| 20, 100 | 20, 19, 88, 3 | 9 | 92%, 87% | 52, 79, 88% |
+| 20, 135 | 20, 19, 76, 3 | 9 | 92%, 87% | 52, 79, 88% |
+| 25, 100 | 20, 18, 66, 1 | 10 | 94%, 94% | 50, 78, 90% |
+| 25, 135 | 20, 17, 57, 2 | 10 | 94%, 94% | 50, 78, 90% |
+| 30, 100 | 20, 18, 59, 3 | 10 | 96%, 95% | 44, 81, 95% |
+| 30, 135 | 20, 17, 56, 1 | 10 | 96%, 95% | 44, 81, 95% |
+
+- **No setting passes step 9's bars at 53 m/s.** The corner proof's failures are the three 22 m corners (a hairpin on seed 6 at steering grip 15 to 20, a chicane on seed 8, a plain corner on seed 17).
+- **When the sliding bot touches walls** (steering grip 20, drift grip 100): 69 of 89 touches in the 3 s after a slide ends, at 43 m/s (median); 2 during a slide; 3 while boosting; 15 on grip at 9 m/s (median). The car leaves the corner fast and a little wide, and full stick on grip at 45 m/s turns only a 100 m circle (60 m at 30 m/s today). A stronger steering grip is the lever: at 25 to 30 the careful driver passes again.
+- **Both test drivers slide into a corner at whatever speed they carry** (the 9b bot does not brake for a corner it slides through; the corner driver's run-up now reaches about 50 m/s). At 30 m/s that was right; at 53 m/s a player would brake before a hairpin. The half-second driver's hairpins (44 to 63%) and the sliding laps' touches point there.
+- Slide ends by reason over the 20 sliding laps: about 175 let go, 1 or 2 walls, 1 to 3 too slow, a few on a respawn.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -1144,3 +1181,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-22 (Milestone 3, Opus 5.5):** Check-in 2 with Tane. Everything works. Tane wants the top speed raised to about 190 km/h (53 m/s, tried on the tuning panel), acceleration unchanged, a bit more grip or turning where that speed is too much, and found a drift cancelling mid-corner with no brake pressed. Measured: a slide on the flat holds at 53 m/s, but cannot hold the 28 m circle above about 41 m/s (`drift.grip`), so the likeliest cancel is a brush of something solid. Docs only. Next: 10a, planned in plan mode first.
 - **2026-11-22 (Milestone 3, Opus 5.5):** Step 10 planned in plan mode and approved (see "Step 10"; 10a split in four parts). 10a-1 done: the drift state names why the last slide ended (`ended`, `ends`, in the fingerprint and the snapshot), and the readout says "drift cancelled: hit a wall" and so on for 2 s. Pictures on seeds 1, 7 and 42 looked at. 2,331 unit tests pass; all 346 browser tests passed in one run (23.7 minutes). Next: 10a-2, the tests that follow the config.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-2 done: every test sized for 30 m/s works its sizes out from the config (`runUp`, `distanceIn`, `circleAt` in `testing/simDriving.ts`, `reachFor` in `testing/lineDriver.ts`; the grounds, hold times, circles, the bots' look-ahead and run-ups), each the larger of its old size and the config's, so nothing moves at 30 m/s. Four speed-tied tests left for 10a-4. 2,338 unit tests pass; all 346 browser tests passed in one run (23.1 minutes). Next: 10a-3, measure at 53 m/s.
+- **2026-11-22 (Milestone 3, Opus 5.5):** 10a-3 measured (throwaway code; table under "10a-3"): at 53 m/s the bot laps every seed clean on grip at any steering grip, and a downforce trial stops the car leaving the ground over crests at no cost in lap time; but no setting tried passes step 9's slide bars, mostly because the car leaves a slide too fast for its steering on grip and the test drivers slide in without braking. Docs only. Next: Tane picks; then the bots brake into tight slides and the bars are measured again.
