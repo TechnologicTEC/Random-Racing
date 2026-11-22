@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished part:** 10a-5, the cause of the throws found and the options measured (see "Step 10", "10a-5"): on islands the grass is 25 cm below the road and the body rides 26 cm up, so the kerb's skirt and the road's edge are steps at body height
-- **Next:** **Tane picks** from 10a-5's tables (the kerb fix, the hit options, the tiers). Then **10a-6** (hits) and **10a-7** (tiers), tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Next:** **10a-6**, hits and kerbs with Tane's picks (the box from 0.15 m up, the damper cap of 4 m/s, spin 3 and lift 0.5 for 0.25 s after a hit), then **10a-7**, tiers 0.6, 1.2 and 1.8 s, tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -1123,6 +1123,8 @@ On the real kerbs of seeds 7, 42 and 1 with the 0.15 m box and the damper cap, e
 - The bot's 177 slides: shortest 0.5 s, a quarter under 1.07 s, middle 1.22 s, a quarter over 1.95 s, longest 5.3 s. A hand on a keyboard slides shorter than the bot through chicanes and plain corners.
 - Touches within 3 s of a boost starting: 2 in every option (so the earlier boosts did not put the bot into walls). With Tane's tiers seed 8's lap is 3.4 s quicker (46.67 to 43.22 s); every seed is quicker.
 - With Tane's tiers set in the config (then put back): the keyboard corner drivers, the corner proof and the sliding laps all pass. Two `drifting.test.ts` tests fail because they are sized to the old tier times (a 2.1 s slide chosen to be tier 2; the drawing state at a fixed step), to be made to read the config in 10a-7.
+
+**Tane's picks (2026-11-22):** the body's collision box starts **0.15 m above its drawn floor** and the damper counts closing speed **up to 4 m/s**; after a hit on a wall, the gate, a tree or a rock the car's turning is held to **3 rad/s for 0.25 s** (was 6, on the touching steps only) and its upward speed to **0.5 m/s** for the same time; boost tiers **0.6, 1.2 and 1.8 s** of sliding (was 1, 2, 3), boosts unchanged (0.5, 1.0, 1.6 s). 10a-6 builds the first three, 10a-7 the tiers.
 
 **One mistake on the way:** the worktree for `34e4184` had a junction to the project's `node_modules`, and removing the worktree followed it and emptied `node_modules`. `npm ci` restored exactly the pinned versions from the lockfile; the type-check and tests ran clean after it. Nothing else was touched.
 
