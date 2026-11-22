@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { generateWorld } from '../../gen';
 import { sampleField, worldX, worldZ } from '../../gen/world/heightfield';
-import { hold } from '../../testing/simDriving';
+import { hold, runUp } from '../../testing/simDriving';
 import { grassGround, poseOn } from '../../testing/testGrounds';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { createSimOn, type CarState } from '../sim';
@@ -38,6 +38,9 @@ describe('off the road, on the grass test ground', () => {
     expect(fastest).toBeLessThanOrEqual(grassTop * 1.01);
   });
 
+  // From top speed to 1 m/s over the grass top speed at the shed rate, and a sixth of a second: 1.5 s and 19 m/s at 30 m/s.
+  const shedTime = (topSpeed - grassTop) / car.engine.shed + 1 / 6;
+
   it('comes down from 30 m/s on the road to under 19 m/s within 1.5 s of all four wheels reaching the grass', () => {
     const sim = createSimOn(rapier, ground.course, config, ground.start);
     let reached = -1;
@@ -45,16 +48,16 @@ describe('off the road, on the grass test ground', () => {
     // The speed when the first wheel reaches the grass: the front wheels start the slowdown a moment before the rear ones get there.
     let atGrass = 0;
     let after = Infinity;
-    hold(sim, THROTTLE, 20, (state) => {
+    hold(sim, THROTTLE, Math.max(20, runUp(car, 0.99).seconds + (ground.grassFrom + 200) / topSpeed), (state) => {
       steps++;
       if (atGrass === 0 && state.wheels.some((wheel) => wheel.surface === 'grass')) atGrass = state.speed;
       if (reached < 0 && onAll(state, 'grass')) reached = steps;
-      if (reached >= 0 && steps === reached + Math.round(1.5 * perSecond)) after = state.speed;
+      if (reached >= 0 && steps === reached + Math.round(shedTime * perSecond)) after = state.speed;
     });
     sim.free();
     expect(reached).toBeGreaterThan(0);
     expect(atGrass).toBeGreaterThan(topSpeed * 0.99);
-    expect(after).toBeLessThan(19);
+    expect(after).toBeLessThan(grassTop + 1);
   });
 
   it('holds 24 m/s with two wheels on the road and two on the grass', () => {

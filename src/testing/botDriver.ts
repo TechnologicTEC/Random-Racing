@@ -28,11 +28,12 @@ import type { Rapier } from '../sim/physics/rapier';
 import { createSim, createSimOn, type CarState } from '../sim/sim';
 import { checkpointCount } from '../sim/track/progress';
 import { lapPose } from './cornerDriver';
-import { cornerLimit, CORNER_SHARE, stickToward, type MapPoint } from './lineDriver';
+import { cornerLimit, CORNER_SHARE, reachFor, stickToward, type MapPoint } from './lineDriver';
+import { runUp } from './simDriving';
 
 /** The bot's own numbers (test code, so not in the config). */
 export const BOT = {
-  /** How far ahead it looks for corners to brake for, in metres. */
+  /** How far ahead it looks for corners to brake for, in metres: further for a faster car (`reachFor`, step 10a). */
   reach: 80,
   /** It aims this far ahead on the centre line, in metres, plus `aimPerSpeed` seconds of travel. */
   aimBase: 6,
@@ -96,7 +97,7 @@ export function turnLeft(line: CenterLine, from: number, end: number): number {
 
 /** The speed the bot wants at sample `from` of the line: the top speed, or less for a corner within 80 m (see the file's comment). */
 export function targetSpeed(line: CenterLine, from: number, cfg: PhysicsConfig, margin = CORNER_SHARE, skip?: (sample: number) => boolean): number {
-  return Math.min(cfg.car.engine.topSpeed, cornerLimit(line, from, BOT.reach, cfg.car, margin, skip));
+  return Math.min(cfg.car.engine.topSpeed, cornerLimit(line, from, reachFor(cfg.car, BOT.reach), cfg.car, margin, skip));
 }
 
 /** How far ahead of its place on the lap the bot aims at this speed, in metres. */
@@ -130,6 +131,7 @@ export function createBot(world: WorldResult, cfg: BotConfig, chosen: Partial<Bo
   const n = line.count;
   const ds = line.spacing;
   const lap = line.length;
+  const reach = reachFor(cfg.car, BOT.reach);
   const corners = options.corners ?? (options.slide ? slideCorners(sections, cfg) : []);
   // The samples of the corners it slides through, which it does not brake for.
   const skipped = new Uint8Array(n);
@@ -195,7 +197,7 @@ export function createBot(world: WorldResult, cfg: BotConfig, chosen: Partial<Bo
     const point = pointAlong(line, progress.along + aimDistance(speed));
     // The car's own top speed for the step: raised while a boost runs, so the bot does not brake a boost away.
     // Having given up a slide, it brakes for every corner again.
-    const target = Math.min(state.top, cornerLimit(line, progress.near, BOT.reach, cfg.car, options.margin, gaveUp ? undefined : skip));
+    const target = Math.min(state.top, cornerLimit(line, progress.near, reach, cfg.car, options.margin, gaveUp ? undefined : skip));
     return { ...pedalsFor(speed, target, cfg), steer: stickToward(state, point, cfg.car) };
   };
 }
@@ -330,7 +332,9 @@ export function passCorner(rapier: Rapier, world: WorldResult, corner: CornerSec
   const n = line.count;
   const lap = line.length;
   const perSecond = cfg.sim.stepsPerSecond;
-  const startSample = corner.startIndex - Math.round(PASS.runUp / line.spacing);
+  // `PASS.runUp`, or as far as 99% of top speed takes and a fifth more (step 10a).
+  const runUpMetres = Math.max(PASS.runUp, 1.2 * runUp(cfg.car, 0.99).metres);
+  const startSample = corner.startIndex - Math.round(runUpMetres / line.spacing);
   const origin = (((startSample % n) + n) % n) * line.spacing;
   const sim = createSimOn(rapier, { kind: 'island', world }, cfg, lapPose(world, startSample, cfg));
   const bot = createBot(world, cfg, { margin: chosen.margin ?? CORNER_SHARE, corners: chosen.slide ? [corner] : [] });
@@ -339,8 +343,8 @@ export function passCorner(rapier: Rapier, world: WorldResult, corner: CornerSec
     const metres = ((((along - origin) % lap) + lap) % lap);
     return metres > lap / 2 ? metres - lap : metres;
   };
-  const from = PASS.runUp - PASS.before;
-  const to = PASS.runUp + corner.sampleCount * line.spacing + PASS.after;
+  const from = runUpMetres - PASS.before;
+  const to = runUpMetres + corner.sampleCount * line.spacing + PASS.after;
   let state = sim.state();
   let was = travelled(state.progress!.along);
   let started = -1;

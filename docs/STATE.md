@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 10a-1, why a drift ended, on the readout (see "Step 10")
-- **Next:** `docs/PLAN.md`, "The build order": **10a-2**, the tests that follow the config. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Last finished part:** 10a-2, the tests that follow the config (see "Step 10")
+- **Next:** `docs/PLAN.md`, "The build order": **10a-3**, measure at 53 m/s, then Tane picks. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -883,7 +883,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | Part | What | Status |
 | --- | --- | --- |
 | 10a-1 | **Why a drift ended**, on the readout | Done |
-| 10a-2 | **Tests that follow the config** | |
+| 10a-2 | **Tests that follow the config** | Done |
 | 10a-3 | **Measure at 53 m/s**; Tane picks | |
 | 10a-4 | **The new speed in the config** | |
 | 10b | **Speed with the car** (`npm run perf`) | |
@@ -896,6 +896,16 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 - **For Tane's cancels:** at 30 m/s a slide ends with no brake only on a touch (a rock post or wall end can stand up to 0.7 m above what is drawn), or under 9 m/s along its line. With the panel at 53 m/s the "too slow" edge was 16 m/s (57 km/h), which a slow or uphill hairpin can reach. The readout now says which.
 
 Tests, seen failing first (14, on the missing fields and function): `drift.test.ts` gains 5 (each reason on its step, the hit named before the brake, the reason kept and the next end counted, a hop not counted), `drive.test.ts` 5 (`cancelReadout`), and `drifting.test.ts` and `respawn.test.ts` check that the wall slide ends `wall`, a let-go `let go`, a wait `respawn` once, and that the fingerprint sees both fields. Browser test (`drive.spec.ts`, seen failing with the page change stashed): a slide braked on seed 42 shows "drift cancelled: braked" for 2 s and then not. Pictures of the readout on seeds 1, 7 and 42 looked at: small, in the card's muted text, under the drift line, nothing over the road. 2,331 unit tests pass.
+
+### 10a-2: tests that follow the config
+
+Every test that was sized for 30 m/s now works its sizes out from the config. **At today's config every size comes out exactly as before** (checked: each ground's sizes and triangle count, the bots' look-ahead 80 m, the corner proof's run-up 250 m, the corner driver's 100 m), so every run, step 9's laps and corner proof included, is the same step for step. At 53 m/s they grow.
+- **Helpers** (`testing/simDriving.ts`, test code): `runUp(car, share, throttle)` gives the time and distance from rest to a share of top speed, from the engine's own sum (within a step and a metre of the car on the flat); `distanceIn(car, seconds)` the distance in a time; `circleAt(car, speed)` the full-stick circle. `reachFor(car, least)` (`testing/lineDriver.ts`) is how far ahead a test driver looks for corners: braking from boost speed to a stop at 0.7 of the brake, and 30 m more.
+- **The grounds** (`testing/testGrounds.ts`) are each the larger of their old size and what the config needs: the flat sheet's width (room for half stick's circle at top speed) and length; the road before the grass (`grassFrom`, to 99% of top speed); the run-ups before the wall end, the drop and the obstacles (`runUpTo`); the ramp's climb, with a new `settled` (how far up it the car is steady); the kerb's length and a slide run-up (`slideRunUp`, `slideFrom`); the hillside's length; **the banked ring's radius, the top-speed circle times 7/6** (70 m at 30 m/s), still banked 8 degrees.
+- **The tests:** hold times from `runUp` (the flat's half throttle, coasting, braking, the climb; `drifting.test.ts`'s run to top speed); the steady circles at 7.5 m/s, 15 m/s and top speed, and half stick's, from `circleAt`; the instant steering at 15 m/s; the ring at 29/30 of top speed; the kerb run-ups and turn-in; the grass slowdown, from top speed to 1 m/s over the grass top speed at the shed rate and a sixth of a second (1.5 s and 19 m/s at 30 m/s); the drift rules at two thirds of top speed and their start and end edges from `startSpeed` and `endSpeed`; the steering above top speed at 1.15 and 1.5 times top speed; the low slide at two thirds of top speed; the tuning panel's slider value from the config; the browser slide helper `slideTo` leaves out run-ups too short to reach the drift's start speed (at 30 m/s only the 60-step one, which never started a slide). The bots look ahead `reachFor`; the corner proof and the corner driver run up at least to 99% and 97% of top speed.
+- **Left as they are for 10a-4**, since their meaning is tied to the speed: 95% of top speed in 3.5 to 4.5 s (`drive.test.ts`, `driving.test.ts`), four wheels down over the 200 m crest at top speed (`upright.test.ts`), 97% of top speed in the tightest slide (`drifting.test.ts`), and a boost reaching its top speed within its time (`drifting.test.ts`, tier 1: 0.5 s at 12 m/s², 0.66 s needed at 53 m/s).
+
+Tests: `simDriving.test.ts` (6, seen failing on the missing functions) and `lineDriver.test.ts` gains 1 (`reachFor`, seen failing). 2,338 unit tests pass.
 
 ## Working agreements
 
@@ -1133,3 +1143,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-22 (Milestone 3, Opus 5.5):** 9c done, which ends step 9. The bot's lap with slides on seeds 1 and 7, worked out in Node, replayed on the 3D page through `drive.replay` 600 steps at a time, gives the same fingerprint after every chunk in Chromium and Firefox, and finishes the lap there too (`e2e/determinism.spec.ts`). Seen failing first on a deliberate fault, in the chunk that held it. 2,321 unit tests pass; all 344 browser tests passed in one run (22.7 minutes). Nothing drawn changed. Next: check-in 2 with Tane.
 - **2026-11-22 (Milestone 3, Opus 5.5):** Check-in 2 with Tane. Everything works. Tane wants the top speed raised to about 190 km/h (53 m/s, tried on the tuning panel), acceleration unchanged, a bit more grip or turning where that speed is too much, and found a drift cancelling mid-corner with no brake pressed. Measured: a slide on the flat holds at 53 m/s, but cannot hold the 28 m circle above about 41 m/s (`drift.grip`), so the likeliest cancel is a brush of something solid. Docs only. Next: 10a, planned in plan mode first.
 - **2026-11-22 (Milestone 3, Opus 5.5):** Step 10 planned in plan mode and approved (see "Step 10"; 10a split in four parts). 10a-1 done: the drift state names why the last slide ended (`ended`, `ends`, in the fingerprint and the snapshot), and the readout says "drift cancelled: hit a wall" and so on for 2 s. Pictures on seeds 1, 7 and 42 looked at. 2,331 unit tests pass; all 346 browser tests passed in one run (23.7 minutes). Next: 10a-2, the tests that follow the config.
+- **2026-11-22 (Milestone 3, Opus 5.5):** 10a-2 done: every test sized for 30 m/s works its sizes out from the config (`runUp`, `distanceIn`, `circleAt` in `testing/simDriving.ts`, `reachFor` in `testing/lineDriver.ts`; the grounds, hold times, circles, the bots' look-ahead and run-ups), each the larger of its old size and the config's, so nothing moves at 30 m/s. Four speed-tied tests left for 10a-4. 2,338 unit tests pass; all 346 browser tests passed in one run (23.1 minutes). Next: 10a-3, measure at 53 m/s.

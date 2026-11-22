@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { hold } from '../../testing/simDriving';
+import { hold, runUp } from '../../testing/simDriving';
 import { flatGround, poseOn, stepGround, wallGround } from '../../testing/testGrounds';
 import type { RawInput } from '../input';
 import { loadRapier, type Rapier } from '../physics/rapier';
@@ -35,10 +35,10 @@ function newSim(): Sim {
   return createSimOn(rapier, ground.course, config, poseOn(ground, 0, 50, { x: 0, z: -1 }, config));
 }
 
-/** Up to top speed in a straight line: 9 s of full throttle. */
+/** Up to top speed in a straight line: 9 s of full throttle, or a second past 99.5% of top speed (step 10a). */
 function atTopSpeed(): Sim {
   const sim = newSim();
-  hold(sim, { throttle: 1 }, 9);
+  hold(sim, { throttle: 1 }, Math.max(9, runUp(car, 0.995).seconds + 1));
   return sim;
 }
 
@@ -110,21 +110,23 @@ describe('a slide on the flat at top speed', () => {
 });
 
 describe('a slide at a lower speed', () => {
-  it('follows the same circles at 20 m/s as at top speed: speed does not tighten it (Tane, 2026-11-17)', () => {
+  // Throttle 0.67 makes for two thirds of top speed (20 m/s at 30 m/s); the run-up is to about 91% of top speed (3.5 s at 30).
+  it('follows the same circles at two thirds of top speed as at top speed: speed does not tighten it (Tane, 2026-11-17)', () => {
     for (const { steer, radius } of [
       { steer: 1, radius: car.drift.radius.tight },
       { steer: 0, radius: car.drift.radius.middle },
       { steer: -1, radius: car.drift.radius.wide },
     ]) {
       const sim = newSim();
-      hold(sim, { throttle: 1 }, 3.5);
-      // Throttle 0.67 makes for 20 m/s and holds there.
+      hold(sim, { throttle: 1 }, Math.max(3.5, runUp(car, 0.91).seconds));
+      // Throttle 0.67 makes for two thirds of top speed and holds there.
       slide(sim, 1, steer, 1);
       hold(sim, { throttle: 0.67, drift: true, steer }, 3);
       const settled = steps(sim, { throttle: 0.67, drift: true, steer }, perSecond);
       const speed = mean(settled.map(flatSpeed));
-      expect(speed).toBeGreaterThan(18);
-      expect(speed).toBeLessThan(22);
+      // 18 to 22 m/s at 30 m/s.
+      expect(speed).toBeGreaterThan(topSpeed * 0.6);
+      expect(speed).toBeLessThan((topSpeed * 22) / 30);
       const measured = mean(settled.map((state) => flatSpeed(state) / Math.abs(state.spin.y)));
       expect(measured).toBeGreaterThan(radius * 0.95);
       expect(measured).toBeLessThan(radius * 1.05);

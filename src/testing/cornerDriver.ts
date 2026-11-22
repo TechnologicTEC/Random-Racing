@@ -25,7 +25,8 @@ import type { Rapier } from '../sim/physics/rapier';
 import { quatFromAxes } from '../sim/quat';
 import { createSimOn, type CarState, type Sim } from '../sim/sim';
 import type { Pose } from '../sim/start';
-import { cornerLimit, stickToward, type MapPoint } from './lineDriver';
+import { cornerLimit, reachFor, stickToward, type MapPoint } from './lineDriver';
+import { runUp } from './simDriving';
 
 /** Where a car stands on the middle of the road at one sample of the lap, facing along it and tipped with the road, at its ride height. */
 export function lapPose(world: WorldResult, index: number, cfg: PhysicsConfig): Pose {
@@ -147,7 +148,7 @@ export function driveOut(sim: Sim, lane: Lane, cfg: PhysicsConfig, metres: numbe
   const limit = Math.ceil(metres * 2 + 10 * cfg.sim.stepsPerSecond);
   for (let i = 0; i < limit && travelled < metres; i++) {
     const speed = Math.hypot(state.velocity.x, state.velocity.z);
-    const over = speed - (lane.limit?.(LOOK_FOR_CORNERS, cfg) ?? Infinity);
+    const over = speed - (lane.limit?.(reachFor(cfg.car, LOOK_FOR_CORNERS), cfg) ?? Infinity);
     const pedals = over > 0.5 ? { brake: Math.min(1, over / 2) } : { throttle: 1 };
     sim.step(makeInput({ ...pedals, steer: stickToward(state, lane.ahead(lookAhead), cfg.car) }));
     state = sim.state();
@@ -211,7 +212,8 @@ export function driftThroughCorner(rapier: Rapier, world: WorldResult, corner: C
   const ds = world.track.candidates[world.track.winnerIndex]!.line.spacing;
   const dir: -1 | 1 = corner.direction === 'right' ? 1 : -1;
   const startAt = corner.startIndex;
-  const runUpSamples = Math.round(options.runUp / ds);
+  // `options.runUp`, or as far as 97% of top speed takes and a fifth more (step 10a).
+  const runUpSamples = Math.round(Math.max(options.runUp, 1.2 * runUp(cfg.car, 0.97).metres) / ds);
   const entryAt = startAt + Math.round(options.entry / ds);
   const exitAt = startAt + corner.sampleCount - Math.round(options.exit / ds);
   const sim = createSimOn(rapier, { kind: 'island', world }, cfg, lapPose(world, startAt - runUpSamples, cfg));

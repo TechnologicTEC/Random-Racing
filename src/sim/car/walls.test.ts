@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { hold } from '../../testing/simDriving';
-import { poseOn, wallEndGround, wallGround } from '../../testing/testGrounds';
+import { poseOn, runUpTo, wallEndGround, wallGround } from '../../testing/testGrounds';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { rotate } from '../quat';
 import { createSimOn, type CarState, type Sim } from '../sim';
@@ -52,10 +52,13 @@ function driveToWall(sim: Sim): { before: CarState; hit: CarState } {
   return { before, hit: state };
 }
 
-/** Starts the car 200 m from the wall along the way it faces, `angle` degrees to the right of the wall's line. */
+/** How far the car runs to the wall: 200 m, or as far as it takes to reach 98% of top speed (step 10a). */
+const RUN = runUpTo(0.98, 200);
+
+/** Starts the car `RUN` metres from the wall along the way it faces, `angle` degrees to the right of the wall's line. */
 function towardsWall(angle: number): { sim: Sim; wallAt: number } {
   const ground = wallGround();
-  const start = poseOn(ground, ground.wallAt - 200 * Math.sin((angle * Math.PI) / 180), 0, facing(angle), config);
+  const start = poseOn(ground, ground.wallAt - RUN * Math.sin((angle * Math.PI) / 180), 0, facing(angle), config);
   return { sim: createSimOn(rapier, ground.course, config, start), wallAt: ground.wallAt };
 }
 

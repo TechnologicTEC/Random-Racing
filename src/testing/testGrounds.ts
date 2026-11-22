@@ -14,6 +14,7 @@ import type { PlainCourse } from '../sim/course';
 import { quatFromAxes, type Vec3 } from '../sim/quat';
 import type { Pose } from '../sim/start';
 import { cross, dot, scale, sub, unit } from '../sim/vec';
+import { circleAt, distanceIn, runUp } from './simDriving';
 
 export interface TestGround {
   course: PlainCourse;
@@ -99,10 +100,32 @@ export function poseOn(ground: Pick<TestGround, 'height'>, x: number, z: number,
 
 const AHEAD = { x: 0, z: -1 };
 
-/** A level sheet at height 0: 800 m ahead of the car, 100 m behind it and 300 m to each side. */
+/** Rounded up to a whole number of 20 m cells, the grid most grounds are laid on. */
+const cells = (metres: number): number => 20 * Math.ceil(metres / 20 - 1e-9);
+
+/**
+ * The sizes of the grounds follow the config (step 10a), so a faster car still fits: each is the larger of what the
+ * ground had at 30 m/s and what the config needs. At 30 m/s every ground is as it was.
+ */
+const TOP = config.car.engine.topSpeed;
+
+/** A run-up long enough to reach `share` of top speed, a fifth more for good measure, and never shorter than `least`. */
+export const runUpTo = (share: number, least: number): number => Math.max(least, cells(runUp(config.car, share).metres * 1.2));
+
+/**
+ * How far the flat sheet reaches to each side of the start and ahead of it: room for half stick's circle at top speed
+ * (twice the full-stick one) beside the car, and for a run to 99% of top speed and 600 m more ahead; at least 300 m to
+ * each side and 900 m ahead.
+ */
+export const FLAT = {
+  side: Math.max(300, cells(4 * circleAt(config.car, TOP) + 60)),
+  ahead: Math.max(900, cells(runUp(config.car, 0.99).metres + 600)),
+};
+
+/** A level sheet at height 0: `FLAT.ahead` ahead of the car, 100 m behind it and `FLAT.side` to each side (900 and 300 m at 30 m/s). */
 export function flatGround(): TestGround {
   const height = (): number => 0;
-  const road = new Sheets().grid(steps(-300, 300, 20), steps(-900, 100, 20), height).mesh();
+  const road = new Sheets().grid(steps(-FLAT.side, FLAT.side, 20), steps(-FLAT.ahead, 100, 20), height).mesh();
   return { course: { kind: 'plain', road }, start: poseOn({ height }, 0, 0, AHEAD, config), height };
 }
 
@@ -116,13 +139,16 @@ export interface GrassGround extends TestGround {
  * right, road for the first 300 m ahead of the start and grass after that.
  * Driven at x = 50 the car runs off the road onto the grass; driven along
  * x = 0 its left wheels stay on the road and its right wheels go onto the grass.
+ * The road before the grass is long enough to reach 99% of top speed, and the
+ * sheet long enough for 25 s at top speed (300 m and 1200 m at 30 m/s).
  */
 export function grassGround(): GrassGround {
   const height = (): number => 0;
-  const grassFrom = 300;
+  const grassFrom = runUpTo(0.99, 300);
+  const length = Math.max(1200, cells(25 * TOP + 200));
   const right = steps(0, 300, 20);
-  const road = new Sheets().grid(steps(-300, 0, 20), steps(-1200, 100, 20), height).grid(right, steps(-grassFrom, 100, 20), height).mesh();
-  const grass = new Sheets().grid(right, steps(-1200, -grassFrom, 20), height).mesh();
+  const road = new Sheets().grid(steps(-300, 0, 20), steps(-length, 100, 20), height).grid(right, steps(-grassFrom, 100, 20), height).mesh();
+  const grass = new Sheets().grid(right, steps(-length, -grassFrom, 20), height).mesh();
   return { course: { kind: 'plain', road, grass }, start: poseOn({ height }, 50, 0, AHEAD, config), height, grassFrom };
 }
 
@@ -139,7 +165,8 @@ export interface WallGround extends TestGround {
 export function wallGround(): WallGround {
   const flat = flatGround();
   const wallAt = 30;
-  const wall = { centre: { x: wallAt + 0.5, y: 0.1, z: -400 }, half: { x: 0.5, y: 0.7, z: 500 } };
+  // As long as the flat sheet: from 100 m behind the start to `FLAT.ahead` ahead of it.
+  const wall = { centre: { x: wallAt + 0.5, y: 0.1, z: (100 - FLAT.ahead) / 2 }, half: { x: 0.5, y: 0.7, z: (100 + FLAT.ahead) / 2 } };
   return { ...flat, course: { ...flat.course, walls: [wall] }, wallAt };
 }
 
@@ -152,7 +179,7 @@ export interface WallEndGround extends TestGround {
 
 /**
  * A level road running straight ahead (-z) with a wall on its right that
- * starts 200 m ahead, built by the island's own code (`wallPieces`, `wallBox`):
+ * starts far enough ahead to reach 98% of top speed (200 m at 30 m/s), built by the island's own code (`wallPieces`, `wallBox`):
  * it rises from the road's level over `road.walls.taper` at its end, as an
  * island's walls do where the roadside opens. The car starts on the wall's own
  * line, so it meets the sloping end head on.
@@ -160,7 +187,8 @@ export interface WallEndGround extends TestGround {
 export function wallEndGround(): WallEndGround {
   const height = (): number => 0;
   const spacing = config.track.sampleSpacing;
-  const count = Math.round(1000 / spacing);
+  const endAt = runUpTo(0.98, 200);
+  const count = Math.round(Math.max(1000, endAt + 800) / spacing);
   const along = (fill: (k: number) => number): Float64Array => Float64Array.from({ length: count }, (_, k) => fill(k));
   const line: CenterLine = {
     count,
@@ -172,11 +200,10 @@ export function wallEndGround(): WallEndGround {
     tz: along(() => -1),
     curvature: along(() => 0),
   };
-  const endAt = 200;
   const wall = { startIndex: Math.round(endAt / spacing), pieceCount: Math.round(100 / spacing), side: 1 as const };
   const pieces = wallPieces(line, along(() => 0), null, along(() => config.track.roadWidth), [wall], config);
   const wallX = pieces[0]!.from.x;
-  const road = new Sheets().grid(steps(-100, 100, 20), steps(-1100, 100, 20), height).mesh();
+  const road = new Sheets().grid(steps(-100, 100, 20), steps(-(count * spacing + 100), 100, 20), height).mesh();
   const walls = pieces.map((piece) => wallBox(piece, config));
   return { course: { kind: 'plain', road, walls }, start: poseOn({ height }, wallX, 0, AHEAD, config), height, wallX, endAt };
 }
@@ -221,6 +248,12 @@ export interface RampGround extends TestGround {
   rampStart: number;
   /** From this far ahead the climb is steady, for at least 500 m. */
   steadyFrom: number;
+  /**
+   * How far up the steady climb the car at full throttle has settled to its climbing speed, in metres: 250 at 30 m/s.
+   * The speed closes on it as an exponential over top speed times `engine.taper` over `engine.accel` seconds, so this
+   * is that many metres times 8.6, as 250 m was at 30 m/s. The climb carries on 350 m past it.
+   */
+  settled: number;
 }
 
 /** A level run-up of 100 m, then a climb of 15%, the steepest road the generator builds, eased into over a dip of the tightest radius it allows. */
@@ -229,14 +262,17 @@ export function rampGround(): RampGround {
   const radius = config.road.crestMinRadius;
   const rampStart = 100;
   const ease = grade * radius;
+  const { accel, taper } = config.car.engine;
+  const settled = Math.max(250, Math.ceil((8.6 * TOP * TOP * taper) / accel));
+  const climb = Math.max(600, settled + 350);
   const shape = profile([
     { length: rampStart, bend: 0 },
     { length: ease, bend: 1 / radius },
-    { length: 600, bend: 0 },
+    { length: climb, bend: 0 },
   ]);
   const height = (_x: number, z: number): number => shape.height(-z);
-  const road = new Sheets().grid(steps(-20, 20, 10), steps(-(rampStart + ease + 600), 20, 2), height).mesh();
-  return { course: { kind: 'plain', road }, start: poseOn({ height }, 0, 0, AHEAD, config), height, grade, rampStart, steadyFrom: rampStart + ease };
+  const road = new Sheets().grid(steps(-20, 20, 10), steps(-(rampStart + ease + climb), 20, 2), height).mesh();
+  return { course: { kind: 'plain', road }, start: poseOn({ height }, 0, 0, AHEAD, config), height, grade, rampStart, steadyFrom: rampStart + ease, settled };
 }
 
 export interface CrestGround extends TestGround {
@@ -274,10 +310,12 @@ export interface BankedBend extends TestGround {
  * A ring of road of 70 m radius, banked 8 degrees with the inside low: the
  * steepest banking the generator gives, at the radius where it gives all of it.
  * The car starts on the middle of the road at (70, 0), facing -z, so it laps
- * the ring turning left.
+ * the ring turning left. At a top speed whose full-stick circle is wider than
+ * 60 m the ring widens with it, keeping 70 m to 60 m (step 10a), so the car
+ * can still lap it at top speed.
  */
 export function bankedBend(): BankedBend {
-  const radius = config.road.bankFastRadius;
+  const radius = Math.max(config.road.bankFastRadius, (circleAt(config.car, TOP) * 7) / 6);
   const tilt = Math.tan((config.road.bankMax * Math.PI) / 180);
   const height = (x: number, z: number): number => (Math.sqrt(x * x + z * z) - radius) * tilt;
   // A row every 2 degrees, 2.4 m apart on the middle of the road; 15 m of road either side of the middle.
@@ -298,19 +336,30 @@ export interface KerbGround extends TestGround {
   kerbTo: number;
   /** Height of the kerb's top at an x where the kerb is at its full height; 0 beside it. */
   kerbTop(x: number): number;
+  /**
+   * For a slide across the kerb near its start: how long to run up at full throttle (6 s at 30 m/s, time to 97% of
+   * top speed and 1.5 s more for a faster car) and where to start, behind the start line (z = 90 at 30 m/s), so the
+   * car is then about 13 m short of the kerb.
+   */
+  slideRunUp: number;
+  slideFrom: number;
 }
 
 /**
  * Level ground with a kerb like the road's on the car's right: a low ramp
  * rising to the right, 400 m long, with an upright face down its outer side.
+ * Longer for a faster car (step 10a): far enough for a run-up to 99% of top
+ * speed, a turn in on the top-speed circle and 100 m more.
  */
 export function kerbGround(): KerbGround {
   const { kerbWidth, kerbHeight } = config.road;
   const kerbInner = 6.5;
   const kerbFrom = 50;
-  const kerbTo = 450;
+  const kerbTo = Math.max(450, cells(runUp(config.car, 0.99).metres * 1.2 + circleAt(config.car, TOP) + 100));
+  const slideRunUp = Math.max(6, runUp(config.car, 0.97).seconds + 1.5);
+  const slideFrom = Math.max(90, Math.round(distanceIn(config.car, slideRunUp) - kerbFrom + 13));
   const height = (): number => 0;
-  const road = new Sheets().grid(steps(-100, 100, 20), steps(-600, 100, 20), height).mesh();
+  const road = new Sheets().grid(steps(-100, 100, 20), steps(-cells(kerbTo + 150), cells(slideFrom + 10), 20), height).mesh();
   const outer = kerbInner + kerbWidth;
   // Like the road's kerbs, it rises from nothing over its first and last rows.
   const rows = steps(-kerbTo, -kerbFrom, 2).map((z) => ({ z, top: z === -kerbTo || z === -kerbFrom ? 0 : kerbHeight }));
@@ -319,7 +368,7 @@ export function kerbGround(): KerbGround {
     .add(rows.map(({ z, top }) => [{ x: outer, y: top, z }, { x: outer, y: 0, z }]))
     .mesh();
   const kerbTop = (x: number): number => (x < kerbInner || x > outer ? 0 : ((x - kerbInner) / kerbWidth) * kerbHeight);
-  return { course: { kind: 'plain', road, kerbs }, start: poseOn({ height }, 0, 0, AHEAD, config), height, kerbInner, kerbFrom, kerbTo, kerbTop };
+  return { course: { kind: 'plain', road, kerbs }, start: poseOn({ height }, 0, 0, AHEAD, config), height, kerbInner, kerbFrom, kerbTo, kerbTop, slideRunUp, slideFrom };
 }
 
 export interface HillsideGround extends TestGround {
@@ -329,12 +378,15 @@ export interface HillsideGround extends TestGround {
   slope: number;
 }
 
-/** A level strip of road with a grass hillside rising at 45% on the car's right, 60 m up the slope and 700 m long. */
+/**
+ * A level strip of road with a grass hillside rising at 45% on the car's right, 60 m up the slope and 700 m long:
+ * longer if 20 s at 0.6 of top speed would not fit (step 10a).
+ */
 export function hillsideGround(): HillsideGround {
   const foot = 10;
   const slope = config.road.maxBankSlope;
   const height = (x: number): number => Math.max(0, (x - foot) * slope);
-  const zs = steps(-600, 100, 10);
+  const zs = steps(-Math.max(600, cells(20 * 0.6 * TOP + 100)), 100, 10);
   const road = new Sheets().grid(steps(-40, foot, 10), zs, height).mesh();
   const grass = new Sheets().grid(steps(foot, foot + 60, 3), zs, height).mesh();
   return { course: { kind: 'plain', road, grass }, start: poseOn({ height }, 0, 0, AHEAD, config), height, foot, slope };
@@ -347,10 +399,10 @@ export interface StepGround extends TestGround {
   edge: number;
 }
 
-/** Level ground that drops a metre, straight down, 150 m ahead of the car. */
+/** Level ground that drops a metre, straight down, 150 m ahead of the car, or as far as it takes to reach 99% of top speed. */
 export function stepGround(): StepGround {
   const drop = 1;
-  const edge = 150;
+  const edge = runUpTo(0.99, 150);
   const height = (_x: number, z: number): number => (-z <= edge ? 0 : -drop);
   const xs = steps(-30, 30, 10);
   const road = new Sheets()

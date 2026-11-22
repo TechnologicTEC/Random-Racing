@@ -3,7 +3,7 @@ import { config } from '../config';
 import { turnWanted } from '../sim/car/steer';
 import { makeInput, inputFractions } from '../sim/input';
 import { quatFromAxes } from '../sim/quat';
-import { pointOnRing, stickToward } from './lineDriver';
+import { BRAKE_SHARE, pointOnRing, reachFor, stickToward } from './lineDriver';
 
 const car = config.car;
 
@@ -57,5 +57,14 @@ describe('pointOnRing', () => {
     const back = pointOnRing(70, { x: 72, z: 0 }, 70 * (Math.PI / 2), 1);
     expect(back.x).toBeCloseTo(0, 9);
     expect(back.z).toBeCloseTo(70, 9);
+  });
+});
+
+describe('reachFor: how far ahead a test driver looks for corners (step 10a)', () => {
+  it('is 80 m at 30 m/s, as before, and the braking from boost speed to a stop and 30 m more for a faster car', () => {
+    expect(reachFor(config.car, 80)).toBe(80);
+    const faster = { ...config.car, engine: { ...config.car.engine, topSpeed: 53 } };
+    const boosted = 53 * faster.boost.speed;
+    expect(reachFor(faster, 80)).toBeCloseTo((boosted * boosted) / (2 * BRAKE_SHARE * faster.brake.strength) + 30, 9);
   });
 });

@@ -14,20 +14,22 @@ describe('turnWanted: the turn rate the stick asks for', () => {
     expect(30 / -turnWanted(1, 30, car)).toBeCloseTo(60, 9);
   });
 
-  it('keeps the circle it gives at top speed at any faster speed: 60 m at 34.5 m/s and at 45 m/s (Tane, 6h-4: a boosted car can still steer)', () => {
+  // At 30 m/s: 60 m at 34.5 m/s (the boost) and at 45 m/s; the speeds are shares of top speed (step 10a).
+  it('keeps the circle it gives at top speed at any faster speed (Tane, 6h-4: a boosted car can still steer)', () => {
     const { topSpeed } = car.engine;
     const atTop = topSpeed / -turnWanted(1, topSpeed, car);
-    expect(atTop).toBeCloseTo(60, 9);
-    for (const speed of [30.001, 34.5, 45]) expect(speed / -turnWanted(1, speed, car)).toBeCloseTo(atTop, 9);
-    expect(turnWanted(-1, 34.5, car)).toBe(-turnWanted(1, 34.5, car));
+    expect(atTop).toBeCloseTo((topSpeed * topSpeed) / sideForce, 9);
+    const boosted = topSpeed * 1.15;
+    for (const speed of [topSpeed + 0.001, boosted, topSpeed * 1.5]) expect(speed / -turnWanted(1, speed, car)).toBeCloseTo(atTop, 9);
+    expect(turnWanted(-1, boosted, car)).toBe(-turnWanted(1, boosted, car));
     // Rolling backwards it steers the other way, on the same circle.
-    expect(turnWanted(1, -34.5, car)).toBe(-turnWanted(1, 34.5, car));
+    expect(turnWanted(1, -boosted, car)).toBe(-turnWanted(1, boosted, car));
   });
 
-  it('turns fastest where the two limits meet, at about 9.5 m/s', () => {
+  // About 9.5 m/s and 1.58 rad/s with the side force at 15.
+  it('turns fastest where the two limits meet, at the square root of the tightest circle times the side force', () => {
     const meet = Math.sqrt(minRadius * sideForce);
-    expect(meet).toBeCloseTo(9.487, 3);
-    expect(-turnWanted(1, meet, car)).toBeCloseTo(1.581, 3);
+    expect(-turnWanted(1, meet, car)).toBeCloseTo(meet / minRadius, 9);
     for (const speed of [2, 5, 9, 10, 15, 30]) expect(-turnWanted(1, speed, car)).toBeLessThan(-turnWanted(1, meet, car) + 1e-12);
   });
 

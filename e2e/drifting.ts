@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { config } from '../src/config';
+import { runUp } from '../src/testing/simDriving';
 
 /**
  * Browser test helper: brings the car on the page into a slide that has
@@ -14,13 +15,17 @@ export async function slideTo(page: Page, tier: 1 | 2 | 3): Promise<boolean> {
   const perSecond = config.sim.stepsPerSecond;
   // A few steps past the tier, so it is safely reached.
   const steps = Math.round(config.car.drift.tiers[tier - 1] * perSecond) + 5;
+  // Run-ups that reach the drift's start speed with a little to spare (step 10a): at 30 m/s this leaves out only the
+  // 60-step one, which reaches 9.3 m/s of the 12 needed, so it never started a slide.
+  const least = runUp(config.car, config.car.drift.startSpeed * 1.05).seconds * perSecond;
+  const runUps = [120, 240, 60, 180, 360].filter((count) => count >= least);
   // The effects' pictures load beside the world: wait for them, so pictures of the slide show them, not stand-ins.
   await page.waitForFunction(() => document.body.dataset.effects !== 'loading', null, { timeout: 30_000 });
   return page.evaluate(
-    ({ steps, tier }) => {
+    ({ steps, tier, runUps }) => {
       const drive = window.seedCircuit.drive!;
       // The run-ups and sticks that suit most islands first, so most slides are found at once.
-      for (const runUp of [120, 240, 60, 180, 360]) {
+      for (const runUp of runUps) {
         for (const stick of [0, 1, -1]) {
           for (const dir of [-1, 1]) {
             drive.reset();
@@ -34,7 +39,7 @@ export async function slideTo(page: Page, tier: 1 | 2 | 3): Promise<boolean> {
       }
       return false;
     },
-    { steps, tier },
+    { steps, tier, runUps },
   );
 }
 

@@ -22,6 +22,15 @@ export const BRAKE_SHARE = 0.7;
 export const CORNER_SHARE = 0.9;
 
 /**
+ * How far ahead a test driver looks for corners to brake for, in metres (step 10a): far enough to brake from boost
+ * speed to a stop at `BRAKE_SHARE` of the brake, and 30 m more, and never less than `least` (what it was at 30 m/s).
+ */
+export function reachFor(car: CarConfig, least: number): number {
+  const fastest = car.engine.topSpeed * car.boost.speed;
+  return Math.max(least, (fastest * fastest) / (2 * BRAKE_SHARE * car.brake.strength) + 30);
+}
+
+/**
  * The speed a driver on grip may have now to take what is coming within `reach` metres of sample `from` (counted on
  * without wrapping), braking in time: at distance `d` a corner of curvature `c` allows `sqrt(margin * sideForce / |c|)`,
  * and to brake down to that at `BRAKE_SHARE` of the brake the car may have `sqrt(allowed^2 + 2 * share * strength * d)`

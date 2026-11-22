@@ -49,12 +49,13 @@ describe('tuningFields', () => {
       expect(Math.abs(field.value / field.step - Math.round(field.value / field.step))).toBeLessThan(1e-6);
     }
     const top = fields.find((field) => field.path === 'car.engine.topSpeed')!;
-    expect(top).toMatchObject({ value: 30, min: 0, step: 0.1, group: 'car.engine' });
+    expect(top).toMatchObject({ value: config.car.engine.topSpeed, min: 0, step: 0.1, group: 'car.engine' });
   });
 });
 
 describe('setTuned and tunedCopy', () => {
   it('changes the copy, never the shared config', () => {
+    const before = config.car.engine.topSpeed;
     const tuned = tunedCopy(config);
     setTuned(tuned, 'car.engine.topSpeed', 20);
     setTuned(tuned, 'car.drift.tiers.1', 2.5);
@@ -62,7 +63,7 @@ describe('setTuned and tunedCopy', () => {
     expect(tuned.car.engine.topSpeed).toBe(20);
     expect(tuned.car.drift.tiers).toEqual([1, 2.5, 3]);
     expect(tuned.camera.chase.swing).toBe(0.2);
-    expect(config.car.engine.topSpeed).toBe(30);
+    expect(config.car.engine.topSpeed).toBe(before);
     expect(config.car.drift.tiers).toEqual([1, 2, 3]);
     expect(config.camera.chase.swing).toBe(0.12);
   });

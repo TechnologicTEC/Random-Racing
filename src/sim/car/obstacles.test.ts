@@ -1,11 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { hold } from '../../testing/simDriving';
-import { flatGround } from '../../testing/testGrounds';
+import { flatGround, runUpTo } from '../../testing/testGrounds';
 import type { PlainCourse } from '../course';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { rotate, type Quat } from '../quat';
 import { createSimOn, type CarState } from '../sim';
+
+/** Where the trunks and tall rocks stand ahead of the start: 200 m, or as far as it takes to reach 98% of top speed (step 10a). */
+const AT = runUpTo(0.98, 200);
+/** Where the low rock lies: 150 m, or further for a faster car. */
+const LOW_AT = runUpTo(0.98, 150);
 
 let rapier: Rapier;
 beforeAll(async () => {
@@ -53,7 +58,7 @@ function runInto(course: PlainCourse, throttle: number, after: number): { before
 }
 
 describe('a tree trunk at top speed', () => {
-  const post = (x: number) => ({ posts: [{ x, z: -200, radius: config.sim.colliders.trunkRadius.broadleaf, bottom: -1, top: 2.5 }] });
+  const post = (x: number) => ({ posts: [{ x, z: -AT, radius: config.sim.colliders.trunkRadius.broadleaf, bottom: -1, top: 2.5 }] });
 
   it('met head on: stops the car within a second, upright, never spinning fast, never inside the trunk', () => {
     const { before, then } = runInto(courseWith(post(0)), 1, 1);
@@ -61,7 +66,7 @@ describe('a tree trunk at top speed', () => {
     expect(flatSpeed(then.at(-1)!)).toBeLessThan(3);
     expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
     expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
-    expect(then.some((state) => inside(state, 0, -200))).toBe(false);
+    expect(then.some((state) => inside(state, 0, -AT))).toBe(false);
   });
 
   for (const off of [0.5, 0.75]) {
@@ -70,7 +75,7 @@ describe('a tree trunk at top speed', () => {
       expect(flatSpeed(before)).toBeGreaterThan(car.engine.topSpeed * 0.97);
       expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
       expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
-      expect(then.some((state) => inside(state, off, -200))).toBe(false);
+      expect(then.some((state) => inside(state, off, -AT))).toBe(false);
     });
   }
 });
@@ -80,13 +85,13 @@ describe('rocks', () => {
 
   it('a rock lower than the body clears is passed over at 18 and 30 m/s, with nothing touched', () => {
     for (const throttle of [0.6, 1]) {
-      const sim = createSimOn(rapier, courseWith({ rocks: [rock(0, -150, clear, 1.5)] }), config, flatGround().start);
+      const sim = createSimOn(rapier, courseWith({ rocks: [rock(0, -LOW_AT, clear, 1.5)] }), config, flatGround().start);
       const states: CarState[] = [];
       hold(sim, { throttle }, 12, (state) => states.push(state));
       sim.free();
       expect(states.every((state) => state.touch === null)).toBe(true);
       expect(Math.min(...states.map(roofUp))).toBeGreaterThan(0.999);
-      expect(states.at(-1)!.position.z).toBeLessThan(-160);
+      expect(states.at(-1)!.position.z).toBeLessThan(-(LOW_AT + 10));
     }
   });
 
@@ -97,13 +102,13 @@ describe('rocks', () => {
     [1.2, 1],
   ] as const) {
     it(`a rock ${height} m high, met head on at top speed, stops the car like a trunk`, () => {
-      const { before, then } = runInto(courseWith({ rocks: [rock(0, -200, height, reach)] }), 1, 1);
+      const { before, then } = runInto(courseWith({ rocks: [rock(0, -AT, height, reach)] }), 1, 1);
       expect(flatSpeed(before)).toBeGreaterThan(car.engine.topSpeed * 0.97);
       expect(then[0]!.touch).toBe('rock');
       expect(flatSpeed(then.at(-1)!)).toBeLessThan(3);
       expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
       expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
-      expect(then.some((state) => inside(state, 0, -200))).toBe(false);
+      expect(then.some((state) => inside(state, 0, -AT))).toBe(false);
     });
   }
 });

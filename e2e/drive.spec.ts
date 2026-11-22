@@ -372,7 +372,7 @@ test.describe('the tuning panel', () => {
     await page.keyboard.press('t');
     await expect(panel).toBeVisible();
     const slider = panel.locator('input[data-path="car.engine.topSpeed"]');
-    await expect(slider).toHaveValue('30');
+    await expect(slider).toHaveValue(String(config.car.engine.topSpeed));
     await slider.fill('20');
     await expect(panel.locator('output[data-path="car.engine.topSpeed"]')).toHaveText('20');
     // The slider gives the focus back, so the keys drive at once.

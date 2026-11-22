@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
-import { hold } from '../../testing/simDriving';
-import { flatGround, rampGround, type TestGround } from '../../testing/testGrounds';
+import { hold, runUp } from '../../testing/simDriving';
+import { flatGround, rampGround, type RampGround, type TestGround } from '../../testing/testGrounds';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { rotate } from '../quat';
 import { createSimOn, type CarState, type Sim } from '../sim';
@@ -19,6 +19,8 @@ const dt = 1 / config.sim.stepsPerSecond;
 const simOn = (ground: TestGround, start: Pose = ground.start): Sim => createSimOn(rapier, ground.course, config, start);
 
 const THROTTLE = { throttle: 1 };
+/** Long enough at full throttle to be within 1% of top speed: 10 s at 30 m/s, longer for a faster car (step 10a). */
+const UP_TO_SPEED = Math.max(10, runUp(car, 0.99).seconds + 1);
 const BRAKE = { brake: 1 };
 const NOTHING = {};
 
@@ -55,7 +57,9 @@ describe('the engine, on the flat', () => {
 
   it('holds half of top speed with the throttle half pressed', () => {
     const sim = simOn(flatGround());
-    hold(sim, { throttle: 0.5 }, 10);
+    // 10 s, or long enough to be within 1 cm/s of it.
+    const half = 128 / 255;
+    hold(sim, { throttle: 0.5 }, Math.max(10, runUp(car, half - 0.01 / topSpeed, half).seconds + 1));
     // The pedal has 255 steps, so half is a hair over.
     expect(sim.state().speed).toBeCloseTo(topSpeed * (128 / 255), 1);
     sim.free();
@@ -67,7 +71,8 @@ describe('the engine, on the flat', () => {
     const from = sim.state().speed;
     hold(sim, NOTHING, 4);
     expect(sim.state().speed).toBeCloseTo(from - car.engine.coast * 4, 0);
-    hold(sim, NOTHING, 8);
+    // 8 s more, or as long as coasting takes from that speed and a second.
+    hold(sim, NOTHING, Math.max(8, Math.ceil(from / car.engine.coast) - 4 + 1));
     expect(Math.abs(sim.state().speed)).toBeLessThan(0.001);
     const stopped = sim.state().position.z;
     hold(sim, NOTHING, 3);
@@ -79,12 +84,12 @@ describe('the engine, on the flat', () => {
 describe('the brake, on the flat', () => {
   it('stops the car from top speed in a straight line, in the distance its strength gives', () => {
     const sim = simOn(flatGround());
-    hold(sim, THROTTLE, 10);
+    hold(sim, THROTTLE, UP_TO_SPEED);
     const from = sim.state();
     let stoppedAt: CarState | null = null;
     let steps = 0;
     let lowestRoof = 1;
-    hold(sim, BRAKE, 3, (state) => {
+    hold(sim, BRAKE, Math.max(3, (topSpeed / car.brake.strength) * 1.5), (state) => {
       if (stoppedAt) return;
       steps++;
       lowestRoof = Math.min(lowestRoof, rotate(state.rotation, { x: 0, y: 1, z: 0 }).y);
@@ -146,13 +151,20 @@ describe('the brake, on the flat', () => {
 });
 
 describe('the engine on a 15% climb', () => {
+  const pullOf = (ground: RampGround): number => (config.sim.gravity * ground.grade) / Math.sqrt(1 + ground.grade * ground.grade);
+  /** Long enough with nothing pressed for the car to stop on the climb from top speed, and a second more: 8 s at 30 m/s. */
+  const stopOn = (ground: RampGround): number => Math.max(8, Math.ceil(topSpeed / (car.engine.coast + pullOf(ground))) + 1);
+
   it('is at most 10% slower than on the flat, and no faster', () => {
     const ground = rampGround();
     const sim = simOn(ground);
     const speeds: number[] = [];
-    hold(sim, THROTTLE, 22, (state) => {
+    // The car is steady 250 m up the climb at 30 m/s, further for a faster car (`settled`); it is timed over 200 m from there.
+    const from = ground.steadyFrom + ground.settled;
+    const to = from + 200;
+    hold(sim, THROTTLE, Math.max(22, runUp(car, 0.9).seconds + to / (0.9 * topSpeed)), (state) => {
       const along = -state.position.z;
-      if (along > ground.steadyFrom + 250 && along < ground.steadyFrom + 450) speeds.push(state.speed);
+      if (along > from && along < to) speeds.push(state.speed);
     });
     expect(speeds.length).toBeGreaterThan(100);
     const slowest = Math.min(...speeds);
@@ -162,7 +174,7 @@ describe('the engine on a 15% climb', () => {
     // Steady by then.
     expect(fastest - slowest).toBeLessThan(0.05);
     // What the settings give: the engine eases off until its push matches the share of the slope's pull it is left with.
-    const pull = (config.sim.gravity * ground.grade) / Math.sqrt(1 + ground.grade * ground.grade);
+    const pull = pullOf(ground);
     const expected = topSpeed - ((1 - car.engine.slopeHelp) * pull * topSpeed * car.engine.taper) / car.engine.accel;
     expect(slowest).toBeCloseTo(expected, 0);
     sim.free();
@@ -173,7 +185,7 @@ describe('the engine on a 15% climb', () => {
     const sim = simOn(ground);
     hold(sim, THROTTLE, 9);
     expect(-sim.state().position.z).toBeGreaterThan(ground.steadyFrom);
-    hold(sim, NOTHING, 8);
+    hold(sim, NOTHING, stopOn(ground));
     const stopped = sim.state();
     expect(Math.abs(stopped.speed)).toBeLessThan(0.001);
     hold(sim, NOTHING, 5);
@@ -185,7 +197,7 @@ describe('the engine on a 15% climb', () => {
     const ground = rampGround();
     const sim = simOn(ground);
     hold(sim, THROTTLE, 9);
-    hold(sim, NOTHING, 8);
+    hold(sim, NOTHING, stopOn(ground));
     hold(sim, THROTTLE, 2);
     expect(sim.state().speed).toBeGreaterThan(12);
     sim.free();

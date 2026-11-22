@@ -6,10 +6,13 @@ import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftAsk, type
 const car = config.car;
 const steps = driftSteps(car, config.sim.stepsPerSecond);
 const top = car.engine.topSpeed;
+/** Where a drift may start and where it is cancelled, in m/s: 12 and 9 at 30 m/s (step 10a: worked out from the config). */
+const start = car.drift.startSpeed * top;
+const end = car.drift.endSpeed * top;
 
-/** What is asked on one step: by default the button down, full stick right, no brake, 20 m/s, four wheels down, nothing hit. */
+/** What is asked on one step: by default the button down, full stick right, no brake, two thirds of top speed (20 m/s at 30), four wheels down, nothing hit. */
 function ask(change: Partial<DriftAsk> = {}): DriftAsk {
-  return { button: true, steer: 1, brake: 0, speed: 20, wheelsDown: 4, hit: null, ...change };
+  return { button: true, steer: 1, brake: 0, speed: (top * 2) / 3, wheelsDown: 4, hit: null, ...change };
 }
 const UP = ask({ button: false, steer: 0 });
 
@@ -30,10 +33,9 @@ describe('driftSteps: every time in whole steps, worked out once', () => {
 
 describe('stepDrift', () => {
   describe('rule 1: the start', () => {
-    it('starts at 40% of top speed (12.0 m/s) and not at 11.9', () => {
-      expect(car.drift.startSpeed * top).toBeCloseTo(12, 12);
-      expect(stepDrift(NO_DRIFT, ask({ speed: 12 }), car, steps).phase).toBe('slide');
-      expect(stepDrift(NO_DRIFT, ask({ speed: 11.9 }), car, steps).phase).toBe('none');
+    it(`starts at ${car.drift.startSpeed * 100}% of top speed (${start} m/s) and not 0.1 m/s under it`, () => {
+      expect(stepDrift(NO_DRIFT, ask({ speed: start }), car, steps).phase).toBe('slide');
+      expect(stepDrift(NO_DRIFT, ask({ speed: start - 0.1 }), car, steps).phase).toBe('none');
     });
 
     it('hops without the stick, and the hop lasts 9 steps, drawn', () => {
@@ -189,9 +191,9 @@ describe('stepDrift', () => {
       expect(stepDrift(tierTwo(), ask({ brake: 125 / 255 }), car, steps).phase).toBe('slide');
     });
 
-    it('the speed along the line of travel under 30% of top speed (9 m/s)', () => {
-      cancelled(stepDrift(tierTwo(), ask({ speed: 8.9 }), car, steps));
-      expect(stepDrift(tierTwo(), ask({ speed: 9 }), car, steps).phase).toBe('slide');
+    it(`the speed along the line of travel under ${car.drift.endSpeed * 100}% of top speed (${end} m/s)`, () => {
+      cancelled(stepDrift(tierTwo(), ask({ speed: end - 0.1 }), car, steps));
+      expect(stepDrift(tierTwo(), ask({ speed: end }), car, steps).phase).toBe('slide');
     });
 
     it('during the hop too', () => {
