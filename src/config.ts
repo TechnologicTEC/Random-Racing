@@ -1481,6 +1481,12 @@ export interface CarConfig {
   steer: SteerConfig;
   /** Keeping the car the right way up when no wheel is on the ground. */
   stability: StabilityConfig;
+  /**
+   * While any wheel is on the ground, the car is pulled towards it by this times the speed squared, in metres per second
+   * per second (Tane, 10a-3): it keeps the wheels down over the generator's tightest crests (200 m) at top and boost
+   * speed, where gravity alone lets the car leave the ground above 44 m/s. Nothing in the air.
+   */
+  downforce: number;
   engine: EngineConfig;
   /** Drifting: the hop, the slide, the charge and its tiers (brief, "Drift-boost"). */
   drift: DriftConfig;
@@ -1604,7 +1610,7 @@ export interface BumpConfig {
 
 /** The engine. */
 export interface EngineConfig {
-  /** The speed the car makes for with the throttle right down (brief: 30). Part way down, it makes for that share of it. */
+  /** The speed the car makes for with the throttle right down (brief: 30; Tane, check-in 2: 53). Part way down, it makes for that share of it. */
   topSpeed: number;
   /** Its full push, from a standstill up to where it starts to ease off. */
   accel: number;
@@ -1650,6 +1656,12 @@ export interface SuspensionConfig {
   sag: number;
   /** How quickly a bounce dies away: 1 stops it dead, 0 lets it bounce for ever. */
   damping: number;
+  /**
+   * The cosine of the largest angle a wheel's ground direction may be from the other wheels' before it takes theirs for
+   * the step (Tane, 10a-4: a cast meeting the road mesh on an edge between triangles can tilt by 10 degrees and kick the
+   * car; a kerb's top is 5). See `steadyNormals`.
+   */
+  oddNormal: number;
 }
 
 /**
@@ -2081,16 +2093,23 @@ export const config: GameConfig = {
     // clears a 45% bank met at an angle at speed instead of digging in and rolling the car (step 4e; Tane's choice).
     // Damped to 0.5 (Tane, 7d; was 0.8): at 0.8 the 9 cm upright face of a kerb, crossed from the grass at 30 m/s, threw
     // the front wheels off the ground and turned the car 4.2 degrees.
-    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.5 },
-    grip: { side: 22, turn: 30 },
-    // Full stick: a 6 m circle up to 9.5 m/s, 15 m at 15 m/s, 60 m at top speed.
-    steer: { minRadius: 6, sideForce: 15 },
+    // oddNormal: the cosine of 8 degrees.
+    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.5, oddNormal: 0.990268 },
+    // Above what full stick asks at boost speed (25 times 1.15 squared: 33), so ordinary steering never slides (was 22
+    // with a side force of 15; 10a-4).
+    grip: { side: 35, turn: 30 },
+    // Full stick: a 6 m circle up to 12.2 m/s, 36 m at 30 m/s, 113 m at top speed (Tane, 10a-3: was 15, 187 m at 53 m/s,
+    // and the car could not turn back onto the road after a slide).
+    steer: { minRadius: 6, sideForce: 25 },
     stability: { upright: 12, calm: 3 },
-    // 95% of top speed in about 4 seconds.
+    // 7 m/s2 at 53 m/s, 9.3 at 61 (the boost): enough for a 200 m crest at 61 m/s (18.6 needed, 9.8 from gravity).
+    downforce: 0.0025,
+    // 190 km/h (Tane, check-in 2: was 30 m/s, 108 km/h; the straights had nothing to do), with the push as it was: 95% of
+    // top speed in 7 s, and 108 km/h in 3.2 s.
     // Above top speed the car sheds 9 m/s2: a boost's extra speed is gone within about a second of it ending.
-    engine: { topSpeed: 30, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5, shed: 9 },
+    engine: { topSpeed: 53, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5, shed: 9 },
     drift: {
-      // 12 m/s to start, 9 m/s to keep going.
+      // 21 m/s to start, 16 m/s to keep going (shares of top speed; 12 and 9 at 30 m/s measured the same in 10a-3).
       startSpeed: 0.4,
       endSpeed: 0.3,
       steerToStart: 0.3,
@@ -2104,7 +2123,7 @@ export const config: GameConfig = {
       // holds a slide through 97% of the corners of seeds 1 to 20; one changing key once a second through 96% of plain
       // corners, every hairpin and 87% of chicanes (src/sim/car/corners.test.ts; was 22, 45 and 160 m on the 12 m road).
       radius: { tight: 28, middle: 57, wide: 203 },
-      // Holds the tightest slide at top speed (32 m/s2) and at boost speed (43).
+      // Holds the tightest slide (28 m) up to 41 m/s; faster, it scrubs the car down to that (Tane, 10a-3: kept at 60).
       grip: 60,
       // 4 rad/s in one step: enough for the nose to swing in as a slide starts without the path turning away from the corner.
       turnGrip: 240,
@@ -2112,10 +2131,10 @@ export const config: GameConfig = {
       boosts: [0.5, 1.0, 1.6],
       brakeCancel: 0.5,
     },
-    // 34.5 m/s on the road while a boost runs, reached in about 0.4 s (Tane, 6h: short and mild; was 1.3 at 30, 39 m/s,
+    // 61 m/s on the road while a boost runs (34.5 at the old 30 m/s; Tane, 6h: short and mild; was 1.3 at 30, 39 m/s,
     // which threw the car into walls). Steering keeps its top-speed circle while boosting (steer.ts).
     boost: { speed: 1.15, accel: 12 },
-    // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 18 m/s.
+    // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 32 m/s.
     surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
     bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 6 },
     brake: { strength: 20, holdBelow: 0.5 },

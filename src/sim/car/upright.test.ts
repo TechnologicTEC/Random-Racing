@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { generateWorld } from '../../gen';
 import { stickToward } from '../../testing/lineDriver';
-import { driveWith, hold } from '../../testing/simDriving';
+import { driveWith, hold, runUp } from '../../testing/simDriving';
 import { crestGround, flatGround, hillsideGround, poseOn, stepGround } from '../../testing/testGrounds';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { quatFromAxes, rotate } from '../quat';
@@ -35,6 +35,40 @@ function longestRun(states: CarState[], test: (state: CarState) => boolean): num
   }
   return longest;
 }
+
+describe('downforce (Tane, 10a-3)', () => {
+  it('presses the car onto the flat by downforce times the speed squared: the springs squash by that much more', () => {
+    const flat = flatGround();
+    const sim = createSimOn(rapier, flat.course, config, flat.start);
+    hold(sim, { throttle: 1 }, Math.max(9, runUp(car, 0.99).seconds + 1));
+    const squash: number[] = [];
+    let speed = 0;
+    hold(sim, { throttle: 1 }, 0.5, (state) => {
+      squash.push(...state.wheels.map((wheel) => wheel.squash));
+      speed = state.speed;
+    });
+    sim.free();
+    const mean = squash.reduce((a, b) => a + b, 0) / squash.length;
+    const pressed = car.suspension.sag * (1 + (car.downforce * speed * speed) / config.sim.gravity);
+    expect(car.downforce).toBeGreaterThan(0);
+    expect(Math.abs(mean - pressed)).toBeLessThan(pressed * 0.05);
+  });
+
+  it('does nothing in the air: off the 1 m drop the car falls as it would without it', () => {
+    const step = stepGround();
+    const sim = createSimOn(rapier, step.course, config, step.start);
+    const falling: number[] = [];
+    let was: CarState | null = null;
+    hold(sim, { throttle: 1 }, 40, (state) => {
+      if (was && down(was) === 0 && down(state) === 0) falling.push((state.velocity.y - was.velocity.y) * perSecond);
+      was = state;
+    });
+    sim.free();
+    expect(falling.length).toBeGreaterThan(5);
+    // Gravity's 9.81 m/s2 down, give or take the physics engine's own rounding: no downforce added.
+    for (const fall of falling) expect(Math.abs(fall + config.sim.gravity)).toBeLessThan(0.05);
+  });
+});
 
 describe('over the tightest crest at top speed', () => {
   it('keeps all four wheels on the ground on every step', () => {

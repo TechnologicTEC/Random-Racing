@@ -91,9 +91,11 @@ describe('speedChange', () => {
       expect(speedChange(topSpeed, 0.02, brake(), 0.5, TOP, false, car, dt)).toBeCloseTo((-strength * dt) / 2, 12);
     });
 
-    it('below top speed nothing changes: half throttle at 20 m/s still eases off gently', () => {
-      expect(speedChange(20, FLAT, throttle(0.5), 1, TOP, false, car, dt)).toBeCloseTo(Math.max(-coast, (accel * -5) / (topSpeed * taper)) * dt, 12);
-      expect(speedChange(20, FLAT, throttle(0.5), 1, TOP, false, car, dt)).toBeGreaterThanOrEqual(-coast * dt);
+    // 20 m/s at 30 m/s: a sixth of top speed over what half throttle makes for.
+    it('below top speed nothing changes: half throttle at two thirds of top speed still eases off gently', () => {
+      const over = (topSpeed * 2) / 3;
+      expect(speedChange(over, FLAT, throttle(0.5), 1, TOP, false, car, dt)).toBeCloseTo(Math.max(-coast, (accel * (topSpeed / 2 - over)) / (topSpeed * taper)) * dt, 12);
+      expect(speedChange(over, FLAT, throttle(0.5), 1, TOP, false, car, dt)).toBeGreaterThanOrEqual(-coast * dt);
     });
 
     it('makes for a share of top speed when pressed part way', () => {
@@ -146,7 +148,8 @@ describe('speedChange', () => {
     expect(speedChange(0, -0.1, brake(), 0, TOP, false, car, dt)).toBe(0);
   });
 
-  it('reaches 95% of top speed in about 4 seconds, by these settings', () => {
+  // Tane, check-in 2: 190 km/h with the push as it was, so about 7 s (it was about 4 s at 30 m/s, the brief's).
+  it('reaches 95% of top speed in about 7 seconds, by these settings', () => {
     // Full push up to where the easing starts, then the gap to top speed shrinks by the same share each second.
     let speed = 0;
     let steps = 0;
@@ -154,9 +157,8 @@ describe('speedChange', () => {
       speed += speedChange(speed, FLAT, throttle(), 1, TOP, false, car, dt);
       steps++;
     }
-    expect(steps * dt).toBeGreaterThan(3.5);
-    expect(steps * dt).toBeLessThan(4.5);
-    expect(topSpeed).toBe(30);
+    expect(steps * dt).toBeGreaterThan(6.5);
+    expect(steps * dt).toBeLessThan(7.5);
   });
 
   describe('with a boost running (the top speed raised for the step)', () => {

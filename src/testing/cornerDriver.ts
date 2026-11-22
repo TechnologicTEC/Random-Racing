@@ -25,7 +25,7 @@ import type { Rapier } from '../sim/physics/rapier';
 import { quatFromAxes } from '../sim/quat';
 import { createSimOn, type CarState, type Sim } from '../sim/sim';
 import type { Pose } from '../sim/start';
-import { cornerLimit, reachFor, stickToward, type MapPoint } from './lineDriver';
+import { cornerLimit, enterWhole, reachFor, stickToward, type MapPoint } from './lineDriver';
 import { runUp } from './simDriving';
 
 /** Where a car stands on the middle of the road at one sample of the lap, facing along it and tipped with the road, at its ride height. */
@@ -67,7 +67,7 @@ export interface Lane {
   /** The point on the lane's middle this far ahead of where the car last was. */
   ahead(metres: number): MapPoint;
   /** The speed a driver on grip may have now to take what is coming within `reach` metres, braking in time; none on a straight lane. */
-  limit?(reach: number, cfg: PhysicsConfig): number;
+  limit?(reach: number, cfg: PhysicsConfig, slideThrough?: (sample: number) => boolean): number;
 }
 
 /** How far ahead a test driver looks for corners to brake for, in metres. */
@@ -117,7 +117,7 @@ export function roadLane(world: WorldResult, from: number, cfg: PhysicsConfig): 
       const i = wrap(progress + Math.round(metres / ds));
       return { x: line.x[i]!, z: line.z[i]! };
     },
-    limit: (reach, cfg) => cornerLimit(line, progress, reach, cfg.car),
+    limit: (reach, cfg, slideThrough) => cornerLimit(line, progress, reach, cfg.car, undefined, slideThrough, slideThrough ? cfg.car.drift.grip : undefined),
   };
 }
 
@@ -223,11 +223,26 @@ export function driftThroughCorner(rapier: Rapier, world: WorldResult, corner: C
     return sim.state();
   };
 
-  // The run-up, on grip.
+  // The run-up, on grip, braking for what is coming as a player would (10a-4): this corner at what its slide holds
+  // through its tightest part, the rest on grip.
+  const { line } = world.track.candidates[world.track.winnerIndex]!;
+  const n = line.count;
+  const inCorner = (sample: number): boolean => (((sample - startAt) % n) + n) % n < corner.sampleCount;
+  // On a keyboard a corner tighter than the middle circle needs the key into it, the tight circle, at times: braked for
+  // as that circle (the drift grip holds 28 m only to 41 m/s), not the road's own radius.
+  const { tight: tightCircle, middle: middleCircle } = cfg.car.drift.radius;
+  const keyed = enterWhole(line, [corner]);
+  const shaped = corner.minRadius < middleCircle ? { ...keyed, curvature: keyed.curvature.map((c, i) => (inCorner(i) ? Math.max(c, 1 / tightCircle) : c)) } : keyed;
+  const reach = reachFor(cfg.car, LOOK_FOR_CORNERS);
+  /** The fastest the car may be at a sample, with this corner slid through at its tightest. */
+  const slideLimit = (sample: number): number => cornerLimit(shaped, sample, reach, cfg.car, undefined, inCorner, cfg.car.drift.grip);
   let state = sim.state();
   let guard = 0;
   while (lane.sample() < entryAt && guard++ < 3000) {
-    state = step({ throttle: 1, steer: stickToward(state, lane.ahead(options.lookAhead), cfg.car) });
+    const speed = Math.hypot(state.velocity.x, state.velocity.z);
+    const over = speed - slideLimit(lane.sample());
+    const pedals = over > 0.5 ? { brake: Math.min(1, over / 2) } : { throttle: 1 };
+    state = step({ ...pedals, steer: stickToward(state, lane.ahead(options.lookAhead), cfg.car) });
     lane.follow(state);
   }
   const atEntry = lane.follow(state);
@@ -277,7 +292,9 @@ export function driftThroughCorner(rapier: Rapier, world: WorldResult, corner: C
         keyChanges++;
       }
     }
-    state = step({ throttle: 1, drift: true, steer });
+    // Off the throttle while faster than the slide holds through the rest of the corner (10a-4); the brake key would cancel it.
+    const speed = Math.hypot(state.velocity.x, state.velocity.z);
+    state = step({ throttle: speed > slideLimit(lane.sample()) ? 0 : 1, drift: true, steer });
   }
 
   // Letting go, then driving on out of the corner with whatever boost that gave.

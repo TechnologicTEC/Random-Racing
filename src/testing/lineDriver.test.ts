@@ -62,7 +62,7 @@ describe('pointOnRing', () => {
 
 describe('reachFor: how far ahead a test driver looks for corners (step 10a)', () => {
   it('is 80 m at 30 m/s, as before, and the braking from boost speed to a stop and 30 m more for a faster car', () => {
-    expect(reachFor(config.car, 80)).toBe(80);
+    expect(reachFor({ ...config.car, engine: { ...config.car.engine, topSpeed: 30 } }, 80)).toBe(80);
     const faster = { ...config.car, engine: { ...config.car.engine, topSpeed: 53 } };
     const boosted = 53 * faster.boost.speed;
     expect(reachFor(faster, 80)).toBeCloseTo((boosted * boosted) / (2 * BRAKE_SHARE * faster.brake.strength) + 30, 9);

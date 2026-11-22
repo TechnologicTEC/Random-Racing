@@ -83,10 +83,13 @@ describe('a slide on the flat at top speed', () => {
     it(`points its nose 15 degrees inside its line of travel, within 1 degree, once swung in (${side})`, () => {
       const sim = atTopSpeed();
       slide(sim, dir, 0, perSecond);
-      for (const state of slide(sim, dir, 0, perSecond).slice(1)) {
+      const states = slide(sim, dir, 0, perSecond);
+      // Each step's nose against the line the tyres then set it travelling on, the next step's (10a-4: the velocity of
+      // the same step lags a step behind the path, 0.9 degrees at 53 m/s on the middle circle, 0.5 at 30 m/s).
+      for (let k = 1; k < states.length - 1; k++) {
         // Inside a right-hand corner the nose points right of the line of travel: a smaller angle.
-        const inside = wrap(travelAngle(state) - noseAngle(state)) * dir;
-        expect(Math.abs(inside - car.drift.angle)).toBeLessThan(DEGREE);
+        const inside = wrap(travelAngle(states[k + 1]!) - noseAngle(states[k]!)) * dir;
+        expect(Math.abs(inside - car.drift.angle), `step ${k}`).toBeLessThan(DEGREE);
       }
       sim.free();
     });
@@ -101,10 +104,14 @@ describe('a slide on the flat at top speed', () => {
     });
   }
 
-  it('keeps 97% of top speed or more in the tightest slide', () => {
+  // Tane, 10a-3: the drift grip stays 60 m/s2, which holds the tightest circle (28 m) to 41 m/s; Tane, 10a-4: 84% of it
+  // (was 97% of top speed at 30 m/s). Held from 53 m/s the slide scrubs to 34.75 m/s about 2 s in (84.8%), then climbs
+  // back to about 43 and settles near 41 to 42.
+  it('keeps 84% of top speed, or of the speed the drift grip holds on the tightest circle if that is lower, in the tightest slide', () => {
     const sim = atTopSpeed();
     const states = slide(sim, 1, 1, 4 * perSecond);
-    for (const state of states) expect(flatSpeed(state)).toBeGreaterThanOrEqual(0.97 * topSpeed);
+    const held = Math.min(topSpeed, Math.sqrt(car.drift.grip * car.drift.radius.tight));
+    for (const state of states) expect(flatSpeed(state)).toBeGreaterThanOrEqual(0.84 * held);
     sim.free();
   });
 });
@@ -150,10 +157,11 @@ describe('the boost', () => {
   const shedTime = (boostTop - topSpeed) / shed;
 
   it(`after a 2.1 s slide: over top speed on the next step, at ${boostTop} m/s within ${(reachTime + 0.1).toFixed(2)} s, held there to its last step, back to top speed within ${(shedTime + 0.2).toFixed(2)} s more, never over`, () => {
-    const { after } = release(Math.round(2.1 * perSecond));
+    const { atRelease, after } = release(Math.round(2.1 * perSecond));
     const boostSteps = Math.round(car.drift.boosts[1] * perSecond);
     expect(after[0]!.drift.boostLeft).toBeGreaterThan(0);
-    expect(flatSpeed(after[0]!)).toBeGreaterThan(topSpeed);
+    // Faster on the next step than at the release (10a-4: at 53 m/s the slide comes out at 52.7, a little under top speed).
+    expect(flatSpeed(after[0]!)).toBeGreaterThan(flatSpeed(atRelease));
     const reached = after.findIndex((state) => flatSpeed(state) >= boostTop - 1e-6);
     expect(reached).toBeGreaterThanOrEqual(0);
     expect(reached + 1).toBeLessThanOrEqual((reachTime + 0.1) * perSecond);
@@ -168,12 +176,14 @@ describe('the boost', () => {
   for (const tier of [1, 2, 3] as const) {
     const boostSteps = Math.round(car.drift.boosts[tier - 1] * perSecond);
     it(`raises the top speed on exactly ${boostSteps} steps for tier ${tier}, and sheds ${shed} m/s2 afterwards`, () => {
-      const { after } = release(Math.round(car.drift.tiers[tier - 1] * perSecond));
+      const { atRelease, after } = release(Math.round(car.drift.tiers[tier - 1] * perSecond));
       const boosted = after.filter((state) => state.drift.boostLeft > 0);
       expect(boosted).toHaveLength(boostSteps);
       expect(after.slice(0, boostSteps).every((state) => state.drift.boostLeft > 0 && state.drift.boostTier === tier)).toBe(true);
-      // At boost speed on its last step; one step on it has slowed by the shed, and no more.
-      expect(flatSpeed(after[boostSteps - 1]!)).toBeGreaterThan(boostTop * 0.99);
+      // At boost speed on its last step, or, for a boost too short to get there, sped up at `boost.accel` all the way
+      // (Tane, 10a-4: at 53 m/s a tier 1 boost tops out near 59 of 61 m/s); one step on it has slowed by the shed, and no more.
+      const reachable = Math.min(boostTop * 0.99, flatSpeed(atRelease) + 0.97 * car.boost.accel * (boostSteps / perSecond));
+      expect(flatSpeed(after[boostSteps - 1]!)).toBeGreaterThan(reachable);
       const lost = flatSpeed(after[boostSteps - 1]!) - flatSpeed(after[boostSteps]!);
       expect(lost).toBeGreaterThan((shed / perSecond) * 0.99);
       expect(lost).toBeLessThan((shed / perSecond) * 1.01);

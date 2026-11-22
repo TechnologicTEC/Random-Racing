@@ -9,9 +9,10 @@ describe('turnWanted: the turn rate the stick asks for', () => {
   it('asks for the tightest circle at low speed and holds the sideways force at high speed: 6 m at 6 m/s, 15 m at 15 m/s, 60 m at 30 m/s', () => {
     // Full right is a negative turn rate (positive is to the left).
     expect(turnWanted(1, 6, car)).toBeCloseTo(-6 / minRadius, 12);
+    // With the side force at 25 (10a-4): 6 m at 6 m/s, 9 m at 15 m/s, 36 m at 30 m/s.
     expect(6 / -turnWanted(1, 6, car)).toBeCloseTo(6, 9);
-    expect(15 / -turnWanted(1, 15, car)).toBeCloseTo(15, 9);
-    expect(30 / -turnWanted(1, 30, car)).toBeCloseTo(60, 9);
+    expect(15 / -turnWanted(1, 15, car)).toBeCloseTo(Math.max(minRadius, 225 / sideForce), 9);
+    expect(30 / -turnWanted(1, 30, car)).toBeCloseTo(900 / sideForce, 9);
   });
 
   // At 30 m/s: 60 m at 34.5 m/s (the boost) and at 45 m/s; the speeds are shares of top speed (step 10a).

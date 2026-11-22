@@ -186,6 +186,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
         .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch?.thing ?? null)])
         .numbers([d.ended === null ? -1 : DRIFT_ENDS.indexOf(d.ended), d.ends])
         .numbers([slope.x, slope.y, slope.z, memory.sinceWall])
+        .numbers(memory.odd.map((wheel) => (wheel ? 1 : 0)))
         .numbers(progress ? [1, progress.near, progress.along, progress.off, progress.next, progress.passed] : [0])
         .numbers([respawn.waitLeft, respawn.flippedFor, respawn.stuckFor, RESPAWN_REASONS.indexOf(respawn.why), respawn.placedAt, respawn.respawns])
         .digest();

@@ -12,11 +12,13 @@ beforeAll(async () => {
 
 const car = config.car;
 const top = car.engine.topSpeed;
+/** The car at 30 m/s, as it was until 10a-4 (4c measured 95% of it in 3.98 s), and at 53 m/s. */
+const slower: CarConfig = { ...car, engine: { ...car.engine, topSpeed: 30 } };
 const faster: CarConfig = { ...car, engine: { ...car.engine, topSpeed: 53 } };
 
 describe('runUp: the time and distance from rest to a share of top speed, from the engine sum', () => {
   it('gives 95% of top speed in about 4 s at 30 m/s (4c measured 3.98 s), and 7 s at 53 m/s', () => {
-    expect(runUp(car, 0.95).seconds).toBeCloseTo(3.99, 1);
+    expect(runUp(slower, 0.95).seconds).toBeCloseTo(3.99, 1);
     expect(runUp(faster, 0.95).seconds).toBeCloseTo(7.05, 1);
   });
 
@@ -65,7 +67,7 @@ describe('distanceIn: how far the car goes from rest at full throttle in a time'
 describe('circleAt: the full-stick circle at a speed', () => {
   it('is the tightest circle at low speed, speed squared over the side force faster, and the top-speed circle above top speed', () => {
     expect(circleAt(car, 5)).toBeCloseTo(car.steer.minRadius, 12);
-    expect(circleAt(car, 15)).toBeCloseTo(15, 12);
+    expect(circleAt(car, 15)).toBeCloseTo(Math.max(car.steer.minRadius, 225 / car.steer.sideForce), 12);
     expect(circleAt(car, top)).toBeCloseTo(top ** 2 / car.steer.sideForce, 12);
     expect(circleAt(car, top * 1.15)).toBeCloseTo(top ** 2 / car.steer.sideForce, 12);
   });

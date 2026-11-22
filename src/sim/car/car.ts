@@ -8,6 +8,7 @@ import { bounces, pushDirection, wallPush, wallTurn } from './bump';
 import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftEnd, type DriftPhase, type DriftState } from './drift';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
+import { steadyNormals } from './normals';
 import { twistFor, uprightChange } from './stability';
 import { turnWanted } from './steer';
 import { springOf, springPush, wheelMounts } from './suspension';
@@ -62,7 +63,11 @@ export interface CarMemory {
   drift: DriftState;
   /** Steps since the body last touched a wall or the gate, up to `bump.again` in steps: at that, the next touch is a new hit. */
   sinceWall: number;
+  /** Which wheels' ground directions were odd on the last step (10a-4, `steadyNormals`): front left, front right, rear left, rear right. */
+  odd: boolean[];
 }
+
+const NONE_ODD: readonly boolean[] = [false, false, false, false];
 
 /** The handling of one car: the sums that turn what the driver asks for into pushes on its body. */
 export interface Car {
@@ -113,6 +118,7 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   let drift: DriftState = NO_DRIFT;
   const again = Math.round(car.bump.again * cfg.sim.stepsPerSecond);
   let sinceWall = again;
+  let odd: boolean[] = [...NONE_ODD];
 
   /** Feels for the ground under each wheel: a ball cast from the spring's mount, straight down in the car's own directions. */
   function feel(motion: BodyMotion): Array<WheelState & { normal: Vec3 }> {
@@ -183,11 +189,13 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
     clear() {
       drift = NO_DRIFT;
       sinceWall = again;
+      odd = [...NONE_ODD];
     },
-    save: () => ({ drift, sinceWall }),
+    save: () => ({ drift, sinceWall, odd: [...odd] }),
     load(memory) {
       drift = { ...memory.drift };
       sinceWall = memory.sinceWall;
+      odd = [...memory.odd];
     },
 
     step(input, touch = null) {
@@ -203,17 +211,22 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const spinBy = (change: Vec3): void => physics.twist(twistFor(change, motion.rotation, car));
       const ask = (speed: number, wheelsDown: number) => ({ button: input.drift === 1, steer: pedals.steer, brake: pedals.brake, speed, wheelsDown, hit });
 
-      // The springs: each wheel on the ground pushes the body away from it, where the wheel is.
+      // The springs: each wheel on the ground pushes the body away from it, where the wheel is, along its ground's
+      // direction, an odd one steadied (10a-4: a cast on an edge of the road's mesh can tilt by 10 degrees for a step).
+      const steadied = steadyNormals(wheels, car.suspension.oddNormal, odd);
+      odd = steadied.odd;
+      const normals = steadied.normals;
       let grounded = 0;
       let ground = { x: 0, y: 0, z: 0 };
-      for (const wheel of wheels) {
+      for (const [i, wheel] of wheels.entries()) {
         if (!wheel.touching) continue;
+        const normal = normals[i]!;
         grounded++;
-        ground = add(ground, wheel.normal);
+        ground = add(ground, normal);
         // How fast the body is moving at the wheel: its own speed, and its turning about its middle.
         const moving = add(motion.velocity, cross(motion.spin, sub(wheel.at, motion.position)));
-        const closing = -dot(moving, wheel.normal);
-        physics.push(scale(wheel.normal, springPush(spring, wheel.squash, closing, dt)), wheel.at);
+        const closing = -dot(moving, normal);
+        physics.push(scale(normal, springPush(spring, wheel.squash, closing, dt)), wheel.at);
       }
       if (wall) {
         if (sinceWall >= again) physics.push(scale(pushDirection(wall.normal), car.mass * wallPush(motion.velocity, wall.normal, car)));
@@ -246,6 +259,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       physics.push(scale(side, car.mass * sideGrip(dot(coming, side), share, car, dt, old.slide > 0 ? car.drift.grip : car.grip.side)));
       const pull = dot(coming, travel) - speed;
       physics.push(scale(travel, car.mass * speedChange(speed, pull, pedals, share, top, boosting, car, dt)));
+      // Downforce (10a-3): towards the ground, through the body's middle, growing with the speed squared.
+      physics.push(scale(normal, 0 - car.mass * car.downforce * dot(motion.velocity, motion.velocity) * dt));
 
       // And they bring the car's turning to what is asked, as fast as they can: in a slide, the turn that keeps its path
       // on the slide's circle at the speed it is going, and the nose swinging in or out on top of that.

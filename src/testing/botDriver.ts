@@ -28,7 +28,9 @@ import type { Rapier } from '../sim/physics/rapier';
 import { createSim, createSimOn, type CarState } from '../sim/sim';
 import { checkpointCount } from '../sim/track/progress';
 import { lapPose } from './cornerDriver';
-import { cornerLimit, CORNER_SHARE, reachFor, stickToward, type MapPoint } from './lineDriver';
+import { cornerLimit, CORNER_SHARE, enterWhole, reachFor, stickToward, type MapPoint } from './lineDriver';
+
+export { enterWhole } from './lineDriver';
 import { runUp } from './simDriving';
 
 /** The bot's own numbers (test code, so not in the config). */
@@ -42,6 +44,8 @@ export const BOT = {
   band: 0.5,
   /** Braking by how far over the target, in metres per second, for each whole press of the brake. */
   brakePer: 2,
+  /** In a slide it brakes at most this share of the brake that cancels a slide (10a-4). */
+  slideBrake: 0.9,
   /** A lap that takes longer than this, in seconds, is given up. */
   lapLimit: 300,
   /** It presses the drift button this far before a corner it slides through, in metres, unless the road is still turning the other way there. */
@@ -96,8 +100,8 @@ export function turnLeft(line: CenterLine, from: number, end: number): number {
 }
 
 /** The speed the bot wants at sample `from` of the line: the top speed, or less for a corner within 80 m (see the file's comment). */
-export function targetSpeed(line: CenterLine, from: number, cfg: PhysicsConfig, margin = CORNER_SHARE, skip?: (sample: number) => boolean): number {
-  return Math.min(cfg.car.engine.topSpeed, cornerLimit(line, from, reachFor(cfg.car, BOT.reach), cfg.car, margin, skip));
+export function targetSpeed(line: CenterLine, from: number, cfg: PhysicsConfig, margin = CORNER_SHARE, skip?: (sample: number) => boolean, slideGrip?: number): number {
+  return Math.min(cfg.car.engine.topSpeed, cornerLimit(line, from, reachFor(cfg.car, BOT.reach), cfg.car, margin, skip, slideGrip));
 }
 
 /** How far ahead of its place on the lap the bot aims at this speed, in metres. */
@@ -124,6 +128,25 @@ export function pedalsFor(speed: number, target: number, cfg: PhysicsConfig): { 
   return { throttle: target / cfg.car.engine.topSpeed };
 }
 
+/**
+ * Which samples a sliding bot counts at the slide's grip when it brakes for what is coming (10a-4): those of its slide
+ * corners it has not yet reached. The corner it is in, having let go before its end, is driven on grip, and is braked
+ * for on grip.
+ *
+ * @param along where the car is on the lap, in metres
+ */
+export function aheadOnly(corners: readonly Pick<CornerSection, 'startIndex' | 'sampleCount'>[], line: CenterLine, along: number): (sample: number) => boolean {
+  const n = line.count;
+  const lap = line.length;
+  const cornerOf = new Int32Array(n).fill(-1);
+  for (const [c, corner] of corners.entries()) for (let k = corner.startIndex; k < corner.startIndex + corner.sampleCount; k++) cornerOf[((k % n) + n) % n] = c;
+  const inside = corners.map((corner) => ((((along - corner.startIndex * line.spacing) % lap) + lap) % lap) < corner.sampleCount * line.spacing);
+  return (sample) => {
+    const c = cornerOf[((sample % n) + n) % n]!;
+    return c >= 0 && !inside[c];
+  };
+}
+
 /** A bot for a world (see the file's comment). */
 export function createBot(world: WorldResult, cfg: BotConfig, chosen: Partial<BotOptions> = {}): Bot {
   const options: BotOptions = { margin: CORNER_SHARE, slide: false, ...chosen };
@@ -133,6 +156,8 @@ export function createBot(world: WorldResult, cfg: BotConfig, chosen: Partial<Bo
   const lap = line.length;
   const reach = reachFor(cfg.car, BOT.reach);
   const corners = options.corners ?? (options.slide ? slideCorners(sections, cfg) : []);
+  /** The line for braking: its slide corners at their tightest (10a-4). */
+  const braking = corners.length > 0 ? enterWhole(line, corners) : line;
   // The samples of the corners it slides through, which it does not brake for.
   const skipped = new Uint8Array(n);
   for (const c of corners) for (let k = c.startIndex; k < c.startIndex + c.sampleCount; k++) skipped[((k % n) + n) % n] = 1;
@@ -192,12 +217,20 @@ export function createBot(world: WorldResult, cfg: BotConfig, chosen: Partial<Bo
       const fx = state.velocity.x / speed;
       const fz = state.velocity.z / speed;
       const curve = ((2 * (-fz * dx + fx * dz)) / (dx * dx + dz * dz)) * dir;
-      return { throttle: 1, drift: true, steer: stickForCurve(curve, dir, cfg.car) };
+      // In the slide it holds what the slide holds through the rest of the corner, at its tightest (10a-4: at 53 m/s the
+      // throttle alone took the car past it), easing off and braking lightly, never far enough to cancel the slide.
+      const slideTarget = Math.min(state.top, cornerLimit(braking, progress.near, reach, cfg.car, options.margin, () => true, cfg.car.drift.grip));
+      const pedals = pedalsFor(speed, slideTarget, cfg);
+      const held = 'brake' in pedals ? { brake: Math.min(pedals.brake, cfg.car.drift.brakeCancel * BOT.slideBrake) } : pedals;
+      return { ...held, drift: true, steer: stickForCurve(curve, dir, cfg.car) };
     }
     const point = pointAlong(line, progress.along + aimDistance(speed));
     // The car's own top speed for the step: raised while a boost runs, so the bot does not brake a boost away.
     // Having given up a slide, it brakes for every corner again.
-    const target = Math.min(state.top, cornerLimit(line, progress.near, reach, cfg.car, options.margin, gaveUp ? undefined : skip));
+    // A corner it slides through is braked for to what the slide's grip holds there (10a-4).
+    // Only for a corner still ahead: the one it has just let go in is braked for on grip.
+    const ahead = skip && !gaveUp ? aheadOnly(corners, line, progress.along) : undefined;
+    const target = Math.min(state.top, cornerLimit(ahead ? braking : line, progress.near, reach, cfg.car, options.margin, ahead, cfg.car.drift.grip));
     return { ...pedalsFor(speed, target, cfg), steer: stickToward(state, point, cfg.car) };
   };
 }

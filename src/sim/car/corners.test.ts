@@ -41,7 +41,7 @@ beforeAll(() => {
 }, 120_000);
 
 describe('drifting through the corners of real islands, on a keyboard', () => {
-  it('holds a slide from 4 m into each corner to 4 m before its end, on the road, through 95 corners in 100, and 9 in 10 of each kind but sweepers, changing key as often as every 0.15 s', { timeout: 300_000 }, () => {
+  it('holds a slide from 4 m into each corner to 4 m before its end, on the road, through 95 corners in 100, and 9 in 10 of each kind but sweepers, changing key as often as every 0.15 s', { timeout: 600_000 }, () => {
     const runs = driveAll({});
     // The run-up (100 m on grip at full throttle) brings nearly every corner's car to it on the road.
     expect(runs.filter((run) => run.arrived).length).toBeGreaterThan(runs.length * 0.95);
@@ -59,7 +59,7 @@ describe('drifting through the corners of real islands, on a keyboard', () => {
     expect(held.filter((run) => run.exitClean).length / held.length).toBeGreaterThanOrEqual(0.95);
   });
 
-  it('holds a slide through 9 in 10 hairpins and plain corners, and 85 in 100 chicanes, for a driver who keeps each key half a second (Tane, 6h-1 and 6h-4)', { timeout: 300_000 }, () => {
+  it('holds a slide through 9 in 10 hairpins and plain corners, and 85 in 100 chicanes, for a driver who keeps each key half a second (Tane, 6h-1 and 6h-4)', { timeout: 600_000 }, () => {
     const runs = driveAll({ keyHold: 0.5 });
     // Measured in 6h-4 on the final 20 m worlds: hairpins 100%, plain corners 96%, chicanes 87%, sweepers 4% (the widest
     // are taken on grip). A chicane corner lasts about a second, and this driver holds the key into it for the first half:

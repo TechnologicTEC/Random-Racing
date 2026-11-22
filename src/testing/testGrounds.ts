@@ -359,7 +359,9 @@ export function kerbGround(): KerbGround {
   const slideRunUp = Math.max(6, runUp(config.car, 0.97).seconds + 1.5);
   const slideFrom = Math.max(90, Math.round(distanceIn(config.car, slideRunUp) - kerbFrom + 13));
   const height = (): number => 0;
-  const road = new Sheets().grid(steps(-100, 100, 20), steps(-cells(kerbTo + 150), cells(slideFrom + 10), 20), height).mesh();
+  // Wide enough to start the angled crossings' run-up beside the kerb: 250 m (or more) at 15 degrees.
+  const side = Math.max(100, cells(runUpTo(0.99, 250) * Math.tan((15 * Math.PI) / 180) + 30));
+  const road = new Sheets().grid(steps(-side, 100, 20), steps(-cells(kerbTo + 150), cells(slideFrom + 10), 20), height).mesh();
   const outer = kerbInner + kerbWidth;
   // Like the road's kerbs, it rises from nothing over its first and last rows.
   const rows = steps(-kerbTo, -kerbFrom, 2).map((z) => ({ z, top: z === -kerbTo || z === -kerbFrom ? 0 : kerbHeight }));

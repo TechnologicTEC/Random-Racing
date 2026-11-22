@@ -87,7 +87,7 @@ describe('rocks', () => {
     for (const throttle of [0.6, 1]) {
       const sim = createSimOn(rapier, courseWith({ rocks: [rock(0, -LOW_AT, clear, 1.5)] }), config, flatGround().start);
       const states: CarState[] = [];
-      hold(sim, { throttle }, 12, (state) => states.push(state));
+      hold(sim, { throttle }, Math.max(12, (LOW_AT + 60) / (throttle * car.engine.topSpeed) + 3), (state) => states.push(state));
       sim.free();
       expect(states.every((state) => state.touch === null)).toBe(true);
       expect(Math.min(...states.map(roofUp))).toBeGreaterThan(0.999);

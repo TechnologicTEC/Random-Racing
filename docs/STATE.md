@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 10a-3, measured at 53 m/s; Tane picked (see "10a-3")
-- **Next:** `docs/PLAN.md`, "The build order": **10a-4**, the new speed in the config: top speed 53, steering grip 25 (`grip.side` 32), downforce, drift grip 60 as it is; the test drivers taught to brake into tight slides, then step 9's bars measured again `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Last finished part:** 10a-4, the new speed in the config (see "Step 10"): 190 km/h, every step 9 bar met. **This ends 10a**
+- **Next:** `docs/PLAN.md`, "The build order": **10b**, speed with the car (`npm run perf`, which opens a real browser window: ask Tane who runs it) `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -885,7 +885,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | 10a-1 | **Why a drift ended**, on the readout | Done |
 | 10a-2 | **Tests that follow the config** | Done |
 | 10a-3 | **Measure at 53 m/s**; Tane picks | Done |
-| 10a-4 | **The new speed in the config** | |
+| 10a-4 | **The new speed in the config** | Done |
 | 10b | **Speed with the car** (`npm run perf`) | |
 | 10c | **Docs, the pull request, sign-off** | |
 
@@ -945,6 +945,104 @@ Every lap on grip is clean at 53 m/s. Full stick at 53 m/s turns 187, 156, 140 a
 - Slide ends by reason over the 20 sliding laps: about 175 let go, 1 or 2 walls, 1 to 3 too slow, a few on a respawn.
 
 **Tane's picks (2026-11-22):** steering grip 25 (full stick 113 m at 53 m/s; `grip.side` 32, 7 above it); downforce; drift grip 60 as it is, so the tightest slide scrubs a fast car down to about 41 m/s (6b's "97% of top speed in the tightest slide" changes with it). Claude's call: the start and end speeds stay shares of top speed (21 and 16 m/s), as they measured the same as 12 and 9. Steering 25 with drift grip 60 was not one of the measured pairs: 10a-4 measures it, with the test drivers braking into tight slides as a player would.
+
+### 10a-4: the new speed (2026-11-22)
+
+**The car now:** top speed 53 m/s (190 km/h), the push as it was (95% of top speed in 7.0 s; 108 km/h in 3.2 s); steering grip 25 (full stick 6 m up to 12 m/s, 36 m at 30 m/s, 113 m at top speed), tyre grip 35 (above the 33 m/s2 full stick asks at boost speed, so ordinary steering never slides; the grid measured with 32); downforce 0.0025 (`car.downforce`: towards the ground, through the body's middle, times the speed squared, while any wheel is down: 7 m/s2 at 53, enough for the tightest crest at boost speed); an odd wheel's ground direction steadied (`steadyNormals`, below); drift grip 60, boost 12 m/s2 and every drift setting as they were (start and end speeds are shares of top speed: 21 and 16 m/s).
+
+**Why the wheel is steadied** (Tane, from the cause found): on the 15% test ramp with downforce on, one wheel's ball cast returned a contact direction tilted about 10 degrees, (0.035, 0.948, 0.317) against the ramp's (0, 0.989, 0.148), where it met the mesh on an edge between two triangles; the spring pushed along it, the car pitched and rolled (0.8 and 1.5 rad/s) and the opposite wheel lifted. Downforce does not make the bad direction, it makes the springs carry 1.7 times the load at top speed, so the same tilt kicked hard enough to show. `steadyNormals` (`sim/car/normals.ts`): a touching wheel more than 8 degrees (`car.suspension.oddNormal`, its cosine 0.990268) from the average of the other touching wheels takes that average, when at least two others are down, all on the same surface as it and agreeing among themselves, and only on the first step it is odd (`CarMemory.odd`, in the fingerprint and the snapshot). Each condition came from a test: without the first-step rule the car rolled on the 45% hillside (a slope that lasts must be felt); without the same-surface rule one steadied step at the hillside's grass foot left the car 0.5 m short of the climb. A kerb's top (5 degrees) is within the limit.
+
+**The test drivers brake as a player would** (Claude's calls, test code): at 30 m/s even the tightest corner let a slide through faster than top speed, so they never braked for one; at 53 m/s that put them into walls. Now `cornerLimit` counts a corner they slide through at what the slide holds, `sqrt(0.9 x drift.grip x radius)`, and at its tightest from its first sample (`enterWhole`: a long hairpin can tighten near its end, and half the brake cancels a slide); the bot counts only slide corners still ahead (`aheadOnly`: the rest of the one it has let go in is on grip), and in a slide holds that speed, easing off and braking at most 0.9 of the brake that cancels it; the keyboard corner driver lifts off the throttle in a slide and brakes on its run-up, and for a corner tighter than the middle circle brakes for the tight circle (its key into the corner follows 28 m). The bots' look-ahead is the braking from boost speed (`reachFor`, 163 m).
+
+**Tests changed, with Tane's say:** 95% of top speed in 6.5 to 7.5 s (was 3.5 to 4.5; "acceleration as it is"); the steady circles within 5% of the straight-line speed (was 2%; 95.8% measured at 2.5 g); a tier 1 boost speeds up at 12 m/s2 for its whole time where it is too short to reach boost speed, and the boost is felt on the next step as faster than at release (it was over top speed; the slide comes out at 52.7); the tightest slide keeps 84% of what the drift grip holds on the 28 m circle (was 97% of top speed): held from 53 m/s it dips to 34.75 m/s about 2 s in, climbs back to about 43 and settles near 41 to 42 (**corrected**: Claude first reported 96.6% and then 94.85%, each the first step under the test's line, not the lowest). **Tests changed, Claude's calls (no meaning lost):** the nose's angle in a slide is measured against the next step's line of travel (the same step's lags a step: 0.9 degrees at 53 m/s); the circle is compared with the one the steering asks at the speed the car holds; the kerb face's straight is 4/3 s of travel at the crossing speed (40 m at 30 m/s); the kerb ground is wider; the low rock is held long enough to pass; the corner test's time limits 600 s (313 s in a full run); the picture of a tier 3 slide falls back to the bot's lap, and to tier 2 where a seed has no slide of 3 s (seed 42: the bot's longest is 2.8 s; `slideAtLeast` in `e2e/drifting.ts`).
+
+**Step 9's tables at 53 m/s** (Node, seeds 1 to 20):
+
+The laps on grip (lap 1 from standing 4 m behind the line, lap 2 flying):
+
+| Seed | Relief | Lap (m) | Lap 1 (s) | Flying lap (s) | Average (km/h) | Four wheels on road or kerb (%) | Wall touches | Tree and rock touches | Respawns |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | mountain | 2,385 | 65.2 | 62.2 | 132 / 138 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 2 | flat | 1,916 | 54.0 | 51.1 | 128 / 135 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 3 | mountain | 2,740 | 70.6 | 67.8 | 140 / 145 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 4 | rolling | 2,246 | 64.2 | 61.2 | 126 / 132 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 5 | hilly | 2,049 | 55.3 | 52.4 | 133 / 141 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 6 | hilly | 1,998 | 59.8 | 57.3 | 120 / 126 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 7 | hilly | 1,888 | 57.3 | 54.6 | 119 / 124 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 8 | rolling | 1,650 | 52.1 | 49.5 | 114 / 120 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 9 | flat | 1,910 | 53.0 | 50.0 | 130 / 137 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 10 | hilly | 1,901 | 54.9 | 52.0 | 125 / 132 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 11 | mountain | 2,689 | 69.3 | 66.2 | 140 / 146 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 12 | mountain | 2,116 | 58.5 | 55.8 | 130 / 136 | 99.7 / 99.8 | 0 | 0 | 0 |
+| 13 | mountain | 2,141 | 57.9 | 55.2 | 133 / 139 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 14 | mountain | 2,394 | 62.8 | 59.8 | 137 / 144 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 15 | flat | 1,651 | 47.7 | 45.2 | 125 / 132 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 16 | rolling | 2,050 | 62.2 | 59.4 | 119 / 124 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 17 | rolling | 2,106 | 55.2 | 52.1 | 137 / 146 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 18 | flat | 2,123 | 62.3 | 59.6 | 123 / 128 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 19 | rolling | 1,963 | 55.8 | 52.7 | 127 / 134 | 100.0 / 100.0 | 0 | 0 | 0 |
+| 20 | rolling | 2,074 | 59.2 | 56.8 | 126 / 131 | 100.0 / 100.0 | 0 | 0 | 0 |
+
+Every lap clean; 0.0 s off the road on every seed. Mean flying lap 56.0 s (78.5 at 30 m/s).
+
+The laps with slides (one lap from the start line each):
+
+| Seed | On grip (s) | With slides (s) | Wall touches | Respawns | On road or kerb (%) |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 65.18 | 56.57 | 0 | 0 | 100.0 |
+| 2 | 54.03 | 45.92 | 0 | 0 | 100.0 |
+| 3 | 70.57 | 63.90 | 0 | 0 | 100.0 |
+| 4 | 64.18 | 53.62 | 0 | 0 | 100.0 |
+| 5 | 55.32 | 48.73 | 0 | 0 | 100.0 |
+| 6 | 59.77 | 49.82 | 0 | 0 | 100.0 |
+| 7 | 57.30 | 49.02 | 1 | 0 | 98.3 |
+| 8 | 52.10 | 46.67 | 1 | 0 | 94.3 |
+| 9 | 52.98 | 46.02 | 0 | 0 | 100.0 |
+| 10 | 54.88 | 46.63 | 0 | 0 | 99.7 |
+| 11 | 69.28 | 61.03 | 0 | 0 | 99.9 |
+| 12 | 58.52 | 48.97 | 0 | 0 | 98.8 |
+| 13 | 57.92 | 51.15 | 0 | 0 | 100.0 |
+| 14 | 62.77 | 54.67 | 0 | 0 | 99.8 |
+| 15 | 47.68 | 41.35 | 0 | 0 | 100.0 |
+| 16 | 62.20 | 51.32 | 0 | 0 | 100.0 |
+| 17 | 55.20 | 48.07 | 0 | 0 | 99.8 |
+| 18 | 62.33 | 51.95 | 0 | 0 | 100.0 |
+| 19 | 55.77 | 47.82 | 0 | 0 | 100.0 |
+| 20 | 59.25 | 51.33 | 0 | 0 | 99.9 |
+
+Quicker on all 20 seeds, by 5.4 to 10.9 s (9 to 17%). The wall touches on seeds 7 and 8 are recorded, not tested, as at 30 m/s.
+
+The corner proof (`cornerProof.test.ts`; the same picks: each kind's tightest, middle and widest):
+
+| Corner | Seed (relief) | Radius, turn | With the slide: time, exit speed, tier | Best without: time, exit speed | Saved |
+| --- | --- | --- | --- | --- | --- |
+| Hairpin | 6 (hilly) | 22 m, 184 deg | 7.25 s, 35.1 m/s, 3 | 8.30 s, 35.1 m/s | 1.05 s |
+| Hairpin | 1 (mountain) | 38 m, 180 deg | 7.72 s, 36.4 m/s, 2 | 9.19 s, 36.3 m/s | 1.46 s |
+| Hairpin | 15 (flat) | 43 m, 180 deg | 6.15 s, 46.9 m/s, 2 | 7.97 s, 47.4 m/s | 1.82 s |
+| Sweeper | 8 (rolling) | 73 m, 60 deg | 6.66 s, 32.9 m/s, 1 | 6.68 s, 32.9 m/s | 0.02 s |
+| Sweeper | 13 (mountain) | 86 m, 61 deg | 4.97 s, 52.3 m/s, 1 | 5.06 s, 52.2 m/s | 0.09 s |
+| Sweeper | 18 (flat) | 90 m, 84 deg | 7.67 s, 36.1 m/s, 2 | 7.70 s, 35.9 m/s | 0.02 s |
+| Chicane | 8 (rolling) | 22 m, 79 deg | 5.36 s, 32.8 m/s, 0 | 5.97 s, 32.8 m/s | 0.61 s |
+| Chicane | 14 (mountain) | 33 m, 47 deg | 5.32 s, 40.0 m/s, 0 | 5.47 s, 40.0 m/s | 0.15 s |
+| Chicane | 6 (hilly) | 46 m, 66 deg | 5.31 s, 36.8 m/s, 1 | 5.83 s, 36.8 m/s | 0.52 s |
+| Plain corner | 17 (rolling) | 22 m, 78 deg | 5.05 s, 32.4 m/s, 0 | 5.89 s, 32.4 m/s | 0.84 s |
+| Plain corner | 3 (mountain) | 31 m, 72 deg | 4.37 s, 49.7 m/s, 0 | 5.27 s, 48.4 m/s | 0.90 s |
+| Plain corner | 20 (rolling) | 65 m, 48 deg | 5.15 s, 44.4 m/s, 0 | 5.67 s, 44.4 m/s | 0.52 s |
+
+Every slid corner of seeds 1 to 20 (177; throwaway code, the same passes):
+
+| Kind | Corners | Quicker with the slide and clean | Time saved: middle (least, most) | Exit speed, with less without: middle (worst) |
+| --- | --- | --- | --- | --- |
+| Hairpin | 25 | 25 | 1.66 s (1.05, 1.86) | 0 (-1.1 m/s) |
+| Sweeper (70 to 90 m) | 11 | 11 | 0.14 s (0.02, 0.87) | 0.1 (-0.2 m/s) |
+| Chicane | 24 | 24 | 0.45 s (0.14, 0.68) | 0 (-0.2 m/s) |
+| Plain corner | 117 | 117 | 0.78 s (0.03, 1.83) | 0 (-3.2 m/s) |
+
+- **All 177 pass** (176 at 30 m/s: seed 7's 22 m corner no longer touches the wall). Seed 20's 65 m corner, the close one at 30 m/s (0.01 s), saves 0.52 s.
+- **The close ones now are sweepers**: seed 8's 73 m and seed 18's 90 m save 0.02 s. At 53 m/s a sweeper is taken nearly flat out on grip, and the boost is the whole gain.
+- **Tier 3 is harder to reach**: at 53 m/s a 3 s slide needs over 100 m of corner. The bot's longest slide on the lap is 2.8 s on seeds 42 and 48213 and 3.0 s on seed 100 (4.0 s on seed 1). For Tane at the sign-off, with `drift.tiers` on the tuning panel.
+
+Tests, seen failing first: `normals.test.ts` (9); `upright.test.ts` gains 2 (downforce presses the springs by its share, and nothing in the air); `botDriver.test.ts` gains 3 (the slide corner braked for at the drift grip, `aheadOnly`, `enterWhole`); the odd wheels in `walls.test.ts`'s fingerprint test. 2,352 unit tests pass.
 
 ## Working agreements
 
@@ -1017,6 +1115,8 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-22 | **10a-4, Tane's choices on the wheel kick and the tight slide:** an odd wheel's ground direction is steadied (`steadyNormals`); the tightest slide keeps 84% of what the drift grip holds on the 28 m circle. **Corrected:** Claude first reported 96.6% and then 94.85%, each the first step under the test's line, not the lowest; measured properly, held from 53 m/s it dips to 34.75 m/s (84.8%) about 2 s in, climbs back to about 43 and settles near 41 to 42 | Tane, from options with the numbers under "10a-4" |
+| 2026-11-22 | **10a-4, Tane's answers:** the boost stays at 12 m/s2 (at 53 m/s a tier 1 boost tops out near 59 of 61 m/s; its test becomes "speeds up at 12 m/s2 for its whole time"); the steady circles at full stick keep 95% of the straight-line speed (was 98%; 95.8% measured at 2.5 g); the wheel that misses the ramp for a step with downforce: find the cause before choosing | Tane, from options with the numbers under "10a-4" |
 | 2026-11-22 | **10a-3, Tane's picks for 53 m/s:** steering grip 25 (`steer.sideForce`, full stick 113 m at 53 m/s; `grip.side` 32); downforce over crests; drift grip 60 as it is (the tightest slide scrubs a fast car to about 41 m/s). Start and end speeds stay shares of top speed (Claude's call) | From the measured grid under "10a-3": at 53 m/s most wall touches came just after a slide, when steering on grip could not bring the car back; downforce stopped every crest jump at no cost in lap time |
 | 2026-11-22 | **Check-in 2 (Tane):** everything works; **top speed up to about 190 km/h (about 53 m/s; tried on the tuning panel), acceleration as it is**; a bit more grip or turning where the speed is too much; a drift sometimes cancels mid-corner with no brake pressed. The rest stands | Tane's answers at check-in 2. The straights took too long with nothing to do. The cancel is for 10a: the rules end a slide only on a touch, the brake or too little speed, and a slide on the flat holds at 53 m/s |
 | 2026-11-22 | **The bot drives as a player would, and both passes of a corner take the best of three margins** (9b) | Claude's calls, test code only, for Tane to see. The slide follows the circle through a point 12 m ahead (as the keyboard corner driver), not the plan's curvature-plus-offset rule; it presses only when the road is not turning the other way and its line turns into the corner, waits for the nose before a slide the other way, gives up a corner after a hit. Each was found as a wall touch or a stuck car on a real seed, and none changes the car. The margins: the pass without a slide had its pick of three, the slide pass had one, and the next corner inside the 120 m decided seed 20 |
@@ -1048,6 +1148,10 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 - **M2:** corner entries have no easing (the curvature steps from zero to 1/radius). Banking handles this by averaging its tilt over 30 m (done in step 8); kerbs should allow for it too.
 
 ## Known issues and risks
+
+- **Tier 3 is harder to reach at 53 m/s** (10a-4): a 3 s slide needs over 100 m of corner; the bot's longest slide on a lap is 2.8 to 3.0 s on seeds 42, 48213 and 100. For Tane at the sign-off (`drift.tiers` is on the tuning panel).
+- **Sweepers are the close corners of the corner proof at 53 m/s**: seed 8's 73 m and seed 18's 90 m save 0.02 s with the slide (10a-4).
+- **A held tightest slide from 53 m/s dips to 35 m/s and surges back to 43** before settling near 41 (drift grip 60; Tane accepted it, 10a-4).
 
 - **"Gives the same picture of a slide and of a boost twice" fails now and then in Firefox in a full run**: on the slide's picture in 6h-5, on the boost's in 8a (a run with the laptop in standby twice), passing in every run alone (33 so far); the cause is unknown (see "6h-5"). Since 8a the pictures that differ are written to the test's folder in `test-results/` (`slide-round-1.png` and so on): look at them before running anything else, since every Playwright run empties `test-results/`.
 - **A slide gains little in wide corners** (9b): 0.01 to 0.29 s in 65 to 90 m corners, where the car is nearly flat out on grip and the boost is the whole gain; seed 20's 65 m corner by 0.01 s, so a weaker boost at 10a would tip it. For check-in 2 (question 4).
@@ -1185,3 +1289,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-22 (Milestone 3, Opus 5.5):** Step 10 planned in plan mode and approved (see "Step 10"; 10a split in four parts). 10a-1 done: the drift state names why the last slide ended (`ended`, `ends`, in the fingerprint and the snapshot), and the readout says "drift cancelled: hit a wall" and so on for 2 s. Pictures on seeds 1, 7 and 42 looked at. 2,331 unit tests pass; all 346 browser tests passed in one run (23.7 minutes). Next: 10a-2, the tests that follow the config.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-2 done: every test sized for 30 m/s works its sizes out from the config (`runUp`, `distanceIn`, `circleAt` in `testing/simDriving.ts`, `reachFor` in `testing/lineDriver.ts`; the grounds, hold times, circles, the bots' look-ahead and run-ups), each the larger of its old size and the config's, so nothing moves at 30 m/s. Four speed-tied tests left for 10a-4. 2,338 unit tests pass; all 346 browser tests passed in one run (23.1 minutes). Next: 10a-3, measure at 53 m/s.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-3 measured (throwaway code; table under "10a-3"): at 53 m/s the bot laps every seed clean on grip at any steering grip, and a downforce trial stops the car leaving the ground over crests at no cost in lap time; but no setting tried passes step 9's slide bars, mostly because the car leaves a slide too fast for its steering on grip and the test drivers slide in without braking. Docs only. Next: Tane picks; then the bots brake into tight slides and the bars are measured again.
+- **2026-11-22 (Milestone 3, Opus 5.5):** 10a-4 done, which ends 10a. Top speed 53 m/s (190 km/h) with the push as it was, steering grip 25, tyre grip 35, downforce 0.0025, an odd wheel's ground direction steadied (a cast on a mesh edge tilted 10 degrees and kicked the car), drift grip and boost as they were. The test drivers brake for the corners they slide through as a player would. Every step 9 bar met at 53 m/s: laps on grip clean, the sliding lap quicker on all 20 seeds, the corner proof and all 177 slid corners quicker and clean (tables under "10a-4"). Four tests changed with Tane's say; the tightest slide's numbers corrected (first reported wrong). 2,352 unit tests pass; the browser suite: 343 passed in one run (23.9 minutes), and the one that ran out of time there (seed 42's slide picture) passed with the two after it in a rerun of the 96 screenshot tests, with the 48 driving tests rerun after the slide helper's last change. Next: 10b.

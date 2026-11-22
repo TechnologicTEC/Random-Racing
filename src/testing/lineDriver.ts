@@ -9,7 +9,7 @@
  * inputs in the browsers).
  */
 import type { CarConfig } from '../config';
-import type { CenterLine } from '../gen/types';
+import type { CenterLine, CornerSection } from '../gen/types';
 import type { BodyMotion } from '../sim/physics/carBody';
 import { turnWanted } from '../sim/car/steer';
 import { rotate } from '../sim/quat';
@@ -34,19 +34,31 @@ export function reachFor(car: CarConfig, least: number): number {
  * The speed a driver on grip may have now to take what is coming within `reach` metres of sample `from` (counted on
  * without wrapping), braking in time: at distance `d` a corner of curvature `c` allows `sqrt(margin * sideForce / |c|)`,
  * and to brake down to that at `BRAKE_SHARE` of the brake the car may have `sqrt(allowed^2 + 2 * share * strength * d)`
- * now. The least of those; none (Infinity) with no corner in reach. Samples `skip` names are left out.
+ * now. The least of those; none (Infinity) with no corner in reach. Samples `skip` names are left out, or, given
+ * `slideGrip`, taken at the speed a slide holds there: `sqrt(margin * slideGrip / |c|)` (10a-4: at 53 m/s a driver
+ * brakes before a tight corner it will slide through, as a player would; at 30 m/s even the tightest allowed more than
+ * top speed).
  */
-export function cornerLimit(line: CenterLine, from: number, reach: number, car: CarConfig, margin = CORNER_SHARE, skip?: (sample: number) => boolean): number {
+export function cornerLimit(
+  line: CenterLine,
+  from: number,
+  reach: number,
+  car: CarConfig,
+  margin = CORNER_SHARE,
+  skip?: (sample: number) => boolean,
+  slideGrip?: number,
+): number {
   const n = line.count;
   const ds = line.spacing;
   const braking = 2 * BRAKE_SHARE * car.brake.strength;
   let speed = Infinity;
   for (let k = 0; k * ds <= reach; k++) {
     const i = (((from + k) % n) + n) % n;
-    if (skip?.(i)) continue;
+    const sliding = skip?.(i) ?? false;
+    if (sliding && slideGrip === undefined) continue;
     const curve = Math.abs(line.curvature[i]!);
     if (curve === 0) continue;
-    const allowed = Math.sqrt((margin * car.steer.sideForce) / curve);
+    const allowed = Math.sqrt((margin * (sliding ? slideGrip! : car.steer.sideForce)) / curve);
     speed = Math.min(speed, Math.sqrt(allowed * allowed + braking * k * ds));
   }
   return speed;
@@ -98,4 +110,20 @@ export function pointOnRing(radius: number, from: MapPoint, ahead: number, way: 
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   return { x: radius * (x * c - way * z * s), z: radius * (way * x * s + z * c) };
+}
+
+/**
+ * The line as a sliding driver brakes for it (10a-4): every sample of a slide corner given that corner's greatest
+ * curvature, so the bot enters at a speed its slide holds through the corner's tightest part, as a player brakes
+ * before a hairpin. It cannot brake hard in a slide (half the brake cancels it), and a long hairpin can tighten near its end.
+ */
+export function enterWhole(line: CenterLine, corners: readonly Pick<CornerSection, 'startIndex' | 'sampleCount'>[]): CenterLine {
+  const n = line.count;
+  const curvature = Float64Array.from(line.curvature);
+  for (const corner of corners) {
+    let most = 0;
+    for (let k = corner.startIndex; k < corner.startIndex + corner.sampleCount; k++) most = Math.max(most, Math.abs(line.curvature[((k % n) + n) % n]!));
+    for (let k = corner.startIndex; k < corner.startIndex + corner.sampleCount; k++) curvature[((k % n) + n) % n] = most;
+  }
+  return { ...line, curvature };
 }

@@ -153,7 +153,7 @@ describe('what the simulation remembers of a wall', () => {
     sim.free();
   });
 
-  it("puts the touch's slope and the time since the last hit in the fingerprint", () => {
+  it("puts the touch's slope, the time since the last hit and the odd wheels in the fingerprint", () => {
     const { sim } = towardsWall(30);
     driveToWall(sim);
     const saved = sim.snapshot();
@@ -162,6 +162,9 @@ describe('what the simulation remembers of a wall', () => {
     sim.restore({ ...saved, touch: { thing: 'wall', normal: { x: 0, y: 1, z: 0 } } });
     expect(sim.hash()).not.toBe(base);
     sim.restore({ ...saved, car: { ...saved.car, sinceWall: saved.car.sinceWall + 1 } });
+    expect(sim.hash()).not.toBe(base);
+    // And which wheels' ground directions were odd on the last step (10a-4).
+    sim.restore({ ...saved, car: { ...saved.car, odd: saved.car.odd.map((wheel, i) => (i === 0 ? !wheel : wheel)) } });
     expect(sim.hash()).not.toBe(base);
     sim.restore(saved);
     expect(sim.hash()).toBe(base);

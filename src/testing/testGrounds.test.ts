@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import type { MeshData } from '../gen/types';
 import { rotate } from '../sim/quat';
+import { circleAt } from './simDriving';
 import { bankedBend, crestGround, flatGround, hillsideGround, kerbGround, poseOn, rampGround, stepGround, type TestGround } from './testGrounds';
 
 /** Every vertex of a mesh, as points. */
@@ -122,20 +123,22 @@ describe('crestGround', () => {
 });
 
 describe('bankedBend', () => {
-  it('is a ring of 70 m radius, banked 8 degrees with the inside low, and the car starts on it facing round it', () => {
+  // 70 m, or 7/6 of the top-speed circle where that is wider (10a-2): 131 m at 53 m/s with the side force at 25.
+  it('is a ring of 70 m radius or more, banked 8 degrees with the inside low, and the car starts on it facing round it', () => {
     const ground = bankedBend();
-    expect(ground.radius).toBe(70);
+    const r = ground.radius;
+    expect(r).toBeCloseTo(Math.max(70, (circleAt(config.car, config.car.engine.topSpeed) * 7) / 6), 9);
     // tan 8 degrees.
     expect(ground.cross).toBeCloseTo(0.14054, 4);
     // The centre line is at height 0 all the way round; the surface rises towards the outside.
-    for (const [x, z] of [[70, 0], [0, 70], [-70, 0], [0, -70], [49.497, 49.497]] as const) {
+    for (const [x, z] of [[r, 0], [0, r], [-r, 0], [0, -r], [r * Math.SQRT1_2, r * Math.SQRT1_2]] as const) {
       expect(ground.height(x, z)).toBeCloseTo(0, 2);
-      const out = { x: x / 70, z: z / 70 };
+      const out = { x: x / r, z: z / r };
       expect(ground.height(x + out.x * 5, z + out.z * 5) - ground.height(x - out.x * 5, z - out.z * 5)).toBeCloseTo(10 * ground.cross, 2);
     }
     // The start: on the centre line at (70, 0), facing -z, so the middle of the ring is on its left; tipped with the bank.
     const { position, rotation } = ground.start;
-    expect(position.x).toBeCloseTo(70, 0);
+    expect(position.x).toBeCloseTo(r, 0);
     expect(position.z).toBeCloseTo(0, 6);
     const forward = rotate(rotation, { x: 0, y: 0, z: -1 });
     expect(forward.z).toBeCloseTo(-1, 6);
@@ -144,8 +147,8 @@ describe('bankedBend', () => {
     // The mesh's rows are no longer than the real road's.
     const points = vertices(ground.course.road);
     const radii = points.map((p) => Math.sqrt(p.x * p.x + p.z * p.z));
-    expect(Math.min(...radii)).toBeLessThanOrEqual(58);
-    expect(Math.max(...radii)).toBeGreaterThanOrEqual(82);
+    expect(Math.min(...radii)).toBeLessThanOrEqual(r - 12);
+    expect(Math.max(...radii)).toBeGreaterThanOrEqual(r + 12);
   });
 });
 

@@ -89,9 +89,14 @@ describe('steady circles on the flat, full stick', () => {
       const right = circle(throttle, 1);
       const left = circle(throttle, -1);
       for (const turn of [right, left]) {
-        expect(Math.abs(turn.radius - radius)).toBeLessThan(radius * 0.05);
+        // The circle the steering asks for at the speed the car holds on it (10a-4: at 2.5 g on the 9 m circle the car
+        // runs 4% under its straight-line speed, and the circle tightens with it, as the steering's sum says).
+        const asked = circleAt(car, turn.speed);
+        expect(Math.abs(turn.radius - asked)).toBeLessThan(asked * 0.05);
+        expect(Math.abs(asked - radius)).toBeLessThan(radius * 0.1);
         expect(turn.wander).toBeLessThan(radius * 0.05);
-        expect(Math.abs(turn.speed - pedalSpeed(throttle))).toBeLessThan(pedalSpeed(throttle) * 0.02);
+        // Within 5% of it (Tane, 10a-4: was 2%; at full stick on the 9 m circle, 2.5 g sideways, it keeps 95.8%).
+        expect(Math.abs(turn.speed - pedalSpeed(throttle))).toBeLessThan(pedalSpeed(throttle) * 0.05);
         expect(turn.everyWheelDown).toBe(true);
         expect(turn.lowestRoof).toBeGreaterThan(0.999);
       }
@@ -223,8 +228,10 @@ describe('crossing a kerb from the outside, up its upright face (7d)', () => {
     const kerb = kerbGround();
     const face = kerb.kerbInner + config.road.kerbWidth;
     const target = (0 - degrees * Math.PI) / 180;
-    // Far enough out for the turn in on the top-speed circle (60 m at 30 m/s) and 40 m of straight at that heading.
-    const out = circleAt(car, topSpeed) * (1 - Math.cos(target)) + 40 * Math.sin(0 - target) + 1;
+    // Far enough out for the turn in on the top-speed circle (60 m at 30 m/s) and 40 m of straight at that heading, or 4/3
+    // s of travel at the speed it crosses at (10a-4: at 53 m/s the turn in takes longer and 40 m was used up before the kerb).
+    const straight = Math.max(40, (pedalSpeed(throttle) * 4) / 3);
+    const out = circleAt(car, topSpeed) * (1 - Math.cos(target)) + straight * Math.sin(0 - target) + 1;
     // 200 m along the kerb to get up to speed, or as far as 99% of top speed takes.
     const runUpEnd = 90 - runUpTo(0.99, 200);
     const sim = createSimOn(rapier, kerb.course, config, poseOn(kerb, face + out, 90, { x: 0, z: -1 }, config));

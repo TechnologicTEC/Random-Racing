@@ -32,18 +32,19 @@ describe('the engine, on the flat', () => {
     sim.free();
   });
 
-  it('reaches 95% of top speed in 3.5 to 4.5 seconds, then top speed itself, and never goes over it', () => {
+  // Tane, check-in 2: 190 km/h with the push as it was, so about 7 s (3.5 to 4.5 s at 30 m/s, the brief's about 4).
+  it('reaches 95% of top speed in 6.5 to 7.5 seconds, then top speed itself, and never goes over it', () => {
     const sim = simOn(flatGround());
     let fastest = 0;
     let at95 = -1;
     let steps = 0;
-    hold(sim, THROTTLE, 12, (state) => {
+    hold(sim, THROTTLE, Math.max(12, UP_TO_SPEED + 2), (state) => {
       steps++;
       fastest = Math.max(fastest, state.speed);
       if (at95 < 0 && state.speed >= 0.95 * topSpeed) at95 = steps * dt;
     });
-    expect(at95).toBeGreaterThan(3.5);
-    expect(at95).toBeLessThan(4.5);
+    expect(at95).toBeGreaterThan(6.5);
+    expect(at95).toBeLessThan(7.5);
     const state = sim.state();
     expect(state.speed).toBeGreaterThan(topSpeed * 0.99);
     expect(fastest).toBeLessThanOrEqual(topSpeed * 1.0005);

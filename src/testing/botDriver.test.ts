@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import type { CornerSection } from '../gen/types';
 import { NO_DRIFT, pathCurve } from '../sim/car/drift';
-import { aimDistance, pedalsFor, pointAlong, slideCorners, stickForCurve, targetSpeed, turnLeft } from './botDriver';
+import { aheadOnly, aimDistance, enterWhole, pedalsFor, pointAlong, slideCorners, stickForCurve, targetSpeed, turnLeft } from './botDriver';
 import { circleLine, stadiumLine } from './trackFixtures';
 
 /** Two 200 m straights joined by half circles of 30 m, sampled about every 2 m. Sample 0 is where a half circle meets a straight; samples 10 to 95 are straight. */
@@ -29,6 +29,14 @@ describe('the bot: how fast it may go (step 9a)', () => {
     const before = arcStart - Math.round(10 / line.spacing);
     const expected = Math.sqrt(0.9 * sideForce * 30 + 2 * 0.7 * brake * 10);
     expect(Math.abs(targetSpeed(line, before, config) / expected - 1)).toBeLessThan(0.02);
+  });
+
+  it('brakes for a corner it slides through to what the slide holds there: the square root of 0.9 times the drift grip times its radius (10a-4)', () => {
+    const slid = targetSpeed(line, midArc, config, 0.9, () => true, config.car.drift.grip);
+    const expected = Math.min(top, Math.sqrt(0.9 * config.car.drift.grip * 30));
+    expect(Math.abs(slid / expected - 1)).toBeLessThan(0.01);
+    // Without the slide grip, the corner it slides through is not braked for at all, as in 9b.
+    expect(targetSpeed(line, midArc, config, 0.9, () => true)).toBe(top);
   });
 
   it('is the top speed with no corner within 80 m', () => {
@@ -106,5 +114,35 @@ describe('the bot: drifting where told (step 9b)', () => {
     expect(turnLeft(ring, 10, 10 + ring.count / 2)).toBeCloseTo(Math.PI, 1);
     expect(turnLeft(ring, ring.count - 5, ring.count + 5)).toBeCloseTo(turnLeft(ring, ring.count - 5, ring.count) + turnLeft(ring, 0, 5), 12);
     expect(turnLeft(ring, 7, 7)).toBe(0);
+  });
+});
+
+describe('aheadOnly: the slide corners still ahead of the car (10a-4)', () => {
+  // The first half circle as a slide corner.
+  const arcLength = Math.round((Math.PI * 30) / line.spacing);
+  const corner = { startIndex: arcStart, sampleCount: arcLength } as CornerSection;
+
+  it('counts a slide corner the car has not reached at the slide grip, and the one it is in on grip', () => {
+    const before = aheadOnly([corner], line, (arcStart - 20) * line.spacing);
+    expect(before(arcStart + 5)).toBe(true);
+    // In the corner (it has let go 15 degrees before the end, say): the rest of it on grip.
+    const inside = aheadOnly([corner], line, (arcStart + arcLength - 5) * line.spacing);
+    expect(inside(arcStart + arcLength - 2)).toBe(false);
+    // Samples of no slide corner are never counted at the slide grip.
+    expect(before(10)).toBe(false);
+  });
+});
+
+describe('enterWhole: a slide corner braked for at its tightest from its first sample (10a-4)', () => {
+  it('gives every sample of a slide corner the corner’s greatest curvature, and leaves the rest of the line alone', () => {
+    // Half the first half circle as the corner, its second half the tighter (made by hand).
+    const curvature = Float64Array.from(line.curvature);
+    const corner = { startIndex: arcStart, sampleCount: 20 } as CornerSection;
+    curvature[arcStart + 15] = 2 / 30;
+    const shaped = enterWhole({ ...line, curvature }, [corner]);
+    for (let k = arcStart; k < arcStart + 20; k++) expect(Math.abs(shaped.curvature[k]!)).toBeCloseTo(2 / 30, 12);
+    expect(shaped.curvature[arcStart + 25]).toBe(curvature[arcStart + 25]);
+    expect(shaped.curvature[10]).toBe(curvature[10]);
+    expect(shaped.x).toBe(line.x);
   });
 });
