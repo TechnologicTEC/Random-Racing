@@ -2,7 +2,7 @@ import type { PhysicsConfig } from '../config';
 import { createHasher } from '../core/hash';
 import type { WorldResult } from '../gen/types';
 import { createCar, type CarMemory, type CarReading } from './car/car';
-import type { Hit } from './car/drift';
+import { DRIFT_ENDS, type Hit } from './car/drift';
 import { surfaceFinder } from './car/surface';
 import type { Course } from './course';
 import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input';
@@ -184,6 +184,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
         .numbers([position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, rotation.w])
         .numbers([velocity.x, velocity.y, velocity.z, spin.x, spin.y, spin.z])
         .numbers([PHASES.indexOf(d.phase), d.dir, d.charge, d.hopLeft, d.slide, d.boostLeft, d.boostTier, d.held ? 1 : 0, TOUCHES.indexOf(touch?.thing ?? null)])
+        .numbers([d.ended === null ? -1 : DRIFT_ENDS.indexOf(d.ended), d.ends])
         .numbers([slope.x, slope.y, slope.z, memory.sinceWall])
         .numbers(progress ? [1, progress.near, progress.along, progress.off, progress.next, progress.passed] : [0])
         .numbers([respawn.waitLeft, respawn.flippedFor, respawn.stuckFor, RESPAWN_REASONS.indexOf(respawn.why), respawn.placedAt, respawn.respawns])

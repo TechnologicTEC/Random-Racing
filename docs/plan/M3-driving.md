@@ -329,6 +329,10 @@ Then **check-in 2 with Tane**: the feel of the drift, with the tuning panel.
 
 | Part | Build | Done when |
 | --- | --- | --- |
-| **10a Tuning** | Tane's numbers from check-in 2 into `config.ts` | Step 9's tables run again and still pass; the new tables in STATE.md |
+| **10a Tuning** | Tane's numbers from check-in 2 into `config.ts`, in four parts (below) | Step 9's tables run again and still pass; the new tables in STATE.md |
+| 10a-1 Why a drift ended | `DriftState.ended` (let go, wall, gate, tree, rock, brake, slow, respawn) and `ends`, in the fingerprint and the snapshot; the readout says "drift cancelled: hit a wall" and so on for `render.cancelShown` (2 s) after a cancel | One test per reason on the exact step; the wall slide on `wallGround` ends `wall`; a respawn's wait `respawn`; the fingerprint sees both fields; browser test: a slide braked shows "braked" for 2 s; pictures on seeds 1, 7, 42 |
+| 10a-2 Tests that follow the config | Run-ups, hold times, ground sizes, circles and the bots' look-ahead worked out from the config, not sized for 30 m/s | Every test passes at today's config, and step 9's tables come out the same. Left for 10a-4: 95% of top speed in 3.5 to 4.5 s, wheels down over the 200 m crest at top speed, 97% of top speed in the tightest slide |
+| 10a-3 Measure | Throwaway grid at 53 m/s: `steer.sideForce` 15 to 22, with and without a downforce trial; `drift.grip` 60, 100, 135; start and end speeds as shares or as today's 12 and 9 m/s | The table in STATE.md; Tane picks |
+| 10a-4 The new speed | `engine.topSpeed` 53 and Tane's picks | Every test passes; `laps`, `cornerProof`, `slidingLaps`, `corners` at the new config; one fingerprint in every browser; step 9's tables again in STATE.md |
 | **10b Speed** | `npm run perf` with the chase view added to its views | 16.7 ms a frame or less on High at 1080p on the Arc graphics; a step under 1 ms on seed 8 (the most wooded) |
 | **10c Docs and the pull request** | README, CLAUDE.md (controls, addresses, commands), STATE.md and the plan, one pull request for the milestone | Tane's playtest sign-off, then merge |

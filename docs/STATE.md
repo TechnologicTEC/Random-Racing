@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 9c, the same lap in every browser (see "Step 9"). **This ends step 9**
-- **Next:** `docs/PLAN.md`, "The build order": **10a**, tuning from check-in 2 ("Check-in 2" under "Step 9"): **planned in plan mode first** `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at check-in 2
+- **Last finished part:** 10a-1, why a drift ended, on the readout (see "Step 10")
+- **Next:** `docs/PLAN.md`, "The build order": **10a-2**, the tests that follow the config. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -874,6 +874,29 @@ Tests, seen failing first on the missing functions (and the sliding lap on the b
 
 **Not raised, so they stand as they are:** the drift's start speed and hop; the circles (28, 57, 203 m) and the 15 degrees; the tiers and boosts; the walls; grass and sand; respawn; the brake at top speed downhill (9a). The look's open questions (tier 3's purple, `drive-slide.jpg` and `drive-boost.jpg` as references, rocks and wall ends taller than drawn) were not answered.
 
+## Step 10: tuning, speed, docs and the pull request (2026-11-22)
+
+Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-64ad-random-sprightly-kay-of-40b3337d-b55f-4029-b9b7-081e8448b743.md`). The parts are in `docs/plan/M3-driving.md`, "Step 10".
+
+**What 53 m/s touches, from the sums** (10a-3 measures them): 95% of top speed in 7.0 s and 290 m (4.0 s now; 0 to 108 km/h in 3.2 s, quicker than today); full stick at top speed a 187 m circle (60 m now); the tight slide circle held only to 41 m/s at `drift.grip` 60 (100 m/s² holds it at 53, 133 at the boost's 61); a drift starting at 21 m/s and cancelled under 16 (shares of top speed); the car leaving the ground over the generator's tightest crests (200 m) above 44 m/s; braking from 53 to 17 m/s takes 64 m, more than the bot's 80 m look-ahead allows at 0.7 of the brake. No test holds a fixed simulation fingerprint.
+
+| Part | What | Status |
+| --- | --- | --- |
+| 10a-1 | **Why a drift ended**, on the readout | Done |
+| 10a-2 | **Tests that follow the config** | |
+| 10a-3 | **Measure at 53 m/s**; Tane picks | |
+| 10a-4 | **The new speed in the config** | |
+| 10b | **Speed with the car** (`npm run perf`) | |
+| 10c | **Docs, the pull request, sign-off** | |
+
+### 10a-1: why a drift ended
+
+- **`DriftState`** (`sim/car/drift.ts`) gains `ended` (why the last slide ended: `let go`, `wall`, `gate`, `tree`, `rock`, `brake`, `slow`, `respawn`; null before any) and `ends` (how many slides have ended). `stepDrift` sets them on the step a slide ends; a hop cut short is not counted, since it never started a slide. When a hit and the brake come together, the hit is named. `Car.halt` (a respawn's wait) names `respawn`, also for a slide let go on that same step, since the wait took its boost. Both fields are in the fingerprint (`DRIFT_ENDS`) and the snapshot; nothing in the car's motion reads them, so the car drives exactly as before.
+- **The readout** says "drift cancelled: hit a wall" (hit the gate, a tree, a rock; braked; too slow; respawn) in small figures at the bottom of the card for `render.cancelShown` (2 s) from the step the page sees a new end (`cancelReadout` in `app/drive.ts`, timed in steps, so `still=1` repeats). A slide let go says nothing there: its boost already shows. The line is hidden otherwise, so the card looks as before. Claude's call, for Tane to judge.
+- **For Tane's cancels:** at 30 m/s a slide ends with no brake only on a touch (a rock post or wall end can stand up to 0.7 m above what is drawn), or under 9 m/s along its line. With the panel at 53 m/s the "too slow" edge was 16 m/s (57 km/h), which a slow or uphill hairpin can reach. The readout now says which.
+
+Tests, seen failing first (14, on the missing fields and function): `drift.test.ts` gains 5 (each reason on its step, the hit named before the brake, the reason kept and the next end counted, a hop not counted), `drive.test.ts` 5 (`cancelReadout`), and `drifting.test.ts` and `respawn.test.ts` check that the wall slide ends `wall`, a let-go `let go`, a wait `respawn` once, and that the fingerprint sees both fields. Browser test (`drive.spec.ts`, seen failing with the page change stashed): a slide braked on seed 42 shows "drift cancelled: braked" for 2 s and then not. Pictures of the readout on seeds 1, 7 and 42 looked at: small, in the card's muted text, under the drift line, nothing over the road. 2,331 unit tests pass.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -1109,3 +1132,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-22 (Milestone 3, Opus 5.5):** 9b done, the corner proof. The bot slides through the generator's drift corners (45 degrees or more, 90 m or less) and is quicker, cleanly, through all 12 picked corners (three each of hairpin, sweeper, chicane and plain corner, a mountain seed among each kind) and through 176 of the 177 slid corners of seeds 1 to 20; the lap with slides is quicker on all 20 seeds, by 6 to 14%. Saved per corner: hairpins 1.4 s, plain corners 0.7, chicanes 0.4, sweepers 0.2 (middles); seed 20's 65 m corner by only 0.01 s. Four bot habits and a like-for-like comparison came from wall touches on real seeds (decisions). 2,321 unit tests pass; all 340 browser tests passed in one run (21.8 minutes). Nothing drawn changed. Next: 9c.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 9c done, which ends step 9. The bot's lap with slides on seeds 1 and 7, worked out in Node, replayed on the 3D page through `drive.replay` 600 steps at a time, gives the same fingerprint after every chunk in Chromium and Firefox, and finishes the lap there too (`e2e/determinism.spec.ts`). Seen failing first on a deliberate fault, in the chunk that held it. 2,321 unit tests pass; all 344 browser tests passed in one run (22.7 minutes). Nothing drawn changed. Next: check-in 2 with Tane.
 - **2026-11-22 (Milestone 3, Opus 5.5):** Check-in 2 with Tane. Everything works. Tane wants the top speed raised to about 190 km/h (53 m/s, tried on the tuning panel), acceleration unchanged, a bit more grip or turning where that speed is too much, and found a drift cancelling mid-corner with no brake pressed. Measured: a slide on the flat holds at 53 m/s, but cannot hold the 28 m circle above about 41 m/s (`drift.grip`), so the likeliest cancel is a brush of something solid. Docs only. Next: 10a, planned in plan mode first.
+- **2026-11-22 (Milestone 3, Opus 5.5):** Step 10 planned in plan mode and approved (see "Step 10"; 10a split in four parts). 10a-1 done: the drift state names why the last slide ended (`ended`, `ends`, in the fingerprint and the snapshot), and the readout says "drift cancelled: hit a wall" and so on for 2 s. Pictures on seeds 1, 7 and 42 looked at. 2,331 unit tests pass; all 346 browser tests passed in one run (23.7 minutes). Next: 10a-2, the tests that follow the config.

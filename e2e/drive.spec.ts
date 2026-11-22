@@ -280,6 +280,25 @@ test.describe('drifting on the page', () => {
     expect(errors).toEqual([]);
   });
 
+  test('says why a slide was cancelled, for two seconds (step 10a)', async ({ page }) => {
+    const errors = collectErrors(page);
+    await openDriving(page, 'seed=42&still=1');
+    const cancel = page.getByTestId('world-cancel');
+    await expect(cancel).toBeHidden();
+    expect(await slideTo(page, 1)).toBe(true);
+    await expect(cancel).toBeHidden();
+    // The brake right down, the button still held: the slide is cancelled.
+    await page.evaluate(() => window.seedCircuit.drive!.run(1, { brake: 1, drift: true }));
+    await expect(cancel).toBeVisible();
+    await expect(cancel).toHaveText('drift cancelled: braked');
+    const shown = Math.round(config.render.cancelShown * config.sim.stepsPerSecond);
+    await page.evaluate((count) => window.seedCircuit.drive!.run(count, { throttle: 1 }), shown - 2);
+    await expect(cancel).toHaveText('drift cancelled: braked');
+    await page.evaluate(() => window.seedCircuit.drive!.run(2, { throttle: 1 }));
+    await expect(cancel).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
   test('gives the same picture of a slide and of a boost twice', async ({ page }, testInfo) => {
     // A slide may take several tries from the start line (`slideTo`), each drawing frames in software, and this takes it twice.
     test.setTimeout(180_000);

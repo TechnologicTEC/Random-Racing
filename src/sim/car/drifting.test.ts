@@ -202,7 +202,7 @@ describe('the boost', () => {
 describe('what the car reads out about the drift', () => {
   it('gives the phase, side, tier, slide angle, hop and boost, for drawing', () => {
     const sim = atTopSpeed();
-    expect(sim.state().drift).toEqual({ phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 });
+    expect(sim.state().drift).toEqual({ phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0, ended: null, ends: 0 });
     const [first] = slide(sim, 1, 1, 1);
     expect(first!.drift).toMatchObject({ phase: 'slide', dir: 1, tier: 0 });
     expect(first!.drift.hop).toBeGreaterThan(0);
@@ -210,7 +210,7 @@ describe('what the car reads out about the drift', () => {
     expect(later.drift).toMatchObject({ phase: 'slide', dir: 1, tier: 2, hop: 0 });
     expect(later.drift.angle).toBeCloseTo(car.drift.angle, 12);
     const [letGo] = steps(sim, { throttle: 1 }, 1);
-    expect(letGo!.drift).toMatchObject({ phase: 'none', tier: 0, boostTier: 2 });
+    expect(letGo!.drift).toMatchObject({ phase: 'none', tier: 0, boostTier: 2, ended: 'let go', ends: 1 });
     expect(letGo!.drift.boostLeft).toBeCloseTo(car.drift.boosts[1], 12);
     sim.free();
   });
@@ -261,6 +261,8 @@ describe('the drift state in snapshots and fingerprints', () => {
       { boostLeft: drift.boostLeft + 1 },
       { boostTier: 3 },
       { held: !drift.held },
+      { ended: 'rock' },
+      { ends: drift.ends + 1 },
     ];
     for (const change of changes) {
       sim.restore({ ...saved, car: { ...saved.car, drift: { ...drift, ...change } } });
@@ -297,7 +299,7 @@ describe('what ends a slide on the course', () => {
     expect(angle).toBeGreaterThan(15);
     expect(angle).toBeLessThan(25);
     // No boost, then or when the button is let go.
-    expect(at.drift).toMatchObject({ phase: 'none', tier: 0, boostLeft: 0 });
+    expect(at.drift).toMatchObject({ phase: 'none', tier: 0, boostLeft: 0, ended: 'wall', ends: 1 });
     const [letGo] = steps(sim, { throttle: 1 }, 1);
     expect(letGo!.drift.boostLeft).toBe(0);
     sim.free();

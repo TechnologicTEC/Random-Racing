@@ -24,7 +24,7 @@ import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { checkpointCount } from '../sim/track/progress';
 import { genClient } from '../worker/client';
-import { driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
+import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen } from './drive';
 import { createDriving } from './driving';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
@@ -104,6 +104,7 @@ const TEMPLATE = `
       <p class="world-surface" data-ref="surface" data-testid="world-surface"></p>
       <p class="world-place" data-ref="place" data-testid="world-place"></p>
       <p class="world-drift" data-ref="drift" data-testid="world-drift"><span class="world-tier" data-ref="tier" hidden></span><span data-ref="boost"></span></p>
+      <p class="world-cancel" data-ref="cancel" data-testid="world-cancel" hidden></p>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
@@ -248,6 +249,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const engine: Promise<Rapier> = import('../sim/physics/rapier').then(({ loadRapier }) => loadRapier());
   let rapier: Rapier | null = null;
   let sim: Sim | null = null;
+  /** What the readout last saw of the slides' ends (step 10a). */
+  let cancelSeen: CancelSeen | null = null;
   /**
    * The page's own copy of the config, which the tuning panel (T) changes: the simulation, the chase camera and the
    * car's drawing use it. The shared config, and every fingerprint made from it, never change.
@@ -285,6 +288,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (drift.colour !== null && tier.style.backgroundColor !== drift.colour) tier.style.backgroundColor = drift.colour;
       if (ref('boost').textContent !== drift.boost) ref('boost').textContent = drift.boost;
       document.body.dataset.driveTier = String(drift.tier);
+      // Why the last slide was cancelled, for a moment after (step 10a).
+      const cancel = cancelReadout(cancelSeen, state.drift, state.step, Math.round(tuned.render.cancelShown * tuned.sim.stepsPerSecond));
+      cancelSeen = cancel.seen;
+      const cancelLine = ref('cancel');
+      if (cancelLine.textContent !== cancel.text) cancelLine.textContent = cancel.text;
+      cancelLine.hidden = cancel.text === '';
       document.body.dataset.driveStep = String(state.step);
       // The place on the lap, and the fade to white and back over a respawn.
       const line = shown ? shown.track.candidates[shown.track.winnerIndex]!.line : null;
@@ -301,6 +310,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const dropSim = (): void => {
     sim?.free();
     sim = null;
+    cancelSeen = null;
     driving.setSim(null);
     delete document.body.dataset.driveStep;
     drawCar();

@@ -5,7 +5,7 @@ import type { BodyMotion, CarPhysics, Touch } from '../physics/carBody';
 import { rotate, type Vec3 } from '../quat';
 import { add, cross, dot, scale, sub, unit } from '../vec';
 import { bounces, pushDirection, wallPush, wallTurn } from './bump';
-import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftPhase, type DriftState } from './drift';
+import { driftSteps, NO_DRIFT, pathCurve, stepDrift, tierOf, type DriftEnd, type DriftPhase, type DriftState } from './drift';
 import { speedChange } from './drive';
 import { sideGrip, turnGrip } from './grip';
 import { twistFor, uprightChange } from './stability';
@@ -40,6 +40,10 @@ export interface DriftView {
   boostLeft: number;
   /** The tier of the boost running, 0 with none. */
   boostTier: 0 | 1 | 2 | 3;
+  /** Why the last slide ended, null before any has (step 10a). */
+  ended: DriftEnd | null;
+  /** How many slides have ended. */
+  ends: number;
 }
 
 /** What the car's own sums add to the body's motion, for drawing, the camera and the readout. */
@@ -152,6 +156,8 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
     hop: drift.hopLeft / steps.hop,
     boostLeft: drift.boostLeft / cfg.sim.stepsPerSecond,
     boostTier: drift.boostTier,
+    ended: drift.ended,
+    ends: drift.ends,
   });
 
   return {
@@ -168,7 +174,11 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       if (turning > limit) physics.twist(twistFor(scale(motion.spin, limit / turning - 1), motion.rotation, car));
     },
     halt() {
-      drift = { ...drift, phase: 'none', charge: 0, hopLeft: 0, boostLeft: 0, boostTier: 0 };
+      // A slide ended by the wait counts as a respawn's end. One let go on this same step is already counted, but it was
+      // the wait that took its boost, so that is what the readout says.
+      const sliding = drift.phase === 'slide';
+      const ended = sliding || drift.boostLeft > 0 ? 'respawn' : drift.ended;
+      drift = { ...drift, phase: 'none', charge: 0, hopLeft: 0, boostLeft: 0, boostTier: 0, ended, ends: sliding ? drift.ends + 1 : drift.ends };
     },
     clear() {
       drift = NO_DRIFT;

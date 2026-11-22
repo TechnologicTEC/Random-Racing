@@ -13,7 +13,7 @@ const WHEELS = [
   { x: -0.6, y: -0.56, z: 0.8 },
   { x: 0.6, y: -0.56, z: 0.8 },
 ] as const;
-const NOTHING: DriftView = { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 };
+const NOTHING: DriftView = { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0, ended: null, ends: 0 };
 const sliding = (tier: 0 | 1 | 2 | 3): DriftView => ({ ...NOTHING, phase: 'slide', dir: 1, tier, angle: config.car.drift.angle });
 /** Going forwards at 30 m/s: the car's front is -z. */
 const input = (drift: DriftView, step = 500): EffectInput => ({ drift, step, rear: WHEELS, motion: { x: 0, y: 0, z: -30 } });

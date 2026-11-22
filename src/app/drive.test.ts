@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { NEUTRAL_INPUT } from '../sim/input';
 import type { CarState } from '../sim/sim';
-import { advance, blendState, driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
+import { advance, blendState, cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
 import { NO_RESPAWN } from '../sim/respawn';
 
 const cfg = config.sim;
@@ -74,7 +74,7 @@ function stateAt(k: number, rotation = { x: 0, y: 0, z: 0, w: 1 }): CarState {
     spin: v(0.5),
     wheels: [0, 1, 2, 3].map((i) => ({ touching: k > 0, squash: 0.01 * k, surface: k > 0 ? ('road' as const) : null, at: v(i + 1) })),
     speed: 10 * k,
-    drift: { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 },
+    drift: { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0, ended: null, ends: 0 },
     top: 30,
     step: k,
     input: NEUTRAL_INPUT,
@@ -150,7 +150,7 @@ describe('mainSurface', () => {
 });
 
 describe('driftReadout', () => {
-  const none = { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0 } as const;
+  const none = { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0, ended: null, ends: 0 } as const;
 
   it('shows no dot and no boost with no drift', () => {
     expect(driftReadout(none)).toEqual({ tier: 0, colour: null, boost: '' });
@@ -164,6 +164,48 @@ describe('driftReadout', () => {
   it('shows the boost left, to a tenth of a second, in the colour of its tier', () => {
     expect(driftReadout({ ...none, boostLeft: 0.6, boostTier: 2 })).toEqual({ tier: 2, colour: 'rgb(255, 153, 31)', boost: 'boost 0.6 s' });
     expect(driftReadout({ ...none, boostLeft: 1 / 60, boostTier: 1 }).boost).toBe('boost 0.0 s');
+  });
+});
+
+describe('cancelReadout: why the last slide was cancelled, for a while after', () => {
+  const none = { phase: 'none', dir: 0, tier: 0, angle: 0, hop: 0, boostLeft: 0, boostTier: 0, ended: null, ends: 0 } as const;
+  const show = Math.round(config.render.cancelShown * config.sim.stepsPerSecond);
+
+  it('says nothing before any slide has ended, or for one that was let go', () => {
+    expect(cancelReadout(null, none, 10, show).text).toBe('');
+    const first = cancelReadout(null, none, 10, show);
+    expect(cancelReadout(first.seen, { ...none, ended: 'let go', ends: 1 }, 11, show).text).toBe('');
+  });
+
+  it('names each cancel in plain words', () => {
+    const words = { wall: 'hit a wall', gate: 'hit the gate', tree: 'hit a tree', rock: 'hit a rock', brake: 'braked', slow: 'too slow', respawn: 'respawn' } as const;
+    for (const [ended, said] of Object.entries(words)) {
+      const first = cancelReadout(null, none, 10, show);
+      expect(cancelReadout(first.seen, { ...none, ended: ended as keyof typeof words, ends: 1 }, 11, show).text).toBe(`drift cancelled: ${said}`);
+    }
+  });
+
+  it('shows it for its time from the step it was first seen, then not', () => {
+    const first = cancelReadout(null, none, 100, show);
+    const hit = { ...none, ended: 'wall', ends: 1 } as const;
+    const seen = cancelReadout(first.seen, hit, 101, show);
+    expect(seen.text).not.toBe('');
+    expect(cancelReadout(seen.seen, hit, 101 + show - 1, show).text).not.toBe('');
+    expect(cancelReadout(seen.seen, hit, 101 + show, show).text).toBe('');
+  });
+
+  it('does not show an end that was already there when the page first saw the car, or after a new simulation', () => {
+    const old = { ...none, ended: 'tree', ends: 3 } as const;
+    expect(cancelReadout(null, old, 500, show).text).toBe('');
+    const seen = cancelReadout(null, old, 500, show).seen;
+    expect(cancelReadout(seen, none, 0, show).text).toBe('');
+  });
+
+  it('starts its time again for the next cancel', () => {
+    const first = cancelReadout(null, none, 0, show);
+    const a = cancelReadout(first.seen, { ...none, ended: 'wall', ends: 1 }, 10, show);
+    const b = cancelReadout(a.seen, { ...none, ended: 'brake', ends: 2 }, 10 + show + 50, show);
+    expect(b.text).toBe('drift cancelled: braked');
   });
 });
 

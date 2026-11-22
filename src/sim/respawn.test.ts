@@ -269,17 +269,20 @@ describe('a drift when a wait starts', () => {
     const saved = sim.snapshot();
     sim.restore({
       ...saved,
-      car: { ...saved.car, drift: { phase: 'slide', dir: 1, charge: 150, hopLeft: 0, slide: 1, boostLeft: 40, boostTier: 1, held: true } },
+      car: { ...saved.car, drift: { phase: 'slide', dir: 1, charge: 150, hopLeft: 0, slide: 1, boostLeft: 40, boostTier: 1, held: true, ended: null, ends: 0 } },
     });
     sim.step(NEUTRAL_INPUT);
     expect(sim.state().respawn.waitLeft).toBe(DELAY);
     expect(sim.state().drift.phase).toBe('none');
     expect(sim.state().drift.tier).toBe(0);
     expect(sim.state().drift.boostLeft).toBe(0);
+    // Named once, on the step the wait starts (step 10a), not again on every step of the wait.
+    expect(sim.state().drift).toMatchObject({ ended: 'respawn', ends: 1 });
     for (let i = 0; i < DELAY - 1; i++) {
       sim.step(makeInput({ drift: i % 2 === 0, steer: 1 }));
       expect(sim.state().drift.boostLeft, `step ${i} of the wait`).toBe(0);
     }
+    expect(sim.state().drift.ends).toBe(1);
     sim.free();
   });
 });

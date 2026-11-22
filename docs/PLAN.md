@@ -47,7 +47,11 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **9b** The bot drifts: the corner proof
 - [x] **9c** The same lap in every browser
 - [x] **Check-in 2 with Tane** (questions below; 2026-11-22: answers in STATE.md, "Check-in 2")
-- [ ] **10a** Tuning from check-in 2
+- **10a** Tuning from check-in 2 (planned and approved 2026-11-22, the parts in `docs/plan/M3-driving.md`, "Step 10"):
+  - [x] **10a-1** Why a drift ended, on the readout
+  - [ ] **10a-2** Tests that follow the config (top speed still 30: nothing changes)
+  - [ ] **10a-3** Measure at 53 m/s, then Tane picks the steering, drift grip, start and end speeds, and what to do about crests
+  - [ ] **10a-4** The new speed in the config
 - [ ] **10b** Speed, with the car
 - [ ] **10c** README, CLAUDE.md, STATE.md, the pull request; **Tane's playtest sign-off**; merge and delete the branch
 

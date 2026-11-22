@@ -13,6 +13,15 @@ export type DriftPhase = 'none' | 'hop' | 'slide';
 /** What the car's body touched on the last physics step that cancels a drift. The ground, road and kerbs never count. */
 export type Hit = 'wall' | 'gate' | 'tree' | 'rock' | null;
 
+/**
+ * Why a slide ended (step 10a, for the readout): let go, touching a wall, the gate, a tree or a rock, the brake, too
+ * slow along its line of travel, or a respawn's wait. A hop that ends without a slide is not counted.
+ */
+export type DriftEnd = 'let go' | 'wall' | 'gate' | 'tree' | 'rock' | 'brake' | 'slow' | 'respawn';
+
+/** Every reason, in a fixed order, for the fingerprint. */
+export const DRIFT_ENDS: readonly DriftEnd[] = ['let go', 'wall', 'gate', 'tree', 'rock', 'brake', 'slow', 'respawn'];
+
 /** Everything the drift rules remember from one step to the next. All of it goes into the fingerprint and the snapshot. */
 export interface DriftState {
   phase: DriftPhase;
@@ -30,9 +39,24 @@ export interface DriftState {
   boostTier: 0 | 1 | 2 | 3;
   /** Whether the drift button was down on the last step. */
   held: boolean;
+  /** Why the last slide ended, null before any has. Nothing in the car's motion reads it. */
+  ended: DriftEnd | null;
+  /** How many slides have ended, so the readout can tell a new end from the last one. */
+  ends: number;
 }
 
-export const NO_DRIFT: DriftState = Object.freeze({ phase: 'none', dir: 0, charge: 0, hopLeft: 0, slide: 0, boostLeft: 0, boostTier: 0, held: false });
+export const NO_DRIFT: DriftState = Object.freeze({
+  phase: 'none',
+  dir: 0,
+  charge: 0,
+  hopLeft: 0,
+  slide: 0,
+  boostLeft: 0,
+  boostTier: 0,
+  held: false,
+  ended: null,
+  ends: 0,
+});
 
 /** What the rules are told on one step. */
 export interface DriftAsk {
@@ -106,7 +130,7 @@ const SNAP = 1e-9;
 export function stepDrift(state: DriftState, asked: DriftAsk, car: CarConfig, steps: DriftSteps): DriftState {
   const rules = car.drift;
   const top = car.engine.topSpeed;
-  let { phase, dir, charge, hopLeft, slide, boostLeft, boostTier } = state;
+  let { phase, dir, charge, hopLeft, slide, boostLeft, boostTier, ended, ends } = state;
   const pressed = asked.button && !state.held;
   const side: -1 | 0 | 1 = asked.steer >= rules.steerToStart ? 1 : asked.steer <= 0 - rules.steerToStart ? -1 : 0;
   // A new slide picks up a nose still swinging back on its own side; to the other side, it waits until the nose is back.
@@ -146,10 +170,19 @@ export function stepDrift(state: DriftState, asked: DriftAsk, car: CarConfig, st
     }
     phase = 'none';
     charge = 0;
+    ended = 'let go';
+    ends++;
   }
 
   // Rule 7: a hit, the brake half down or more, or too slow along the line of travel cancel it, with no boost.
-  if (phase !== 'none' && (asked.hit !== null || asked.brake >= rules.brakeCancel || asked.speed < rules.endSpeed * top)) {
+  const cancel: DriftEnd | null =
+    asked.hit !== null ? asked.hit : asked.brake >= rules.brakeCancel ? 'brake' : asked.speed < rules.endSpeed * top ? 'slow' : null;
+  if (phase !== 'none' && cancel !== null) {
+    // Only a slide's end is counted: a hop cut short never started one.
+    if (phase === 'slide') {
+      ended = cancel;
+      ends++;
+    }
     phase = 'none';
     charge = 0;
   }
@@ -165,5 +198,5 @@ export function stepDrift(state: DriftState, asked: DriftAsk, car: CarConfig, st
   }
   if (phase !== 'slide' && slide === 0) dir = 0;
 
-  return { phase, dir, charge, hopLeft, slide, boostLeft, boostTier, held: asked.button };
+  return { phase, dir, charge, hopLeft, slide, boostLeft, boostTier, held: asked.button, ended, ends };
 }

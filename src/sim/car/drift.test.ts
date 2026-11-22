@@ -215,6 +215,42 @@ describe('stepDrift', () => {
     });
   });
 
+  describe('why a slide ended (step 10a, for the readout)', () => {
+    const tierTwo = (): DriftState => slidFor(130);
+
+    it('starts with no slide ended', () => {
+      expect(NO_DRIFT).toMatchObject({ ended: null, ends: 0 });
+      expect(tierTwo()).toMatchObject({ ended: null, ends: 0 });
+    });
+
+    it('names each reason on the step the slide ends, and counts the ends', () => {
+      expect(stepDrift(tierTwo(), UP, car, steps)).toMatchObject({ phase: 'none', ended: 'let go', ends: 1 });
+      for (const hit of ['wall', 'gate', 'tree', 'rock'] as const) {
+        expect(stepDrift(tierTwo(), ask({ hit }), car, steps)).toMatchObject({ ended: hit, ends: 1 });
+      }
+      expect(stepDrift(tierTwo(), ask({ brake: 1 }), car, steps)).toMatchObject({ ended: 'brake', ends: 1 });
+      const slow = car.drift.endSpeed * top - 0.1;
+      expect(stepDrift(tierTwo(), ask({ speed: slow }), car, steps)).toMatchObject({ ended: 'slow', ends: 1 });
+    });
+
+    it('names the hit first when the brake and a hit come together', () => {
+      expect(stepDrift(tierTwo(), ask({ hit: 'tree', brake: 1 }), car, steps)).toMatchObject({ ended: 'tree' });
+    });
+
+    it('keeps the reason and the count after the slide, and counts the next end', () => {
+      const first = stepDrift(tierTwo(), ask({ hit: 'wall' }), car, steps);
+      const later = run(first, [...times(40, UP), ...times(70, ask())]);
+      expect(later).toMatchObject({ phase: 'slide', ended: 'wall', ends: 1 });
+      expect(stepDrift(later, UP, car, steps)).toMatchObject({ ended: 'let go', ends: 2 });
+    });
+
+    it('does not count a hop that ends without a slide', () => {
+      const hop = stepDrift(NO_DRIFT, ask({ steer: 0 }), car, steps);
+      expect(stepDrift(hop, ask({ steer: 0, brake: 1 }), car, steps)).toMatchObject({ ended: null, ends: 0 });
+      expect(run(NO_DRIFT, [...times(9, ask({ steer: 0 })), UP])).toMatchObject({ ended: null, ends: 0 });
+    });
+  });
+
   describe('rule 8: the boost', () => {
     it('falls by one a step, on the ground or in the air, and its tier goes when it ends', () => {
       const boosted = stepDrift(slidFor(60), UP, car, steps);

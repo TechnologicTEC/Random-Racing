@@ -2,6 +2,7 @@ import type { SimConfig } from '../config';
 import type { Quat, Vec3 } from '../sim/quat';
 import type { Surface } from '../sim/car/surface';
 import type { DriftView, WheelState } from '../sim/car/car';
+import type { DriftEnd } from '../sim/car/drift';
 import { SPARK } from '../render/palette';
 import type { RespawnState } from '../sim/respawn';
 import type { CarState } from '../sim/sim';
@@ -114,6 +115,40 @@ export function driftReadout(drift: DriftView): DriftReadout {
   const tier = drift.phase === 'slide' && drift.tier > 0 ? drift.tier : boosting ? drift.boostTier : 0;
   const colour = tier === 0 ? null : `rgb(${SPARK[tier - 1]!.map((c) => Math.round(c * 255)).join(', ')})`;
   return { tier, colour, boost: boosting ? `boost ${drift.boostLeft.toFixed(1)} s` : '' };
+}
+
+/** What the readout last saw of the slides' ends: how many there had been, and the step it saw the last of them change. */
+export interface CancelSeen {
+  ends: number;
+  from: number;
+}
+
+/** The plain words for each cancel; a slide let go says nothing, since its boost already shows. */
+const CANCEL_WORDS: Record<Exclude<DriftEnd, 'let go'>, string> = {
+  wall: 'hit a wall',
+  gate: 'hit the gate',
+  tree: 'hit a tree',
+  rock: 'hit a rock',
+  brake: 'braked',
+  slow: 'too slow',
+  respawn: 'respawn',
+};
+
+/**
+ * The readout's line on why the last slide was cancelled (step 10a), shown for `show` steps from the step the page
+ * first sees the count of ends go up. An end that was already there when the page first saw the car, or a count that
+ * went down (a new simulation), shows nothing. Worked out from step counts, never the clock, so `still=1` repeats.
+ *
+ * @param seen what the last call gave back, or null for the first state seen
+ * @param step the step count of the state shown (`CarState.step`)
+ * @param show how many steps to show it for
+ */
+export function cancelReadout(seen: CancelSeen | null, drift: DriftView, step: number, show: number): { seen: CancelSeen; text: string } {
+  let now: CancelSeen = seen ?? { ends: drift.ends, from: Number.NEGATIVE_INFINITY };
+  if (drift.ends !== now.ends) now = { ends: drift.ends, from: drift.ends > now.ends ? step : Number.NEGATIVE_INFINITY };
+  const cancel = drift.ended !== null && drift.ended !== 'let go' ? drift.ended : null;
+  const text = cancel !== null && step - now.from < show ? `drift cancelled: ${CANCEL_WORDS[cancel]}` : '';
+  return { seen: now, text };
 }
 
 /**

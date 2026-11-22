@@ -156,6 +156,18 @@ body,
   display: none;
 }
 
+/* Why the last slide was cancelled (step 10a): small, under the drift line, for two seconds. */
+.world-cancel {
+  color: #4c665f;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.world-cancel[hidden] {
+  display: none;
+}
+
 .world-loading {
   position: absolute;
   inset: 0;

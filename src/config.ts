@@ -928,6 +928,8 @@ export interface RenderConfig {
   bloom: BloomConfig;
   /** The fade to white and back over a respawn (step 8c), in seconds: up over the last `in` of the wait, back over `out` after. */
   respawnFade: { in: number; out: number };
+  /** How long the readout says why a slide was cancelled (a hit, the brake, too slow, a respawn), in seconds (step 10a). */
+  cancelShown: number;
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -2227,6 +2229,8 @@ export const config: GameConfig = {
     bloom: { enabled: true, strength: 0.7, radius: 0.5, scale: 0.5 },
     // Short, so the car is seen going under and seen back on the road (step 8c, the plan's "a short fade").
     respawnFade: { in: 0.3, out: 0.4 },
+    // Long enough to read after a slide ends mid-corner (Tane, check-in 2: a drift sometimes ended with no brake pressed).
+    cancelShown: 2,
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
