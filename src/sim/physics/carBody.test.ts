@@ -125,7 +125,8 @@ describe('the body still meets everything', () => {
     expect(physics.colliders.walls).toEqual([]);
     for (let i = 0; i < 120; i++) physics.step();
     const { position, velocity } = physics.motion();
-    expect(position.y).toBeCloseTo(config.car.body.halfHeight, 2);
+    // The box that meets things starts `body.raise` above the drawn floor (Tane, 10a-6), so the body rests that much lower.
+    expect(position.y).toBeCloseTo(config.car.body.halfHeight - config.car.body.raise, 2);
     expect(Math.abs(velocity.y)).toBeLessThan(0.01);
     physics.free();
   });
@@ -182,12 +183,24 @@ describe('touching: the solid thing the body is against', () => {
     return physics;
   }
 
+  it('keeps the weight and balance of the whole box when the box is raised: a push through the middle of the body turns it not at all', () => {
+    const ground = flatGround();
+    const physics = createCarPhysics(rapier, ground.course, config, { ...ground.start, position: { ...ground.start.position, y: ground.start.position.y + 5 } });
+    const { position } = physics.motion();
+    physics.push({ x: 300, y: 0, z: -600 }, position);
+    const { spin, velocity } = physics.motion();
+    expect(Math.hypot(spin.x, spin.y, spin.z)).toBeLessThan(1e-6);
+    // 300 kg: the push of 600 newton seconds forward gives 2 m/s.
+    expect(velocity.z).toBeCloseTo(-600 / config.car.mass, 6);
+    physics.free();
+  });
+
   it('names nothing while the body rests on the road: the ground, the road and the kerbs never count', () => {
     const ground = flatGround();
     const physics = createCarPhysics(rapier, ground.course, config, ground.start);
     for (let i = 0; i < 120; i++) physics.step();
     // The body has settled onto the road (no springs here), so it is touching it.
-    expect(physics.motion().position.y).toBeCloseTo(config.car.body.halfHeight, 2);
+    expect(physics.motion().position.y).toBeCloseTo(config.car.body.halfHeight - config.car.body.raise, 2);
     expect(physics.touching()).toBeNull();
     physics.free();
   });

@@ -64,6 +64,14 @@ describe('springPush', () => {
     expect(springPush(spring, 0.08, -0.2, dt)).toBeCloseTo(still - spring.damping * 0.2 * dt, 9);
   });
 
+  it('counts the speed it is closing at only up to `suspension.closingCap` (Tane, 10a-6: a wheel meeting the edge of a kerb)', () => {
+    const cap = car.suspension.closingCap;
+    expect(cap).toBeGreaterThan(0);
+    const atCap = springPush(spring, 0.08, cap, dt);
+    expect(springPush(spring, 0.08, cap + 20, dt)).toBeCloseTo(atCap, 9);
+    expect(springPush(spring, 0.08, cap * 0.5, dt)).toBeLessThan(atCap);
+  });
+
   it('never pulls: a wheel that is leaving the ground fast pushes nothing', () => {
     expect(springPush(spring, 0.01, -5, dt)).toBe(0);
     expect(springPush(spring, 0, 0, dt)).toBe(0);

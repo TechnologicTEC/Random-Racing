@@ -26,6 +26,8 @@ export interface Spring {
   stiffness: number;
   /** Newtons for each metre per second it is closing at. */
   damping: number;
+  /** The damper counts closing speed only up to this, in metres per second (`suspension.closingCap`). */
+  closingCap: number;
 }
 
 /**
@@ -39,17 +41,18 @@ export function springOf(cfg: PhysicsConfig): Spring {
   const quarter = mass / 4;
   const rest = body.halfHeight + suspension.rideHeight - wheels.radius;
   const stiffness = (quarter * cfg.sim.gravity) / suspension.sag;
-  return { rest, free: rest + suspension.sag, stiffness, damping: suspension.damping * 2 * Math.sqrt(stiffness * quarter) };
+  return { rest, free: rest + suspension.sag, stiffness, damping: suspension.damping * 2 * Math.sqrt(stiffness * quarter), closingCap: suspension.closingCap };
 }
 
 /**
  * How hard a spring pushes the body away from the ground during one step, as
- * an impulse in newton seconds. A spring pushes and never pulls.
+ * an impulse in newton seconds. A spring pushes and never pulls. The damper
+ * counts the closing speed only up to `closingCap` (Tane, 10a-6).
  *
  * @param squash how far it is squashed from its free length, in metres
  * @param closing how fast the body is closing on the ground at the wheel, in metres per second; negative when parting
  * @param dt the length of a step, in seconds
  */
 export function springPush(spring: Spring, squash: number, closing: number, dt: number): number {
-  return Math.max(0, spring.stiffness * squash + spring.damping * closing) * dt;
+  return Math.max(0, spring.stiffness * squash + spring.damping * Math.min(closing, spring.closingCap)) * dt;
 }

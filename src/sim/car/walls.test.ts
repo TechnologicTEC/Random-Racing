@@ -166,6 +166,9 @@ describe('what the simulation remembers of a wall', () => {
     // And which wheels' ground directions were odd on the last step (10a-4).
     sim.restore({ ...saved, car: { ...saved.car, odd: saved.car.odd.map((wheel, i) => (i === 0 ? !wheel : wheel)) } });
     expect(sim.hash()).not.toBe(base);
+    // And the time since the body last touched anything solid (10a-6: the turning and the lift are held for a while after).
+    sim.restore({ ...saved, car: { ...saved.car, sinceHit: saved.car.sinceHit + 1 } });
+    expect(sim.hash()).not.toBe(base);
     sim.restore(saved);
     expect(sim.hash()).toBe(base);
     sim.free();

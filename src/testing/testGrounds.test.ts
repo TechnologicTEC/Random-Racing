@@ -3,7 +3,7 @@ import { config } from '../config';
 import type { MeshData } from '../gen/types';
 import { rotate } from '../sim/quat';
 import { circleAt } from './simDriving';
-import { bankedBend, crestGround, flatGround, hillsideGround, kerbGround, poseOn, rampGround, stepGround, type TestGround } from './testGrounds';
+import { bankedBend, crestGround, flatGround, hillsideGround, kerbGround, poseOn, rampGround, roadEdgeGround, stepGround, type TestGround } from './testGrounds';
 
 /** Every vertex of a mesh, as points. */
 function vertices(mesh: MeshData): Array<{ x: number; y: number; z: number }> {
@@ -170,6 +170,49 @@ describe('kerbGround', () => {
     expect(ground.kerbTop(ground.kerbInner + kerbWidth + 0.1)).toBe(0);
     // The flat ground carries on under and beyond it.
     expect(ground.height(ground.kerbInner + 5, -50)).toBe(0);
+  });
+});
+
+describe('roadEdgeGround', () => {
+  // 10a-6: an island's road edge, built by the generator's own road, kerb and wall code on a straight line.
+  const ground = roadEdgeGround();
+  const { sink, apronWidth, apronDrop, kerbWidth, kerbHeight, barrierOffset } = config.road;
+  const within = (along: number, stretch: { from: number; to: number }): boolean => along > stretch.from + 10 && along < stretch.to - 10;
+
+  it('has the road level up to its right edge at x = 0, and the apron falling from it', () => {
+    const road = vertices(ground.course.road);
+    expect(road.filter((p) => p.x <= 0 && p.x > -200).every((p) => Math.abs(p.y) < 1e-6)).toBe(true);
+    const apron = road.filter((p) => p.x > 0);
+    expect(apron.length).toBeGreaterThan(100);
+    expect(apron.every((p) => Math.abs(p.x - apronWidth) < 1e-4 && Math.abs(p.y + apronDrop) < 1e-4)).toBe(true);
+  });
+
+  it('has grass at the depth of the sunken ground, as an island has beside its road', () => {
+    expect(vertices(ground.course.grass!).every((p) => Math.abs(p.y + sink) < 1e-6)).toBe(true);
+    expect(ground.height(5, -100)).toBeCloseTo(-sink, 9);
+    expect(ground.height(-5, -100)).toBe(0);
+  });
+
+  it('has the kerb along the kerb stretches only, its outer edge standing higher above the grass than the body rides', () => {
+    const kerb = vertices(ground.course.kerbs!);
+    const outer = kerb.filter((p) => Math.abs(p.x - kerbWidth) < 1e-4);
+    const full = outer.filter((p) => within(-p.z, ground.stretches.kerb) || within(-p.z, ground.stretches.kerbWall));
+    expect(full.length).toBeGreaterThan(100);
+    expect(full.every((p) => Math.abs(p.y - kerbHeight) < 1e-4)).toBe(true);
+    expect(kerbHeight + sink).toBeGreaterThan(config.car.suspension.rideHeight);
+    expect(kerb.some((p) => within(-p.z, ground.stretches.bare) || within(-p.z, ground.stretches.bareWall))).toBe(false);
+  });
+
+  it('has a wall along the two wall stretches only, its face where the walls of an island stand', () => {
+    const walls = ground.course.walls!;
+    expect(walls.length).toBeGreaterThan(10);
+    // `barrierOffset` is how far out from the road edge the face of the wall stands.
+    const face = barrierOffset;
+    expect(ground.wallFace).toBe(face);
+    const middles = walls.filter((w) => within(-w.centre.z, ground.stretches.kerbWall) || within(-w.centre.z, ground.stretches.bareWall));
+    expect(middles.length).toBeGreaterThan(10);
+    for (const w of middles) expect(w.centre.x - w.half.x).toBeCloseTo(face, 2);
+    expect(walls.some((w) => within(-w.centre.z, ground.stretches.kerb) || within(-w.centre.z, ground.stretches.bare))).toBe(false);
   });
 });
 

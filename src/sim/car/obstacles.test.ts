@@ -65,19 +65,36 @@ describe('a tree trunk at top speed', () => {
     expect(flatSpeed(before)).toBeGreaterThan(car.engine.topSpeed * 0.97);
     expect(flatSpeed(then.at(-1)!)).toBeLessThan(3);
     expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
-    expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
+    expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(car.bump.spin + SPIN_ROUNDING);
     expect(then.some((state) => inside(state, 0, -AT))).toBe(false);
   });
 
   for (const off of [0.5, 0.75]) {
-    it(`met ${off} m off centre: upright, never spinning fast, never inside the trunk`, () => {
+    it(`met ${off} m off centre: upright, never spinning fast, never inside the trunk, never thrown up`, () => {
       const { before, then } = runInto(courseWith(post(off)), 1, 1);
       expect(flatSpeed(before)).toBeGreaterThan(car.engine.topSpeed * 0.97);
       expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
-      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
+      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(car.bump.spin + SPIN_ROUNDING);
       expect(then.some((state) => inside(state, off, -AT))).toBe(false);
+      // Tane, 10a-6: the lift is held after a hit (0.75 m off centre threw the car 1.3 m up).
+      expect(Math.max(...then.map((state) => state.position.y)) - before.position.y).toBeLessThan(0.2);
     });
   }
+
+  it('holds the turning for `bump.hold` after the last touch, not only while touching (Tane, 10a-6)', () => {
+    const { then } = runInto(courseWith(post(0.5)), 1, 1.5);
+    const holdSteps = Math.round(car.bump.hold * perSecond);
+    let since = Infinity;
+    let worst = 0;
+    let after = 0;
+    for (const state of then) {
+      since = state.touch !== null ? 0 : since + 1;
+      if (since <= holdSteps) worst = Math.max(worst, spinRate(state));
+      if (since > 0 && since <= holdSteps) after++;
+    }
+    expect(after).toBeGreaterThanOrEqual(holdSteps);
+    expect(worst).toBeLessThanOrEqual(car.bump.spin + SPIN_ROUNDING);
+  });
 });
 
 describe('rocks', () => {
@@ -107,7 +124,7 @@ describe('rocks', () => {
       expect(then[0]!.touch).toBe('rock');
       expect(flatSpeed(then.at(-1)!)).toBeLessThan(3);
       expect(Math.min(...then.map(roofUp))).toBeGreaterThanOrEqual(0.95);
-      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(6 + SPIN_ROUNDING);
+      expect(Math.max(...then.map(spinRate))).toBeLessThanOrEqual(car.bump.spin + SPIN_ROUNDING);
       expect(then.some((state) => inside(state, 0, -AT))).toBe(false);
     });
   }

@@ -8,6 +8,8 @@
  */
 import { config, type PhysicsConfig } from '../config';
 import { wallPieces } from '../gen/road/barriers';
+import { buildKerbs } from '../gen/road/kerbs';
+import { buildRoadRibbon } from '../gen/road/ribbon';
 import type { CenterLine, MeshData } from '../gen/types';
 import { wallBox } from '../sim/physics/colliders';
 import type { PlainCourse } from '../sim/course';
@@ -206,6 +208,64 @@ export function wallEndGround(): WallEndGround {
   const road = new Sheets().grid(steps(-100, 100, 20), steps(-(count * spacing + 100), 100, 20), height).mesh();
   const walls = pieces.map((piece) => wallBox(piece, config));
   return { course: { kind: 'plain', road, walls }, start: poseOn({ height }, wallX, 0, AHEAD, config), height, wallX, endAt };
+}
+
+export interface RoadEdgeGround extends TestGround {
+  /** Stretches of the road's right edge, in metres ahead of the start (z = -along): a kerb, a kerb with a wall behind it, a bare edge, a bare edge with a wall. */
+  stretches: Record<'kerb' | 'kerbWall' | 'bare' | 'bareWall', { from: number; to: number }>;
+  /** The x of the wall's face, towards the road. */
+  wallFace: number;
+}
+
+/**
+ * An island's road edge (10a-6), built by the generator's own code on a
+ * straight line running ahead (-z): the road (`buildRoadRibbon`) with its right
+ * edge at x = 0 and its apron, the kerbs (`buildKerbs`) and the walls
+ * (`wallPieces`, `wallBox`), and beyond the edge the grass at `road.sink`
+ * under the road, as an island's ground is sunk under its road and verge. The
+ * road is 600 m wide, all of it to the left, so a car can run up to top speed
+ * and turn to meet the edge at any angle. `height` is the road for x up to 0,
+ * then the higher of the apron and the grass (the kerb lies on top of it).
+ */
+export function roadEdgeGround(): RoadEdgeGround {
+  const { sink, apronWidth, apronDrop, barrierOffset } = config.road;
+  const spacing = config.track.sampleSpacing;
+  const width = 600;
+  const stretch = 600;
+  const stretches = {
+    kerb: { from: 100, to: 100 + stretch },
+    kerbWall: { from: 100 + stretch, to: 100 + 2 * stretch },
+    bare: { from: 100 + 2 * stretch, to: 100 + 3 * stretch },
+    bareWall: { from: 100 + 3 * stretch, to: 100 + 4 * stretch },
+  };
+  const count = Math.round((100 + 4 * stretch + 200) / spacing);
+  const along = (fill: (k: number) => number): Float64Array => Float64Array.from({ length: count }, (_, k) => fill(k));
+  const line: CenterLine = {
+    count,
+    spacing,
+    length: count * spacing,
+    x: along(() => -width / 2),
+    z: along((k) => -k * spacing),
+    tx: along(() => 0),
+    tz: along(() => -1),
+    curvature: along(() => 0),
+  };
+  const level = along(() => 0);
+  const widths = along(() => width);
+  const sample = (metres: number): number => Math.round(metres / spacing);
+  const road = buildRoadRibbon(line, level, null, widths, config);
+  const kerbs = buildKerbs(line, level, null, widths, [{ startIndex: sample(stretches.kerb.from), sampleCount: sample(2 * stretch) + 1, side: 1 }], config);
+  const walls = [stretches.kerbWall, stretches.bareWall].map(({ from, to }) => ({ startIndex: sample(from), pieceCount: sample(to - from), side: 1 as const }));
+  const pieces = wallPieces(line, level, null, widths, walls, config);
+  const grass = new Sheets().grid(steps(-width - 100, 400, 20), steps(-(count * spacing + 100), 100, 20), () => 0 - sink).mesh();
+  const height = (x: number): number => (x <= 0 ? 0 : Math.max((0 - apronDrop * x) / apronWidth, 0 - sink));
+  return {
+    course: { kind: 'plain', road, kerbs, grass, walls: pieces.map((piece) => wallBox(piece, config)) },
+    start: poseOn({ height }, -10, 0, AHEAD, config),
+    height,
+    stretches,
+    wallFace: barrierOffset,
+  };
 }
 
 /**

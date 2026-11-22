@@ -1467,8 +1467,11 @@ export interface CarConfig {
    * The box that is the car's body: half its width, height and length; how much it grips what it rubs against (0 is
    * ice, 1 is rubber) and how much of its speed it keeps when it bounces off something (0 is none). The wheels carry
    * the car, so the body touches things only when it hits them: a low grip lets it slide along what it scrapes.
+   * `raise`: the box that meets things starts this far above the body's drawn floor, its weight and balance those of
+   * the whole box (Tane, 10a-6). An island's grass lies `road.sink` under its road, so from the grass the road's edge
+   * and a kerb's skirt stood at the height of the body's floor, which ran into them and was thrown.
    */
-  body: { halfWidth: number; halfHeight: number; halfLength: number; grip: number; bounce: number };
+  body: { halfWidth: number; halfHeight: number; halfLength: number; grip: number; bounce: number; raise: number };
   mass: number;
   wheels: WheelConfig;
   suspension: SuspensionConfig;
@@ -1601,11 +1604,15 @@ export interface BumpConfig {
   /** A hit is new when the body has touched no wall for this long, in seconds. */
   again: number;
   /**
-   * Straight after a physics step in which the body touched a wall, the gate, a tree or a rock, its turning (about its
-   * up, and its roll and pitch with it) is held to this, in radians per second (Tane, 7c): a trunk clipped off centre at
-   * top speed spun it at 8 to 10.
+   * Straight after a physics step in which the body touched a wall, the gate, a tree or a rock, and for `hold` after the
+   * last such step, its turning (about its up, and its roll and pitch with it) is held to this, in radians per second
+   * (Tane, 7c: a trunk clipped off centre at top speed spun it at 8 to 10).
    */
   spin: number;
+  /** How long after the body last touched something solid its turning and its rise are still held, in seconds (Tane, 10a-6). */
+  hold: number;
+  /** For the same time, its upward speed is held to this, in metres per second (Tane, 10a-6: a clipped trunk threw it 1.3 m up). */
+  lift: number;
 }
 
 /** The engine. */
@@ -1656,6 +1663,11 @@ export interface SuspensionConfig {
   sag: number;
   /** How quickly a bounce dies away: 1 stops it dead, 0 lets it bounce for ever. */
   damping: number;
+  /**
+   * The damper counts the speed it is closing at only up to this, in metres per second, as a real damper's valve
+   * blows off (Tane, 10a-6): a wheel landing on the edge of a kerb read the car's speed along the road as closing speed.
+   */
+  closingCap: number;
   /**
    * The cosine of the largest angle a wheel's ground direction may be from the other wheels' before it takes theirs for
    * the step (Tane, 10a-4: a cast meeting the road mesh on an edge between triangles can tilt by 10 degrees and kick the
@@ -2086,7 +2098,7 @@ export const config: GameConfig = {
     respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
   },
   car: {
-    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0 },
+    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15 },
     mass: 300,
     wheels: { radius: 0.05, halfTrack: 0.6, front: 0.8, rear: 0.8 },
     // About two bounces a second if nothing damped them: firm, for a kart. Ridden at 26 cm (was 18) so the body's corner
@@ -2094,7 +2106,8 @@ export const config: GameConfig = {
     // Damped to 0.5 (Tane, 7d; was 0.8): at 0.8 the 9 cm upright face of a kerb, crossed from the grass at 30 m/s, threw
     // the front wheels off the ground and turned the car 4.2 degrees.
     // oddNormal: the cosine of 8 degrees.
-    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.5, oddNormal: 0.990268 },
+    // closingCap: 4 m/s (Tane, 10a-6).
+    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.5, oddNormal: 0.990268, closingCap: 4 },
     // Above what full stick asks at boost speed (25 times 1.15 squared: 33), so ordinary steering never slides (was 22
     // with a side force of 15; 10a-4).
     grip: { side: 35, turn: 30 },
@@ -2136,7 +2149,9 @@ export const config: GameConfig = {
     boost: { speed: 1.15, accel: 12 },
     // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 32 m/s.
     surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
-    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 6 },
+    // spin: Tane picked 3 in 10a-5, which waits for 10a-6b: at 3 a car scraping an island's wall catches on the seams
+    // between its 2 m boxes and is pinned against it (STATE.md, "10a-6").
+    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 6, hold: 0.25, lift: 0.5 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },

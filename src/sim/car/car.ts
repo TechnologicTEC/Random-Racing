@@ -65,6 +65,11 @@ export interface CarMemory {
   sinceWall: number;
   /** Which wheels' ground directions were odd on the last step (10a-4, `steadyNormals`): front left, front right, rear left, rear right. */
   odd: boolean[];
+  /**
+   * Physics steps since the body last touched a wall, the gate, a tree or a rock, up to `bump.hold` in steps and one
+   * more (10a-6): while it is at most `bump.hold`, the turning and the rise are held (`settle`).
+   */
+  sinceHit: number;
 }
 
 const NONE_ODD: readonly boolean[] = [false, false, false, false];
@@ -80,9 +85,10 @@ export interface Car {
    */
   step(input: InputRecord, touch?: Touch | null): void;
   /**
-   * Straight after a physics step: if the body touched a wall, the gate, a tree or a rock in it, holds the body's
-   * turning to `bump.spin` (Tane, 7c), so a hit off centre never spins the car faster than that. The whole turning is
-   * held, its roll and pitch with the spin about its up, in proportion.
+   * Straight after a physics step: if the body touched a wall, the gate, a tree or a rock in it, or did within
+   * `bump.hold` before it, holds the body's turning to `bump.spin` (Tane, 7c and 10a-6), so a hit never spins the car
+   * faster than that, and its upward speed to `bump.lift`, so a hit never throws it up. The whole turning is held, its
+   * roll and pitch with the spin about its up, in proportion.
    */
   settle(touch: Touch | null): void;
   /**
@@ -119,6 +125,10 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
   const again = Math.round(car.bump.again * cfg.sim.stepsPerSecond);
   let sinceWall = again;
   let odd: boolean[] = [...NONE_ODD];
+  const holdSteps = Math.round(car.bump.hold * cfg.sim.stepsPerSecond);
+  /** One more than the hold: nothing held. */
+  const NO_HIT = holdSteps + 1;
+  let sinceHit = NO_HIT;
 
   /** Feels for the ground under each wheel: a ball cast from the spring's mount, straight down in the car's own directions. */
   function feel(motion: BodyMotion): Array<WheelState & { normal: Vec3 }> {
@@ -173,11 +183,13 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       return { wheels, speed: speedOf(motion), drift: view(), top: topFor(wheels, drift) };
     },
     settle(touch) {
-      if (touch === null) return;
+      sinceHit = touch !== null ? 0 : Math.min(NO_HIT, sinceHit + 1);
+      if (sinceHit > holdSteps) return;
       const motion = physics.motion();
       const turning = Math.sqrt(dot(motion.spin, motion.spin));
       const limit = car.bump.spin;
       if (turning > limit) physics.twist(twistFor(scale(motion.spin, limit / turning - 1), motion.rotation, car));
+      if (motion.velocity.y > car.bump.lift) physics.push({ x: 0, y: car.mass * (car.bump.lift - motion.velocity.y), z: 0 });
     },
     halt() {
       // A slide ended by the wait counts as a respawn's end. One let go on this same step is already counted, but it was
@@ -190,12 +202,14 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       drift = NO_DRIFT;
       sinceWall = again;
       odd = [...NONE_ODD];
+      sinceHit = NO_HIT;
     },
-    save: () => ({ drift, sinceWall, odd: [...odd] }),
+    save: () => ({ drift, sinceWall, odd: [...odd], sinceHit }),
     load(memory) {
       drift = { ...memory.drift };
       sinceWall = memory.sinceWall;
       odd = [...memory.odd];
+      sinceHit = memory.sinceHit;
     },
 
     step(input, touch = null) {
