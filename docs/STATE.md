@@ -9,7 +9,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished part:** 10a-4, the new speed in the config (see "Step 10"): 190 km/h, every step 9 bar met. **This ends 10a**
-- **Next:** `docs/PLAN.md`, "The build order": **10b**, speed with the car (`npm run perf`, which opens a real browser window: ask Tane who runs it) `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Next:** **Tane's drive after 10a** (see "Step 10", "Tane's drive after 10a-4"): the boost tiers come too rarely, and hits on walls and kerbs throw the car about. Plan it in plan mode first. Then `docs/PLAN.md`'s **10b**, speed with the car (`npm run perf`, which opens a real browser window: ask Tane who runs it) `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -1043,6 +1043,12 @@ Every slid corner of seeds 1 to 20 (177; throwaway code, the same passes):
 - **Tier 3 is harder to reach**: at 53 m/s a 3 s slide needs over 100 m of corner. The bot's longest slide on the lap is 2.8 s on seeds 42 and 48213 and 3.0 s on seed 100 (4.0 s on seed 1). For Tane at the sign-off, with `drift.tiers` on the tuning panel.
 
 Tests, seen failing first: `normals.test.ts` (9); `upright.test.ts` gains 2 (downforce presses the springs by its share, and nothing in the air); `botDriver.test.ts` gains 3 (the slide corner braked for at the drift grip, `aheadOnly`, `enterWhole`); the odd wheels in `walls.test.ts`'s fingerprint test. 2,352 unit tests pass.
+
+### Tane's drive after 10a-4 (2026-11-22)
+
+- **The speed is good**: for the most part the corners can be taken fine.
+- **The boost rarely comes.** A boost needs a slide held 1 s for tier 1 (`drift.tiers` 1, 2, 3 s), and gives 0.5, 1.0 or 1.6 s. At 53 m/s many slides are over in under a second: in the corner proof at 53 m/s, 5 of the 12 corners (every chicane but one and every plain corner) ended at tier 0, so no boost. Tane tuned the tiers shorter on the panel and it worked well: **the boosts are to be redone so they take less time to earn** (ask Tane for the panel's numbers; measure options).
+- **Hits are far too violent.** After touching a wall, a kerb or something else the car is sent flying and spinning out of control; it needs much less spin, speed and height from a hit. **Even from a standstill, driving back onto the road across a kerb, it glitched and threw the car.** Not yet investigated: find the cause before changing anything (suspects to check: the kerb's upright face at low speed, the odd-wheel rule from 10a-4 at a kerb, downforce, the stronger steering; and whether it happens at 30 m/s on the commit before 10a-4).
 
 ## Working agreements
 
