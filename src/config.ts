@@ -1470,8 +1470,10 @@ export interface CarConfig {
    * `raise`: the box that meets things starts this far above the body's drawn floor, its weight and balance those of
    * the whole box (Tane, 10a-6). An island's grass lies `road.sink` under its road, so from the grass the road's edge
    * and a kerb's skirt stood at the height of the body's floor, which ran into them and was thrown.
+   * `round`: the box's edges and corners are rounded by this, in metres, its outer size the same (Tane, 10a-6b). An
+   * island's wall is a row of 2 m boxes, and a square box scraping along one caught on the seams between them.
    */
-  body: { halfWidth: number; halfHeight: number; halfLength: number; grip: number; bounce: number; raise: number };
+  body: { halfWidth: number; halfHeight: number; halfLength: number; grip: number; bounce: number; raise: number; round: number };
   mass: number;
   wheels: WheelConfig;
   suspension: SuspensionConfig;
@@ -2098,7 +2100,7 @@ export const config: GameConfig = {
     respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
   },
   car: {
-    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15 },
+    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },
     mass: 300,
     wheels: { radius: 0.05, halfTrack: 0.6, front: 0.8, rear: 0.8 },
     // About two bounces a second if nothing damped them: firm, for a kart. Ridden at 26 cm (was 18) so the body's corner
@@ -2149,9 +2151,9 @@ export const config: GameConfig = {
     boost: { speed: 1.15, accel: 12 },
     // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 32 m/s.
     surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
-    // spin: Tane picked 3 in 10a-5, which waits for 10a-6b: at 3 a car scraping an island's wall catches on the seams
-    // between its 2 m boxes and is pinned against it (STATE.md, "10a-6").
-    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 6, hold: 0.25, lift: 0.5 },
+    // spin 3 (Tane, 10a-5; was 6): with the hold, a 60-degree hit stops against the wall instead of spinning round. It
+    // came in with the round-edged body (10a-6b): with square edges a car held to 3 was pinned on the wall's seams.
+    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 3, hold: 0.25, lift: 0.5 },
     brake: { strength: 20, holdBelow: 0.5 },
     reverse: { topSpeed: 8, accel: 6 },
   },

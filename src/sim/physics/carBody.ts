@@ -104,7 +104,7 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
   // wheels must be able to feel the ground before the car's first step.
   physics.step();
 
-  const { halfWidth, halfHeight, halfLength, grip, bounce, raise } = cfg.car.body;
+  const { halfWidth, halfHeight, halfLength, grip, bounce, raise, round } = cfg.car.body;
   let body: RigidBody = physics.createRigidBody(
     rapier.RigidBodyDesc.dynamic()
       .setTranslation(start.position.x, start.position.y, start.position.z)
@@ -114,12 +114,13 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
   );
   // The box that meets things starts `raise` above the drawn floor (Tane, 10a-6), so it clears the road's edge and a
   // kerb's skirt seen from an island's sunken grass. Its weight and balance stay those of the whole box: the middle of
-  // the mass at the body's middle (half the raise below the box's own middle), and the whole box's turning inertia.
+  // the mass at the body's middle (half the raise below the box's own middle), and the whole box's turning inertia. Its edges are
+  // rounded by `round` (Tane, 10a-6b), the outer size the same, so it slides past the seams between a wall's boxes.
   const mass = cfg.car.mass;
   const [w, h, l] = [2 * halfWidth, 2 * halfHeight, 2 * halfLength];
   const inertia = { x: (mass / 12) * (h * h + l * l), y: (mass / 12) * (w * w + l * l), z: (mass / 12) * (w * w + h * h) };
   physics.createCollider(
-    rapier.ColliderDesc.cuboid(halfWidth, halfHeight - raise / 2, halfLength)
+    rapier.ColliderDesc.roundCuboid(halfWidth - round, halfHeight - raise / 2 - round, halfLength - round, round)
       .setTranslation(0, raise / 2, 0)
       .setMassProperties(mass, { x: 0, y: 0 - raise / 2, z: 0 }, inertia, { x: 0, y: 0, z: 0, w: 1 })
       .setFriction(grip)

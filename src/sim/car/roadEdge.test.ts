@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { hold } from '../../testing/simDriving';
-import { poseOn, roadEdgeGround, type RoadEdgeGround } from '../../testing/testGrounds';
+import { poseOn, roadEdgeGround, runUpTo, type RoadEdgeGround } from '../../testing/testGrounds';
 import { loadRapier, type Rapier } from '../physics/rapier';
 import { rotate } from '../quat';
 import { createSimOn, type CarState } from '../sim';
@@ -23,6 +23,7 @@ beforeAll(async () => {
 
 const car = config.car;
 const perSecond = config.sim.stepsPerSecond;
+const top = car.engine.topSpeed;
 const ride = car.body.halfHeight + car.suspension.rideHeight;
 const flatSpeed = (state: CarState): number => Math.hypot(state.velocity.x, state.velocity.z);
 const roofUp = (state: CarState): number => rotate(state.rotation, { x: 0, y: 1, z: 0 }).y;
@@ -112,6 +113,77 @@ describe('from the grass back onto the road, as on an island (10a-6)', () => {
     it(`over the bare edge at ${degrees} degrees from ${out} m out: stays low and level`, () => {
       const { states } = grassToRoad(ground.stretches.bare, degrees, out);
       expectTame(states, `bare, ${degrees} degrees, ${out} m`);
+    });
+  }
+});
+
+/**
+ * From the road at `degrees` to the edge, full throttle at `throttle` from far enough back to reach 98% of its speed,
+ * into the wall in the middle of a stretch. Gives the state on the step before the first touch and every state from
+ * the first touch until `seconds` later.
+ */
+function intoWall(stretch: { from: number; to: number }, degrees: number, throttle: number, seconds: number): { before: CarState; states: CarState[] } {
+  const a = (degrees * Math.PI) / 180;
+  const run = runUpTo(0.98, 200) + 30;
+  const x = -2 - (run - 3) * Math.sin(a);
+  const z = 0 - middle(stretch) + run * Math.cos(a);
+  const sim = createSimOn(rapier, ground.course, config, poseOn(ground, x, z, { x: Math.sin(a), z: 0 - Math.cos(a) }, config));
+  let last = sim.state();
+  let before: CarState | null = null;
+  const states: CarState[] = [];
+  for (let step = 0; step < 40 * perSecond && states.length < seconds * perSecond; step++) {
+    hold(sim, { throttle }, 1 / perSecond);
+    const state = sim.state();
+    if (before === null && state.touch === 'wall') before = last;
+    if (before !== null) states.push(state);
+    last = state;
+  }
+  sim.free();
+  expect(before, 'it never reached the wall').not.toBeNull();
+  return { before: before!, states };
+}
+
+/** While touching and for `bump.hold` after the last touch, the turning stays at or under `bump.spin` (the engine's rounding allowed). */
+function expectTurningHeld(states: CarState[], label: string): void {
+  const holdSteps = Math.round(car.bump.hold * perSecond);
+  let since = Infinity;
+  let worst = 0;
+  for (const state of states) {
+    since = state.touch !== null ? 0 : since + 1;
+    if (since <= holdSteps) worst = Math.max(worst, turning(state));
+  }
+  expect(worst, `${label}: turning while held (rad/s)`).toBeLessThanOrEqual(car.bump.spin + 1e-5);
+}
+
+// Tane, 10a-6b: 65% of the speed a second after the hit (a 30-degree hit on the bare-edge wall keeps 66 to 69%; the flat
+// wall test of step 7b keeps 70% or more, measured 87% at 30 m/s).
+describe('hitting a wall beside the road, as on an island (10a-6b)', () => {
+  for (const [name, stretch] of [
+    ['with a kerb in front of it', 'kerbWall'],
+    ['beside a bare edge', 'bareWall'],
+  ] as const) {
+    for (const degrees of [5, 10, 30]) {
+      for (const throttle of [1, 0.6]) {
+        it(`${name}, at ${degrees} degrees and ${Math.round(throttle * top)} m/s: low, level, along the wall a second later with 65% of its speed`, () => {
+          const { before, states } = intoWall(ground.stretches[stretch], degrees, throttle, 1.5);
+          expect(flatSpeed(before)).toBeGreaterThan(throttle * top * 0.95);
+          const label = `${name}, ${degrees} degrees`;
+          expect(Math.max(...states.map(rise)), `${label}: rise (m)`).toBeLessThan(0.5);
+          expect(Math.min(...states.map(roofUp)), `${label}: roof-up`).toBeGreaterThan(0.9);
+          expectTurningHeld(states, label);
+          const second = states[perSecond]!;
+          expect(Math.abs(heading(second)), `${label}: heading a second on (degrees)`).toBeLessThan(10);
+          expect(flatSpeed(second), `${label}: speed a second on`).toBeGreaterThanOrEqual(flatSpeed(before) * 0.65);
+        });
+      }
+    }
+
+    it(`${name}, at 60 degrees and top speed: never spun round to face back, low and level`, () => {
+      const { states } = intoWall(ground.stretches[stretch], 60, 1, 2);
+      expectTurningHeld(states, `${name}, 60 degrees`);
+      expect(Math.max(...states.map((state) => Math.abs(heading(state)))), 'heading from the wall line (degrees)').toBeLessThan(100);
+      expect(Math.max(...states.map(rise))).toBeLessThan(0.5);
+      expect(Math.min(...states.map(roofUp))).toBeGreaterThan(0.9);
     });
   }
 });
