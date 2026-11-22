@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 10a-4, the new speed in the config (see "Step 10"): 190 km/h, every step 9 bar met. **This ends 10a**
-- **Next:** **Tane's drive after 10a** (see "Step 10", "Tane's drive after 10a-4"): the boost tiers come too rarely, and hits on walls and kerbs throw the car about. Plan it in plan mode first. Then `docs/PLAN.md`'s **10b**, speed with the car (`npm run perf`, which opens a real browser window: ask Tane who runs it) `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Last finished part:** 10a-5, the cause of the throws found and the options measured (see "Step 10", "10a-5"): on islands the grass is 25 cm below the road and the body rides 26 cm up, so the kerb's skirt and the road's edge are steps at body height
+- **Next:** **Tane picks** from 10a-5's tables (the kerb fix, the hit options, the tiers). Then **10a-6** (hits) and **10a-7** (tiers), tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -886,6 +886,9 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | 10a-2 | **Tests that follow the config** | Done |
 | 10a-3 | **Measure at 53 m/s**; Tane picks | Done |
 | 10a-4 | **The new speed in the config** | Done |
+| 10a-5 | **Tane's drive after 10a-4: the cause of the throws, and the options measured** (hits, kerbs, tiers) | Done |
+| 10a-6 | **Hits and kerbs**, with Tane's picks | |
+| 10a-7 | **Boost tiers**, with Tane's pick | |
 | 10b | **Speed with the car** (`npm run perf`) | |
 | 10c | **Docs, the pull request, sign-off** | |
 
@@ -1049,6 +1052,79 @@ Tests, seen failing first: `normals.test.ts` (9); `upright.test.ts` gains 2 (dow
 - **The speed is good**: for the most part the corners can be taken fine.
 - **The boost rarely comes.** A boost needs a slide held 1 s for tier 1 (`drift.tiers` 1, 2, 3 s), and gives 0.5, 1.0 or 1.6 s. At 53 m/s many slides are over in under a second: in the corner proof at 53 m/s, 5 of the 12 corners (every chicane but one and every plain corner) ended at tier 0, so no boost. Tane tuned the tiers shorter on the panel and it worked well: **the boosts are to be redone so they take less time to earn** (ask Tane for the panel's numbers; measure options).
 - **Hits are far too violent.** After touching a wall, a kerb or something else the car is sent flying and spinning out of control; it needs much less spin, speed and height from a hit. **Even from a standstill, driving back onto the road across a kerb, it glitched and threw the car.** Not yet investigated: find the cause before changing anything (suspects to check: the kerb's upright face at low speed, the odd-wheel rule from 10a-4 at a kerb, downforce, the stronger steering; and whether it happens at 30 m/s on the commit before 10a-4).
+
+Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\tanee\.claude\plans\steady-whistling-wozniak-of-efa8d0e4-dda1-4960-99f7-da71165c16fb.md`): 10a-5 measures, 10a-6 the hits, 10a-7 the tiers. Tane's answers before planning: on the panel the tiers at **about half (0.5, 1, 1.5 s)** with the boosts unchanged worked well; a hit **launched the car up, spun it round and shot it away**; the kerb throw was **from the grass, slowly, up the kerb's outer face back onto the road**; **Claude runs `npm run perf`** in 10b.
+
+### 10a-5: the cause of the throws, and the options measured (2026-11-22)
+
+Throwaway code in Node (deleted). A copy of the island's road edge as a plain test ground: road at 0, the apron falling 0.6 m over 1.5 m, a kerb 1 m wide rising to 9 cm with its skirt dropping to 0.6 m under the road 0.15 m beyond it, the grass at 0.25 m under the road (`road.sink`), and a wall whose face stands 1.65 m out (`barrierOffset` less half its width). Checked against real kerbs on seeds 7, 42 and 1.
+
+**The cause.** On an island the grass beside the road is 25 cm lower than the road, and the body's underside rides only 26 cm above the ground. So a car on the grass rides with its underside 1 cm above road level, and anything at the road's edge is a step at the height of its body:
+- **The kerb's outer skirt stands 34 cm above the grass**, nearly upright. Driving from the grass to the road, the body's box runs into it like a wall, a hit no rule knows about (kerbs are not things that count as touches, so the spin cap never acts), and the physics lifts the box out. Seed 7's kerb at sample 522, crossed at 45 degrees from rest: 7.8 to 3.7 m/s in one step, 2 m/s upwards, no wheel yet on the kerb. Most slow crossings on seeds 7, 42 and 1 never reach the kerb at all: the car is stopped against the skirt.
+- **The road's own edge**: with the front pitched up by a kerb, the box's front edge strikes the edge of the road surface itself (31 to 6 m/s in one step at 31 m/s, 11 rad/s of spin).
+- **A wall with a kerb in front of it** is the worst case: the wall pushes the car back towards the road and the body slams into the kerb's skirt from the side.
+- The wheels add to it: a wheel's ball landing on the skirt's top edge comes back with its ground direction tilted 66 to 77 degrees and its spring squashed by up to 22 cm, and the damper then reads the car's forward speed as closing speed.
+- **The 7d kerb test ground did not show any of this**: its kerb stands on ground at road level, a 9 cm step. On it, a slow crossing rises 2 cm.
+
+**Was it there before 10a-4? Yes.** The same file on `34e4184` (the code before 10a-4, in a worktree): at its own 30 m/s, from the grass up a kerb at 18 m/s (the grass top speed then), the car rose 0.7 m and turned 30 to 140 degrees. With 53 m/s set as on the panel, it was as violent as today (2.25 m up, half a turn). Switching off 10a-4's changes one at a time (downforce, the odd-wheel rule, steering) changes nothing that matters. The kerb's shape has been like this since Milestone 2; the speed makes it worse, because the grass allows 60% of top speed: 32 m/s now, 18 before.
+
+**Today** (grass to road: the car's highest rise above the ground under it, the most spin, the lowest roof-up, how far it turned, the longest time with no wheel down):
+
+| Case | Rise | Spin (rad/s) | Lowest roof-up | Turned | In the air |
+| --- | --- | --- | --- | --- | --- |
+| Over a kerb straight on, at 11 / 26 / 31 m/s | 0.40 / 1.56 / 2.15 m | 2.8 / 5.8 / 6.9 | 0.88 / 0.67 / 0.59 | 1 / 141 / 180 degrees | 0.4 / 1.0 / 1.3 s |
+| Over a kerb at 20 degrees, 24 / 31 m/s | 1.43 / 2.58 m | 6.9 / 8.1 | 0.86 / 0.79 | 177 degrees | 0.9 / 1.0 s |
+| Bare edge (the apron) straight on, 26 m/s | 0.39 m | 3.1 | 0.99 | 0 | 0.5 s |
+| Wall with a kerb in front, 53 m/s, at 5 / 10 / 30 degrees | 4.0 / 7.5 / 1.8 m | 12 / 16 / 10.5 | 0.49 / 0.58 / 0.53 | 50 to 80 degrees | 1.0 to 1.4 s |
+| The same at 30 m/s, 30 degrees | 3.1 m | 7.9 | **0.04** | 127 degrees | 1.0 s |
+| Wall, bare apron, 53 m/s, 20 / 60 degrees | 0.2 m | 6 (the cap) | 0.97 | ends 29 / 168 degrees off the wall's line | 0 |
+| Road to grass over a kerb, 53 m/s | 0.3 m | 2 to 4 | 0.94 | 0 | 0.2 s |
+
+**The kerb options** (the same cases; the worst of each group):
+
+| Option | Grass to road over a kerb | Bare edge | Wall with a kerb in front |
+| --- | --- | --- | --- |
+| Kerb's back a 40% or 60% slope down to the grass (a generator change) | **worse**: up to 4.4 and 6.8 m (the slope is a ramp) | as today | fixed: 0.4 m |
+| Springs push along the car's own up | no help | as today | no help; **breaks** the 45% hillside test (tips 62 degrees) and the crest test |
+| Each wheel's ground direction held within 20 to 40 degrees of the car's up | no help on its own | as today | as today |
+| The body passes through kerbs | fixed except straight on at 31 m/s: 1.7 m, 12 rad/s, half a turn (the box hits the road's edge) | as today | fixed: 0.4 m |
+| The body passes through the road and kerbs | fixed: 0.2 m, 2.7 rad/s | 0.4 m | fixed. But on plain test grounds the road is the only floor, and on an island a car on its roof would sink 25 cm into the road |
+| **The body's box starts 0.15 m above its drawn floor** (collision only: weight, balance and the wheels as now; still solid to everything) | **0.18 m, 2.7 rad/s, roof-up 0.99, turned 3 degrees, never in the air** | 0.4 m, 0.5 s in the air | **0.30 m, roof-up 0.97 or more** |
+| 0.2 m above | the same as 0.15 | the same | the same |
+| **0.15 m, and the damper's closing speed counted up to 4 m/s** (a real damper's blow-off) | **0.14 m, 1.9 rad/s** | **0.05 to 0.2 m, at most 0.2 s in the air** | 0.30 m |
+| The damper along the car's up (any tilt) | fixes the 31 m/s case with "passes through kerbs" | | **breaks** the hillside and crest tests, and seed 13's sliding lap |
+
+On the real kerbs of seeds 7, 42 and 1 with the 0.15 m box and the damper cap, every slow crossing now gets onto the kerb (before, most stopped against the skirt), at most 2.7 m/s upwards, 3.9 rad/s, roof-up 0.91 or more.
+
+**The hit options**, measured with the kerb fixed (the body passing through kerbs, damper along up; the walls on the island-like edge, 53 and 30 m/s; trunks on the flat at 53):
+
+| Option | Walls at 10 to 30 degrees, 53 m/s: heading afterwards from the wall's line, speed kept | Walls at 60 degrees | Trunk 0.75 m off centre |
+| --- | --- | --- | --- |
+| Today: spin held to 6 only on the touching steps | 11 to 31 degrees, 42 to 51 m/s | spun round, ends 138 to 168 degrees (facing back), 1 to 3 m/s | rises 1.3 m |
+| **Spin held to 3, for 0.25 s after the hit** | **0 to 5 degrees, 41 to 51 m/s** | stops against the wall, 0 m/s, never turned back | 1.3 m, ends facing back |
+| Spin held to 2, for 0.25 or 0.5 s | 0 to 1 degree, 38 to 46 m/s | the same | 1.3 m |
+| Roll and pitch held to 1 rad/s as well | the same as without | the same | the same |
+| **Lift held: upward speed at most 0.5 m/s for that time** | the same | the same | **0.06 m, ends 26 degrees off** |
+| No faster after a hit than before it | no change: hits do not add speed here | | |
+
+"Shot away" was the kerb launch: no hit on a wall, tree or rock added speed.
+
+**The guard run** with the 0.15 m box, the damper cap of 4 m/s, spin 3 for 0.25 s and lift 0.5 (all of `src/sim` and `src/testing`, 416 tests): 414 pass. The two that fail are in `carBody.test.ts`: a bare body with no springs, resting on the road, sits 0.15 m lower than they expect, which is the change itself. Every lap, the corner proof, the sliding laps, the keyboard corner drivers, the walls, trunks, rocks, kerbs, crest, hillside, drop and bank tests pass.
+
+**The boost tiers** (the bot's sliding lap on seeds 1 to 20, one lap each; boosts unchanged at 0.5, 1.0 and 1.6 s):
+
+| Tiers (s of sliding) | Slides that earn a boost | Tier 2 or more | Tier 3 | Mean lap | Wall touches, respawns | Corner proof corners with no boost |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1, 2, 3 (today) | 80% | 25% | 6% | 50.73 s | 2, 0 | 5 of 12 |
+| **0.5, 1, 1.5 (Tane's)** | 100% | 80% | 36% | 50.17 s | 2, 0 | 0 |
+| 0.4, 0.8, 1.2 | 100% | 92% | 55% | 50.01 s | 2, 0 | 0 |
+| 0.6, 1.2, 1.8 | 99% | 56% | 27% | 50.65 s | 3, 0 | 0 |
+
+- The bot's 177 slides: shortest 0.5 s, a quarter under 1.07 s, middle 1.22 s, a quarter over 1.95 s, longest 5.3 s. A hand on a keyboard slides shorter than the bot through chicanes and plain corners.
+- Touches within 3 s of a boost starting: 2 in every option (so the earlier boosts did not put the bot into walls). With Tane's tiers seed 8's lap is 3.4 s quicker (46.67 to 43.22 s); every seed is quicker.
+- With Tane's tiers set in the config (then put back): the keyboard corner drivers, the corner proof and the sliding laps all pass. Two `drifting.test.ts` tests fail because they are sized to the old tier times (a 2.1 s slide chosen to be tier 2; the drawing state at a fixed step), to be made to read the config in 10a-7.
+
+**One mistake on the way:** the worktree for `34e4184` had a junction to the project's `node_modules`, and removing the worktree followed it and emptied `node_modules`. `npm ci` restored exactly the pinned versions from the lockfile; the type-check and tests ran clean after it. Nothing else was touched.
 
 ## Working agreements
 
@@ -1296,3 +1372,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-2 done: every test sized for 30 m/s works its sizes out from the config (`runUp`, `distanceIn`, `circleAt` in `testing/simDriving.ts`, `reachFor` in `testing/lineDriver.ts`; the grounds, hold times, circles, the bots' look-ahead and run-ups), each the larger of its old size and the config's, so nothing moves at 30 m/s. Four speed-tied tests left for 10a-4. 2,338 unit tests pass; all 346 browser tests passed in one run (23.1 minutes). Next: 10a-3, measure at 53 m/s.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-3 measured (throwaway code; table under "10a-3"): at 53 m/s the bot laps every seed clean on grip at any steering grip, and a downforce trial stops the car leaving the ground over crests at no cost in lap time; but no setting tried passes step 9's slide bars, mostly because the car leaves a slide too fast for its steering on grip and the test drivers slide in without braking. Docs only. Next: Tane picks; then the bots brake into tight slides and the bars are measured again.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-4 done, which ends 10a. Top speed 53 m/s (190 km/h) with the push as it was, steering grip 25, tyre grip 35, downforce 0.0025, an odd wheel's ground direction steadied (a cast on a mesh edge tilted 10 degrees and kicked the car), drift grip and boost as they were. The test drivers brake for the corners they slide through as a player would. Every step 9 bar met at 53 m/s: laps on grip clean, the sliding lap quicker on all 20 seeds, the corner proof and all 177 slid corners quicker and clean (tables under "10a-4"). Four tests changed with Tane's say; the tightest slide's numbers corrected (first reported wrong). 2,352 unit tests pass; the browser suite: 343 passed in one run (23.9 minutes), and the one that ran out of time there (seed 42's slide picture) passed with the two after it in a rerun of the 96 screenshot tests, with the 48 driving tests rerun after the slide helper's last change. Next: 10b.
+- **2026-11-22 (Milestone 3, Opus 5.5):** Tane's drive after 10a-4 planned in plan mode and approved (10a-5 to 10a-7). 10a-5 measured (throwaway code, tables under "10a-5"): the throws come from the island's road edge, not from 10a-4 (the commit before it throws the car too, worse at 53 m/s). The grass is 25 cm below the road and the body rides 26 cm up, so from the grass the kerb's skirt (34 cm) and the road's edge are steps at body height; the body hits them, and the spin cap never acts because kerbs are not touches. The 7d kerb test ground had a 9 cm kerb on level ground and showed none of it. The body's box starting 0.15 m above its drawn floor, with the damper's closing speed capped at 4 m/s, makes every crossing tame (0.14 m, 1.9 rad/s, was up to 2.6 m and half a turn) and wall hits with a kerb in front too (0.3 m, was up to 7.5 m and nearly on the roof); spin held to 3 for 0.25 s after a hit keeps shallow wall hits along the wall and stops 60-degree hits spinning round; lift held to 0.5 m/s stops a clipped trunk throwing the car 1.3 m up. Tiers of 0.5, 1 and 1.5 s give every bot slide a boost (80% today) and every corner proof corner one. `node_modules` emptied by a worktree removal and restored with `npm ci`. Docs only. Next: Tane picks; then 10a-6 and 10a-7.

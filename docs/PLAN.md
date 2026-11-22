@@ -52,6 +52,9 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **10a-2** Tests that follow the config (top speed still 30: nothing changes)
   - [x] **10a-3** Measure at 53 m/s, then Tane picks the steering, drift grip, start and end speeds, and what to do about crests
   - [x] **10a-4** The new speed in the config
+  - [x] **10a-5** Tane's drive after 10a-4: the cause of the throws found and the options measured (hits, kerbs, tiers); Tane picks
+  - [ ] **10a-6** Hits and kerbs, with Tane's picks
+  - [ ] **10a-7** Boost tiers, with Tane's pick
 - [ ] **10b** Speed, with the car
 - [ ] **10c** README, CLAUDE.md, STATE.md, the pull request; **Tane's playtest sign-off**; merge and delete the branch
 
