@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 10a-2, the tests that follow the config (see "Step 10")
-- **Next:** `docs/PLAN.md`, "The build order": **10a-3**: the grid is measured (see "10a-3"); **waiting for Tane's picks**, then the bots taught to brake into tight slides and measured again. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Last finished part:** 10a-3, measured at 53 m/s; Tane picked (see "10a-3")
+- **Next:** `docs/PLAN.md`, "The build order": **10a-4**, the new speed in the config: top speed 53, steering grip 25 (`grip.side` 32), downforce, drift grip 60 as it is; the test drivers taught to brake into tight slides, then step 9's bars measured again `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -884,7 +884,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | --- | --- | --- |
 | 10a-1 | **Why a drift ended**, on the readout | Done |
 | 10a-2 | **Tests that follow the config** | Done |
-| 10a-3 | **Measure at 53 m/s**; Tane picks | |
+| 10a-3 | **Measure at 53 m/s**; Tane picks | Done |
 | 10a-4 | **The new speed in the config** | |
 | 10b | **Speed with the car** (`npm run perf`) | |
 | 10c | **Docs, the pull request, sign-off** | |
@@ -943,6 +943,8 @@ Every lap on grip is clean at 53 m/s. Full stick at 53 m/s turns 187, 156, 140 a
 - **When the sliding bot touches walls** (steering grip 20, drift grip 100): 69 of 89 touches in the 3 s after a slide ends, at 43 m/s (median); 2 during a slide; 3 while boosting; 15 on grip at 9 m/s (median). The car leaves the corner fast and a little wide, and full stick on grip at 45 m/s turns only a 100 m circle (60 m at 30 m/s today). A stronger steering grip is the lever: at 25 to 30 the careful driver passes again.
 - **Both test drivers slide into a corner at whatever speed they carry** (the 9b bot does not brake for a corner it slides through; the corner driver's run-up now reaches about 50 m/s). At 30 m/s that was right; at 53 m/s a player would brake before a hairpin. The half-second driver's hairpins (44 to 63%) and the sliding laps' touches point there.
 - Slide ends by reason over the 20 sliding laps: about 175 let go, 1 or 2 walls, 1 to 3 too slow, a few on a respawn.
+
+**Tane's picks (2026-11-22):** steering grip 25 (full stick 113 m at 53 m/s; `grip.side` 32, 7 above it); downforce; drift grip 60 as it is, so the tightest slide scrubs a fast car down to about 41 m/s (6b's "97% of top speed in the tightest slide" changes with it). Claude's call: the start and end speeds stay shares of top speed (21 and 16 m/s), as they measured the same as 12 and 9. Steering 25 with drift grip 60 was not one of the measured pairs: 10a-4 measures it, with the test drivers braking into tight slides as a player would.
 
 ## Working agreements
 
@@ -1015,6 +1017,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 | 2026-11-17 | **A close view of the car, `look=car`**, and **no car in the old views** (5c) | Claude's call, for Tane to judge. The car needs a repeatable close picture before the chase camera exists, and for the visual bar's references. Old addresses keep their pictures, as the plan asks |
 | 2026-11-17 | **The chase camera stays behind the nose while the car reverses**, and follows the velocity only when going forwards faster than 2 m/s (5d) | Claude's call, for Tane to judge. Following the velocity, it would swing round in front of a car backing away at more than 2 m/s |
 | 2026-11-17 | **R puts the car back on the start line** as a new simulation, until 8b makes reset the simulation's own respawn; **"reduce motion" no longer holds the car**, only `still=1` does; **`sim.maxStepsPerFrame` lives in the `sim` block** (5e, 5b) | Claude's calls, for Tane to judge. Without R the car could only be brought back from the sea by reloading the page at check-in 1. Stopping the car would stop people who asked for less motion from driving at all. The limit sits beside the step rate it belongs with, though only the page reads it |
+| 2026-11-22 | **10a-3, Tane's picks for 53 m/s:** steering grip 25 (`steer.sideForce`, full stick 113 m at 53 m/s; `grip.side` 32); downforce over crests; drift grip 60 as it is (the tightest slide scrubs a fast car to about 41 m/s). Start and end speeds stay shares of top speed (Claude's call) | From the measured grid under "10a-3": at 53 m/s most wall touches came just after a slide, when steering on grip could not bring the car back; downforce stopped every crest jump at no cost in lap time |
 | 2026-11-22 | **Check-in 2 (Tane):** everything works; **top speed up to about 190 km/h (about 53 m/s; tried on the tuning panel), acceleration as it is**; a bit more grip or turning where the speed is too much; a drift sometimes cancels mid-corner with no brake pressed. The rest stands | Tane's answers at check-in 2. The straights took too long with nothing to do. The cancel is for 10a: the rules end a slide only on a touch, the brake or too little speed, and a slide on the flat holds at 53 m/s |
 | 2026-11-22 | **The bot drives as a player would, and both passes of a corner take the best of three margins** (9b) | Claude's calls, test code only, for Tane to see. The slide follows the circle through a point 12 m ahead (as the keyboard corner driver), not the plan's curvature-plus-offset rule; it presses only when the road is not turning the other way and its line turns into the corner, waits for the nose before a slide the other way, gives up a corner after a hit. Each was found as a wall touch or a stuck car on a real seed, and none changes the car. The margins: the pass without a slide had its pick of three, the slide pass had one, and the next corner inside the 120 m decided seed 20 |
 | 2026-11-22 | **The brake takes a car on past top speed** (`speedChange`, 9a): above top speed the shed stops at top speed, the brake does not | Claude's call, for Tane to feel at check-in 2. Rule 9 as first written stopped the brake at top speed too, so downhill, where gravity takes the car a hair over top speed every step, the brake did nothing at 30 m/s. Found by step 9a's bot, which then touched walls on 8 of 20 seeds; with the fix, none |
