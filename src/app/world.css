@@ -397,3 +397,80 @@ body,
 .world-race-accent {
   color: #1a7d77;
 }
+
+/* The menu card (M4.4): the title, pause and results, in the middle of the screen while the car is not driven (Tane, M4.0). */
+.world-menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 17rem;
+  padding: 18px 22px 20px;
+  text-align: center;
+}
+
+.world-menu[hidden] {
+  display: none;
+}
+
+.world-menu h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.world-menu-body p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-menu-quiet {
+  color: #4c665f;
+}
+
+.world-menu-total {
+  margin-top: 8px !important;
+  font-size: 30px !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.world-menu-lap {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 11rem;
+  margin: 2px auto 0 !important;
+  font-weight: 600;
+}
+
+.world-menu-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.world-menu-choices button {
+  font: inherit;
+  font-weight: 600;
+  color: #1a7d77;
+  background: transparent;
+  border: 1.5px solid #1a7d77;
+  border-radius: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+
+/* The choice Enter and the controller's A pick: filled, as the page's main button is. */
+.world-menu-choices button.chosen {
+  background: #1a7d77;
+  color: #ffffff;
+}
+
+.world-menu-choices button:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}

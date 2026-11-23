@@ -29,6 +29,26 @@ export function padToInput(axes: readonly number[], buttons: readonly number[], 
   };
 }
 
+const A = 0;
+const B = 1;
+const DPAD_UP = 12;
+const DPAD_DOWN = 13;
+const LEFT_STICK_UP_DOWN = 1;
+
+/**
+ * The controller on a menu card (M4.4): the D-pad, or the left stick pushed over half way, moves the choice up and
+ * down (a stick's up is negative); A picks it and B goes back.
+ */
+export function padMenu(axes: readonly number[], buttons: readonly number[]): { up: boolean; down: boolean; confirm: boolean; back: boolean } {
+  const upDown = axes[LEFT_STICK_UP_DOWN] ?? 0;
+  return {
+    up: (buttons[DPAD_UP] ?? 0) > 0.5 || upDown < -0.5,
+    down: (buttons[DPAD_DOWN] ?? 0) > 0.5 || upDown > 0.5,
+    confirm: (buttons[A] ?? 0) > 0.5,
+    back: (buttons[B] ?? 0) > 0.5,
+  };
+}
+
 /** The controller's buttons that are for the page, not the car: Y changes the camera, Start pauses. */
 export function padPresses(buttons: readonly number[]): { camera: boolean; pause: boolean } {
   return { camera: (buttons[Y] ?? 0) > 0.5, pause: (buttons[START] ?? 0) > 0.5 };

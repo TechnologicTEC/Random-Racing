@@ -125,10 +125,11 @@ describe('openingScreen: what the 3D view opens on (M4.4)', () => {
     }
   });
 
-  it('drives freely at the plain address, for now (the title card comes in M4.4c)', () => {
-    expect(screen('')).toBe('free');
-    expect(screen('?seed=7&still=1')).toBe('free');
-    expect(screen('?seed=7&mode=nonsense')).toBe('free');
+  it('opens on the title card at the plain address, or with a seed and nothing else (Tane, M4.0)', () => {
+    expect(screen('')).toBe('title');
+    expect(screen('?seed=7')).toBe('title');
+    expect(screen('?seed=7&still=1&time=07:30')).toBe('title');
+    expect(screen('?seed=7&mode=nonsense')).toBe('title');
   });
 });
 

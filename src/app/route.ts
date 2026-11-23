@@ -60,13 +60,13 @@ const VIEW_OPTIONS = ['cam', 'lap', 'look', 'at'] as const;
 
 /**
  * What the 3D view opens on: `mode=race` races at once, `mode=free` drives freely with no clock, and so does an
- * address that asks for a camera or a place (`cam=`, `lap=`, `look=`, `at=`). For now every other address drives
- * freely too; M4.4c gives the plain address the title card.
+ * address that asks for a camera or a place (`cam=`, `lap=`, `look=`, `at=`). Any other address, the plain one
+ * among them, opens on the title card over the circling island (Tane, M4.0).
  */
 export function openingScreen(params: URLSearchParams): OpeningScreen {
   if (params.get('mode') === 'race') return 'race';
   if (params.get('mode') === 'free' || VIEW_OPTIONS.some((name) => params.has(name))) return 'free';
-  return 'free';
+  return 'title';
 }
 
 /** The camera C changes to: driving, flying, circling, and back to driving. */

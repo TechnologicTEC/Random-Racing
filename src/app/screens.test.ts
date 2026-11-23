@@ -6,21 +6,21 @@ const RACE: Screen = { name: 'race' };
 const FREE: Screen = { name: 'free' };
 const RESULTS: Screen = { name: 'results' };
 const pausedFrom = (from: 'race' | 'free'): Screen => ({ name: 'paused', from });
-const loading = (then: 'title' | 'free'): Screen => ({ name: 'loading', then });
+const LOADING: Screen = { name: 'loading' };
 
 /**
  * Every move from every screen (M4.4): what it leads to, null where it is not allowed. A move left out of a screen's
  * row is not allowed there.
  */
 const TABLE: Array<[string, Screen, Partial<Record<Move, Screen>>]> = [
-  ['the title', TITLE, { start: RACE, freeDrive: FREE, newTrack: loading('title'), enterSeed: loading('title') }],
-  ['loading for the title', loading('title'), { loaded: TITLE, newTrack: loading('title'), enterSeed: loading('title') }],
-  ['loading for free driving', loading('free'), { loaded: FREE, newTrack: loading('free'), enterSeed: loading('free') }],
+  ['the title', TITLE, { start: RACE, freeDrive: FREE, newTrack: LOADING, enterSeed: LOADING }],
+  // Tane, M4.0: the plain address and N open the title card, so a new island always comes in on it.
+  ['loading', LOADING, { loaded: TITLE, newTrack: LOADING, enterSeed: LOADING }],
   ['the race', RACE, { pause: pausedFrom('race'), restart: RACE, finished: RESULTS }],
-  ['free driving', FREE, { pause: pausedFrom('free'), restart: FREE, newTrack: loading('free') }],
+  ['free driving', FREE, { pause: pausedFrom('free'), restart: FREE, newTrack: LOADING }],
   ['paused in a race', pausedFrom('race'), { resume: RACE, restart: RACE, quit: TITLE }],
   ['paused in free driving', pausedFrom('free'), { resume: FREE, restart: FREE, quit: TITLE }],
-  ['the results', RESULTS, { restart: RACE, newTrack: loading('title'), quit: TITLE }],
+  ['the results', RESULTS, { restart: RACE, newTrack: LOADING, quit: TITLE }],
 ];
 
 describe('move: the screens and the moves between them', () => {
@@ -47,7 +47,7 @@ describe('what each screen does', () => {
   it('takes steps only while racing or driving freely', () => {
     expect(steps(RACE)).toBe(true);
     expect(steps(FREE)).toBe(true);
-    for (const screen of [TITLE, loading('free'), pausedFrom('race'), pausedFrom('free'), RESULTS]) expect(steps(screen)).toBe(false);
+    for (const screen of [TITLE, LOADING, pausedFrom('race'), pausedFrom('free'), RESULTS]) expect(steps(screen)).toBe(false);
   });
 
   it('lets C change the camera only while driving freely: in a race it does nothing', () => {
@@ -61,7 +61,7 @@ describe('what each screen does', () => {
     expect(backMove(pausedFrom('race'))).toBe('resume');
     expect(backMove(RESULTS)).toBe('quit');
     expect(backMove(TITLE)).toBeNull();
-    expect(backMove(loading('title'))).toBeNull();
+    expect(backMove(LOADING)).toBeNull();
   });
 });
 
@@ -91,7 +91,7 @@ describe('the menus', () => {
   });
 
   it('has no menu while driving or loading', () => {
-    for (const screen of [RACE, FREE, loading('title')]) expect(menuFor(screen)).toEqual([]);
+    for (const screen of [RACE, FREE, LOADING]) expect(menuFor(screen)).toEqual([]);
   });
 
   it('offers only moves the screen allows', () => {

@@ -1,6 +1,6 @@
 import type { InputConfig } from '../config';
 import type { RawInput } from '../sim/input';
-import { padPresses, padToInput } from './gamepad';
+import { padMenu, padPresses, padToInput } from './gamepad';
 import { keysToInput } from './keyboard';
 import { mergeInputs } from './merge';
 
@@ -9,12 +9,28 @@ export const DRIVING_KEYS: ReadonlySet<string> = new Set([
   'KeyW', 'ArrowUp', 'KeyS', 'ArrowDown', 'KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'KeyR',
 ]);
 
+/** The controller's buttons for the page that went down since the last look. */
+export interface PadPresses {
+  camera: boolean;
+  pause: boolean;
+  reset: boolean;
+  up: boolean;
+  down: boolean;
+  confirm: boolean;
+  back: boolean;
+}
+
+const NO_PRESSES: PadPresses = { camera: false, pause: false, reset: false, up: false, down: false, confirm: false, back: false };
+
 /** The keyboard and any controller, read together. */
 export interface Devices {
   /** What the driver asks for now: the keys held and the first controller with the standard layout, merged. */
   read(): Required<RawInput>;
-  /** Buttons for the page that went down since the last call: the controller's Y (camera), Start (pause) and Back (reset). */
-  presses(): { camera: boolean; pause: boolean; reset: boolean };
+  /**
+   * Buttons for the page that went down since the last call: the controller's Y (camera), Start (pause) and Back
+   * (reset), and on a menu the D-pad or stick up and down, A and B (M4.4).
+   */
+  presses(): PadPresses;
   /** Counts every key as let go. */
   release(): void;
   /** Stops listening. */
@@ -31,7 +47,7 @@ export interface Devices {
  */
 export function createDevices(target: Window, cfg: InputConfig, wants: (event: KeyboardEvent) => boolean): Devices {
   const held = new Set<string>();
-  let padWas = { camera: false, pause: false, reset: false };
+  let padWas: PadPresses = NO_PRESSES;
 
   const down = (event: KeyboardEvent): void => {
     if (!DRIVING_KEYS.has(event.code) || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -73,8 +89,11 @@ export function createDevices(target: Window, cfg: InputConfig, wants: (event: K
     },
     presses() {
       const reading = pad();
-      const now = reading ? { ...padPresses(reading.buttons), reset: padToInput(reading.axes, reading.buttons, cfg).reset } : { camera: false, pause: false, reset: false };
-      const went = { camera: now.camera && !padWas.camera, pause: now.pause && !padWas.pause, reset: now.reset && !padWas.reset };
+      const now: PadPresses = reading
+        ? { ...padPresses(reading.buttons), reset: padToInput(reading.axes, reading.buttons, cfg).reset, ...padMenu(reading.axes, reading.buttons) }
+        : NO_PRESSES;
+      const went = { ...NO_PRESSES };
+      for (const name of Object.keys(went) as Array<keyof PadPresses>) went[name] = now[name] && !padWas[name];
       padWas = now;
       return went;
     },

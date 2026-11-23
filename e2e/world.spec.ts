@@ -70,11 +70,12 @@ test('generates the 3D world in the worker within the 3-second budget @budget', 
   expect(fastest).toBeLessThan(3000);
 });
 
-test('opens the 3D view at the plain address, driving, on a random seed that it records', async ({ page }) => {
+test('opens the 3D view at the plain address, on the title card over the circling island, on a random seed that it records', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   await expect(page.getByTestId('world-canvas')).toBeVisible();
-  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'title');
+  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'orbit');
   const seed = await page.locator('body').getAttribute('data-world-seed');
   expect(Number(seed)).toBeGreaterThanOrEqual(1);
   expect(Number(seed)).toBeLessThanOrEqual(99999);
@@ -531,6 +532,10 @@ test.describe('grass', () => {
     await page.getByTestId('world-new').click();
     await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '7');
     await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
+    // A new island comes in on the title card, its camera high over it, where no blade is drawn (M4.4): drive it to see the grass.
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'title');
+    await page.getByTestId('menu-choice').filter({ hasText: 'Free drive' }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
     const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
     expect(stats.blades).toBeGreaterThan(50_000);
   });

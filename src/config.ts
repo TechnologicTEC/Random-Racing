@@ -1341,6 +1341,8 @@ export interface CameraConfig {
     furthest: number;
     /** When framing an island, the distance is this many times the longer side of the track. */
     fit: number;
+    /** How fast it circles the island by itself behind the title and results cards (M4.4), in radians a second. */
+    turn: number;
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
@@ -2335,6 +2337,8 @@ export const config: GameConfig = {
       nearest: 30,
       furthest: 3600,
       fit: 1.25,
+      // About two minutes a turn: slow enough to read the card over it.
+      turn: 0.05,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
     car: { distance: 7, tilt: 0.3, side: 0.7 },

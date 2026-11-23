@@ -28,6 +28,7 @@ import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen } from './drive';
 import { createDriving } from './driving';
 import { countdownLights, raceCard, type RaceCard } from './raceCard';
+import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
 import { nextCamera, openingCamera, openingScreen, switchAddress, type CameraMode } from './route';
@@ -81,7 +82,7 @@ const TEMPLATE = `
   <div class="world">
     <canvas class="world-canvas" data-ref="canvas" data-testid="world-canvas"></canvas>
     <div class="world-fade" data-ref="fade" data-testid="world-fade" aria-hidden="true"></div>
-    <div class="world-card world-title">
+    <div class="world-card world-title" data-ref="titleCard">
       <h1 data-ref="name" data-testid="world-name">Seed Circuit</h1>
       <p data-ref="code" data-testid="world-code"></p>
       <p class="world-character" data-ref="character" data-testid="world-character"></p>
@@ -116,6 +117,11 @@ const TEMPLATE = `
       <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
       <div class="world-race-rows" data-ref="raceRows"></div>
     </div>
+    <div class="world-card world-menu" data-ref="menu" data-testid="menu" hidden>
+      <h2 data-ref="menuHeading" data-testid="menu-heading"></h2>
+      <div class="world-menu-body" data-ref="menuBody"></div>
+      <div class="world-menu-choices" data-ref="menuChoices"></div>
+    </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
     </div>
@@ -125,9 +131,13 @@ const TEMPLATE = `
 /** Where the browser keeps the quality level chosen last. */
 const QUALITY_KEY = 'seedCircuit.quality';
 
+/** The keys for driving, said on the corner card in a race and in free driving. */
+const DRIVING_HINT = 'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R goes back to the last checkpoint.';
+/** On a menu card: the keys and the controller's buttons for it. */
+const MENU_HINT = 'Up and down choose, Enter picks, Esc goes back; on a controller the D-pad or stick, A and B. L opens the lab.';
+
 const HINTS: Record<CameraMode, string> = {
-  chase:
-    'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R goes back to the last checkpoint. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.',
+  chase: `${DRIVING_HINT} Esc pauses. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.`,
   fly: 'Space pauses, up and down arrows change speed, C circles the island, N makes a new one. L opens the lab.',
   orbit: 'Drag to turn, scroll to zoom. C drives, N makes a new island. L opens the lab.',
 };
@@ -168,8 +178,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const at = params.get('at') ?? '';
   const startLap = Number(params.get('lap') ?? '0');
   const askedTime = parseClock(params.get('time') ?? '');
-  // A race asked for in the address (`mode=race`): the simulation runs its countdown, laps and times (M4.2c).
-  const simOptions = { race: openingScreen(params) === 'race' };
+  // What the page opens on (M4.4): the title card, a race at once (`mode=race`), or free driving (`mode=free`).
+  const opening = openingScreen(params);
+  /** The screen the page is on (`screens.ts`); the title comes in once the island is. */
+  let screen: Screen = opening === 'title' ? { name: 'loading' } : { name: opening };
+  document.body.dataset.screen = screen.name;
   const [earliest, latest] = config.world.sky.hours;
   /** Holds a time of day to the hours seeds pick from. */
   const daylightHour = (hour: number): number => Math.min(latest, Math.max(earliest, hour));
@@ -231,7 +244,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const sync = params.get('sync') === '1';
   document.body.dataset.worldSync = String(sync);
   let orbit: Orbit = { targetX: 0, targetY: 8, targetZ: 0, ...config.camera.orbit.start };
-  let mode: CameraMode = openingCamera(params);
+  // Behind the title card the camera circles the island.
+  let mode: CameraMode = opening === 'title' ? 'orbit' : openingCamera(params);
   let flight: FlyPath | null = null;
   let distance = 0;
   let speed = fly.speed;
@@ -272,7 +286,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   /** The simulation moved on by the fixed-step loop, and the chase camera. */
   const driving = createDriving(tuned);
   /** The keyboard and any controller. Keys drive only in the driving view. */
-  const devices = createDevices(window, config.input, () => mode === 'chase');
+  const devices = createDevices(window, config.input, () => mode === 'chase' && steps(screen));
   /** Whether the car is drawn in the views other than driving: in the close view of it, or once it has been driven. */
   let lookingAtCar = false;
   let driven = false;
@@ -363,7 +377,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const startSim = (world: WorldResult, engine: Rapier): void => {
     const started = performance.now();
     dropSim();
-    sim = createSim(engine, world, tuned, simOptions);
+    // A race only on the race's screen: the title, free driving and the rest drive with no clock.
+    sim = createSim(engine, world, tuned, { race: screen.name === 'race' });
     driving.setSim(sim);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
     document.body.dataset.driveStep = String(sim.state().step);
@@ -392,7 +407,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     rebuildWanted = false;
     const started = performance.now();
     const [world, engine] = [shown, rapier];
-    sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg, simOptions), tuned);
+    const race = sim.state().race !== null;
+    sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg, { race }), tuned);
     driving.replaceSim(sim);
     rebuilds++;
     document.body.dataset.tuningBuilds = String(rebuilds);
@@ -419,7 +435,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     ref('play').textContent = playing ? 'Pause' : 'Play';
     ref('play').hidden = mode !== 'fly';
     ref('toggle').textContent = NEXT_VIEW[nextCamera(mode)];
-    ref('hint').textContent = HINTS[mode];
+    // In a race, on the title and on the cards the camera is chosen for the player (M4.4).
+    ref('toggle').hidden = !cameraFree(screen);
+    ref('new').hidden = move(screen, 'newTrack') === null;
+    ref('hint').textContent = menuFor(screen).length > 0 ? MENU_HINT : screen.name === 'race' ? `${DRIVING_HINT} Esc pauses.` : HINTS[mode];
     ref('quality').textContent = `Quality: ${quality === 'high' ? 'High' : 'Low'}`;
     ref('dash').hidden = mode !== 'chase';
     // The chase camera sees a wider view than the others.
@@ -503,13 +522,29 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // A long gap (a hidden tab, say) must not fling the camera down the road.
     const seconds = Math.min(0.05, gap / 1000);
     last = now;
-    // The controller's buttons for the page: Y changes the camera in any view, Back starts again while driving.
+    // The controller's buttons for the page: Y changes the camera in free driving, Start pauses and resumes, and on a
+    // menu card the D-pad or stick, A and B choose, pick and go back.
     applyTuning();
     const pressed = devices.presses();
-    if (pressed.camera) setMode(nextCamera(mode));
+    if (pressed.camera && cameraFree(screen)) setMode(nextCamera(mode));
+    if (pressed.pause) act(screen.name === 'paused' ? 'resume' : 'pause');
+    const menu = menuFor(screen);
+    if (menu.length > 0 && (pressed.up || pressed.down)) setChoice(choiceAfter(choice, menu.length, pressed.up ? -1 : 1));
+    if (menu.length > 0 && pressed.confirm) act(menu[choice]!.move);
+    if (pressed.back) {
+      const back = backMove(screen);
+      if (back) act(back);
+    }
     // The controller's Back reaches the simulation in the input record, as R does: it puts the car back itself.
     // Driving: the fixed-step loop takes its own measure of the frame (at most five steps), unless the picture is held still.
-    if (mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
+    // Paused, on the title and on the results, no step is taken and nothing pressed is recorded.
+    if (steps(screen) && mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
+    checkFinished();
+    // Behind the title and results cards the camera circles the island by itself.
+    if (!still && mode === 'orbit' && (screen.name === 'title' || screen.name === 'results') && !dragging) {
+      orbit = { ...orbit, angle: orbit.angle + config.camera.orbit.turn * seconds };
+      dirty = true;
+    }
     if (mode === 'fly' && playing && flight) {
       distance = (distance + speed * seconds) % flight.length;
       dirty = true;
@@ -661,6 +696,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       document.body.dataset.worldSeed = String(result.seed);
       document.body.dataset.worldMs = ms.toFixed(0);
       loading.hidden = true;
+      // A new island comes in on the title card (M4.4).
+      if (screen.name === 'loading') act('loaded');
       document.body.dataset.worldReady = 'true';
       await buildSim(result);
     } catch (error) {
@@ -686,16 +723,38 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.addEventListener('click', (event) => {
     if (event.target instanceof HTMLButtonElement) event.target.blur();
   });
-  ref('new').addEventListener('click', () => void show(randomSeed(), false));
+  ref('new').addEventListener('click', () => act('newTrack'));
   ref('quality').addEventListener('click', () => setQuality(quality === 'high' ? 'low' : 'high'));
   window.addEventListener('keydown', (event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     // The time slider takes its own arrow keys.
     if (event.target instanceof HTMLInputElement) return;
     const key = event.key.toLowerCase();
+    // The menu cards and the pause (M4.4): Esc goes back, up and down choose, Enter picks.
+    const menu = menuFor(screen);
+    if (key === 'escape') {
+      const back = backMove(screen);
+      if (back) act(back);
+      event.preventDefault();
+      return;
+    }
+    if (menu.length > 0 && (key === 'arrowup' || key === 'arrowdown')) {
+      setChoice(choiceAfter(choice, menu.length, key === 'arrowup' ? -1 : 1));
+      event.preventDefault();
+      return;
+    }
+    if (menu.length > 0 && key === 'enter') {
+      // A choice with the focus is pressed by Enter itself; otherwise Enter picks the choice shown as chosen.
+      if (!choiceButtons().includes(document.activeElement as HTMLButtonElement)) {
+        act(menu[choice]!.move);
+        event.preventDefault();
+      }
+      return;
+    }
     if (key === ' ' && mode === 'fly') setPlaying(!playing);
-    else if (key === 'c') setMode(nextCamera(mode));
-    else if (key === 'n') void show(randomSeed(), false);
+    else if (key === 'c') {
+      if (cameraFree(screen)) setMode(nextCamera(mode));
+    } else if (key === 'n') act('newTrack');
     else if (key === 't') panel.toggle();
     else if (key === 'q') setQuality(quality === 'high' ? 'low' : 'high');
     // The address already holds the seed being shown, so the lab opens on it.
@@ -711,7 +770,112 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
   });
 
+  /** The choice on the menu card shown as chosen, which Enter and the controller's A pick. */
+  let choice = 0;
+  const choiceButtons = (): HTMLButtonElement[] => [...ref('menuChoices').querySelectorAll<HTMLButtonElement>('button')];
+  const setChoice = (index: number): void => {
+    choice = index;
+    const buttons = choiceButtons();
+    buttons.forEach((button, k) => button.classList.toggle('chosen', k === index));
+    buttons[index]?.focus();
+  };
+  /** A line of text on the menu card. */
+  const line = (text: string, className = '', testId = ''): HTMLElement => {
+    const p = document.createElement('p');
+    p.textContent = text;
+    if (className) p.className = className;
+    if (testId) p.dataset.testid = testId;
+    return p;
+  };
+  /** Writes the card in the middle for the screen the page is on, or hides it while the car is driven (Tane, M4.0). */
+  const renderScreen = (): void => {
+    document.body.dataset.screen = screen.name;
+    const menu = menuFor(screen);
+    ref('menu').hidden = menu.length === 0;
+    // On the title the card in the middle has the island's name, so the corner card stands aside.
+    ref('titleCard').hidden = screen.name === 'title';
+    if (menu.length === 0) return;
+    const name = shown?.track.name ?? 'Seed Circuit';
+    const body: HTMLElement[] = [];
+    if (screen.name === 'title') {
+      ref('menuHeading').textContent = name;
+      body.push(line(ref('code').textContent ?? ''), line(ref('character').textContent ?? '', 'world-menu-quiet'));
+    } else if (screen.name === 'paused') {
+      ref('menuHeading').textContent = 'Paused';
+      body.push(line(name, 'world-menu-quiet'));
+    } else {
+      ref('menuHeading').textContent = 'Finished';
+      body.push(line(name, 'world-menu-quiet'));
+      const race = sim?.state().race;
+      if (race) {
+        const card = raceCard(race, tuned.sim.race, tuned.sim.stepsPerSecond);
+        body.push(line(card.time, 'world-menu-total', 'menu-total'));
+        card.laps.forEach((lap, i) => {
+          const row = line('', `world-menu-lap${lap.best ? ' world-race-accent' : ''}`, 'menu-lap');
+          const label = document.createElement('span');
+          label.textContent = `Lap ${i + 1}`;
+          const time = document.createElement('span');
+          time.textContent = lap.time;
+          row.append(label, time);
+          body.push(row);
+        });
+      }
+    }
+    ref('menuBody').replaceChildren(...body);
+    ref('menuChoices').replaceChildren(
+      ...menu.map((option, i) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = option.label;
+        button.dataset.testid = 'menu-choice';
+        button.addEventListener('click', () => act(option.move));
+        button.addEventListener('focus', () => {
+          choice = i;
+          choiceButtons().forEach((other, k) => other.classList.toggle('chosen', k === i));
+        });
+        return button;
+      }),
+    );
+    setChoice(0);
+  };
+  /** Makes a move between the screens (`screens.ts`), if the screen allows it, and shows where it leads. */
+  function act(m: Move): void {
+    const next = move(screen, m);
+    if (!next) return;
+    screen = next;
+    if (m === 'start' || m === 'freeDrive' || m === 'restart') {
+      // A new simulation of the same island, a race on the race's screen, and the camera behind the car.
+      if (shown && rapier) startSim(shown, rapier);
+      setMode('chase');
+      driving.snap();
+    } else if (m === 'pause') {
+      devices.release();
+    } else if (m === 'quit' || m === 'finished' || m === 'loaded') {
+      // Off the road: the camera circles the island behind the card. Back on the title the car is put back on the line.
+      if (shown) frameIsland(shown);
+      if (m === 'quit' && shown && rapier) startSim(shown, rapier);
+      setMode('orbit');
+      if (m !== 'finished') driven = false;
+    } else if (m === 'newTrack') {
+      void show(randomSeed(), false);
+    }
+    renderScreen();
+    renderControls();
+    drawCar();
+  }
+  /** "Finished" has shown for its two seconds: on to the results (M4.4). */
+  const checkFinished = (): void => {
+    if (screen.name !== 'race' || !sim) return;
+    const race = sim.state().race;
+    if (race?.phase === 'finished' && race.finishedSteps >= raceSteps(tuned.sim.race, tuned.sim.stepsPerSecond).finishedFor) act('finished');
+  };
+  // A race or a drive left in a hidden tab is paused, so nothing happens while nobody is looking.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && steps(screen)) act('pause');
+  });
+
   renderControls();
+  renderScreen();
   const fromUrl = parseSeedInput(params.get('seed') ?? '');
   void show(Math.min(MAX_SEED, Math.max(0, fromUrl ? fromUrl.seed : randomSeed())), true);
 
@@ -743,13 +907,14 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     drive: {
       state: () => sim?.state() ?? null,
       hash: () => sim?.hash() ?? null,
-      run(steps, raw = {}) {
+      run(count, raw = {}) {
         if (!sim) throw new Error('The simulation is not built yet');
         applyTuning();
-        const state = driving.run(steps, makeInput(raw));
+        const state = driving.run(count, makeInput(raw));
         // Drawn at once, with no step of the page's own and the camera straight behind the car.
         driving.frame(0, makeInput({}), false, groundAt);
         drawCar();
+        checkFinished();
         aimCamera();
         view.render();
         dirty = false;
@@ -762,6 +927,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         for (const packed of inputs) state = driving.run(1, unpackInput(packed));
         driving.frame(0, makeInput({}), false, groundAt);
         drawCar();
+        checkFinished();
         aimCamera();
         view.render();
         dirty = false;

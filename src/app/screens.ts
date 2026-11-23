@@ -10,8 +10,8 @@ export type DriveKind = 'race' | 'free';
 
 export type Screen =
   | { name: 'title' }
-  /** A new island on its way from the worker, and the screen to show once it is in. */
-  | { name: 'loading'; then: 'title' | 'free' }
+  /** A new island on its way from the worker. It comes in on the title card (Tane, M4.0: the plain address and N open it). */
+  | { name: 'loading' }
   | { name: 'race' }
   | { name: 'free' }
   /** Paused, with what it paused to go back to. */
@@ -24,6 +24,7 @@ export type Move = 'start' | 'freeDrive' | 'pause' | 'resume' | 'restart' | 'qui
 export const MOVES: readonly Move[] = ['start', 'freeDrive', 'pause', 'resume', 'restart', 'quit', 'newTrack', 'enterSeed', 'loaded', 'finished'];
 
 const TITLE: Screen = { name: 'title' };
+const LOADING: Screen = { name: 'loading' };
 const RACE: Screen = { name: 'race' };
 const FREE: Screen = { name: 'free' };
 
@@ -33,12 +34,12 @@ export function move(screen: Screen, m: Move): Screen | null {
     case 'title':
       if (m === 'start') return RACE;
       if (m === 'freeDrive') return FREE;
-      if (m === 'newTrack' || m === 'enterSeed') return { name: 'loading', then: 'title' };
+      if (m === 'newTrack' || m === 'enterSeed') return LOADING;
       return null;
     case 'loading':
-      if (m === 'loaded') return screen.then === 'title' ? TITLE : FREE;
+      if (m === 'loaded') return TITLE;
       // Another island asked for while one is on its way: that one is shown instead.
-      if (m === 'newTrack' || m === 'enterSeed') return { name: 'loading', then: screen.then };
+      if (m === 'newTrack' || m === 'enterSeed') return LOADING;
       return null;
     case 'race':
       if (m === 'pause') return { name: 'paused', from: 'race' };
@@ -48,8 +49,7 @@ export function move(screen: Screen, m: Move): Screen | null {
     case 'free':
       if (m === 'pause') return { name: 'paused', from: 'free' };
       if (m === 'restart') return FREE;
-      // N in free driving makes a new island and goes on driving, as before the title card.
-      if (m === 'newTrack') return { name: 'loading', then: 'free' };
+      if (m === 'newTrack') return LOADING;
       return null;
     case 'paused':
       if (m === 'resume' || m === 'restart') return screen.from === 'race' ? RACE : FREE;
@@ -57,7 +57,7 @@ export function move(screen: Screen, m: Move): Screen | null {
       return null;
     case 'results':
       if (m === 'restart') return RACE;
-      if (m === 'newTrack') return { name: 'loading', then: 'title' };
+      if (m === 'newTrack') return LOADING;
       if (m === 'quit') return TITLE;
       return null;
   }
