@@ -1345,7 +1345,7 @@ export interface CameraConfig {
     turn: number;
     /** It never comes closer than this to the ground or the sea under it, in metres, so the empty space under the island never shows (Tane, check-in after M4.4). */
     clearance: number;
-    /** Behind the title and results cards the whole island is framed, its furthest land this far from the middle of the picture to its edge (1). */
+    /** Behind the title and results cards the whole lap is framed, its furthest point this far from the middle of the picture to its edge (1). */
     fill: number;
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */

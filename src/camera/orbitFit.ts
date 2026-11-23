@@ -1,8 +1,8 @@
-import type { HeightField } from '../gen/types';
+import type { CenterLine } from '../gen/types';
 import { MAX_TILT, orbitEye, type Orbit } from './orbit';
 
 /**
- * The circling camera kept to what should be seen (the check-in after M4.4, Tane): it frames the whole island behind
+ * The circling camera kept to what should be seen (the check-in after M4.4, Tane): it frames the whole lap behind
  * the title and results cards, and it never goes under the ground or the sea, where the empty space under the island
  * shows. Plain numbers, as `orbit.ts`; nothing here knows about Three.js.
  */
@@ -37,15 +37,22 @@ export function onScreen(p: Point, orbit: Orbit, fieldOfView: number, aspect: nu
   return { x: (dx * rx + dz * rz) / (ahead * half * aspect), y: (dx * ux + dy * uy + dz * uz) / (ahead * half) };
 }
 
+/** How far from the middle of the picture points may be, to each side, to the top and to the bottom (1 is its edge). */
+export interface Bounds {
+  side: number;
+  top: number;
+  bottom: number;
+}
+
 /**
- * The orbit pulled back, on its own line of sight, just far enough that every point is within `fill` of the middle of
- * the picture (1 is its edge), and kept between the nearest and furthest distances.
+ * The orbit pulled back, on its own line of sight, just far enough that every point is within the bounds, and kept
+ * between the nearest and furthest distances.
  */
-export function fitOrbit(points: readonly Point[], orbit: Orbit, fieldOfView: number, aspect: number, fill: number, nearest: number, furthest: number): Orbit {
+export function fitOrbit(points: readonly Point[], orbit: Orbit, fieldOfView: number, aspect: number, bounds: Bounds, nearest: number, furthest: number): Orbit {
   const fits = (distance: number): boolean =>
     points.every((p) => {
       const seen = onScreen(p, { ...orbit, distance }, fieldOfView, aspect);
-      return seen !== null && Math.abs(seen.x) <= fill && Math.abs(seen.y) <= fill;
+      return seen !== null && Math.abs(seen.x) <= bounds.side && seen.y <= bounds.top && seen.y >= -bounds.bottom;
     });
   if (!fits(furthest)) return { ...orbit, distance: furthest };
   if (fits(nearest)) return { ...orbit, distance: nearest };
@@ -98,35 +105,26 @@ export function clearOrbit(orbit: Orbit, groundAt: (x: number, z: number) => num
 }
 
 /**
- * A ring round all of an island's land (its ground above the sea): the middle of the land's extent, and `count`
- * points round the circle through its furthest land at sea level and as many at the island's highest point, so a
- * camera that sees the ring sees the whole island whichever way it faces.
+ * A ring round a whole lap: the middle of its extent, and `count` points round the circle through its furthest sample
+ * at the road's lowest height and as many at its highest, so a camera that sees the ring sees the whole lap whichever
+ * way it faces. Behind the title and results cards (Tane, after the check-in: a ring round all the land left the island
+ * small, under the card).
  */
-export function landRing(ground: HeightField, count = 24): { centre: { x: number; z: number }; radius: number; points: Point[] } {
-  const { size, cell, origin, height } = ground;
-  let [minX, maxX, minZ, maxZ, highest] = [Infinity, -Infinity, Infinity, -Infinity, 0];
-  for (let iz = 0; iz < size; iz++) {
-    for (let ix = 0; ix < size; ix++) {
-      const h = height[iz * size + ix]!;
-      if (h <= 0) continue;
-      minX = Math.min(minX, ix);
-      maxX = Math.max(maxX, ix);
-      minZ = Math.min(minZ, iz);
-      maxZ = Math.max(maxZ, iz);
-      highest = Math.max(highest, h);
-    }
+export function lapRing(line: CenterLine, height: ArrayLike<number>, count = 24): { centre: { x: number; z: number }; radius: number; points: Point[] } {
+  let [minX, maxX, minZ, maxZ, low, high] = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
+  for (let i = 0; i < line.count; i++) {
+    minX = Math.min(minX, line.x[i]!);
+    maxX = Math.max(maxX, line.x[i]!);
+    minZ = Math.min(minZ, line.z[i]!);
+    maxZ = Math.max(maxZ, line.z[i]!);
+    low = Math.min(low, height[i]!);
+    high = Math.max(high, height[i]!);
   }
-  if (minX > maxX) return { centre: { x: 0, z: 0 }, radius: 0, points: [] };
-  const centre = { x: origin + ((minX + maxX) / 2) * cell, z: origin + ((minZ + maxZ) / 2) * cell };
+  const centre = { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
   let radius = 0;
-  for (let iz = minZ; iz <= maxZ; iz++) {
-    for (let ix = minX; ix <= maxX; ix++) {
-      if (height[iz * size + ix]! <= 0) continue;
-      radius = Math.max(radius, Math.hypot(origin + ix * cell - centre.x, origin + iz * cell - centre.z));
-    }
-  }
+  for (let i = 0; i < line.count; i++) radius = Math.max(radius, Math.hypot(line.x[i]! - centre.x, line.z[i]! - centre.z));
   const points: Point[] = [];
-  for (const y of [0, highest]) {
+  for (const y of [low, high]) {
     for (let k = 0; k < count; k++) {
       const a = (k * 2 * Math.PI) / count;
       points.push({ x: centre.x + radius * Math.cos(a), y, z: centre.z + radius * Math.sin(a) });

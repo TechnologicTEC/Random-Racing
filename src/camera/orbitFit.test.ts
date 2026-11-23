@@ -3,7 +3,7 @@ import { config } from '../config';
 import { generateWorld } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { orbitEye, type Orbit } from './orbit';
-import { clearOrbit, fitOrbit, landRing, onScreen } from './orbitFit';
+import { clearOrbit, fitOrbit, lapRing, onScreen } from './orbitFit';
 
 /**
  * The circling camera at the check-in after M4.4 (Tane): it frames the whole island behind the title card, and it
@@ -41,7 +41,7 @@ describe('fitOrbit', () => {
 
   it('pulls back just far enough to show every point inside the picture, at any compass angle', () => {
     for (const angle of [0, 1, 2.5, 4]) {
-      const fitted = fitOrbit(ring, { ...base, angle }, FOV, ASPECT, 0.9, 30, 5000);
+      const fitted = fitOrbit(ring, { ...base, angle }, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.9 }, 30, 5000);
       const seen = ring.map((p) => onScreen(p, fitted, FOV, ASPECT)!);
       for (const s of seen) {
         expect(Math.abs(s.x)).toBeLessThanOrEqual(0.9 + 1e-6);
@@ -53,7 +53,16 @@ describe('fitOrbit', () => {
   });
 
   it('keeps to the furthest distance allowed', () => {
-    expect(fitOrbit(ring, base, FOV, ASPECT, 0.9, 30, 500).distance).toBe(500);
+    expect(fitOrbit(ring, base, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.9 }, 30, 500).distance).toBe(500);
+  });
+
+  it('keeps every point above a lower edge of its own, as a bar along the bottom of the picture needs', () => {
+    const fitted = fitOrbit(ring, base, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.6 }, 30, 5000);
+    const seen = ring.map((p) => onScreen(p, fitted, FOV, ASPECT)!);
+    expect(Math.min(...seen.map((s) => s.y))).toBeGreaterThanOrEqual(-0.6 - 1e-6);
+    expect(Math.min(...seen.map((s) => s.y))).toBeLessThan(-0.59);
+    // Further back than with the bottom at 0.9.
+    expect(fitted.distance).toBeGreaterThan(fitOrbit(ring, base, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.9 }, 30, 5000).distance);
   });
 });
 
@@ -93,27 +102,21 @@ describe('clearOrbit', () => {
   });
 });
 
-describe('landRing on a real island', () => {
-  it('rings all the land of seed 1 (a mountain seed with land far from the lap), from the sea up to its highest point', () => {
+describe('lapRing on a real island', () => {
+  it('rings the whole lap of seed 1 (a mountain seed), from the road\u2019s lowest point up to its highest', () => {
     const world = generateWorld(1, config);
-    const { centre, points } = landRing(world.ground);
-    const radius = Math.hypot(points[0]!.x - centre.x, points[0]!.z - centre.z);
-    let highest = 0;
-    const { ground } = world;
-    for (let iz = 0; iz < ground.size; iz += 2) {
-      for (let ix = 0; ix < ground.size; ix += 2) {
-        const h = ground.height[iz * ground.size + ix]!;
-        if (h <= 0) continue;
-        const x = ground.origin + ix * ground.cell;
-        const z = ground.origin + iz * ground.cell;
-        expect(Math.hypot(x - centre.x, z - centre.z)).toBeLessThanOrEqual(radius + ground.cell);
-        highest = Math.max(highest, h);
-      }
-    }
-    expect(Math.max(...points.map((p) => p.y))).toBeGreaterThanOrEqual(highest - 1);
-    expect(Math.min(...points.map((p) => p.y))).toBe(0);
-    // The ring is round the land, not the whole tile: seed 1's island is well inside its 2.7 km tile.
-    expect(radius).toBeLessThan(-ground.origin * Math.SQRT2);
-    expect(sampleField(ground, centre.x, centre.z, 0)).toBeGreaterThan(0);
+    const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
+    const { centre, radius, points } = lapRing(line, profile.height);
+    for (let i = 0; i < line.count; i++) expect(Math.hypot(line.x[i]! - centre.x, line.z[i]! - centre.z)).toBeLessThanOrEqual(radius + 1e-9);
+    // Just round it: some sample is on the ring.
+    let reach = 0;
+    for (let i = 0; i < line.count; i++) reach = Math.max(reach, Math.hypot(line.x[i]! - centre.x, line.z[i]! - centre.z));
+    expect(reach).toBeCloseTo(radius, 9);
+    const heights = points.map((p) => p.y);
+    expect(Math.min(...heights)).toBe(Math.min(...profile.height));
+    expect(Math.max(...heights)).toBe(Math.max(...profile.height));
+    // Well inside the island's tile, and much smaller than a ring round all the land would be.
+    expect(radius).toBeLessThan(-world.ground.origin);
+    expect(sampleField(world.ground, centre.x, centre.z, 0)).toBeGreaterThan(-100);
   });
 });
