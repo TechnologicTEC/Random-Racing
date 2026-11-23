@@ -61,11 +61,15 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 **Milestone 4: time trial** (new branch `milestone-4-time-trial` from `main`, issue #4; plan it in plan mode first; the steps: [`docs/plan/M4-time-trial.md`](plan/M4-time-trial.md))
 
-- [ ] **M4.0** Plan approved; steps recorded in STATE.md
+- [x] **M4.0** Plan approved; steps recorded in STATE.md (2026-11-23; Tane's answers and the parts in STATE.md, "Milestone 4")
 - [ ] **M4.1** Flatten the start area
-- [ ] **M4.2** The race rules in the simulation
+- **M4.2** The race rules in the simulation:
+  - [ ] **M4.2a** The race rules, pure (`src/sim/race.ts`)
+  - [ ] **M4.2b** The race in the simulation (opt-in; held, start boost, finished)
+  - [ ] **M4.2c** The bot races 3 laps; one fingerprint in Node, Chromium and Firefox
 - [ ] **M4.3** The race on screen
 - [ ] **M4.4** Screens and menus
+- [ ] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5)
 - [ ] **M4.5** New track, typed seed, restart
 - [ ] **M4.6** A whole race in the browser tests; check-in; tuning; pull request; **sign-off**; merge
 

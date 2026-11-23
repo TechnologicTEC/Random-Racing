@@ -2,7 +2,7 @@
 
 Part of the plan. `docs/PLAN.md` has the build order, the routine for one part, what to do when something does not go to plan, and the questions for Tane; this file has the steps of one milestone. Tick the build order in `docs/PLAN.md` as parts are finished.
 
-Issue #4. **Done when** (the brief): a full 3-lap race can be played from the menu and back with correct times. Start a new branch `milestone-4-time-trial` from `main` once Milestone 3 is merged, and plan in plan mode first: this section is what that plan starts from. Ask Tane the milestone's questions (pace, check-ins) at M4.0.
+Issue #4. **Done when** (the brief): a full 3-lap race can be played from the menu and back with correct times. Start a new branch `milestone-4-time-trial` from `main` once Milestone 3 is merged, and plan in plan mode first: this section is what that plan starts from. Ask Tane the milestone's questions (pace, check-ins) at M4.0. (Asked and answered 2026-11-23: one check-in after M4.4; the title card with Race and Free drive opens the page; menus in the middle only while not driving; three red lights at the top middle. M4.2 is split into M4.2a to M4.2c. Details in `docs/STATE.md`, "Milestone 4".)
 
 | Step | Build | Done when |
 | --- | --- | --- |
