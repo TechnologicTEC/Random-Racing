@@ -38,7 +38,7 @@ The car handles like a Mario Kart kart: grippy and forgiving by default, with dr
 
 - Hold drift while steering above about 40% of top speed to start a drift. The car hops slightly and slides at an angle.
 - During a drift, steering changes how tight the slide is rather than its direction, so you commit to a corner.
-- Charge builds in three tiers, shown by spark colour: blue at about 1 second, orange at about 2 seconds, purple at about 3 seconds.
+- Charge builds in three tiers, shown by spark colour: blue at about 1 second, orange at about 2 seconds, purple at about 3 seconds. (Tane, 2026-11-22, step 10a-7: 0.6, 1.2 and 1.8 seconds, since at the top speed of 53 m/s many slides last under a second.)
 - Releasing gives a boost of about 0.5, 1.0 or 1.6 seconds for the three tiers.
 - Hitting a wall or braking hard cancels the drift and loses the charge.
 - A well-timed throttle press during the start countdown gives a small starting boost.
@@ -77,11 +77,11 @@ Each seed generates about 30 candidate tracks, rejects any that break the rules,
 
 1. **Random streams.** Split the seed into separate random streams for world, track and decoration, so tweaking one part of the generator doesn't reshuffle the others.
 2. **Layout.** Place 10 to 18 control points around a loop, push them in and out with noise, and run a closed Catmull-Rom spline through them to get the centre line.
-3. **Validate.** Reject layouts that cross themselves, have corners tighter than about 15 m radius, bring separate sections closer than about 2.5 track widths, or fall outside a 1.4 to 2.4 km lap.
+3. **Validate.** Reject layouts that cross themselves, have corners so tight that the road's inside edge comes within about 9 m of the corner's centre (a 19 m radius on the 20 m road; 15 m on the first 12 m road), bring separate sections closer than about 2.5 track widths, or fall outside a 1.4 to 2.4 km lap.
 4. **Score.** Reward at least two straights over 150 m (for boosting and, later, overtaking), a mix of hairpins, sweepers and chicanes, corners that suit drifting, some elevation change, and good flow between corners. Show the scores in a debug view.
 5. **Elevation.** Sample the terrain along the line, smooth it, keep gradients under about 8%, and avoid sharp crests that launch the car by accident.
 6. **Fit the terrain.** Flatten a corridor to the road's height, then blend in cuttings and embankments over 10 to 25 m. Where the road sits more than about 6 m above ground or water, build a bridge; where it sits more than about 8 m below the surface, build a tunnel.
-7. **Build the road.** A 12 to 14 m wide road, banking of up to about 8 degrees in fast corners, kerbs on the apexes, barriers along the edges, a start/finish gate, and invisible checkpoints about every 100 m for lap validation and respawning.
+7. **Build the road.** A 20 m wide road, wider on some straights (Tane, 2026-11-17: room for a drift, as kart racers have; it was 12 to 14 m), banking of up to about 8 degrees in fast corners, kerbs on the apexes, barriers along the edges, a start/finish gate, and invisible checkpoints about every 100 m for lap validation and respawning.
 8. **Decorate.** Clear trees and rocks from the road corridor and place trackside props.
 
 A 2D top-down debug view, toggled with a key, shows the centre line, rejected candidates and the score breakdown for the current seed.

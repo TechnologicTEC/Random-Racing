@@ -128,6 +128,13 @@ test('shows the character of the seed: relief, coast, mountains, their shape and
   await expect(facts).toContainText('Road width');
 });
 
+test('says how much of the roadside is walled, and draws the walls on the map', async ({ page }) => {
+  await openLab(page, '?seed=7');
+  // The walls belong to the world, which arrives a moment after the track.
+  await expect(page.getByTestId('facts')).toContainText(/Walls\s*\d+ walls; \d+% of the roadside open/);
+  await expect(page.locator('body')).toHaveAttribute('data-lab-walls', /^[1-9]\d*$/);
+});
+
 test('says whether a mountain seed climbs its mountain or circles it', async ({ page }) => {
   // Seed 1 is a mountain seed.
   await openLab(page, '?seed=1');

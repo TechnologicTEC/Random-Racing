@@ -1,0 +1,863 @@
+# Project state: Milestones 1 and 2 (archive)
+
+Moved out of `docs/STATE.md` on 2026-11-15, when Milestone 3 started. This is the step-by-step record of Milestones 1 and 2: plans, measurements, check-ins and the session log. Nothing here is updated any more. Decisions, known issues and working agreements live on in `docs/STATE.md`.
+
+## Milestone 2 steps
+
+Part A is data only (no Three.js). Part B is the 3D view.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 0 | Branch, plan and decisions recorded here | Done |
+| 1 | `core/noise.ts`, `core/scalar.ts`: seeded simplex, fbm, ridged, exact maths only | Done |
+| 2 | Web Worker: protocol, handler, client; lab and contact sheet generate through it | Done |
+| 3 | Rolling relief and the road height solver (gradient, crests, close sections); elevation chart in the lab | Done |
+| 4 | Elevation score at 12% weight | Done |
+| 5 | Island: height grid, coast shaped by the track, natural ground; island map in the lab | Done |
+| 6 | Cut and fill, cover maps, fit report, `generateWorld`, world fingerprint | Done |
+| | **Check-in 1 with Tane:** 2D contact sheets of islands for 20 seeds | Done: Tane's island feedback applied (see decisions) |
+| 7 | Add Three.js; `/?view=3d` with terrain chunks and an orbit camera; Playwright WebGL screenshots proven | Done |
+| 8 | Banking and the asphalt ribbon; close-up cameras on the fit report's worst spots | Done |
+| 9 | Kerbs | Done |
+| 10 | Barriers, start line and gate | Done |
+| 11 | Fly-along camera and HUD | Done |
+| | **Check-in 2 with Tane:** fly a few seeds | Done: islands too basic. See "Milestone 2 rework" |
+| R1–R8 | **Rework** (table below), then check-in 3 | Done |
+| C0–C6 | **Check-in 3 response** (table below), then check-in 4 | Done |
+| 12 | Water and sky; time of day from the seed | Done (12a to 12f, see "Step 12") |
+| 13 | Trees, rocks and clouds | Done (13a to 13g, see "Step 13") |
+| 14 | Grass | Done (14a to 14f, see "Step 14") |
+| 15 | Shadows, far-terrain detail levels, low quality option, performance numbers | Done (15a to 15h, see "Step 15") |
+| 16 | 3D becomes the default page; lab on the L key and `?lab=1` | Done (see "Step 16") |
+| 17 | 20-seed check with screenshot sheets and fit reports; pull request | Done (see "Step 17") |
+
+## Milestone 2 rework (agreed at check-in 2, 2026-11-12)
+
+**Tane's feedback after flying the islands:** they are too basic. Too flat; the mountains are too small and there should be more of them; some tracks should climb a mountain or descend one while others stay flat; the track should only sometimes run beside the sea, and the land can extend well past it; the road should be wider in some parts; and not every trait should apply to every track, so that coastal, tall, flat, edge-hugging and folded tracks combine differently.
+
+**Tane's choices:** mountains 200 to 250 m, on a bigger island; up to 15% gradient on mountain tracks; road 12 m widening to 22 m.
+
+**This replaces parts of the check-in 1 feedback.** Sea 15 to 35 m from the road now applies only to coastal stretches (still never under 10 m). Height near the road depends on the seed's relief. The single 40 to 70 m peak becomes 0 to 4 mountains. Beaches, cliffs, bays and headlands stay, on coastal stretches.
+
+### Rework design
+
+1. **Each seed gets a character** (`src/gen/character.ts`, new, from the `world` stream). Independent traits, weights in `src/config.ts`, shown in the lab:
+
+   | Trait | Values (starting weights) |
+   | --- | --- |
+   | Layout style (exists) | folded 50%, stretched 25%, round 25% |
+   | Relief | flat 20%, rolling 35%, hilly 25%, mountain 20% |
+   | Coast | inland 25% (road never by the sea), touches 45% (one or two coastal stretches), coastal 30% (most of the outside by the sea) |
+   | Mountains | 0 to 4; flat seeds 0 or 1; mountain seeds at least 1 |
+   | Road width | constant 35%, varied 65% |
+
+2. **Relief and climbs.** `relief.ts` stays seed-only, built from the relief trait. Lap height range aimed for, and road gradient limit: flat under 8 m (8%); rolling 15 to 30 m (8%); hilly 30 to 60 m (8%); mountain 60 to 120 m (15%). Mountain relief adds a broad ramp across the buildable area (the lower flank of a mountain, no steeper than about 18%) so a 15% road follows it with ordinary cut and fill. `solveProfile` takes the gradient limit from the character. The elevation score's targets come from the relief trait, so flat seeds are not marked down. Cut and fill limits stay 6 m and 8 m.
+3. **Variable road width** (`src/gen/road/width.ts`, new): one width per sample of the winner's line. 12 m base, up to 22 m on the start straight, long straights and hairpin exits, eased over about 40 m. Not widened beside a close section. Chosen after the winner is picked (own stream), so it does not change which layout wins. Everything that used the fixed `cfg.track.roadWidth` takes the per-sample width: `fit.ts`, `report.ts`, `ribbon.ts`, `kerbs.ts`, `barriers.ts`, `startGate.ts`, `island.ts`, `cover.ts`, `profile.ts`, and the lab's road drawing. The validator keeps judging layouts at the base width.
+4. **Bigger island.** Tile 2700 m (was 1400 m), 3 m cells (was 2 m), about 812,000 heights; verge 4 m (was 2.5 m), which also removes the verge dip. A **hinterland** is added in `island.ts`: a separate, gently shaped landmass from its own noise. Land = infield + the strip beside the road + hinterland + every mountain's foot. Where the hinterland covers the road the land runs on 80 to 600 m past it; where the road sticks out of it, the coast is the existing near coast. The coast trait sets how much of the road it covers. Build it as its own landform with bounded slopes, never as a multiplier on the margin (that mistake made 200% slopes before). `shoreShape`, `coastProfile` and `carveCoast` are reused unchanged.
+5. **Mountains and hills.** `placePeak` becomes `placeMountains`: 0 to 4, main one 200 to 250 m, others 80 to 200 m, sides up to about 110% (the main one is about 700 m across). In a large infield or on the hinterland outside the loop, which grows to hold them; nothing within 60 m of the road. On mountain-relief seeds the main one sits at the top of the ramp. Foothills (5 to 25 m, about 150 m across) on land away from the road. Snow above about 180 m.
+6. **3D follow-ups.** Far ground at quarter detail (pulled forward from step 15); fog, camera far distance and orbit limits scaled up.
+
+**About the folds:** the layouts have not changed since Milestone 1. They look stuck to the edge because the sea follows the road everywhere and fills every fold; the hinterland should fix that. R1 measures fold counts to confirm, in case the elevation score did reduce them.
+
+### Rework steps
+
+Tests first, watched failing. Run the unit and browser suites so that a failure stops the commit (do not pipe test output through a filter in the same command chain as `git commit`).
+
+| # | Step | Ends with | Status |
+| --- | --- | --- | --- |
+| R0 | Record the plan and decisions here | Pushed | Done |
+| R1 | Baselines: fold and hairpin counts for seeds 1 to 200 now and with the Milestone 1 scorer; world build time at the new tile size in Node, Chromium and Firefox | Numbers here; a decision on style weights, and on the grid if Firefox is over 3 s | Done: style weights and grid stay as planned |
+| R2 | Seed character: `gen/character.ts`, config weights, on `TrackResult`, shown in the lab | Tests: same seed same character; each value at about its weight over 2000 seeds | Done |
+| R3 | Relief by character, gradient limit by character, elevation score targets | Tests per relief type on 200 seeds: lap range in its band, gradient within its limit, cut and fill within 6 m and 8 m | Done: the plan worked as written; mountain seeds keep every layout style |
+| R4 | Variable road width through generation, meshes, fit, report and lab | Tests: 12 to 22 m, eased, not widened beside close sections, ground follows the wider road, kerbs and barriers at the true edge | Done |
+| R5 | Bigger tile, 3 m cells, 4 m verge | Existing fit tests pass at the new grid; build time measured | Done |
+| R6 | Hinterland and coast trait | Tests: inland seeds have no sea within 60 m of the road; coastal seeds have most of their outside within 35 m; never under 10 m; open sea deep; tile edge is sea | Done |
+| R7 | Mountains (0 to 4, main 200 to 250 m), foothills, snow | Tests: heights in range, 60 m clear of the road, slopes within limit, mountain seeds have the main one above the ramp | Done |
+| R8 | 3D: far-ground detail levels, fog and camera limits | Triangle count recorded; fly, orbit and close-up screenshots on 20 seeds | Done |
+| | **Check-in 3:** Tane looks at contact sheets and flies a few seeds | Feedback | Done: see "Check-in 3 feedback" |
+
+After check-in 3, resume steps 12 to 17 in the table above.
+
+### Check-in 3 feedback (2026-11-13)
+
+Tane looked at the contact sheets and flew seeds (screenshots: a single cone-shaped mountain behind a track; seeds 19 and 20 with round mountain islands beside the track). Feedback, in Tane's words where possible:
+
+1. **Tracks should include the mountains.** Right now the mountains are only background. Some tracks should go up the mountains and right around them.
+2. **More elevation on some tracks.** Some of the mountain-relief tracks do not go very high. Some should drive up a mountain and back down.
+3. **Mountains look too basic.** They are cones that only vary in height, copies of each other. They should vary in shape: for example rolling hills that dip up and down and mould the terrain (reference: a photo of soft, rounded green hills folding into each other), or sharp pointed peaks joined together into a range (reference: a photo of jagged Dolomite-style spires connected by ridges).
+
+**Not yet decided; for the planning session.** The track is built first and the land shaped around it. Layouts only know the seed's relief (`createRelief`), and mountains are placed afterwards, at least 60 m from the road. Points to settle in the plan:
+
+- To route a track over or around a mountain, the mountain has to exist before the layouts are scored. It could become part of the relief, which is seed-only and already holds the highland. Candidates could then also be scored on how they use it.
+- A road limited to 15% with cut and fill of at most 6 m and 8 m cannot go straight up 110% sides. It needs gentler mountain flanks where the road goes, or switchbacks, or layouts that wrap round the mountain along its contours. The layout builder knows nothing about terrain today.
+- Shapes: rolling hill country (overlapping soft swells, perhaps from noise rather than separate bells) and ridged ranges (several sharp peaks joined by ridges, from ridged noise along a spine), chosen per seed like the other traits.
+- These would also answer the check-in 3 issues already noted under "Known issues": round dome-islands off the coast, and coastal ramps slicing hills into bands.
+- Elevation targets: the mountain relief band (60 to 120 m per lap) and its score target may need raising, within the cut and fill limits.
+
+### Check-in 3 response (agreed 2026-11-13)
+
+**The limit found while planning:** a 15% road on a lap of at most 2.4 km can rise about 150 m at most, so it can reach a 200 to 250 m mountain's shoulder, not its summit.
+
+**Tane's choices:**
+- Mountain seeds may have laps up to **3 km** (departs from the brief's 1.4 to 2.4 km). The gradient stays 15%. That allows about 180 m of climb.
+- **Every mountain-relief seed** (20% of seeds) climbs onto its main mountain and goes round it. Hilly seeds keep climbing the lower slopes of a mountain beyond the track, in the new shapes.
+- **Three shapes, one per seed:** ridged range about 40%, rolling hill country about 35%, lone peak about 25%. The lone peak is reshaped too: an uneven foot, spurs and a steep top instead of a cone.
+
+**Tane's choice after the C1 spike:** a lap can climb high or go right round a mountain, not both (going round follows the contour, so it stays at one height). So mountain seeds are split **half climbing, half circling**, a new per-seed choice. Climbing seeds have the summit at the edge of the track area and rise about 100 to 145 m onto its shoulder; circling seeds have the summit 200 m from the centre and go round it, rising about 60 to 90 m. Mountain seeds get a 600 m track area (500 m for the others). The numbers are under "Rework measurements", C1. Where they differ from the design below, C1 wins.
+
+#### Design
+
+1. **Landform trait.** `Character.landform`: `range`, `hills` or `peak`, from its own stream (`world/character/landform`), so no other trait changes. The mountain count (0 to 4) stays; every mountain on an island has the seed's shape.
+   - *Range:* 3 to 6 sharp peaks along a curved spine 500 to 1200 m long; saddles at 55 to 75% of the lower neighbouring peak; steep sides (up to about 110%) with crags from ridged noise. The tallest peak is 200 to 250 m.
+   - *Hill country:* overlapping soft swells from smooth noise over a raised dome, rounded and folding into each other. Tops stay below the snow line (main 120 to 170 m, others 50 to 120 m).
+   - *Lone peak:* gentle foot and steep top; the foot's radius varies by about 30% with direction; the summit is off-centre; 3 to 5 spurs run down from it.
+2. **Shapes module** `src/gen/world/landforms.ts` (new, pure, exact maths): height above its base at any point, distance outside its foot, summits, bounds. Used by the relief (main mountain) and the island (the others). Replaces the round bell in `placeMountains`.
+3. **The main mountain moves into the relief.** `placeHighland` becomes `placeMassif`, in the seed's landform. The relief still depends only on the seed. On mountain seeds the summit is inside the track area (150 to 300 m from the centre, settled by C1), with lower slopes a 15% road can climb by running across them; the steep top is kept clear by the earthworks rule. On hilly seeds the massif stays beyond the track area with an 8% lower flank, as today's highland.
+4. **Longer mountain laps.** Lap length becomes a range per relief: mountain about 1600 to 3000 m (C1 sets the lower end), the others 1400 to 2400 m as now. If 3 km laps do not fit, mountain seeds get a 600 m buildable radius instead of 500 m (C1 decides).
+5. **Turning candidates to face the mountain.** Each candidate's shape is tried at several turns about the centre (about 8 on mountain seeds, 4 on hilly, 1 on the others; C1 settles it), and the best-scoring valid turn is kept. The candidate records its `turn` for the lab.
+6. **Earthworks rule.** A new reason to reject a candidate: its road needs a cut deeper than 8 m, a fill taller than 6 m, or a bank between close sections steeper than 45%. Gentle ground used to guarantee these; now the ground can be steeper than the road.
+7. **Scoring.** Higher elevation targets on mountain seeds (about range 160 m, climb 240 m) and more weight on elevation there (C1 sets the numbers). If fewer than about half of mountain winners go round the mountain, a "goes round the mountain" share joins the elevation part.
+8. **Island.** On hilly and mountain seeds the main mountain comes from the relief (listed, not added twice); the others use `landforms.ts` and stay 60 m clear of the road. The main mountain's upper part is never cut by the coast; its lower slopes meet the sea like other land. Other mountains go only where their foot touches the road's land (no more dome islands across a channel, seed 4). The coast's join with high ground is rounded over a height that grows with the cut (softens seed 12's bands). Snow on range and peak tops above 180 m; hill country stays green.
+9. **Lab and 3D.** The shape in the Track panel, captions and sheet summary. New close views `look=summit` (the lap's highest point, facing the summit) and `look=climb` (the steepest stretch).
+
+#### Steps
+
+Tests first, watched failing. Unit and browser suites must pass before each commit.
+
+| # | Step | Ends with | Status |
+| --- | --- | --- | --- |
+| C0 | Record the plan and Tane's choices here | Pushed | Done |
+| C1 | **Spike** (throwaway): a simple concave massif in the relief of 200 mountain seeds, laps of 1.6 to 3 km, 1, 4 and 8 turns, earthworks rule. Measure lap range, how many winners go round the summit or within 150 m of its steep top, rejects per seed, fallbacks, cut and fill, whether 3 km fits in 500 m, time per seed | Numbers here; decisions on summit distance, flank profile, turns, buildable radius, lap minimum, score numbers. **If the median range is under 110 m, report to Tane before going on** | Done: reported; Tane chose half climbing, half circling |
+| C2 | Landform trait: `character.ts`, config weights, lab and contact sheets | Tests: same seed same landform; each shape at about its weight over 2000 seeds; other traits unchanged on seeds 1 to 2000 | Done, with the climb or circle route for mountain seeds |
+| C3 | `landforms.ts`: range, hills, peak | Tests per shape: heights in range; steepest slope within limit; peak foot not a circle (radius varies at least 25%); range has 3 to 6 summits with saddles at least 55% of the lower neighbour; hill country at least 5 swells, below the snow line, slopes at most about 60%; no copies | Done; slope limits 120% for peaks and 150% for ranges (see decisions) |
+| C4 | Massif in the relief, longer mountain laps, turns, earthworks rule, score changes | Mountain climb tests: new lap range band, 15%, crests, cut and fill and banks on every valid candidate, no fallback on 200 seeds, most winners round the summit or near its top, laps at most 3 km. Other reliefs still pass at 2.4 km. Build time measured | Done; steep rock cuttings beside mountain roads allowed (Tane's choice, see decisions) |
+| C5 | Island with shapes and the main mountain from the relief; joined-land placement; softer coast join | Mountain tests rewritten: not doubled; others in shape and 60 m clear; every mountain joined by land to the road's land; main top never carved; coastal mountain seeds keep sea by the road; snow only on range and peak. Fit clean on 30 worlds; barrier footing passes | Done, except the softer coast join: it did not soften the bands (see C5 results) |
+| C6 | Lab and 3D: shape shown, `look=summit`, `look=climb` | Screenshots of seeds 1 to 20 plus mountain seeds of each shape checked by eye; triangle counts; 3 s budget passes in Chromium and Firefox | Done |
+| | **Check-in 4:** Tane looks at contact sheets and flies mountain seeds of each shape | Feedback | Done: looks good, no changes asked; the rock trenches on climbing seeds stay as they are for now |
+
+#### Risks
+
+- Too few valid candidates on mountain seeds once the earthworks rule bites. Turns first, extra rounds second; the fallback oval must try every turn too.
+- Build time: up to 8 turns of 30 candidates on longer laps. If too slow, a quick ground-only check picks the best two or three turns before the full road solve.
+- A road across a 30% mountainside makes wide cuttings and embankments. The report and the barrier footing test catch problems; C6 screenshots check the look.
+- Every hilly and mountain winner changes and every mountain changes shape (allowed while the generator is v0).
+- Milestone 3 must handle 3 km laps with 15% climbs.
+
+The full plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\read-claude-md-docs-state-md-and-purring-pearl.md`.
+
+### Rework measurements
+
+**R1 baselines (2026-11-12), before any rework code.**
+
+*Folds and hairpins, winners of seeds 1 to 200.* A fold is counted as a pocket at least 100 m deep in the track's outline (its convex hull).
+
+| | Now (elevation 12%) | Milestone 1 scorer |
+| --- | --- | --- |
+| Folds per track | 1.12 (none 14%, one 63%, two 23%, three or more 2%) | 1.07 (none 17%, one 61%, two 21%, three or more 2%) |
+| Hairpins per track | 1.60 (none 2%, one 58%, two or more 41%) | 1.60 (same shares) |
+| Lap length over outline length | 1.19 | 1.18 |
+| Share of the lap with another section within 80 m | 12% | 12% |
+
+By style now: folded 1.17 folds and 1.85 hairpins; stretched 1.16 and 1.35; round 0.96 and 1.30. 45 of 200 winners differ between the two scorers.
+
+**Decision:** the elevation score did not reduce folds, so the style weights stay at 50 / 25 / 25. The tracks look stuck to the edge because the sea fills every fold; the hinterland (R6) is the fix.
+
+*World build time, 8 seeds, median (range), in milliseconds.*
+
+| | Node | Chromium worker | Firefox worker |
+| --- | --- | --- | --- |
+| Now: 1400 m tile, 2 m cells | 435 (403 to 491) | 372 (353 to 402) | 603 (561 to 743) |
+| New: 2700 m tile, 3 m cells, 4 m verge | 575 (554 to 644) | 489 (480 to 535) | 845 (816 to 903) |
+| New tile with land out to 500 m from the road (stands in for the hinterland; 24% of the tile is land) | 608 (592 to 678) | 551 (514 to 560) | 881 (844 to 901) |
+| 2700 m tile at 2 m cells, for comparison | 1268 | not measured | not measured |
+
+Handing the result from the worker to the page adds 1 to 4 ms. **Decision:** Firefox is far under the 3 s budget, so the grid stays as planned (2700 m, 3 m cells). Mountains and the hinterland's own noise will add to this; R5, R6 and R7 measure again.
+
+**R3 results (2026-11-13): winners of seeds 1 to 200, every seed forced to one relief.**
+
+| Relief | Ground | Lap height range, lowest to highest (median) | Inside its band | Steepest road | Deepest cut, tallest fill | Winner scores |
+| --- | --- | --- | --- | --- | --- | --- |
+| Flat | hills 7 m | 1.2 to 6.3 m (4.2) | 100% under 8 m | 4% | 0.1 m, 0.1 m | 89 to 100 |
+| Rolling | hills 33 m, as before | 5.6 to 29.6 m (20.5) | 91% in 15 to 30 m | 8% | 4.7 m, 4.7 m | 85 to 99 |
+| Hilly | 8% flank, hills 14 m | 23.9 to 59.5 m (41.2) | 95% in 30 to 60 m | 8% | 4.6 m, 4.6 m | 84 to 97 |
+| Mountain | 15% flank, hills 12 m | 47.1 to 106.8 m (75.8) | 90% in 60 to 120 m | 15% | 3.5 m, 3.5 m | 84 to 96 |
+
+Over all 30 candidates of 40 seeds per relief, cut and fill also stay inside 6 m and 8 m, and the bank between close sections stays under 45%. On 30 whole worlds with their own characters the fit is clean: nothing through the road, nothing hanging, deepest cutting 3.2 m, tallest embankment 3.7 m, steepest bank 65%.
+
+**R4 results (2026-11-13): winners of seeds 1 to 200, every seed forced to varied width.**
+
+- 194 of 200 widen somewhere. The 6 that do not are folded layouts with another section within 70 m of every straight.
+- Wide stretches per seed: 1.75 on average. Widest point: median 20.2 m, largest 22.0 m.
+- Share of the lap wider than 12 m: median 19% (one seed in ten under 8%, one in ten over 37%, most 55%). By style: folded 16%, stretched 23%, round 21%.
+- On 24 whole worlds with their own characters (15 of them varied) the fit is still clean: nothing through the road, nothing hanging, deepest cutting 3.2 m, tallest embankment 3.6 m, steepest bank 66%.
+
+**R5 results (2026-11-13): 2700 m tile, 3 m cells (901 by 901, 812,000 heights), 4 m verge.**
+
+- World build time, 8 seeds: Node 611 to 705 ms (median 661), Chromium worker 551 to 621 ms (median 598), Firefox worker 822 to 891 ms (median 858). Budget 3 s.
+- Barrier footing (0.6 m nominal) on 10 hilly and mountain seeds: at least 0.40 m in the ground on 9 of them; 0.29 m at worst on seed 1. The verge dip is smaller (about 0.3 m, was about 0.45 m) but not gone.
+- Fit still clean on those 10 seeds: deepest cutting 3.2 m, tallest embankment 3.6 m, steepest bank 63%.
+
+**R6 results (2026-11-13): seeds 1 to 12 of each coast trait, on a 5 m grid.** "Rays" go straight out from every fourth sample on each side of the road that faces outwards.
+
+| Coast | Sea within 35 m of the road (or as near as a cliff beside a high road allows) | Land 80 m or more past the road, where the hinterland covers it |
+| --- | --- | --- |
+| Inland | none on any seed; no sea within 60 m anywhere | 100% on every seed |
+| Touches | 7% to 48% of rays per seed | 54% to 97% of covered rays (median about 82%); the rest is the short stretch where the hinterland gives way to the coast |
+| Coastal | more than half of rays on every seed (seeds 1 to 8) | little land beyond the road |
+
+- On every island: never sea within 10 m of the road edge, the tile edge is open sea, no water cut off from the open sea, no slope steeper than 250% more than 80 m from the road.
+- World build time: R6 itself adds about 50 ms (measured back to back with R5: 1,254 ms before, 1,294 ms after in Node). But the machine was busier than in R5's measurement, so today's absolute numbers are higher: Node about 1.3 s, Chromium worker 1.05 to 1.23 s (median 1.12), Firefox worker 1.72 to 1.83 s (median 1.77). Budget 3 s. Measure again in R8 with nothing else running.
+
+**R7 results (2026-11-13).**
+
+- Seeds 1 to 40 with their own characters (5 m grid): 76 mountains asked for, 76 placed. Every main mountain is 201 to 248 m high, with a foot 154 to 416 m in radius. All 10 mountain-relief seeds have their main mountain on the highland.
+- Steepest mountain sides on 8 sample mountains: 107% to 129% (the 110% limit, plus the slope of the ground under them).
+- World build time, measured with only the dev server running: Chromium worker 655 to 812 ms, Firefox worker 1,028 to 1,198 ms. Budget 3 s.
+
+**R8 results (2026-11-13).**
+
+- Ground triangles loaded, 8 seeds: 58% to 74% of full detail with far ground at quarter detail (seed 12: 786k down to 455k). Seed 2024, whose land is all within 250 m of the road, keeps all 164k.
+- Triangles drawn per frame (Chromium, 1280 by 720): circling view 182k to 407k in 25 to 70 draw calls; flying view 92k to 141k in 13 to 29 draw calls. Seeds 1, 12, 2024 and 48213.
+- Fly, orbit and close-up screenshots of seeds 1 to 20 checked by eye: no seams where the detail levels meet.
+
+**C1 results (2026-11-13): the check-in 3 spike, mountain seeds only.** Throwaway code: the candidate loop rebuilt from `generateLayout`, `solveProfile`, `measureProfile` and `scoreLayout`, with a test mountain added to the seed's relief (no highland), each candidate tried at several turns about the centre, and the earthworks rule (cut 8 m, fill 6 m, bank 45%) rejecting turns. "Sweep" is how many degrees round the summit the lap passes within 300 m of the steep top's foot; "fully round" means the summit is inside the loop.
+
+*First tries, 40 seeds, laps 1.6 to 3 km, 500 m track area, 8 turns unless stated.*
+
+| Test mountain | Median lap range | Laps under 90 m | Fully round | Median sweep | Turns rejected |
+| --- | --- | --- | --- | --- | --- |
+| Today (highland flank, 1 turn, laps to 2.4 km) | 77.3 m | 33 | 0 | 0° | 0% |
+| Broad dome 150 m, 900 m radius, under the whole area, peak on top | 78.6 m | 30 | 19 | 200° | 94% |
+| 15% cone, summit 450 m out, 1 turn | 89.2 m | 23 | 0 | 80° | 10% |
+| Same, 4 turns | 99.5 m | 8 | 0 | 90° | 11% |
+| Same, 8 turns | 105.5 m | 4 | 0 | 90° | 10% |
+| Same, 8 turns, laps to 2.4 km only | 97.4 m | 10 | 0 | 80° | 7% |
+| 15% cone, summit 350 m out | 86.0 m | 25 | 0 | 120° | 45% |
+| 15% cone, summit 250 m out | 69.3 m | 38 | 5 | 150° | 80% |
+| 600 m area, cone summit 550 m out | 112.7 m | 5 | 0 | 70° | 2% |
+| Same, elevation weight 25% | 124.0 m | 1 | 0 | 70° | 2% |
+| 600 m area, weight 25%, cone summit 200 m out | 76.9 m | 36 | 26 | 320° | 78% |
+| Same, summit 120 m out | 67.1 m | 40 | 34 | 350° | 77% |
+
+What it shows: a dome steeper than the road's 15% almost everywhere leaves few layouts that fit. A 15% cone works, with the steep top only at its summit. Climb is limited by how far the track area reaches up the slope, not by lap length (3 km laps add about 8 m). A lap that circles a mountain stays near one height.
+
+*Confirmed on 200 seeds (600 m area, laps 1.6 to 3 km, elevation weight 25%, targets 160 m range and 240 m climb).*
+
+| | Climbing: summit 550 m out, 8 turns | Same, 4 turns | Circling: summit 200 m out, 8 turns |
+| --- | --- | --- | --- |
+| Lap range, lowest / tenth / median / ninetieth / highest | 76.9 / 100.8 / 120.4 / 140.3 / 149.2 m | 72.8 / 98.7 / 118.5 / 137.3 / 149.2 m | 38.8 / 63.7 / 77.1 / 89.9 / 101.8 m |
+| Laps under 90 m | 5 | 11 | 182 |
+| Highest point of the lap (median) | 147 m | 144 m | 108 m |
+| Fully round the summit; 180° or more | 0; 0 | 0; 0 | 152; 170 |
+| Within 150 m of the steep top | 197 | 193 | 200 |
+| Turns rejected for earthworks | 1.5% | 1.4% | 76% |
+| Fallbacks (no valid candidate) | 0 | 0 | 0 |
+| Deepest cut, tallest fill, steepest bank of winners | 7.4 m, 5.9 m, 35% | 7.3 m, 5.9 m, 32% | 7.7 m, 6.0 m, 40% |
+| Laps over 2.4 km; longest | 121; 2970 m | 126; 2970 m | 112; 2970 m |
+| Track generation per seed in Node (median) | 287 ms | 162 ms | 317 ms (today 47 ms) |
+
+**Decisions from C1 (Tane chose the split; the rest follows from the numbers):**
+- Mountain seeds are half climbing, half circling, from a stream of their own.
+- The main mountain stands on a 15% cone that eases in over 120 m at its foot and reaches 600 m past the summit. Its steep top stands on a flat shoulder about 100 m higher. Climbing seeds: summit 550 m from the centre, top's foot 130 m across in radius (summit about 250 m above the sea). Circling seeds: summit 200 m out, foot 110 m (summit about 200 m). C3 and C5 give the top its landform shape.
+- Mountain seeds: 600 m track area, laps 1.6 to 3 km, 8 turns (4 turns loses 2 m of median range and doubles the laps under 90 m), elevation weight 25% (the other four parts 18.75% each), elevation targets 160 m range and 240 m climb.
+- The earthworks rule is needed: without it, three in four turns on circling seeds would break the cut and fill limits.
+- No "goes round the mountain" score: three in four circling winners already go fully round.
+- Test bands for lap range: climbing 90 to 160 m; circling 55 to 100 m.
+- 3 km laps fit (the longest winner is 2.97 km, no layout failed to build), so only mountain seeds get the bigger area, for the climb.
+- Not measured yet: hilly seeds (C4 measures whether turns help them) and whole-world build time in browsers (C4).
+
+**C3 results (2026-11-13): the three shapes on their own, 30 streams each** (peaks and ranges 200 and 250 m high, hill country 120 and 170 m), measured on the game's 3 m grid.
+
+| Shape | Slope limit | Steepest (median / worst of 30) | Size, including the foot |
+| --- | --- | --- | --- |
+| Lone peak | 120% | 95% / 115% | about 1.0 to 1.6 km across |
+| Ridged range | 150% | 116% / 122% | 3 to 6 peaks over 300 to 1200 m; with the feet up to about 2 km long and 0.8 km wide |
+| Hill country | 60% | 54% / 58% | about 1.3 to 2 km across; the tallest is the widest |
+
+Looked at as shaded maps of 8 streams per shape (not yet in the game): peaks are oval with rock ridges and gullies; ranges are lines of spires, some bending; hill country is clusters of swells running into each other on an uneven dome. The first two attempts were rejected by eye: peaks read as smooth domes with a "+"-shaped top, ranges as faceted crystals with a sawtooth outline, hill country sat on a round disc.
+
+**C4 results (2026-11-13): the massif in the relief, 60 seeds for each route and shape.** Real pipeline (8 turns, laps 1.6 to 3 km, 600 m area, earthworks rule). "Round" means the summit is inside the loop; "near the top" means within 150 m of the top's foot.
+
+| Route, shape | Lap range: lowest / tenth / median / ninetieth / highest | In band | Round; near the top | Candidates rejected for earthworks | Summit (above the lowland) | Track time in Node, median |
+| --- | --- | --- | --- | --- | --- | --- |
+| Climbing, lone peak | 74 / 96 / 112 / 128 / 138 m | 57 of 60 (90 to 160 m) | 0; 60 | 0.7% | 226 m | 100 ms |
+| Climbing, range | 74 / 92 / 111 / 134 / 143 m | 57 | 0; 60 | 0.7% | 226 m | 121 ms |
+| Climbing, hill country | 74 / 100 / 121 / 138 / 157 m | 57 | 0; 60 | 0% | 176 m | 101 ms |
+| Circling, lone peak | 46 / 60 / 79 / 92 / 95 m | 59 of 60 (55 to 100 m) | 40; 60 | 49% | 154 m | 136 ms |
+| Circling, range | 51 / 62 / 80 / 92 / 107 m | 55 | 32; 60 | 59% | 154 m | 162 ms |
+| Circling, hill country | 58 / 70 / 85 / 96 / 103 m | 58 | 49; 60 | 17% | 127 m | 117 ms |
+
+No fallbacks. Deepest centre-line cut 7.5 m, tallest fill 6.0 m, steepest bank between sections 46%. About 3 in 5 mountain laps are over 2.4 km; the longest 2.97 km.
+
+- *Compared with C1's test mountain:* the lap ranges match (climbing median 120 m in C1, circling 77 m). Fewer circling laps go fully round (C1: three in four), most of all with ranges: the real tops are wider than C1's 130 m bell.
+- *Hilly seeds, 100 seeds:* 4 turns lift the median lap range from 42 to 45 m and bring all 100 laps into the 30 to 60 m band (95 with 1 turn), for 121 ms instead of 46 ms per track.
+- *Banks beside the road on 30 mountain worlds* (whole island, after the fit): median 104%, ninetieth percentile 157%, steepest 209%. Laps that reach the top run across ground 40 to 90% steep and are cut into it. Checking cut and fill at the edges of the verges as well as the centre line was tried: it rejected most circling candidates, two seeds fell back to the oval, one took 3.2 s, and the banks barely changed. Tane chose to allow the rock cuttings.
+- *World build time, fastest of three:* in Node, mountain worlds 0.87 to 1.0 s, seed 7 0.84 s. In the browsers on the lab page: seed 3 (climbing range, the slowest kind) 1.0 to 1.2 s in Chromium and 1.4 s in Firefox; seed 7 0.8 s and 1.1 s. On the 3D page, where headless Chromium draws in software and takes processor time from the worker: seed 3 3.0 to 3.3 s in Chromium (2.3 to 2.5 s before C4) and 1.8 to 2.0 s in Firefox; seed 7 2.0 to 2.6 s and 1.1 to 1.5 s, as before C4. The budget test (seed 7) passes in both.
+- *Speed-ups that keep results the same:* the road solver finds which parts of the lap run side by side once per candidate instead of once per turn (track 300 to 400 ms down to 100 to 160 ms); the island looks up the relief once per cell; each spire of a range skips points beyond its reach.
+
+**C5 results (2026-11-13): mountains in the seed's shape on the island.**
+
+- *Sizes:* a shape's foot spreads with its height. At 250 m a lone peak's foot is about 850 m in radius (1.7 km across; the old round mountain was 437 m), a range's 700 m, and hill country at 170 m about 860 m. Beside a 1 km track area on a 2.7 km tile most full-height mountains cannot fit, so a mountain is built lower, and so smaller, where it must.
+- *Placement over seeds 1 to 60* (as they come): 84 of 90 mountains asked for found room (lone peaks 30 of 31, ranges 16 of 20, hill country 38 of 39). Their summits are a median 84 to 88% of the middle of their range, none under 57%.
+- *Coastal mountain seeds* (seeds 1 to 6, forced coastal): the sea is within 120 m of the road along 19 to 67% of the lap. Climbing ranges are lowest (0.19 and 0.28): the road runs up beside the range, whose land covers that side.
+- *Build time, fastest of three, in Node:* seed 3 (climbing range) 1.15 to 1.27 s (1.0 s after C4), seed 13 1.14 s, seed 7 0.86 s. In the browsers: on the lab page seed 3 takes 1.0 s in Chromium and 1.5 s in Firefox; on the 3D page 2.9 to 3.7 s in Chromium and 2.0 s in Firefox; seed 7 2.1 to 2.5 s and 1.4 to 1.5 s. The budget test (seed 7) passes in both.
+- *Speed-ups that keep results the same:* a spire's shape is worked out once and moved while its col is searched for (it was rebuilt 24 times); the massif is built once in the island and handed to the relief; a range skips spires too far away to be the nearest; each cell's distance outside each foot is kept from pass 2 for pass 3.
+- *The coast bands (seed 12) were not softened.* 9,816 of the 10,887 cells steeper than 60% on seed 12 (away from the road and the feet) are ground the coast cut more than 2 m. They are the hinterland's coast cutting a sea cliff, up to its 250% limit, into the cone 60 m and more above the sea. Three changes were tried and undone: rounding the top of the cut over 1.5 m plus 30% of the coast's height there (no visible change; 10,835 steep cells); the coast's limit rising inland at 50% instead of 100% (no visible change); the hinterland's coast climbing half as steeply (11,327 steep cells: a gentler climb cuts a wider swathe). On land this high the coast must drop 60 to 100 m wherever the hinterland's edge crosses it. The fix is for the coastline to follow the terrain (the waterline where the land is already low), a change to how the island's outline is chosen. For check-in 4.
+
+**C6 results (2026-11-13): the lab and 3D.**
+
+- *Seeds photographed:* 1 to 20 (mountain seeds among them: circling lone peaks 1, 11, 12, 14; climbing range 3; circling range 13) plus 27 (circling hill country), 44 (climbing lone peak), 47 (climbing range) and 53 (climbing hill country). Each has the overview, four flying views and eight close views (cut, fill, bank, water, hairpin, start, summit, climb), 312 in all, plus lab pages and contact sheets from seeds 1, 21 and 41.
+- *Checked by eye:* the summit view shows the lap's highest point with the main summit behind it on every mountain seed; the climb view looks up the steepest stretch. Flat seed 9 (no mountain) looks along the road from its highest point. Two close views were blocked by a mountainside (seed 44 `bank` was half white snow, seed 47 `water` only grass); the close camera now turns until its view is clear (see decisions).
+- *What the pictures show for check-in 4:* deep rock trenches with saw-tooth edges between parallel sections at different heights on climbing seeds (seed 3 `hairpin` and `start`, seed 53 `cut`, `fill` and `start`); the steep rock cuttings Tane allowed in C4, very visible from close up. Seed 44's snow cap looks smeared at close range.
+- *Ground triangles loaded* (far ground at quarter detail), 11 seeds: 47% to 74% of full detail, 318k to 434k on hilly and mountain seeds (R8: 455k at most). Seed 2024 keeps all 164k.
+- *Triangles drawn per frame* (Chromium, 1280 by 720), seeds 1, 3, 7, 12, 13, 27, 44, 47, 53, 2024, 48213: circling view 182k to 428k in 25 to 80 draw calls (R8: 182k to 407k, 25 to 70); flying view 92k to 197k in 13 to 38 calls (R8: 92k to 141k, 13 to 29); summit view 116k to 337k in 17 to 68 calls.
+- *Budget:* the 3-second budget test (seed 7) passes in Chromium and Firefox.
+
+## Step 12: water and sky (2026-11-14)
+
+Plan approved in plan mode. Tane's choices: seeds pick a time from 07:00 to 19:30, all equally likely, no night; a clock and slider with a "Seed's time" button and a `time=17:30` address option; waves always moving (the page draws every frame unless held still); the seed also picks the compass direction of the sun's path. The full plan: `C:\Users\tanee\.claude\plans\read-claude-md-docs-state-md-and-graceful-peach.md`.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 12a | `gen/world/sky.ts` (`pickSky`), `world.sky`, `WorldResult.sky` in the world fingerprint, lab line | Done |
+| 12b | `render/daylight.ts` (`daylightAt`): sun direction, sky, haze, light and water colours as plain numbers | Done |
+| 12c | Sky dome (`render/sky.ts`), lights and haze from the daylight; `time=`; `look=sun`; no drawing while a world is built | Done |
+| 12d | Water (`render/water.ts`, `render/waterDepth.ts`) in place of the flat sea; waves move every frame unless held still | Done |
+| 12e | Clock, slider and "Seed's time" button; the title card names the time and its light | Done |
+| 12f | Screenshots, counts, this file | Done |
+| 12g | Tane's feedback on the water (below): waves of our own in `render/waves.ts` | Done |
+
+**What carried over from the island demo:** the sky shader (horizon to zenith, glow round a low sun, sun disc and halo, haze below the horizon), its day colour keys and blends, and its water shader (summed wave slopes, shallow to deep colour by depth, sky reflection, sun glints, moving shore foam, see-through shallows). Moon and stars were left out: there is no night.
+
+**What changed for the 2.7 km tile:** the sun's path (sunrise 06:30, sunset 20:00, 60 degrees at its highest, so 07:00 and 19:30 are about 7 degrees up; the demo's sun set at 18:00); colours converted to linear light and light strengths matched to the old midday (sun 2.4, sky 1.5); the dome sized from the camera's far distance and drawn first, hiding nothing; the depth comes from the island's fitted ground as a 901 by 901 float texture; the large waves fade between 300 and 1500 m and the glints dim where the small waves have faded, because from the circling camera, a kilometre or more out, the regular waves made a fish-scale pattern; the sun disc is about half the demo's size.
+
+**Results.**
+- *Screenshots checked by eye:* seeds 1 to 20 at their own times (view from above, four flying views and eight close views each, 260 pictures); a time strip of seeds 1, 7, 12, 44 and 53 at 07:00, 10:00, 13:00, 16:30, 18:30 and 19:30, from above and facing the sun (`look=sun`); seed 44 in Firefox against Chromium (same picture; only the slider's thumb differs). Sky and sea meet at the horizon with no seam; shallows and foam line beaches and cliff feet; the sun shows low in morning and evening views; nothing is hidden by the dome.
+- *Triangles and draw calls per frame* (Chromium, 1280 by 720, seeds 1, 3, 7, 12, 44, 53, 2024): circling view 184k to 401k in 26 to 81 calls; flying view 94k to 193k in 14 to 39; summit view 118k to 339k in 18 to 69. As in C6 plus the dome's one call (the water replaces the flat sea's).
+- *Budget:* both 3-second budget tests pass in the full run. Frame rate on a real graphics card is for step 15 (headless browsers draw in software).
+- 883 unit tests and 194 browser tests pass.
+
+**Tane's feedback after trying it (2026-11-14):** the time, sunrise and sunset all look good. The water looks like a checker pattern, blurry and not like waves: waves should be spaced out more and come unevenly, some bigger, some later, some smaller.
+
+**12g, the response.** The demo's five regular waves crossed at wide angles and made a lattice, and far-off waves smaller than a pixel shimmered into false patterns. The waves are now our own (`render/waves.ts`, settings in `render.water`):
+- Eight trains, 62 m down to 2.1 m long, all within 40 degrees of one wind direction, so crests are long lines across the wind and not a grid.
+- Each train builds up and dies down in patches about 4.5 wavelengths across (waves come in groups), and its crests are pushed forward or back by up to half a wavelength from patch to patch, so they bend and come sooner or later.
+- Crests are peaked, with broad troughs between; long waves travel faster than short ones, as at sea.
+- A wave is dropped once a pixel covers 7% to 30% of its length (measured the way it travels), which replaces the fades by distance. Where waves are dropped, the sun's glints spread and soften.
+- The water takes light and shade from the waves' faces, and the tops of the taller waves are a little lighter. The demo's water only showed waves through reflections, so they vanished when seen from above.
+
+`waveField` does the sums in TypeScript for the tests (13 of them: uneven gaps between big crests, crests of very different sizes, no repeat down or across the wind, peaked crests, slopes that match heights, travel down the wind); `wavesGlsl` writes the same sums for the shader. Checked by eye on seeds 2, 4, 5, 6, 7, 9, 13, 15, 17, 18, 19 and 20, from above, flying and close to the shore. 896 unit tests and 194 browser tests pass.
+
+## Step 13: trees, rocks and clouds (2026-11-14)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-content-id-d3aa-random-racing-rosy-cocke.md`.
+
+**Why the demo is not copied as it is:** it scatters about 1,160 trees and 15 small clouds over a 420 m island, by trial and error with its own random numbers. Our tile is 2.7 km with 250 m mountains, generation must be pure and exact, and the 3D page already draws 184k to 401k triangles in the circling view.
+
+**Tane's choices:**
+- Tree cover varies by seed: open, wooded or forest.
+- Three kinds of tree: broadleaf, pine, and a new palm by the beach.
+- Trees stand close to the road, in patches: from about 8 m off the road edge, wherever the woods reach it.
+- The seed picks the amount of cloud (clear, fair or cloudy); clouds stay above the highest summit.
+
+**Claude's calls, approved with the plan:**
+- Trees and rocks are scenery only. Barriers line the whole lap, so Milestone 3 needs no collisions with them.
+- No shadows yet (step 15). Trees do not sway.
+- The woods and cloud traits are on the world, not on `Character`, so no track fingerprint changes.
+- Clouds drift down the same wind as the waves and stand still with `still=1`.
+- The lab shows trees and rocks as dots on the single-seed map (key T) and names the woods and the sky. Contact-sheet thumbnails stay as they are.
+
+**Design.** Generation says where everything is, as plain numbers from the `decor` stream; `src/render` only draws them.
+- `gen/world/decor.ts`: the woods trait; trees from one pass over a jittered grid (so trees never overlap and the cost is fixed), kept where there is grass, the ground is not too steep, the road edge is at least 8 m away and a forest pattern is above the level for the seed's woods; palms on and just behind beaches, pines above a height band, broadleaf below, none above the tree line. Rocks from a second grid: boulders on rocky ground, a few on beaches and in the shallows.
+- `gen/world/clouds.ts`: the cloud trait; clouds of 5 to 9 puffs over a square wider than the tile, their bases above the island's highest ground.
+- `WorldResult.decor` and `WorldResult.clouds`, typed arrays only, in the world fingerprint. Settings in `world.decor` and `world.clouds`.
+- Drawing: shapes, instance groups and cloud positions as plain numbers first (`render/treeShapes.ts`, `scatter.ts`, `clouds.ts`, unit tested), then thin Three.js wrappers (`decorView.ts`, `cloudView.ts`). Trees are drawn in groups about 450 m square, each with a near and a far shape. `decor=off` in the address hides trees, rocks and clouds.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 13a | Record the plan and Tane's choices here | Done |
+| 13b | Config, types, `decor.ts`: the woods trait and trees | Done |
+| 13c | Rocks; `clouds.ts`; `WorldResult.decor` and `.clouds`; world fingerprint; worker | Done |
+| 13d | `render/treeShapes.ts`, `scatter.ts`, `clouds.ts` (plain numbers) | Done |
+| 13e | `decorView.ts`, `cloudView.ts`, the 3D page; `decor=off` | Done |
+| 13f | Lab: dots, T key, Track panel lines, title card | Done |
+| 13g | Screenshots of seeds 1 to 20 and a time strip, triangle counts, this file | Done |
+
+**Budgets:** trees, rocks and clouds add at most about 350k triangles and 120 draw calls to the circling view of a forest seed; the decoration takes under about 80 ms to generate in Node.
+
+**As built.**
+- *Trees* (`placeTrees`): one tree at most in each 9 m square, up to 2.7 m off its middle, so no two are closer than 3.6 m. A tree needs dry land, 8 m clear of the road edge, ground no steeper than 50%, little rock, and (broadleaf and pine) at least 55% grass cover. It grows where a noise pattern 260 m across is above the level for the seed's woods (open 0.72, wooded 0.55, forest 0.36), with a ragged edge, and here and there on its own (1.2% of squares). Broadleaf below 20 m, pines above 70 m, mixed between; trees thin out from 100 m and none grow above 125 m. Palms stand on ground 0.9 to 6 m high with sea within 28 m, in 30% of such squares, whatever the woods. Every square draws the same twelve random numbers whether or not it gets a tree, so changing one rule does not reshuffle the rest. At most 22,000 trees, thinned evenly past that.
+- *Rocks* (`placeRocks`): a 12 m grid; boulders on ground with 35% rock cover or more that is no steeper than 100% (half of such squares); small rocks along the shore and in the shallows (a quarter of squares between 1.2 m under water and 2.2 m above); the odd boulder on grass (0.4%). 6 m clear of the road edge. At most 5,000.
+- *Clouds* (`pickClouds`): clear 4 to 9 clouds, fair 14 to 24, cloudy 34 to 52, each of 5 to 9 flattened puffs 20 to 96 m in radius, spread over a 5.6 km square. Their undersides are at least 320 m up and 60 m over the island's highest ground, in a layer 180 m deep.
+- *Drawing:* a near and a far shape for each kind of tree (pine 28 and 11 triangles, broadleaf 46 and 14, palm 42 and 11), a boulder (20 and 8) and a puff (80). One instanced draw for each kind in each 450 m square; a square within 350 m of the camera uses the near shapes. Trees are drawn from both sides, so cones are left open underneath. Clouds drift at 10 m/s down the waves' wind on the wave clock, wrap round their square, shrink to nothing over the last 400 m before its edge, and thin away within 360 m of the camera. Their shaded sides are lit by 70% of the sky's light.
+- *Lab:* trees and rocks as dots on the island (T key or tick box), "Woods" and "Sky" lines in the Track panel. *3D title card:* a line such as "wooded · fair sky". *Address:* `decor=off` leaves out trees, rocks and clouds.
+
+**Changed from the plan after looking at pictures.**
+- A "cloudy" sky at the planned 24 to 38 clouds over a 7 km square showed four or five clouds from the road. Counts were raised and the square tightened to 5.6 km.
+- The circling camera flies at the height of the clouds, and on seeds 5 and 19 a cloud sat right in front of it. Puffs now thin away as the camera comes within 360 m and are gone at 120 m. A camera on the road never gets that close to a cloud it can see.
+- Clouds are lit underneath by a share of the sky's light instead of the demo's fixed dim glow, which left their undersides nearly black under Three.js 0.187's lighting.
+
+**Results (2026-11-14).**
+- *Counts, seeds 1 to 20:* 476 to 11,321 trees (open seeds 476 to 2,141; wooded 548 to 9,480; forest 1,004 to 11,321, the smallest a 0.2 km² island), 75 to 1,746 rocks, 29 to 364 cloud puffs. On 8 test islands: forest 5,500 to 6,900 trees for each square kilometre of grass, wooded about 3,000, open about 1,000.
+- *Time to generate:* trees and rocks together 10 to 19 ms in Node (seeds 1 to 20 and six more; budget 80 ms). Both 3-second budget tests pass.
+- *Triangles and draw calls per frame* (Chromium, 1280 by 720), with the scenery and, in brackets, what it adds: seeds 1, 3, 7, 12, 44, 53, 2024 and the most wooded 8, 18 and 20. Circling view 197k to 589k in 46 to 169 calls (adds 13k to 176k and 20 to 81 calls); flying view 83k to 332k in 13 to 85 calls (adds 17k to 131k and 4 to 42); summit view 146k to 477k in 30 to 130 calls (adds 27k to 187k and 12 to 63). Inside the budget of 350k triangles and 120 calls added.
+- *Screenshots checked by eye:* seeds 1 to 20 at their own times (view from above, four flying views and eight close views each, 260 pictures, looked at as contact sheets) and a time strip of seeds 1 (open), 12 (wooded) and 20 (forest) at 07:00, 13:00 and 19:30, from above and facing the sun. Trees stand on the ground with none on the road, verge or bare rock; palms line the beaches; pines take over on higher ground; boulders dot the rock of the peaks; clouds stay clear of every summit; no close view is hidden by a tree.
+- *Same in every browser:* Chromium, Firefox and Node give identical world fingerprints for 20 seeds, now including every tree, rock and cloud.
+- 971 unit tests and 212 browser tests pass.
+
+**Risks:** a close camera (`look=`) can stand behind a tree, since it only checks the ground; clouds count as foam in the pixel counts, so tests that count foam or land open with `decor=off`; the palm is a new shape, judged by eye in 13g.
+
+## Step 14: grass (2026-11-14)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-content-id-4f36-random-racing-sorted-mist.md`.
+
+**Why the demo is not copied as it is:** its 110,000 blades fill a square 58 m to each side of a walker. Our camera flies 4 m above a 12 to 22 m road with a 4 m bare verge, so the nearest grass is about 10 m away and the view runs 100 m and more down the road. The flying view already draws 83k to 332k triangles.
+
+**Tane's choices:**
+- Grass varies in patches on every island: long meadow grass and short turf, following the lush-to-dry map each island already has.
+- Blades reach about 120 m from the camera, thinning with distance.
+- A mown strip beside the road: short grass for the first metres beyond the verge, longer further out.
+- Wildflowers among the long grass, in some patches.
+
+**Claude's calls, approved with the plan:**
+- Grass is drawing only. No generation code changes, so world and track fingerprints stay as they are. Where grass grows is already world data (`cover.grass`).
+- Blades sway down the same wind as the waves and clouds, on the same clock, and stand still with `still=1` or reduced motion.
+- `grass=off` in the 3D address leaves the blades out. `decor=off` does not touch grass.
+- No blades are drawn when the camera is too high to see them (the far circling view).
+- Grass is scenery only: Milestone 3's off-road slowdown will read the cover map, not the blades.
+- No shadows yet (step 15). The lab is unchanged.
+
+**Design.** The pattern of `waves.ts` and `clouds.ts`: the sums as plain numbers, unit tested; the same sums written out for the shader; a thin Three.js wrapper.
+- *Tiers:* three square fields of blades, one inside the next, all following the camera: near (about 30 m, many thin blades), middle (about 60 m, fewer and wider) and far (about 120 m, few, wide, one triangle each). A blade has a fixed place in its tier's square and wraps round as the camera moves; each tier fades its blades to nothing at its edge, so none pops. Each square sits ahead of the camera, so most blades are in view.
+- *On the ground:* a blade's foot is read from the fitted ground heights with the same two-triangle split per cell as the ground mesh.
+- *Where it grows:* a blade lives only if its own fixed number is under the grass cover there. None on the road, verge, sand, bare rock, snow or sea.
+- *Length:* long in lush patches, short in dry ones (`cover.variation`); held to a mown height near the road edge, easing up beyond it.
+- *Flowers:* about 4% of blades can flower (white, yellow or red tips), only in long grass inside flower patches about 40 m across, placed by the seed.
+- *Wind, colour, light:* the demo's sway (a slow gust down the wind plus a flutter per blade); the ground's own greens, darker at the foot and lighter at the tip, lit by the time of day and hazed like everything else.
+- *Files:* `render/grassMaps.ts` (distance from the road edge, flower patches, and the grid the shader reads), `render/grass.ts` (blades, shape, the sums, the shader text), `render/grassView.ts` (Three.js). Settings in `render.grass`; colours in the palette.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 14a | Record the plan and Tane's choices here | Done |
+| 14b | `render.grass` config; `grassMaps.ts` | Done |
+| 14c | `grass.ts`: blades, shape, the sums, the shader text | Done |
+| 14d | `grassView.ts`, shared ground texture, the 3D page; `grass=off` | Done |
+| 14e | Look pass from pictures: tier numbers, lengths, mown strip, flowers, colours | Done |
+| 14f | Screenshots of seeds 1 to 20 and a time strip, triangle counts, this file | Done |
+
+**Budgets:** grass adds at most about 250k triangles and 3 draw calls to a flying or close view, and nothing to the far circling view. The browser suite is timed before and after 14d; if it grows by more than about a quarter, the tiers shrink.
+
+**Risks:** a visible ring where the blades end; shimmer from blades thinner than a pixel when moving; blade feet a little off the mesh on far ground drawn at quarter detail (only a circling camera zoomed in there would show it); Milestone 3's chase camera will be lower than today's 4 m (reach, tiers and lengths are config values); a shader mistake draws nothing and only logs to the console.
+
+**As built.**
+- *Fields* (`render.grass.tiers`): 24,000 blades 12 cm wide within 20 m, 24,000 blades 22 cm wide within 40 m, and 32,000 single-triangle blades 50 cm wide within 80 m: 80,000 blades, 176,000 triangles, 2 draw calls (one for each shape of blade). About 15, 4 and 1 blades to the square metre. Each field's middle sits half its half-width ahead of the camera, so the grass reaches 120 m ahead, 80 m to the sides and 40 m behind. A blade shrinks to nothing over the last 30% of its field, and an outer field stands down where the field inside it stands at full height.
+- *A blade's place* is its fixed place in its field's square plus a whole number of the square's widths, so it stands exactly still as the camera moves and only ever jumps (a whole width, from the edge behind to the edge ahead) when it has shrunk to nothing.
+- *Feet* are on the ground mesh's own triangles (`groundHeightAt`), sunk 5 cm. No blade stands lower than 0.3 m above the sea.
+- *Where it grows* (`bladeLives`): no blade where the grass cover is a half or less, every blade from 95% cover; in between, by the number each blade lives by.
+- *Length* (`bladeLength`): turf 18 to 32 cm, meadow 50 to 95 cm; meadow where the cover's variation is under 0.4, turf above 0.65. Within 9 m of the road edge (5 m past the verge) no blade is over 16 cm; over the next 6 m the grass grows back.
+- *Flowers:* 8% of blades can flower, in white, yellow or red (`FLOWERS` in the palette). A quarter of every island is flower patch, about 40 m across, from the seed (`decor` stream, `grass/flowers`), worked out on a 9 m grid. Only blades of 45 cm or more flower. The flower is the top 35% of the blade, three times as wide; a far field's blade becomes all flower.
+- *Wind* (`sway`): a gust every 180 m, travelling down the sea's wind at 20 m/s, pushes tips over by up to 40% of the blade's length; each blade flutters another 16% either way. It runs on the wave clock and stands still with `still=1` or reduced motion.
+- *Light:* a blade takes the light of the ground triangle it stands on (`groundNormalAt`), in the ground's own lush and dry greens, 0.7 times as light at its foot and 1.55 times at its tip, and 0.86 to 1.16 times from the shortest blade to the tallest.
+- *What the shader reads:* the ground's heights (the water's texture, shared) and `grassGrid`: four bytes to a cell (grass cover, variation, distance from the road edge up to 15 m, flower patches), built on the page in 26 to 33 ms.
+- *Left out* when the camera is more than 150 m above the ground under it, and with `grass=off` in the address. `stats().blades` says how many are drawn; `pixelCounts().lowDigest` is a fingerprint of the bottom two fifths of the picture.
+- *Files:* `render/grassMaps.ts`, `render/grass.ts` (`bladeAt` does the sums for the tests, `grassGlsl` writes the same sums for the shader), `render/grassView.ts`. No generation code changed.
+
+**Changed from the plan after looking at pictures (14e).**
+- With the demo's own lighting the grassed ground was darker than bare ground, and the round edge of the far field showed on hillsides. Blades now take their ground's light, and their shading from foot to tip averages about the ground's brightness. The edge cannot be seen.
+- Green blades stood scattered over sand and rock wherever the grass cover was partial (seed 2's dunes, seed 7's rocky slope). Thin cover now grows no blades.
+- The mown strip was planned as the first 12 m, growing back over 10 m, at 12 cm. From the road that looked like bare ground. It is now 9 m and 6 m, at 16 cm.
+- Blades were widened (7, 16 and 38 cm at first), turf made taller (it was 14 to 26 cm) and meadow a little commoner.
+- Flowers could hardly be seen: 5% of blades became 8%, flowers were made three times a blade's width (2.2 at first), and a far blade's whole triangle became its flower (only a sliver of its tip was coloured).
+- The foot and tip shades are settings (`render.grass.shade`), not palette colours as the plan said.
+- A blade whose foot would be under 0.3 m above the sea does not stand (added in 14c: a steep shore's blend could put a few in the water).
+
+**Results (2026-11-15).**
+- *Screenshots checked by eye,* as contact sheets: seeds 1 to 20 at their own times (view from above, four flying views and eight close views each, 260 pictures); a time strip of seeds 1, 7 and 20 at 07:00, 13:00 and 19:30, facing the sun; and close-ups from 30 m of start lines, hairpins, an embankment, a flower patch (seed 42) and grass on far ground (seed 42). No blades on any road, verge, beach, rock face or in the sea; no edge to the field; the mown strip reads as short grass beside the barriers; flowers show as dabs of colour in some views and not others; at 07:00 and 19:30 the blades are as dark as their ground.
+- *Triangles and draw calls per frame* (Chromium, 1280 by 720, 13:00; seeds 1, 3, 7, 12, 44, 53, 2024, 8, 18, 20). Grass adds 176,000 triangles and 2 calls wherever it is drawn, and nothing to the view from above (budget: 250,000 and 3). Circling view 197k to 589k in 46 to 169 calls, as in step 13; flying view 259k to 508k in 15 to 87 calls at 0.3 of the lap, 297k to 579k in 26 to 105 at 0.8; summit view 322k to 653k in 32 to 132; start view 255k to 468k in 19 to 105.
+- *Browser suite:* 375 s before the grass was drawn, 428 s after, with 12 more tests (14% longer; the limit was a quarter). Both 3-second budget tests pass.
+- *Fingerprints:* unchanged, since no generation code changed; Chromium, Firefox and Node still agree.
+- *Far ground* (drawn at quarter detail beyond 250 m from the road): blade feet are 4 to 6 cm from the drawn ground on average, 1.4 to 1.7 m at worst on steep ground (seeds 7, 16 and 42). Not visible in the close-up taken; only the `at=` address puts a camera there.
+- 1,043 unit tests and 224 browser tests pass (406 with the screenshots of 20 seeds).
+- *Not done as the plan said:* the grid's build time is checked against a loose 1 s limit, not about 30 ms (it took 190 ms once with every test file running, and failed the first limit of 150 ms). One shader-text test (a far blade's flower) was written together with its change and not seen failing first. The grass was judged from still pictures only: nobody has watched it move yet.
+
+## Step 15: shadows, far-ground detail, a low quality option and performance numbers (2026-11-15)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\mutable-wishing-wall.md`.
+
+**Found while planning.**
+- Tane's laptop is the brief's target machine: Intel Arc graphics (Core Ultra 7 155H), screen 2880 by 1800 at 120 Hz. Real frame times can be measured on it by opening a real browser window from Playwright (headless browsers draw in software).
+- Full screen on that laptop draws about 2.5 times the pixels of 1080p (the page draws up to 2 pixels per CSS pixel today).
+- Three.js 0.187 ships a sun light with two fitted shadow maps (`SunLight`, in the pinned `three` package under `three/addons/lights`; no new dependency). Good for crisp shadows near the camera.
+- That alone is not enough. At 07:00 and 19:30 the sun is 7 degrees up: a 250 m mountain throws a 2 km shadow, and clouds shade ground 3 km away. Shadow maps fitted to the view cannot reach that far, so those shadows would be missing or would pop as the camera turns.
+- Far ground is already at quarter detail beyond 250 m from the road (R8). From above, the ground is still most of what is drawn (182k to 428k of up to 589k triangles).
+
+**Tane's choices:**
+- High favours steady speed over full sharpness. On screens sharper than 1080p, High draws at most a set number of pixels (between 1080p and 1440p worth, settled from the measurements) and stretches the picture to fit.
+- Low keeps tree and barrier shadows. It may thin the grass, draw fewer pixels and use a plainer sea.
+- Quality is chosen with a button and remembered. Nothing switches by itself.
+
+**Claude's calls, approved with the plan:**
+- Drawing only. No generation code changes, so world and track fingerprints stay as they are.
+- What casts: trees, rocks, barriers and the start gate (crisp, near the camera); the land itself, mountains included (long shadows at low sun); clouds (soft, drifting on the wave clock, still with `still=1`). Grass blades and kerbs cast nothing.
+- What is shaded: ground, road, trees, rocks, grass and the sea. Clouds are not.
+- Shadows only take away the sun's light, never the sky's, so they are blue-grey, never black. How dark is tuned from pictures.
+- `shadows=off` in the address leaves them all out. A frame-time readout shows with `fps=1` or the F key.
+- No settings menu yet (Milestone 6).
+
+**Design.** Three kinds of shadow, each done the cheapest way that is right. (One shadow map following the camera, as in the demo, covers about 250 m and gives no mountain or cloud shadows. Three.js's fitted maps for everything cut off long low-sun shadows and draw the whole island twice more each frame.)
+- *Land shade* (`render/terrainShade.ts`, plain numbers): `shadeGrid(ground, sun, cfg)` says how much of the sun reaches every cell of the height grid. One pass over the grid travelling away from the sun, carrying the height of the shadow's top edge and dropping it by the sun's slope each cell; a soft edge of a few metres. Done when a world loads and again when the time of day moves.
+- *Cloud shade* (`render/cloudShade.ts`, plain numbers): `cloudShadeMap(clouds, size)` is a soft dark patch under every puff, over the clouds' own square, built once per world. The shader slides it by wind times time and finds its place by following the sun's ray from the ground up to the cloud layer. `cloudShadeAt` does the same sum for the tests.
+- *Near shadows* (`worldView.ts`): the `DirectionalLight` becomes `SunLight` with its two shadow maps. Trees, rocks, barriers and the gate cast; ground, road, trees, rocks and grass receive. The ground does not cast here (the land shade does that). How far the maps reach follows the camera's height (`shadowReach`): about 350 m when flying the road, the whole island when circling high.
+- *One shared piece of shader text* (`render/shade.ts`: `sunShade(worldPosition)` = land shade times cloud shade). Standard materials (ground, road, trees, rocks) get it through a small patch that throws if the line it replaces is missing. The grass and water shaders multiply their sun term by it; grass also takes the near shadows at each blade's foot.
+- *Far ground:* `buildTerrainChunks` gains a list of levels: full detail near the road, quarter detail beyond 250 m, sixteenth detail beyond about 700 m and for sea bed under about 3 m of water (distances settled in 15b). No blades grow on ground drawn coarse.
+- *Quality:* `render.quality` says what `low` changes from `high`; `qualitySettings(render, level)` and `pixelRatioFor(width, height, devicePixelRatio, budget)` in `render/quality.ts`. A pixel budget replaces the fixed pixel ratio. A "Quality" button, the Q key and `quality=low` in the address; remembered in the browser; the address wins. Switching rebuilds the picture of the same island, keeping the camera and the time.
+- *Measuring:* `render/frameMeter.ts` (median, 95th percentile, worst, share over 16.7 ms); `ViewHandle.frames()`; `e2e/perf.spec.ts` in its own Playwright project (`npm run perf`, not part of `npm run e2e`): a real Chromium window at 1920 by 1080, frame limit off, flying 10 s of a lap and holding the circling and summit views on seeds 1, 7, 8, 20 and 2024. It refuses to run if the browser reports software drawing.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 15a | Record the plan and Tane's choices here | Done |
+| 15b | Frame meter, readout, `npm run perf`; baseline numbers for today's page, whole and with grass, scenery and water detail off in turn. Report to Tane before going on | Done (results below) |
+| 15c | Far ground: detail levels, coarse sea bed, no blades on coarse ground | Done (below) |
+| 15d | `render.shadows` config; `terrainShade.ts`, `cloudShade.ts`, `shade.ts` | Done (below) |
+| 15e | Land and cloud shade in the picture; `shadows=off`; re-shaded when the time moves | Done (below) |
+| 15f | Near shadows: `SunLight`, casters, receivers, reach by camera height | Done (below) |
+| 15g | Quality levels, pixel budget, button, Q key, address, remembered; Low tuned from the numbers | Done (below) |
+| 15h | Look pass from pictures; final frame times for High and Low; this file | Done (below) |
+
+**Budgets.** High holds a median of 16.7 ms or less (95th percentile under about 20 ms) in every measured view at 1080p on the Arc laptop; Low is at least about a third faster. If the baseline is already over, or near shadows push High over and the levers do not bring it back, report to Tane before going on. Near shadows add at most about 200k triangles and 90 draw calls to a view from the road. The browser suite takes 428 s now; if it grows by more than about a quarter, tests that are not about shadows open with `shadows=off`.
+
+**Risks:** `SunLight` is new in Three.js (fallback: one ordinary shadow map following the camera, about 200 m each way, with land and cloud shade unchanged); wiring Three.js's shadow lookup into the grass shader (fallback: grass takes land and cloud shade only); streaks in the land shade along the sun's direction at very low sun, and a soft 3 m edge; stripes or gaps where shadows meet their casters on flat-shaded shapes; cloud shadows at low sun fall kilometres from their clouds and will not line up exactly; 07:00 and 19:30 are already quite dark, and long mountain shadows make parts darker still (shadow strength is a setting, for Tane to judge); frame times wobble from run to run (each view run three times, the middle one kept).
+
+**15b as built.**
+- `render/frameMeter.ts` (`createFrameMeter`): the last 600 frame times; median, 95th percentile, worst, share over 16.7 ms. Settings in `render.frames`. The page counts a frame only when the frame before it was drawn too, so a still picture counts nothing.
+- A readout at the top right ("6.3 ms · 159 fps · 356k triangles · 51 calls"): `fps=1` in the address or the F key.
+- `water=off` leaves out the sea's surface (the sea bed shows), to tell what the water costs. `sync=1` makes the page wait for the graphics card to finish each frame before the next (`WorldView.finish`, one pixel read back).
+- `ViewHandle.frames()`, `resetFrames()`, `graphics()` (the graphics card's name).
+- `npm run perf` (`e2e/perf.spec.ts`, `playwright.perf.config.ts`): a real Chromium window with the frame limit off and `sync=1`, at 13:00. Each view settles for 1.5 s, then three spells of 3 s are timed and the middle one kept. It fails if the browser is drawing in software. It prints a table; `SEEDS`, `PARTS=0` and `EXTRA` trim or change the runs. `npm run e2e` leaves it out.
+
+- 1,049 unit tests and 238 browser tests pass. The browser suite took 556 s (428 s at 14f, with 14 fewer tests); it ran straight after the frame-time run on a warm laptop, so it is timed again in 15c before anything is read into that.
+
+**Why `sync=1`.** With only the frame limit off, the page handed frames to the graphics card faster than it could draw them: the middle frame time read 0.4 to 1.2 ms with stalls of 16 to 90 ms. Waiting for each frame gives what a frame costs (a little more than in play, since the page and the card no longer work at the same time).
+
+**Baseline frame times (2026-11-15), before any shadows.** Intel Arc graphics (Core Ultra 7 155H), Chromium, 13:00. Median and 95th percentile, in ms; 16.7 ms is 60 frames per second.
+
+| View | 1920 by 1080 | 2880 by 1800 (the laptop's screen, full) |
+| --- | --- | --- |
+| Flying the lap (seeds 1, 7, 8, 20, 2024) | 5.2 to 5.9, 95th 6.8 to 7.1 | 9.3 to 9.7, 95th 11.6 to 12.2 (seeds 1, 7, 8) |
+| Circling from above | 8.0 to 9.4, 95th 10.1 to 11.3 | 15.1 to 18.8, 95th 17.7 to 33.5; 11% to 72% of frames over 16.7 ms |
+| Summit view | 5.5 to 7.0, 95th 7.0 to 8.1 | 8.8 to 10.1, 95th 10.3 to 11.7 |
+
+Parts switched off, flying at 1080p (seeds 1, 7, 8): whole 5.2 to 5.9 ms; no grass 4.8 to 5.4; no trees, rocks or clouds 4.9 to 5.5; no sea surface 4.8 to 5.3; none of the three 4.2 to 4.7.
+
+**What the numbers say.**
+- At 1080p every view holds 60 frames per second with room to spare: the slowest (circling) leaves about 6 ms for shadows.
+- Triangles hardly matter on this card: 653k triangles in 132 calls (seed 8's summit) takes 6.6 ms, and switching off grass, scenery and sea together saves only about 1.2 ms of 5.5.
+- Pixels matter most. The laptop's full screen has 2.5 times the pixels of 1080p and takes 1.6 to 2 times as long; the circling view, where the sea fills the picture, goes over 16.7 ms there. This is what Tane's choice of steady speed on High is for.
+- So High's pixel budget does the most for speed; a third level of far-ground detail does little for it here (it still cuts the triangles a weaker card has to draw).
+- Provisional pixel budget for High: about 2.8 million pixels (1080p is 2.1 million, the full screen 5.2 million), to be settled in 15g once shadows are in.
+
+**15c as built.**
+- `render.detail` replaces `detailDistance` and `farStride`: ground none of which comes within 250 m of the road's centre line is drawn with every second height each way (a quarter of the triangles, as since R8); beyond **500 m**, every fourth (a sixteenth). A piece of sea bed lying entirely 4 m or more under the sea is drawn at a sixteenth wherever it is.
+- `chunkStrides` (`render/terrainChunks.ts`) works out each piece's step; `buildTerrainChunks` uses it and reports `stride` on every chunk; `detailOptions` builds the options from the config. The old way of joining a fine piece to a coarse one works for any two steps, so no crack opens where any two levels meet (tested on every shared edge).
+- No grass grows on ground drawn coarse (`grassGrid` takes the steps), which removes the known issue of blade feet up to 1.7 m off far ground.
+- `stats().levels`: how many pieces are drawn at each level.
+
+**Why 500 m and 4 m.** Ground triangles of eight seeds, as a share of what R8 drew (quarter detail only):
+
+| Sixteenth from | 4 m deep sea bed | Range over seeds 1, 3, 7, 8, 12, 20, 44, 2024 |
+| --- | --- | --- |
+| 700 m | yes | 77% to 92% |
+| 600 m | yes | 76% to 90% |
+| **500 m** | **yes** | **74% to 88%** |
+
+Deeper sea-bed limits (6 m) saved up to 4 points less; 3 m saved nothing more. Seed 12's island fills most of the tile, so at 700 m it kept 90%.
+
+**Results.** Screenshots of seeds 1, 3, 7, 8, 12, 20, 44 and 2024 from above, flying at 0.3 and 0.8 of the lap and the summit and climb views, checked as contact sheets: no cracks or seams where levels meet, mountains keep their shape, the sea bed shows no steps through the shallows. Frame times hardly change on this card (15b found triangles cheap here); the saving is for weaker cards. 1,057 unit tests and 240 browser tests pass. **The browser suite took 598 s** (428 s at 14f, 556 s at 15b): the 16 tests added since 14f open about 32 more worlds, which does not explain all of it. 15f compares against 598 s, and the cause is looked at if it keeps growing.
+
+**15d as built.** Plain numbers and shader text only; nothing is drawn differently yet.
+- `render.shadows`: `land` (soft edge 6 m on level ground, bias 0.3 m, sun taken as no lower than 0.05 rad) and `clouds` (a 512-cell map, a cloud keeps off 55% of the sun, full strength over the middle half of a puff's radius).
+- `landShade(ground, sun, cfg)` (`render/terrainShade.ts`): for every point of the ground's grid, the height of the shadow's top over it. One sweep from the side nearest the sun, along whichever grid direction is closer to the sun's; each point takes the higher of the ground (or the sea's surface, at 0) and the shadow one step back towards the sun, lowered by the sun's slope over the step. `landLightAt` gives the share of the sun reaching any point by its own height, so trees, barriers and the sea are lit by where they stand.
+- `cloudShadeMap(clouds, cfg)` (`render/cloudShade.ts`): a soft disc under every puff on a map of the clouds' square that wraps round, built once per world (7 ms at most). `cloudLightAt` follows the sun's ray up to the clouds' layer (the middle of their heights), slides the map down the wind by the clock, and fades a shadow as its cloud shrinks near the square's edge.
+- `shadeGlsl(cfg)` (`render/shade.ts`): `sunShade(world)`, the same sums as shader text for every material: land times clouds, and 1 when shadows are off.
+
+**Changed from the plan:** the soft edge lies wholly below the shadow's top, not either side of it. Level ground and the sea are their own neighbour's casters, so an edge centred on the top dimmed them slightly at a high sun (the sea 80 m off a cliff read 0.987). The shadow's end moves at most a soft edge (6 m) towards the caster.
+
+**Measured** (Node; land with its sea surface, a point counted as shaded below half the sun):
+
+| Seed | 07:00 | 10:00 | 13:00 | 16:30 | 19:30 |
+| --- | --- | --- | --- | --- | --- |
+| 1 (mountain) | 47% | 0% | 0% | 1% | 28% |
+| 3 (mountain) | 47% | 1% | 0% | 0% | 35% |
+| 7 (hilly) | 30% | 0% | 0% | 0% | 35% |
+| 12 (mountain) | 42% | 0% | 0% | 0% | 31% |
+| 2024 (rolling) | 13% | 1% | 0% | 1% | 11% |
+
+The land shade takes 16 to 26 ms. Cloud shadows over the island, sun overhead, seeds 1 to 60: clear 0.3%, fair 1.1%, cloudy 2.7% of the ground (clouds are scattered puffs, not a lid). 1,080 unit tests pass.
+
+**15e as built.**
+- `render/shadeView.ts` (`createShadeView`): the land's map as a float texture and the clouds' as a byte texture that wraps round, and the uniforms the shared shader text reads. It works the land's shadow out again whenever the sun moves (load, time slider), and slides the clouds' shadows on the clouds' clock.
+- The ground, road, trees and rocks (standard Three.js materials) take it through `patch`: Three.js's lighting is changed so the sun's light is multiplied by `sunShade` at each pixel. The patch throws if Three.js's text has changed, so an upgrade fails loudly.
+- The water multiplies its sun light, its glints and the light on its foam by `sunShade` where the surface is. The grass works it out at each corner of a blade, not each pixel (there are 80,000 blades; a shadow's edge is metres wide).
+- `shadows=off` leaves every shadow out; `decor=off` takes the clouds' shadows away with the clouds. `stats().shaded` is the share of the land in its own shadow; `ViewHandle.setClock(seconds)` sets the waves', clouds' and grass's clock for checks that compare moments.
+
+**Looked at:** a time strip of seeds 1, 2 (cloudy), 7, 12 and 20 at 07:00, 10:00, 13:00, 16:30 and 19:30, from above and facing the sun, and pairs with `shadows=off` (seed 12 from above at 07:00, seed 1's summit at 07:30, seed 3 flying at 18:30, seed 2 flying at 13:00). Cloud shadows read clearly as soft dark patches drifting over land and sea. **Mountain shadows are faint:** a low sun adds little light to level ground, so taking it away changes little, and most of the morning's shading already comes from slopes facing away from the sun. Left for the look pass (15h), with the tree shadows in.
+
+**Test machine:** the whole browser suite failed six tests in one run and one in another, all worlds that did not load in time while four headless browsers each flew a page. In software a flying frame takes about 950 ms with or without shadows (300 ms without grass), so the shadows are not the cause: four browsers drawing at once busy every core. Playwright now runs **three browsers at a time** (`playwright.config.ts`). The frame-count test asks for 3 frames within 30 s, not 6 within 15 s.
+- 1,080 unit tests and the browser suite pass; it took 682 s with three browsers.
+
+**15f as built.**
+- The sun is Three.js's `SunLight` (from `three/addons`, in the pinned package) with two shadow maps of 2048 by 2048 cells fitted to the view, softened (PCF, radius 2). Settings in `render.shadows.near`.
+- `shadowReach` (`render/nearShadows.ts`): how far from the camera the maps reach: 350 m from a camera up to 20 m over the ground, then 6 m further for each metre higher, up to 2500 m.
+- **What casts:** trees and rocks by their **far shapes**, from a third copy of each group that only the shadow maps see (Three.js layer 1, `CASTER_LAYER` in `decorView.ts`); the barriers and the start gate. **What receives:** ground, road, kerbs, barriers, gate, trees, rocks and grass. The grass reads the shadow maps in its own shader, at each pixel (Three.js's `getSunShadow`).
+- `stats().shadowReach`; `shadows=off` leaves these out too.
+
+**Changed from the plan:**
+- Trees cast with their far shapes. With their full shapes the shadow maps added 397,000 triangles to the forest view from the start line (seed 20), twice the budget; now it is inside 200,000.
+- The grass shader had to include Three.js's common definitions for the shadow lookup (it would not compile: `PI2` undeclared).
+- Two tree tests count the trees' own triangles with `shadows=off`, and the land-and-cloud test no longer says shadows add nothing to draw (the maps do).
+
+**Looked at:** pairs with `shadows=off` (seed 8 flying at 13:00, seed 20 from the start line at 10:00, seed 12 flying at 16:30) and a map of where they differ. Every tree has its shadow and the barriers shade the road's edges, but **shadows are faint**: about a quarter darker than sunlit ground, because the sky lights the ground almost as strongly as the sun (3% darker overall in the forest view). For the look pass.
+
+**Frame times with all three kinds of shadow** (Intel Arc, 13:00, `npm run perf`; median and 95th percentile in ms, before shadows in brackets):
+
+| View | 1920 by 1080 | 2880 by 1800 |
+| --- | --- | --- |
+| Flying the lap | 7.5 to 9.6, 95th 8.1 to 11.3 (5.2 to 5.9) | 12.1 to 13.3, 95th 15.3 to 15.9 (9.3 to 9.7) |
+| Circling from above | 10.1 to 12.9, 95th 11.0 to 14.2 (8.0 to 9.4) | 20.6 to 22.6, 60% to 99% of frames over 16.7 ms (15.1 to 18.8) |
+| Summit view | 7.2 to 9.7, 95th 7.7 to 13.1 (5.5 to 7.0) | 11.8 to 14.1, 95th 12.7 to 15.9 (8.8 to 10.1) |
+
+High holds 60 frames per second at 1080p in every view, inside the goal (median 16.7 ms, 95th under 20). The full laptop screen does not, from above; 15g's pixel budget is for that. Draw calls flying rise by up to 67 (budget 90); from above by up to 200, as every tree group near the view is drawn again for each map.
+
+- 1,083 unit tests pass. The browser suite took 685 s: 249 passed and 3 failed while the laptop went into standby at 4:12 pm (`ERR_NETWORK_IO_SUSPENDED`, and Windows' Kernel-Power events 506 and 507); the three pass on their own.
+
+**The flaky failures since 15e were the laptop going into standby.** Windows logged a dozen spells of Modern Standby that afternoon, three of them during 15e's runs (2:23 to 2:57, 3:15 and 3:29 pm). A page caught by one stays on "Raising a new island…". Neither the code nor the long-running dev server (up since 14 November) is to blame, as far as can be told. Three browsers at a time is kept (the suite takes about the same time). Keep the laptop awake while the suites run.
+
+**15g as built.**
+- `render/quality.ts`: `parseQuality`, `qualitySettings(render, level)` (High is the config as it is; Low draws at most 1.2 million pixels, 35% of the grass blades, the 4 longest wave trains, 1024-cell shadow maps reaching at most 800 m, full tree shapes within 200 m; it keeps every kind of shadow) and `pixelRatioFor` (as sharp as the screen allows within the budget, never under one pixel in two). Settings in `render.quality`; High's budget is 2.8 million pixels.
+- The page: a "Quality: High/Low" button, the Q key, `quality=low` in the address; remembered in the browser (`seedCircuit.quality`), the address wins. Switching builds a new view on the same canvas and loads the same island, keeping the camera, time and clocks. `stats().programs` counts Three.js's shader programs.
+- Tests: `src/render/quality.test.ts` (11) and a "quality" group in `e2e/world.spec.ts` (3, run at 1920 by 1080: a 1280 by 720 window is already under Low's budget). 1,094 unit tests pass (run with `--maxWorkers=6` while the laptop was slow). Tane ran the browser suite by hand: 257 passed and one frame-count test failed, which now asks for 3 frames within 30 s like its twin; it and both budget tests then passed.
+- **Why Low gains little from above:** with every shadow off, Low's circling view still takes about 8.9 ms, as High's did before shadows (8.0), though Low draws 40% fewer pixels; with scenery off as well, half the draw calls, about the same. On this graphics card that view has a fixed cost of about 8 ms that neither pixels nor draw calls explain. Low's cuts should do more on a card that is short of pixels. For Milestone 6's performance pass.
+- **Frame times, clean run:** High at 1080p as in 15f (fly 6.2 to 9.4 ms, circling 12.1 to 12.6, summit 7.3 to 9.5); on the full laptop screen High is now drawn at 2116 by 1322 (fly 8.6 to 9.8, circling 14.3 to 17.3, seed 8 just over 16.7). Low at 1080p (drawn at 1460 by 821): fly 6.2 to 6.5, circling 9.6 to 11.7, summit 6.0 to 8.6. **Low is 10% to 50% faster, short of the planned third when circling from above.** Fewer pixels and fewer draw calls (Low's shorter shadow reach cut 100) barely change that view; what holds it up was not found.
+- **The laptop then throttled:** frame times jumped between about 7 ms and 60 to 115 ms from view to view on the same settings, unit tests ran about 60 times slower, and the processor stayed at 1,400 MHz (of 3,800) under load. Measurements were stopped. Earlier that afternoon the laptop also went into standby when the lid was closed (4:12 pm).
+
+**15h, the look pass.**
+- **Shadows were faint**: a shadow only took the sun's light away, and the sky lights the ground almost as strongly. A new setting, `render.shadows.skyShare` (0.6), is the share of the sky's light a full shadow takes too. It applies to everything the sun lights: the ground, road, trees and rocks through the patch of Three.js's lighting (which now also catches the near shadow where Three.js reads its maps), and the grass and water in their own shaders (`skyShade` in `shade.ts`). `shadowSky=0.3` in the address tries another value without changing the code.
+- **Judged from pictures:** 0, 0.45 and 0.8 side by side on four views (seed 20's forest at 10:00, seed 8 flying at 16:30, seed 12 from above at 08:00, seed 1's summit at 18:30). At 0 only the cloud shadows read; mountain shadows show from about 0.45 and are strong but not black at 0.8. 0.6 was taken. Measured in the forest view: 4.4% darker over the whole picture than with no shadows (2.9% with the sun's light alone), the shadows themselves being a small part of it.
+- **Screenshots checked by eye** as contact sheets: seeds 1 to 20 from above, flying at 0.3 of the lap, at the start line and the summit; a time strip of seeds 1, 7, 12 and 20 at 07:00, 13:00 and 19:30 from above and facing the sun, and flying at 0.8. Mountains' shadowed sides and deep cuttings read darker; at 07:00 and 19:30 trees and the start gate throw long shadows across the road and grass; no stripes, gaps or hard edges.
+- The cloud-shadow tests sample the clock every 60 s, not 30, and have two minutes: drawing and reading back the pictures in software went over a minute with other tests running.
+
+**Final frame times** (Intel Arc, 13:00, `npm run perf`, seeds 1, 7, 8, 20 and 2024; median ms; slow spells left out, see below):
+
+| Quality | Pixels drawn | Flying | Circling | Summit |
+| --- | --- | --- | --- | --- |
+| High, 1080p window | 1920 by 1080 | 5.5 to 10.2 | 7.6 to 15.8 | 6.3 to 10.0 |
+| High, full laptop screen | 2116 by 1322 | 7.0 to 10.3 | 10.0 to 14.8 | 9.7 to 10.5 |
+| Low, 1080p window | 1460 by 821 | 4.1 to 6.9 | 9.8 to 11.2 | 4.2 to 8.3 |
+| Low, full laptop screen | 1385 by 866 | 4.1 to 6.7 | 11.2 to 12.5 | 4.1 to 8.3 |
+
+High holds 60 frames per second in every view, at 1080p and on the full screen (seed 8 from above is the closest, at 15.8 ms with its 95th percentile 16.4). Low is about a third faster flying and at the summit, about a fifth when circling.
+
+**Slow spells:** in every timing run that evening, two or three views in a row ran at 40 to 115 ms and the next ones were normal again; which views varied from run to run, so it is the laptop, not an island. Asking Windows to keep the display awake did not stop them. Their cause is not known (heat, power saving or another program). Take the middle of several runs when timing.
+
+**Step 15 done.** 1,095 unit tests pass. On this laptop the evening's browser runs slowed to half speed and timed out (18, then 20, tests whose worlds never loaded, in areas 15h does not touch). After the long-running dev server was closed, Tane ran the suite by hand: 259 passed and one timed out (pausing and resuming the flight, which needs several software-drawn frames of a second or more after the pause); it now has two minutes, and it and both budget tests pass.
+
+**Tane's verdict (2026-11-15):** the shadows look good. `skyShare` stays at 0.6.
+
+### Rework risks
+
+- **Build time.** About 1.7 times as many heights, and Firefox is already slow under the dev server. R1 measures first. Fallbacks: skip open-sea cells earlier, or a coarser far field.
+- **Mountain tracks.** A 15% road on an 18% flank must stay within the cut and fill limits beside folded sections. If R3's tests fail, mountain seeds avoid the folded style.
+- **Proportion.** A 250 m mountain beside a 12 m road is very large. Tane judges it at check-in 3; the heights are config values.
+- **Width touches many modules.** The existing real-seed fit tests are the safety net.
+
+The full plan as approved is also in Tane's plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-9c3b-read-claude-md-playful-sutton.md`.
+
+## Step 16: the 3D view becomes the default page (2026-11-15)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\pasted-content-id-ac8d-random-racing-prancy-firefly.md`.
+
+**Which page an address opens** (`src/app/route.ts`, `choosePage`; first match wins):
+
+| Address | Page |
+| --- | --- |
+| `view=3d` | 3D (kept, so old links still work) |
+| `seeds=5,99` (at least one valid seed) | contact sheet of chosen seeds |
+| `sheet=20` (`&from=1`) | contact sheet of a run |
+| `lab=1` | lab |
+| `candidate=`, `minRadius=` or `gapWidths=` | lab (only the lab understands them, so old lab links still work) |
+| anything else, including `/` and `/?seed=48213` | 3D |
+
+Only a bare `/?seed=N` changed meaning: it now opens that seed in 3D.
+
+**The L key** (`switchAddress`) loads the other page on the same seed: to the lab it adds `lab=1`; back to 3D it drops `lab`, `candidate`, `minRadius` and `gapWidths`. Both ways it drops `view`, and the 3D options are kept, so coming back finds them again. It is a full page load, not an overlay: neither page can shut itself down (WebGL, frame loop and key handlers on one side, key handlers using the same N and arrow keys on the other), and one world build (under 3 s) is fine for a debug view.
+
+**Visible changes:** the 3D hint ends "L opens the lab."; the lab header has a "3D view (L)" link that follows the seed, and its hint mentions L; contact sheet cards open `?lab=1&seed=N`; the page title is "Seed Circuit" (the lab sets "Seed Circuit: track lab"). The 3D page is still loaded only when shown, so the lab and sheets do not download Three.js.
+
+**Tests:** `src/app/route.test.ts` (12, watched failing first); browser tests for the plain address, an old `view=3d` address, an old `candidate=` link, L both ways (and not while typing in the seed box), and the sheet card links (four failed before the code, two already passed as guards for old links). The lab, determinism and screenshot tests now open the lab with `lab=1`; the world and frame-time tests no longer add `view=3d`.
+
+**Also:** `README.md` converted from UTF-16 to UTF-8 (agreed on 2026-11-11 but never done) and brought up to date: what the page is now, the addresses and the keys. `CLAUDE.md` lists the 3D and lab addresses.
+
+**Step 16 done.** 1,107 unit tests and 270 browser tests pass (Chromium and Firefox, both budget tests included). Screenshots checked by eye: 3D at seeds 1, 7, 42, 100, 2024 and 48213 (circling, flying and close views), the lab at 20 seeds, both contact sheets.
+
+## Step 17: the 20-seed check and the pull request (2026-11-15)
+
+Plan approved in plan mode. The full plan: `C:\Users\tanee\.claude\plans\abstract-swimming-karp.md`.
+
+**Seeds.** Seeds 1 to 20, and 20 fresh seeds drawn at random from 1 to 99,999 (as the N key draws them), leaving out every seed used in a test or a check before: 42625, 23982, 49123, 71138, 59679, 39898, 52035, 1256, 1905, 37884, 88647, 28496, 32534, 7421, 56198, 67454, 62658, 6322, 66025, 36062. Both lists are in `src/testing/checkSeeds.ts`.
+
+**Tests** (written first; they failed until the seed list and the helper existed). The fit checks that ran on six seeds in `generate.test.ts` moved into a helper, `src/testing/fitChecks.ts` (`describeCleanFit`), which builds each world on the full grid, checks it, and lets it go before the next. `src/gen/seeds1to20.test.ts` and `src/gen/freshSeeds.test.ts` run it on the 40 seeds, side by side (about 22 s each). Each seed is checked for: a valid winner without the fallback, no ground through the road, no road hanging, cut and fill within the limits, banks within their limit, sea at least 10 m away, the coast carved without touching the road, no embankment in the sea, the ground tilted with the banking, barrier footing, no grass on the road.
+
+**What the first run found** (20 of 524 checks failed; every seed had a valid winner, no fallback, no ground through the road and no road hanging):
+
+1. *Two gorges.* On seeds 28496 and 39898 (rolling) a ridged range stands over the road: the road runs through it in a gorge, 85 m and 27 m deep, with sides up to 619% and 215%. Mountains are meant to stay 60 m from the road, but `placeMountains` checks a foot at only 32 points round its outline, and a range a kilometre across can reach the road between them (gaps of nearly 200 m). Seeds 1 to 200 on a 5 m grid: 5 have a range foot reaching the road or within 44 m of it (41, 42, 103, 182, 192). **Tane saw them and chose to keep the gorges**: it is a kind of track Tane wanted. The two seeds are listed as `GORGE_SEEDS`, whose check expects the cut to be over the limit; a comment in `placeMountains` says not to tighten the rule without asking.
+2. *Cuttings on mountain seeds.* Seeds 11 to 14 (circling) have cuts of up to 13.1 m and fills of up to 6.7 m at the road's edge, where the road runs across a mountainside; on the centre line they are within 8 m and 6 m. These are the rock cuttings Tane allowed in C4, so on mountain seeds the check now measures the centre line, as the earthworks rule does.
+3. *Bays.* On 12 flat and rolling seeds the sea never comes within 13 m of the road (nearest 13.8 to 28.2 m on eleven of them and 226 m on seed 39898; never under 10 m). The old check expected a bay to bring it in to 10 m beside low road, but since the rework a seed may touch the sea along only a stretch or two, and a bay goes only where the road faces open sea. **Tane chose to relax the check**: only the 10 m minimum is checked now.
+
+After these, all 524 checks pass.
+
+**Fit reports** of the 40 winners (full grid, Node; cut and fill across the whole width of the road, banks over the whole island after the fit; "-" for closest sections means none within the coupling distance):
+
+| Seed | Character | Style | Lap | Height range | Steepest | Deepest cut (m) | Tallest fill (m) | Steepest bank | Nearest sea (m) | Closest sections (m) | Ground through | Hanging | Fallback | Score | Build in Node |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | mountain, touches, peak, circle, constant | round | 2.36 km | 83 m | 15.0% | 4.1 | 2.5 | 119% | 32.3 | - | 0 | 0 | no | 83 | 1.10 s |
+| 2 | flat, touches, range, constant | stretched | 1.81 km | 4 m | 2.9% | 0.9 | 0.9 | 26% | 18.9 | - | 0 | 0 | no | 95 | 0.95 s |
+| 3 | mountain, touches, range, climb, constant | folded | 2.75 km | 102 m | 15.0% | 4.4 | 2.4 | 145% | 37.7 | - | 0 | 0 | no | 85 | 1.20 s |
+| 4 | rolling, coastal, peak, varied | stretched | 2.26 km | 20 m | 8.0% | 1.8 | 2.4 | 54% | 10.0 | 54 | 0 | 0 | no | 92 | 1.08 s |
+| 5 | hilly, coastal, hills, varied | folded | 1.84 km | 48 m | 8.0% | 3.0 | 3.6 | 58% | 11.8 | - | 0 | 0 | no | 94 | 0.83 s |
+| 6 | hilly, touches, peak, varied | folded | 1.93 km | 51 m | 8.0% | 1.3 | 1.6 | 39% | 24.0 | - | 0 | 0 | no | 93 | 0.88 s |
+| 7 | hilly, touches, hills, varied | folded | 1.89 km | 47 m | 8.0% | 2.9 | 3.2 | 53% | 16.5 | - | 0 | 0 | no | 92 | 0.91 s |
+| 8 | rolling, touches, hills, varied | round | 2.23 km | 23 m | 8.0% | 3.2 | 3.3 | 59% | 10.2 | - | 0 | 0 | no | 98 | 1.15 s |
+| 9 | flat, coastal, -, constant | stretched | 1.92 km | 5 m | 3.0% | 0.9 | 0.9 | 23% | 10.3 | - | 0 | 0 | no | 94 | 0.84 s |
+| 10 | hilly, touches, peak, varied | stretched | 1.70 km | 45 m | 8.0% | 0.8 | 1.0 | 35% | 32.2 | - | 0 | 0 | no | 91 | 1.16 s |
+| 11 | mountain, touches, peak, circle, constant | folded | 1.81 km | 58 m | 15.0% | 8.2 | 5.8 | 101% | 152.6 | - | 0 | 0 | no | 84 | 1.06 s |
+| 12 | mountain, inland, peak, circle, constant | round | 2.02 km | 75 m | 15.0% | 7.2 | 6.7 | 119% | 142.3 | - | 0 | 0 | no | 81 | 1.15 s |
+| 13 | mountain, coastal, range, circle, varied | round | 2.60 km | 105 m | 15.0% | 12.8 | 6.5 | 173% | 11.9 | - | 0 | 0 | no | 81 | 1.20 s |
+| 14 | mountain, coastal, peak, circle, varied | folded | 2.75 km | 81 m | 15.0% | 13.1 | 6.7 | 209% | 23.4 | - | 0 | 0 | no | 83 | 0.98 s |
+| 15 | flat, coastal, range, varied | folded | 1.85 km | 3 m | 1.7% | 0.9 | 0.9 | 29% | 10.1 | - | 0 | 0 | no | 97 | 0.94 s |
+| 16 | rolling, inland, peak, varied | folded | 1.59 km | 16 m | 8.0% | 2.0 | 1.2 | 47% | 95.5 | - | 0 | 0 | no | 93 | 0.90 s |
+| 17 | rolling, inland, hills, constant | stretched | 2.15 km | 15 m | 8.0% | 1.8 | 1.2 | 34% | 168.8 | - | 0 | 0 | no | 93 | 0.85 s |
+| 18 | flat, coastal, hills, varied | folded | 2.08 km | 5 m | 2.3% | 0.8 | 0.9 | 25% | 15.2 | 47 | 0 | 0 | no | 93 | 0.86 s |
+| 19 | rolling, coastal, hills, constant | stretched | 2.09 km | 20 m | 8.0% | 1.1 | 1.9 | 51% | 14.9 | - | 0 | 0 | no | 95 | 0.95 s |
+| 20 | rolling, coastal, range, constant | folded | 1.62 km | 14 m | 8.0% | 1.1 | 1.7 | 35% | 10.2 | - | 0 | 0 | no | 89 | 1.02 s |
+| 42625 | hilly, touches, peak, constant | round | 1.97 km | 47 m | 8.0% | 1.5 | 1.9 | 44% | 16.5 | 51 | 0 | 0 | no | 91 | 0.75 s |
+| 23982 | rolling, inland, range, constant | round | 2.07 km | 23 m | 8.0% | 1.2 | 1.3 | 39% | 146.7 | - | 0 | 0 | no | 97 | 1.12 s |
+| 49123 | flat, coastal, -, varied | folded | 1.64 km | 4 m | 2.3% | 0.9 | 0.9 | 29% | 10.0 | - | 0 | 0 | no | 94 | 0.72 s |
+| 71138 | rolling, touches, peak, varied | stretched | 1.78 km | 21 m | 8.0% | 1.0 | 1.1 | 36% | 15.1 | 54 | 0 | 0 | no | 90 | 1.01 s |
+| 59679 | rolling, touches, hills, varied | stretched | 1.85 km | 23 m | 8.0% | 1.8 | 2.2 | 50% | 14.6 | - | 0 | 0 | no | 92 | 0.83 s |
+| 39898 | rolling, touches, range, varied | folded | 1.81 km | 17 m | 8.0% | 26.9 | 2.6 | 215% | 225.9 | - | 0 | 0 | no | 95 | 1.17 s |
+| 52035 | hilly, touches, hills, constant | folded | 1.83 km | 48 m | 8.0% | 2.3 | 2.8 | 54% | 21.7 | 48 | 0 | 0 | no | 89 | 0.72 s |
+| 1256 | flat, coastal, hills, constant | round | 2.31 km | 5 m | 2.0% | 0.9 | 0.9 | 30% | 10.2 | - | 0 | 0 | no | 96 | 0.83 s |
+| 1905 | hilly, touches, peak, varied | round | 1.80 km | 43 m | 8.0% | 1.4 | 1.5 | 45% | 20.8 | - | 0 | 0 | no | 91 | 0.76 s |
+| 37884 | rolling, touches, range, varied | folded | 1.50 km | 15 m | 6.6% | 1.0 | 1.0 | 35% | 19.5 | 47 | 0 | 0 | no | 88 | 0.87 s |
+| 88647 | rolling, touches, range, varied | folded | 1.95 km | 27 m | 8.0% | 2.3 | 3.2 | 60% | 15.6 | - | 0 | 0 | no | 98 | 1.18 s |
+| 28496 | rolling, coastal, range, varied | stretched | 1.95 km | 26 m | 8.0% | 85.5 | 1.0 | 619% | 14.7 | - | 0 | 0 | no | 94 | 1.15 s |
+| 32534 | hilly, inland, hills, constant | stretched | 1.86 km | 53 m | 8.0% | 3.8 | 3.5 | 52% | 393.7 | - | 0 | 0 | no | 92 | 1.09 s |
+| 7421 | mountain, touches, peak, circle, varied | round | 2.66 km | 72 m | 15.0% | 4.4 | 3.1 | 120% | 20.4 | 54 | 0 | 0 | no | 82 | 0.90 s |
+| 56198 | rolling, touches, range, constant | folded | 1.80 km | 18 m | 8.0% | 1.1 | 1.9 | 40% | 14.9 | - | 0 | 0 | no | 95 | 1.17 s |
+| 67454 | rolling, inland, hills, constant | folded | 2.07 km | 18 m | 7.9% | 1.1 | 1.2 | 39% | 157.4 | 54 | 0 | 0 | no | 92 | 0.72 s |
+| 62658 | rolling, touches, hills, varied | stretched | 2.15 km | 22 m | 8.0% | 3.3 | 3.7 | 56% | 28.2 | 51 | 0 | 0 | no | 96 | 0.88 s |
+| 6322 | mountain, touches, peak, circle, varied | folded | 1.88 km | 66 m | 15.0% | 5.4 | 4.6 | 92% | 28.5 | - | 0 | 0 | no | 80 | 0.88 s |
+| 66025 | rolling, touches, range, varied | stretched | 2.20 km | 17 m | 8.0% | 2.0 | 2.0 | 43% | 13.8 | - | 0 | 0 | no | 93 | 0.75 s |
+| 36062 | flat, coastal, -, varied | folded | 1.61 km | 4 m | 3.1% | 0.9 | 0.9 | 28% | 10.2 | - | 0 | 0 | no | 98 | 0.70 s |
+
+Laps 1.50 to 2.75 km; scores 80 to 98; every world built in 0.70 to 1.20 s in Node. Of the 40: 7 flat, 17 rolling, 8 hilly, 8 mountain (1 climbing, 7 circling); 19 folded, 12 stretched, 9 round.
+
+**Screenshots looked at** (Chromium, in four batches of ten seeds, copied out after each): for every one of the 40 seeds, the view from above, four flying views (2, 30, 55 and 80% of the lap) and eight close views (cut, fill, bank, water, hairpin, start, summit, climb), tiled thirteen to a page; the lab page of every seed, which the screenshot test also checks for a valid winner, no fallback and a clean fit; contact sheets of seeds 1 to 20 and of the 20 fresh seeds (sheets from 21, 41 and 61 were taken too). All 573 screenshot tests passed. Nothing new was wrong: the road sits on the ground everywhere, kerbs, barriers and gates stand at the road's edge, and water, sky, trees, grass and shadows are in every view. What shows is already known: rock trenches on climbing seed 3, saw-tooth sea cliffs (seeds 5, 56198), tall dark sea cliffs on mountain seeds (14, 7421), a tree crown at the edge of a close view (seed 10 `cut`), and the two gorges.
+
+**Done when (from the brief): "the track sits cleanly in the terrain on 20 seeds, checked with Playwright screenshots."** Met on 20 fresh seeds and on seeds 1 to 20: every winner valid without the fallback, no ground through the road, no road hanging, cut and fill within the limits apart from the mountain rock cuttings and the two gorges Tane chose to keep.
+
+**Step 17 done.** 1,603 unit tests and 270 browser tests pass (Chromium and Firefox, both budget tests included); the type checks and the build pass.
+
+## Milestone 2 design
+
+*Steps 0 to 11 as built. Where the rework above differs (coast distance, the single peak, fixed road width, tile and grid size, 8% gradient everywhere), the rework wins.*
+
+One rule: **generation says what the world is, as plain numbers; rendering only draws those numbers.**
+
+- `src/core`: RNG, exact maths, noise, hashing. `src/gen/track`: the Milestone 1 layout pipeline. `src/gen/road`: road heights, banking, 3D frames, kerbs, barriers and their triangle lists. `src/gen/world`: relief, island, cut and fill, cover maps, tree and rock positions. All pure, no Three.js, exact maths only.
+- `src/worker`: runs generation off the main thread. `src/render`: the only folder that imports Three.js. `src/camera`: camera maths as plain numbers. `src/app`: page wiring.
+- **Island around the track, in this order:**
+  1. *Relief* from the seed alone: rolling hills, lowlands at 3 m, hills to 36 m, 99% of the ground gentler than 15% (`gen/world/relief.ts`).
+  2. *Road heights* for each candidate (`gen/road/profile.ts`): sample the relief along the line, limit the gradient to 8%, then average over 33 samples so no crest or dip is tighter than 200 m radius. Always at least 2 m above the sea. Measured on 3,000 layouts: never more than 5.3 m above or below the ground (limits 6 m and 8 m), so no bridges or tunnels are needed before Milestone 6.
+  3. *Elevation score* from that profile, so the winner is partly chosen for how it uses the hills.
+  4. *Inland ground* for the winner (`gen/world/island.ts`): the relief, small bumps that fade in over the first 30 m from the road, and one peak. The peak stands where the infield is furthest from the road, with a summit 40 to 70 m above the sea (taller where there is more room) and a round foot that ends at least 60 m from the road edge. Infields with nowhere 96 m from the road get no peak.
+  5. *Coast*: a limit on how high the ground may be, worked out from distance to the road. The waterline follows the road edge at a margin that is usually 15 to 35 m, comes in to 10 m at one or two bays (put beside low road) and goes out to 40 to 60 m at one or two headlands. Never under 10 m. Going inland from the waterline: a beach 5 to 25 m wide (none on cliff stretches, about a third of the coast), then a climb to road height by 5 m from the road edge. Beside a high road the climb is a cliff, up to 250% steep; the water moves out far enough to keep it at that.
+  6. *Fit* (`gen/world/fit.ts`): the road is fitted into the inland ground: ground follows the road and a 2.5 m verge, sunk 0.25 m, then blends back over 10 to 25 m (wide enough to average a 40% slope). It already takes a per-sample tilt, ready for banking in step 8.
+  7. *Carve* (`carveCoast`): the coast limit is applied after the fit, so an embankment can never spill into the sea. The road and verges are never touched.
+  8. *Cover* (`gen/world/cover.ts`): sand, grass, rock and a variation map, one byte per cell each. No grass on the road or verges.
+- **Folded sections 40 m apart:** heights come from a smooth map of the ground, so close sections start similar; the solver couples sections closer than about 55 m and limits their height difference to what a 45% bank can cover; the fit builds one surface between both road edges, never two overlapping blends (each nearby section pulls the ground towards its own height, with a pull that becomes total at its verge).
+- Every seed gets a **fit report** (`gen/world/report.ts`: deepest cutting, tallest embankment, steepest bank, closest sections, nearest sea, points where ground shows through the road, points where the road hangs). Each entry has a map position, so the screenshot cameras can aim at the worst spots. Tests assert on it, and the lab shows it under "Road fit".
+
+## Milestone 1 steps
+
+| # | Step | Status |
+| --- | --- | --- |
+| 0 | Issues, branch, this file | Done |
+| 1 | Scaffold: Vite, TypeScript, Vitest, Playwright, central config | Done |
+| 2 | Seeded RNG, streams, seed codes, architecture guard test | Done |
+| 3 | Spline: closed Catmull-Rom, even resampling, curvature | Done |
+| 4 | Viewer shell: canvas, pan/zoom, seed controls, seed in URL | Done |
+| 5 | Validation rules | Done |
+| 6 | Straight/corner analysis and corner types | Done |
+| 7 | Scoring | Done |
+| 8 | Pipeline of 30 candidates, names, candidates panel, contact sheet. Mid-point check with Tane | Done |
+| 9 | Variety pass: layout builder rewritten after Tane's feedback | Done |
+| 10 | Contact sheet summary, Playwright screenshots of 20 seeds, cross-browser determinism | Done |
+| 11 | Wrap-up: 20 fresh seeds, docs, pull request | Done |
+
+## Session log
+
+- **2026-11-11:** Plan approved. Opened issues #1 to #6, created the branch and this file.
+- **2026-11-11:** Steps 1 to 4 done. Added `src/core/dmath.ts` (own sin/cos built from plain arithmetic) and extended the architecture guard to ban `Math.sin`, `Math.cos`, `Math.hypot` and other browser-dependent functions from `src/core` and `src/gen`.
+- **2026-11-11:** Steps 5 to 8 done: validation, section analysis, scoring, the 30-candidate pipeline with fallback, track names, track hashing, viewer rebuilt around the pipeline, contact sheet. Stopped for the mid-point check.
+- **2026-11-12:** Tane's feedback: technical level is right; hairpins on most tracks, but they were being rejected as too tight and not counted; tracks should fold back on themselves (reference: the Interlagos and Sepang layouts), and may be round, stretched or folded.
+- **2026-11-12:** Step 9 done. Layout builder rewritten (skeleton, folds, jogs, bows, exact corner rounding, three styles, both directions). Fixed a false "crosses itself" verdict on exact diagonal straights. Scoring tightened. Over seeds 1 to 200: every candidate valid, no fallbacks, laps from 1.4 to 2.3 km, 7 to 14 real corners, half the tracks clockwise. 252 unit tests and 24 Playwright tests pass.
+- **2026-11-12:** Steps 10 and 11 done. Contact sheet summary line and `?seeds=` list; cross-browser determinism test passes in Chromium and Firefox; screenshot spec now asserts every seed has a valid winner with no fallback. Verified 20 fresh random seeds (73242, 54536, 43950, 92010, 66907, 29980, 96072, 57351, 6492, 69211, 8509, 27227, 90169, 30860, 73750, 51073, 16182, 18418, 26275, 28919): all valid, no fallback, 9 folded / 3 stretched / 8 round, laps 1674 to 2333 m, scores 88 to 97. Also reviewed contact sheets for seeds 1 to 40, 5000 to 5019 and 73000 to 73019. README and CLAUDE.md commands updated; pull request opened.
+- **2026-11-12:** Tane signed off Milestone 1. PR #7 merged with a merge commit, issue #1 closed. Next: Milestone 2 planning in a fresh session.
+- **2026-11-11 (Milestone 2):** Plan approved in plan mode. Created `milestone-2-world`; recorded the step table, design and decisions here.
+- **2026-11-11 (Milestone 2):** Steps 1 and 2 done. `src/core/noise.ts` (seeded simplex, fbm, ridged) and `scalar.ts`. Generation now runs in a Web Worker (`src/worker`): the lab, the contact sheet and `window.seedCircuit.hashFor` (now async) all go through `genClient()`. The worker file has its own type check (`tsconfig.worker.json`). 282 unit tests and 50 Playwright tests pass; fingerprints still match Node in Chromium and Firefox.
+- **2026-11-11 (Milestone 2):** Step 3 done. `gen/world/relief.ts` and `gen/road/profile.ts`; every candidate now carries a `profile` (road and ground heights). `Grid` moved to `core/grid.ts`. The lab has an Elevation panel (chart plus facts). Seed screenshots are now 1250 px tall so the whole sidebar shows. Over 100 seeds (3,000 layouts): lap height range 4 to 29 m (median 19 m), cut and fill at most 5.3 m, steepest bank between close sections 27% (limit 45%), about 70 ms per seed in Node. 310 unit tests and 52 Playwright tests pass.
+- **2026-11-11 (Milestone 2):** Step 4 done. Elevation is scored (12%; the other four parts 22% each). Over seeds 1 to 200: 45 winners changed, 197 still have a hairpin, winner height range 15 to 25 m for most (median 20.5 m, lowest 5.6 m, highest 29.6 m), scores 85 to 99. The Milestone 1 test "7 to 14 real corners" failed for seed 151 until the corner-count penalty was raised. 319 unit tests and 53 Playwright tests pass.
+- **2026-11-12 (Milestone 2):** Step 5 done. `gen/world/heightfield.ts`, `nearest.ts` (nearest road point and inside-the-loop maps), `island.ts`, `gen/generate.ts` (`generateWorld`, `hashWorld`). The worker answers `world` requests. The lab draws the island under the winning track (I toggles it) and contact sheets show islands. Chromium, Firefox and Node build identical islands. Found and fixed on the way: a crease at the map origin, cliffs where the coast margin jumped, 200% slopes from headlands, shoals far out to sea. 364 unit tests and 41 Playwright tests pass.
+- **2026-11-12 (Milestone 2):** Step 6 done; Part A complete. `gen/world/fit.ts`, `cover.ts`, `report.ts`; `WorldResult` now has `natural`, `ground`, `cover` and `report`. The lab draws the fitted ground with cuttings tinted red and embankments blue, and has a "Road fit" panel; the screenshot test fails any seed whose fit is not clean. Over 24 seeds: nothing through the road, nothing hanging, deepest cutting 5.1 m, tallest embankment 4.6 m, steepest bank 58%, sea 44 to 63 m from the road edge. 404 unit tests and 59 Playwright tests pass. Stopped for check-in 1.
+- **2026-11-12 (Milestone 2):** Check-in 1. Tane's feedback: vary the coastline (beach 5 to 25 m, cliffs, 1 to 2 headlands, 1 to 2 bays), one interior peak 40 to 70 m, sea 15 to 35 m from the road with a few spots at 10 m, smooth coastline. Rebuilt `island.ts` around those numbers (`shoreShape`, `coastProfile`, `carveCoast`, `chooseFeatures`, `placePeak`), changed the order to fit-then-carve, made the distance map exact, and made the lab picture fine-grained. Over 24 seeds: sea 15 to 35 m from the road on 63% to 84% of each coast (median 76%), nearest water 10.0 m on 23 seeds, headlands reach 43 to 62 m, peaks 40 to 64 m on 20 seeds, fit still clean (deepest cutting 5.1 m, tallest embankment 4.6 m, steepest bank 64%), a whole world in about 450 ms. 432 unit tests and 59 Playwright tests pass.
+- **2026-11-12 (Milestone 2):** Step 7 done. Installed `three@0.187.0` and `@types/three@0.187.0`. New: `src/render` (`palette.ts`, `terrainChunks.ts`, `worldView.ts`), `src/camera/orbit.ts`, `src/app/worldPage.ts`, `e2e/world.spec.ts`. `/?view=3d&seed=42` builds the world in the worker and shows the island with a camera that circles it (drag to turn, scroll to zoom). Headless Chromium and Firefox both draw WebGL with no special flags, so the Playwright risk from the plan is closed. Screenshots land in `test-results/screens/world-<seed>.png`. 521 unit tests and 56 Playwright tests pass.
+- **2026-11-12 (Milestone 2):** Step 8 done. `gen/road/banking.ts`, `ribbon.ts`, `meshBuilder.ts`; `WorldResult.road` holds the banking and the surface mesh; the fit and its report now use the banking. `render/road.ts` and `roadColours.ts` draw it. `camera/spots.ts` gives close views: `/?view=3d&seed=42&look=cut` (or `fill`, `bank`, `close`, `water`), and the screenshot test takes them for every seed (`$env:LOOKS` chooses which). With banking on, the six test seeds still have nothing through the road and nothing hanging.
+- **2026-11-12 (Milestone 2):** Step 9 done. `gen/road/kerbs.ts` (`findKerbs`, `buildKerbs`); `WorldResult.road.kerbs` holds the spans and the mesh. Close views now also take `&look=hairpin` (tightest corner), `&look=start` and `&at=x,z` (any map position). Checked by eye on seeds 42 and 100, including the tightest U-turns.
+- **2026-11-12 (Milestone 2):** Step 10 done. `gen/road/barriers.ts` and `startGate.ts`; `WorldResult.road` now also has `barriers` and `gate`. Every part of the road is one of eleven materials listed in `gen/road/ribbon.ts`, coloured in `render/palette.ts`. A new real-seed test checks every barrier is footed in the ground. 585 unit tests pass.
+- **2026-11-12 (Milestone 2):** Step 11 done. `camera/flyAlong.ts` plans the flight (it climbs early over anything that would come within 2.5 m). `app/worldPage.ts` now opens flying, with Play/Pause (Space), Circle the island / Fly the lap (C), New island (N) and speed (up and down arrows); it starts paused for anyone whose system asks for reduced motion. The screenshot test takes four flying views per seed (`$env:LAPS` chooses where). Stopped for check-in 2.
+- **2026-11-12 (Milestone 2):** Check-in 2. Tane flew the islands in 3D and asked for a rework: hillier ground, mountains of 200 to 250 m and more of them, tracks that sometimes climb (up to 15%), land that extends past the track with the road only sometimes by the sea, road width varying from 12 to 22 m, and traits that combine differently per seed. Planned in plan mode and approved (rework steps R1 to R8, then check-in 3, then steps 12 to 17). Step R0 done: the plan is recorded in "Milestone 2 rework" above. No code changed since step 11. Session ended here; the rework starts in a fresh session at R1.
+- **2026-11-12 (Milestone 2 rework):** Step R1 done, measurements only (no code changed). Folds did not drop when elevation joined the score (1.12 per winner now, 1.07 with the Milestone 1 scorer, seeds 1 to 200), so style weights stay. The new 2700 m tile at 3 m cells builds in about 0.58 s in Node, 0.49 s in Chromium and 0.85 s in Firefox, so the grid stays as planned. Numbers are in "Rework measurements".
+- **2026-11-12 (Milestone 2 rework):** Step R2 done. `gen/character.ts` (`pickCharacter`) and `world.character` weights in the config; `TrackResult.character` (relief, coast, mountains, width) is part of the track fingerprint. The lab's Track panel lists it, each contact sheet caption names it, and the sheet summary counts reliefs and coasts. `pickWeighted` moved to `core/rng.ts`. Over seeds 1 to 2000 every value lands within 4 points of its weight. Nothing reads the character yet, so islands and layouts are unchanged. 628 unit tests and 139 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R3 done. `createRelief` builds the ground for the seed's relief; hilly and mountain seeds have a highland (`placeHighland`) whose flank the track climbs. The gradient limit (8%, or 15% on mountain seeds) and the elevation score's targets come from the relief. New tests: `gen/road/climb.<relief>.test.ts` generate 200 seeds of each relief and check gradient, crests, cut and fill, banks and the lap's height range (shared checks in `testing/reliefChecks.ts`). Measured in a throwaway spike before the tests were written. Winners changed on every seed that is not rolling. The 3D screenshot set now includes seed 1 (a mountain seed). Results are in "Rework measurements".
+- **2026-11-13 (Milestone 2 rework):** Step R4 done. `gen/road/width.ts` (`solveWidth`) gives the winner a width per sample; `WorldResult.road.width`. The ribbon, kerbs, barriers, start gate, ground fit, fit report, cover and island all take it (`buildIsland` and the mesh builders have a `width` argument; `fitRoad` and `fitReport` take it in their input; `buildCover` and `carveCoast` take the island's `edge` map). The lab draws the true width and says how much of the lap is wider; the contact sheet draws it too. `profile.ts` did not need to change, because the road is never widened beside a close section. 726 unit tests and 150 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R5 done (switched from Fable 5.2 to Opus 5.5 part way through, when Tane's Fable usage ran out). Tile 2700 m, 3 m cells, verge 4 m. Fixed a NaN in `fitRoad` at cells exactly on a verge's outer edge. Build time and footing depth are in "Rework measurements". 729 unit tests and 150 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R6 done. `world.hinterland` config; `shapeHinterland` and `fillCutOffSea` in `island.ts`; `Island.seaside`. New `hinterland.test.ts` (8 seeds of each coast trait). Contact sheets frame whole islands. Three things found by measuring and fixed on the way: long 40 to 80 m strips (fixed by cutting the pattern instead of lowering it), 400% slopes where the pattern fades out beside high roads (fixed by a gentler pattern and a slower climb), and sea cliffs pulling the barrier's ground down (fixed by the 7 m clear strip). Results are in "Rework measurements". 755 unit tests and 152 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R7 done. `placeMountains` replaces `placePeak`; `Island.mountains`; foothills; `Cover.snow` and its colour. New `mountains.test.ts` (16 seeds: mountain-relief, and rolling with three mountains). Found and fixed by measuring: mountain sides of 250% to 450% (ridges too small), a 2 m mountain on a plateau, 500% slopes at the edge of a mountain's skirt (no sea-bed shelf), creases where the nearest road changes (the hinterland's coast now climbs to the land's height), and a step 670 m from the road (the land height has to be used everywhere). Two new known issues for check-in 3: coastal ramps slicing hills into bands, and very round mountains. 768 unit tests and 152 Playwright tests pass.
+- **2026-11-13 (Milestone 2 rework):** Step R8 done. `buildTerrainChunks` takes the road and draws far chunks at quarter detail with stitched edges; fog, sea and orbit range scaled; the budget test moved to its own projects that run last. Triangle counts are in "Rework measurements". 774 unit tests and 307 Playwright tests pass (with screenshots of seeds 1 to 20). **The rework is complete; stopped for check-in 3.**
+- **2026-11-13 (Milestone 2):** Check-in 3 with Tane. Feedback recorded under "Check-in 3 feedback": tracks should go up and round mountains, some laps should climb more, and mountains should vary in shape (rolling hills, ridged ranges of sharp peaks). The session was at about 770,000 tokens, so the response will be planned in plan mode in a fresh session.
+- **2026-11-13 (Milestone 2):** Check-in 3 response planned in plan mode and approved (steps C0 to C6, then check-in 4). Tane chose 3 km laps on mountain seeds, every mountain seed climbing its mountain, and three shapes (range, hill country, lone peak). Step C0 done: the plan is recorded under "Check-in 3 response". No code changed.
+- **2026-11-13 (Milestone 2):** Step C1 done, measurements only (throwaway spike, deleted). A broad dome rejects almost every layout; a 15% cone with a steep top works. A lap climbs high or circles the mountain, not both, so Tane chose half and half for mountain seeds. Mountain seeds get a 600 m track area, 8 turns and 25% elevation weight. Numbers and decisions are under "Rework measurements", C1. No generator code changed.
+- **2026-11-13 (Milestone 2):** Step C2 done. `Character.landform` and `Character.route`, their weights, `withCharacter` can force them, and the lab shows "Route" and "Mountain shape"; captions read like "mountain, circling · touches · 3 mountains, lone peak" and the sheet summary counts shapes and routes. Nothing reads them yet, so the lab can name a route or shape the land does not show until C4 and C5. The budget tests now run one after the other (see decisions). World build time alone, seed 7, worker: Chromium 1.1 to 2.2 s, Firefox 1.3 to 1.6 s, slower than R7's measurement on a busier machine. 779 unit tests and 154 Playwright tests pass.
+- **2026-11-13 (Milestone 2):** Step C3 done. `gen/world/landforms.ts` (`buildLandform`: peak, range, hills) and `world.scenery.landforms`; 25 new tests in `landforms.test.ts`. Nothing uses it yet. Shapes reworked twice after looking at shaded maps (see "Rework measurements", C3). 804 unit tests and 154 Playwright tests pass.
+- **2026-11-13 (Milestone 2):** Step C4 done. Massif in the relief (`placeMassif`), rules by relief (`gen/track/rules.ts`), candidate turns, the earthworks rule (`gen/track/earthworks.ts`), mountain score weights; the island lists the massif as its main mountain; the lab shows the turn and the new rejection reasons. Tried checking earthworks at the verge edges (rejected too many circling layouts) and a faster blur (no measurable gain); both undone. Tane chose to allow steep rock cuttings beside mountain roads. 838 unit tests and 154 Playwright tests pass. Numbers under "Rework measurements", C4.
+- **2026-11-13 (Milestone 2):** Step C5 done. Island mountains are landforms in the seed's shape (heights by shape), built lower where they do not fit, joined to the road's land, kept from the coast by their own foot; hill country stays green. Mountain tests rewritten (19, including a flood fill from the road); shore widths reworked twice after steep spots on seeds 5 and 7. The softer coast join was tried three ways and undone. Spire shapes are built once; the massif once per island. 843 unit tests and 154 Playwright tests pass. Numbers under "Rework measurements", C5.
+- **2026-11-13 (Milestone 2):** Step C6 done. `WorldResult.mountains`; `look=summit` and `look=climb` (`lookAtRoad`); the 3D title card names the kind of island; close cameras turn away from a hillside in the way. Screenshots of seeds 1 to 20 plus 27, 44, 47 and 53 checked by eye; triangle counts and budget in "Rework measurements", C6. 854 unit tests and 412 Playwright tests pass. **Check-in 3 response complete; stopped for check-in 4.**
+- **2026-11-13 (Milestone 2):** Check-in 4. Tane looked at the C6 screenshots: looks good, carry on. No changes asked. Next: step 12.
+- **2026-11-14 (Milestone 2):** Step 12 planned in plan mode (Tane chose daylight only, a slider, always-moving waves, a seed's sun bearing) and done in six commits (12a to 12f): the seed's time of day, `render/daylight.ts`, the sky dome, the water shader, the time controls, and screenshots of seeds 1 to 20 plus a time strip. Found on the way: the budget test failed under load once the page drew while worlds were built (fixed by not drawing during builds), and Vitest does not run from Git Bash on this machine. 883 unit tests and 194 browser tests pass. Next: step 13.
+- **2026-11-14 (Milestone 2):** Tane tried step 12: time, sunrise and sunset good; the water looked like a checker pattern, not waves. Step 12g: new waves in `render/waves.ts` (wind-driven trains in groups, bent and peaked crests, dropped when too small to draw), shading from the waves and lighter crests in `render/water.ts`. 896 unit tests and 194 browser tests pass.
+- **2026-11-14 (Milestone 2):** Step 13 planned in plan mode and approved (Tane chose woods that vary by seed, three kinds of tree with a palm by the beach, trees close to the road in patches, and a cloud amount picked by the seed). Step 13a done: the plan is recorded under "Step 13". No code changed.
+- **2026-11-14 (Milestone 2):** Step 13 done in seven commits (13a to 13g): the woods trait, trees and rocks (`gen/world/decor.ts`), the seed's clouds (`gen/world/clouds.ts`), `WorldResult.decor` and `.clouds` in the world fingerprint, the shapes and groups as plain numbers, the instanced 3D drawing with near and far shapes, drifting clouds, `decor=off`, and the lab's dots and lines. Changed after looking at pictures: more clouds over a smaller square, clouds lit underneath by the sky, and clouds that thin away near the camera. On this machine long bash heredocs fail (code files were written with the Write tool), and Vitest hides `console.log` from passing tests (throwaway measurements write a file instead). 971 unit tests and 212 browser tests pass. Next: step 14, grass.
+- **2026-11-14 (Milestone 2):** Step 14 planned in plan mode and approved (Tane chose grass in patches of long and short on every island, blades to about 120 m thinning with distance, a mown strip beside the road, and wildflowers). Step 14a done: the plan is recorded under "Step 14". No code changed.
+- **2026-11-15 (Milestone 2):** Step 14 done in six commits (14a to 14f): the grass settings and maps (`render/grassMaps.ts`), the blades and their sums with the same sums as shader text (`render/grass.ts`), the drawing (`render/grassView.ts`, `grass=off`, `stats().blades`), a look pass from pictures, and screenshots of seeds 1 to 20 plus a time strip. Changed after looking at pictures: blades take their ground's light, no blades on thin cover, a narrower and taller mown strip, wider blades, more and bigger flowers. No generation code changed. Found on the way: a wall-clock test limit failed under load and was loosened; a page made in memory cannot load pictures from disk (contact sheets are written as files); an `out` name in a shader clashed with a local of the same name, caught by the console-error check. 1,043 unit tests and 224 browser tests pass. Next: step 15.
+- **2026-11-15 (Milestone 2):** Step 15 planned in plan mode and approved (Tane chose steady speed over full sharpness on High, a Low setting that keeps tree and barrier shadows, and a quality button that is remembered). Step 15a done: the plan is recorded under "Step 15". No code changed.
+- **2026-11-15 (Milestone 2):** Step 15b done: a frame meter (`render/frameMeter.ts`), a readout on the page (`fps=1`, F key), `water=off`, `sync=1`, and `npm run perf`, which times views in a real browser window on the laptop's Intel Arc graphics. Baseline before shadows: 5 to 9 ms a frame at 1080p in every view; 9 to 19 ms on the full 2880 by 1800 screen, where the circling view goes over 16.7 ms. Pixels cost far more than triangles. Found on the way: with only the frame limit off, frame times read as under a millisecond because the page ran ahead of the graphics card; the page now waits for each frame when timing.
+- **2026-11-15 (Milestone 2):** Step 15c done: a third level of ground detail (a sixteenth of the triangles beyond 500 m from the road and for sea bed 4 m under), reported per chunk and in `stats().levels`; no grass on ground drawn coarse. Ground triangles fall to 74% to 88% of R8's on eight seeds. Screenshots of eight seeds checked: no seams, mountains keep their shape.
+- **2026-11-15 (Milestone 2):** Step 15d done: the land's and the clouds' shadows as plain numbers (`render/terrainShade.ts`, `render/cloudShade.ts`) and as shader text (`render/shade.ts`), settings in `render.shadows`. At 07:00 a mountain island is 42% to 47% in its own shadow, at midday none of it; the land shade takes about 20 ms. Nothing drawn yet.
+- **2026-11-15 (Milestone 2):** Step 15e done: the land's and the clouds' shadows drawn on the ground, road, trees, rocks, grass and sea (`render/shadeView.ts`), worked out again when the time moves; `shadows=off`. Cloud shadows show clearly; mountain shadows at low sun are faint, for the look pass. The browser suite now runs three browsers at a time: four at once timed out worlds.
+- **2026-11-15 (Milestone 2):** Step 15f done: trees, rocks, barriers and the gate cast shadows near the camera (Three.js's `SunLight`, two maps; `render/nearShadows.ts`), trees by their far shapes to keep inside the budget; the grass takes them too. At 1080p every view still holds 60 frames per second (median at most 12.9 ms); the full laptop screen from above does not. Shadows are faint, for the look pass.
+- **2026-11-15 (Milestone 2):** Step 15g done: High and Low quality, the pixel budget, the Quality button and Q key, remembered in the browser. Low measured 10% to 50% faster than High at 1080p, least when circling from above. The laptop throttled for a while (processor held at 1,400 MHz, frame times jumping to 60 ms and more, the browser suite at half speed with 19 timeouts), so Tane ran the browser suite by hand.
+- **2026-11-15 (Milestone 2):** Tane closed the dev server that had run since 14 November; the next browser run passed but for one timeout, now given longer. Tane: the shadows look good.
+- **2026-11-15 (Milestone 2):** Step 15h done: shadows take a share of the sky's light as well (`render.shadows.skyShare` 0.6, chosen from pictures; `shadowSky=` in the address), screenshots of seeds 1 to 20 and a time strip checked, final frame times for High and Low. **Step 15 done.** High holds 60 frames per second in every measured view at 1080p and on the full laptop screen; Low is a fifth to a third faster. Next: step 16.
+- **2026-11-15 (Milestone 2):** Step 16 done: the 3D view is the default page; the lab is on L and `?lab=1`, and old lab links, `view=3d` and the contact sheets still work. README converted to UTF-8 and updated. 1,107 unit tests and 270 browser tests pass. Next: step 17, the 20-seed check and the pull request.
+- **2026-11-15 (Milestone 2):** Step 17 done: 20 fresh seeds and seeds 1 to 20 checked by unit tests (`describeCleanFit`, 524 checks) and by 573 screenshot tests. Found two gorges where a range stands over the road (kept, Tane's choice) and a bay check too strict since the rework (relaxed, Tane's choice). Fit table, README and CLAUDE.md updated; Milestone 2 pull request opened. Next: Tane's sign-off, then Milestone 3 in a fresh session.

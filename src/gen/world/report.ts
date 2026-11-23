@@ -103,7 +103,7 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
 /** The closest approach of two separate sections of the lap, if any come within sharing distance. */
 function closestSections(line: CenterLine, cfg: GenConfig): FitSpot | null {
   const n = line.count;
-  const reach = cfg.road.coupleDistance;
+  const reach = cfg.road.coupleGap + cfg.track.roadWidth;
   const minSteps = cfg.road.coupleMinArc / line.spacing;
   const grid = new Grid(reach);
   let bestSquared = reach * reach;

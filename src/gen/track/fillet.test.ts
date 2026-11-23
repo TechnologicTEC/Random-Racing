@@ -3,10 +3,11 @@ import { config } from '../../config';
 import type { CornerSection, Section, StraightSection } from '../types';
 import { analyseSections } from './analysis';
 import { roundCorners, type Corner } from './fillet';
+import { trackRulesFor } from './rules';
 import { resampleClosedPath } from './spline';
 import { validateLayout } from './validate';
 
-const cfg = config.track;
+const cfg = trackRulesFor(config.track, 'flat');
 const cornersOf = (sections: Section[]) => sections.filter((s): s is CornerSection => s.type === 'corner');
 const straightsOf = (sections: Section[]) => sections.filter((s): s is StraightSection => s.type === 'straight');
 
@@ -75,17 +76,18 @@ describe('roundCorners on other shapes', () => {
   });
 
   it('merges the two corners at the end of a narrow strip into one hairpin', () => {
-    // 44 m between the long sides: the biggest arcs that fit are 22 m and meet in the middle.
-    const { rounded, line } = lineFor(rectangle(700, 44, 9999));
+    // As narrow as the builder's narrowest fold (44 m on a 12 m road): the biggest arcs that fit are half that, and meet in the middle.
+    const strip = cfg.layout.fold.hairpinWidth[0];
+    const { rounded, line } = lineFor(rectangle(700, strip, 9999));
     const found = cornersOf(analyseSections(line, cfg));
     expect(found).toHaveLength(2);
     for (const corner of found) {
       expect(corner.kind).toBe('hairpin');
       expect(corner.turnDegrees).toBeGreaterThan(172);
-      expect(corner.minRadius).toBeGreaterThan(21.7);
-      expect(corner.minRadius).toBeLessThan(22.3);
+      expect(corner.minRadius).toBeGreaterThan(strip / 2 - 0.3);
+      expect(corner.minRadius).toBeLessThan(strip / 2 + 0.3);
     }
-    for (const radius of rounded.radii) expect(radius).toBeCloseTo(22, 6);
+    for (const radius of rounded.radii) expect(radius).toBeCloseTo(strip / 2, 6);
     expect(validateLayout(line, cfg)).toEqual([]);
   });
 

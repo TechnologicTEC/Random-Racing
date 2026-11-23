@@ -1,4 +1,4 @@
-import type { ScoreConfig, TrackConfig } from '../../config';
+import type { ScoreConfig, TrackCommon } from '../../config';
 import type { CornerSection, ProfileStats, ReliefKind, ScoreBreakdown, ScorePart, Section, StraightSection } from '../types';
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
@@ -11,7 +11,7 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
  */
 export function scoreLayout(
   sections: readonly Section[],
-  cfg: TrackConfig,
+  cfg: TrackCommon,
   elevation: ProfileStats,
   relief: ReliefKind,
 ): ScoreBreakdown {

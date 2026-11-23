@@ -4,10 +4,11 @@ import { createRng } from '../../core/rng';
 import type { CornerSection, LayoutStyle } from '../types';
 import { analyseSections } from './analysis';
 import { generateLayout, pickStyle, type Layout } from './layout';
+import { trackRulesFor } from './rules';
 import { clearanceOk, signedArea } from './skeleton';
 import { resampleClosedPath } from './spline';
 
-const cfg = config.track;
+const cfg = trackRulesFor(config.track, 'flat');
 const STYLES: LayoutStyle[] = ['folded', 'stretched', 'round'];
 const SEEDS = Array.from({ length: 120 }, (_, i) => i + 1);
 

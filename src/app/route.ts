@@ -37,6 +37,26 @@ export function choosePage(params: URLSearchParams): Page {
   return { kind: 'world' };
 }
 
+/** The cameras of the 3D view: behind the car while driving, flying the lap, or circling a point. */
+export type CameraMode = 'chase' | 'fly' | 'orbit';
+
+/**
+ * Which camera the 3D view opens with: `cam=orbit` circles the island;
+ * `cam=fly`, or a point of the lap (`lap=0.3`), flies the lap; anything else,
+ * the plain address and `cam=chase` among them, drives. A close view (`look=`,
+ * `at=`) is chosen once the island is in, and circles.
+ */
+export function openingCamera(params: URLSearchParams): CameraMode {
+  if (params.get('cam') === 'orbit') return 'orbit';
+  if (params.get('cam') === 'fly' || params.has('lap')) return 'fly';
+  return 'chase';
+}
+
+/** The camera C changes to: driving, flying, circling, and back to driving. */
+export function nextCamera(mode: CameraMode): CameraMode {
+  return mode === 'chase' ? 'fly' : mode === 'fly' ? 'orbit' : 'chase';
+}
+
 /**
  * The address the L key goes to: the same seed on the other page. The 3D
  * view's options are kept both ways, so coming back finds them again; the

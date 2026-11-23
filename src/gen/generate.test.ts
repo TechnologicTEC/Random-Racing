@@ -49,9 +49,14 @@ describe('generateWorld', () => {
     expect(world.road.kerbs.mesh.indices.length).toBeGreaterThan(0);
   });
 
-  it('contains barriers along the whole lap and a gate at the start', () => {
+  it('contains walls, as spans and as triangles, and a gate at the start', () => {
     const winner = world.track.candidates[world.track.winnerIndex]!;
-    expect(world.road.barriers.indices.length / 3).toBe(winner.line.count * 12);
+    const { walls } = world.road;
+    expect(walls.length).toBeGreaterThan(0);
+    const pieces = walls.reduce((sum, wall) => sum + wall.pieceCount, 0);
+    const ends = walls.filter((wall) => wall.pieceCount < winner.line.count).length * 2;
+    // Two faces and a top for every piece, and a face closing each end of a wall that has ends; two triangles each.
+    expect(world.road.barriers.indices.length / 3).toBe(pieces * 6 + ends * 2);
     expect(world.road.gate.indices.length).toBeGreaterThan(0);
   });
 
@@ -181,7 +186,13 @@ describe('hashWorld', () => {
     const afterGate = hashWorld(world);
     expect(afterGate).not.toBe(afterBarriers);
     world.road.width[10] = world.road.width[10]! + 0.5;
-    expect(hashWorld(world)).not.toBe(afterGate);
+    const afterWidth = hashWorld(world);
+    expect(afterWidth).not.toBe(afterGate);
+    world.road.walls[0]!.pieceCount += 1;
+    const afterWall = hashWorld(world);
+    expect(afterWall).not.toBe(afterWidth);
+    world.road.walls[0]!.side = world.road.walls[0]!.side === 1 ? -1 : 1;
+    expect(hashWorld(world)).not.toBe(afterWall);
   });
 });
 

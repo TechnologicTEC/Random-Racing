@@ -343,7 +343,7 @@ export interface Scatter {
 /** The kinds of rock. A rock's `kind` number is its place in `ROCK_KINDS` (gen/world/decor.ts). */
 export type RockKind = 'boulder' | 'shore' | 'field';
 
-/** The island's trees and rocks. Scenery only: nothing collides with them. */
+/** The island's trees and rocks. The car can hit them: a tree on its trunk, a rock as a dome (sim/physics/colliders.ts). */
 export interface Decor {
   woods: WoodsKind;
   trees: Scatter;
@@ -394,6 +394,19 @@ export interface KerbSpan {
   side: 1 | -1;
 }
 
+/**
+ * A wall beside the road. The lap is made of pieces, each from one sample of
+ * the centre line to the next; a wall runs along one side of some of them.
+ */
+export interface WallSpan {
+  /** The sample its first piece starts at. The wall may run past the end of the lap. */
+  startIndex: number;
+  /** How many pieces it covers. A wall round the whole lap covers as many as the line has samples. */
+  pieceCount: number;
+  /** Which side of the road it is on: 1 for the right of the direction of travel, -1 for the left. */
+  side: 1 | -1;
+}
+
 /** The road of the winning track, beyond its centre line and height profile. */
 export interface Road {
   /**
@@ -408,7 +421,9 @@ export interface Road {
   mesh: MeshData;
   /** The kerbs: where they are, and their triangles. */
   kerbs: { spans: KerbSpan[]; mesh: MeshData };
-  /** The low walls along both edges of the lap. */
+  /** Where the low walls beside the road stand: the right-hand ones, then the left-hand ones, each in order along the lap. Everywhere else the roadside is open. */
+  walls: WallSpan[];
+  /** The walls as triangles. */
   barriers: MeshData;
   /** The chequered start line and the gate over it, at sample 0 of the winner's centre line. */
   gate: MeshData;

@@ -1,4 +1,4 @@
-import type { AnalysisConfig, TrackConfig } from '../../config';
+import type { AnalysisConfig, TrackCommon } from '../../config';
 import { TAU } from '../../core/dmath';
 import type { CenterLine, CornerSection, Section } from '../types';
 
@@ -9,7 +9,7 @@ const DEGREES_PER_RADIAN = 360 / TAU;
  * the section that contains the first sample. Each corner turns one way only,
  * so an S-bend is two corners.
  */
-export function analyseSections(line: CenterLine, cfg: TrackConfig): Section[] {
+export function analyseSections(line: CenterLine, cfg: TrackCommon): Section[] {
   const rules = cfg.analysis;
   const labels = labelSamples(line, rules);
   const runs = encodeRuns(labels);
@@ -52,7 +52,7 @@ export function analyseSections(line: CenterLine, cfg: TrackConfig): Section[] {
  * Names each corner in a list of sections (hairpin, sweeper, chicane, kink or
  * plain corner). The list is treated as a loop. Changes the sections in place.
  */
-export function classifyCorners(sections: Section[], cfg: TrackConfig): void {
+export function classifyCorners(sections: Section[], cfg: TrackCommon): void {
   const rules = cfg.analysis;
   for (const section of sections) {
     if (section.type !== 'corner') continue;

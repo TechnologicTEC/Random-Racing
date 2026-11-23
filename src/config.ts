@@ -18,15 +18,18 @@ export interface TrackConfig {
   /** The start line sits this far along the longest straight (0 = its start, 1 = its end). */
   startLineFraction: number;
   /**
-   * Road width in metres (brief: 12 to 14). Layouts are built and judged at this
+   * Road width in metres (brief: 20, Tane's change in 6h; it was 12 to 14). Layouts are built and judged at this
    * width. On some seeds the finished road is wider in places: see `road.width`.
    */
   roadWidth: number;
   /** Shortest and longest allowed lap, in metres. Some reliefs change these: see `byRelief`. */
   lapLengthMin: number;
   lapLengthMax: number;
-  /** Tightest allowed corner radius, in metres (brief: about 15). */
-  minCornerRadius: number;
+  /**
+   * Tightest allowed corner, as the distance from its centre to the road's inside edge, in metres: the radius limit is
+   * this plus half the road's width (brief: a radius of about 15 m on a 12 to 14 m road; 6h keeps the room inside).
+   */
+  minInsideRadius: number;
   /** Separate sections must stay at least this many road widths apart (brief: about 2.5). */
   sectionGapWidths: number;
   /**
@@ -41,7 +44,7 @@ export interface TrackConfig {
   sampleSpacing: number;
   /** Curvature is measured through points this far before and after a sample, in metres. */
   curvatureWindow: number;
-  layout: LayoutConfig;
+  layout: LayoutSettings;
   analysis: AnalysisConfig;
   score: ScoreConfig;
   /** How the rules above change with the seed's relief. */
@@ -55,6 +58,11 @@ export interface TrackConfig {
  */
 export interface ReliefTrackRules {
   turns: number;
+  /**
+   * The earthworks rule holds on the centre line only: the road's edges may be cut deeper and built up higher, as rock
+   * cuttings across a mountainside (C4). Otherwise it holds at the road's banked edges too (6h-3).
+   */
+  earthworksOnCentre?: boolean;
   lapLength?: Range;
   buildableRadius?: number;
   weights?: ScoreWeights;
@@ -235,6 +243,53 @@ export interface LayoutConfig {
   styles: Record<LayoutStyle, StyleConfig>;
 }
 
+/**
+ * The layout builder's settings as the config keeps them (`track.layout`). The
+ * distances that set how close separate parts of the lap come, and the smallest
+ * corners, are given against the road's width, so a change of width carries
+ * through (step 6h). `trackRulesFor` works them out in metres (`LayoutConfig`).
+ */
+export type LayoutSettings = Omit<LayoutConfig, 'minCornerRadius' | 'clearance' | 'base' | 'fold' | 'jog' | 'radius'> & {
+  /**
+   * The builder never rounds a corner so tight that its inside edge comes nearer its centre than this, in metres:
+   * the smallest radius is this plus half the road's width. Kept above the hard limit (`track.minInsideRadius`) for safety.
+   */
+  minInsideRadius: number;
+  /** Separate parts of the skeleton stay at least this many road widths apart. */
+  clearanceWidths: number;
+  base: Omit<LayoutConfig['base'], 'stretchedHalfWidth'> & {
+    /** Half the width of a stretched base: at least `leastWidths` road widths, at most `most` metres. */
+    stretchedHalfWidth: { leastWidths: number; most: number };
+  };
+  fold: Omit<LayoutConfig['fold'], 'hairpinWidth'> & {
+    /** Width of a narrow fold, whose end becomes one hairpin, in road widths. */
+    hairpinWidths: Range;
+  };
+  jog: Omit<LayoutConfig['jog'], 'offset'> & {
+    /** Sideways step, in road widths. */
+    offsetWidths: Range;
+  };
+  radius: Omit<LayoutConfig['radius'], 'hairpin' | 'tip'> & {
+    /** Turns of 120 degrees or more, and the point of a pointed fold: the radius less half the road's width, in metres. */
+    hairpinInside: Range;
+    tipInside: Range;
+  };
+};
+
+/** The track rules that need no working out: the config's (`TrackConfig`) and a seed's (`TrackRules`) both have them. */
+export type TrackCommon = Omit<TrackConfig, 'minInsideRadius' | 'layout'>;
+
+/**
+ * The track rules for one seed, in metres: the config's (`TrackConfig`), with the
+ * limits the seed's relief changes and the road-width settings worked out
+ * (`trackRulesFor`). Everything that builds and judges layouts reads these.
+ */
+export type TrackRules = TrackCommon & {
+  /** Tightest allowed corner radius, in metres: `minInsideRadius` plus half the road's width. */
+  minCornerRadius: number;
+  layout: LayoutConfig;
+};
+
 export interface EllipseBaseConfig {
   /** Length divided by width. */
   aspect: Range;
@@ -272,10 +327,11 @@ export interface RoadConfig {
   /** Flat strip kept beside each road edge, in metres. Kerbs and barriers sit on it. */
   verge: number;
   /**
-   * Two separate sections closer than this (centre to centre, in metres) share
-   * the ground between them, so their heights are tied together.
+   * Two separate sections whose road edges come closer than this, in metres, share the ground
+   * between them, so their heights are tied together. Measured from the usual width's edges: the
+   * centres are then this plus the road's width apart (55 m on a 12 m road).
    */
-  coupleDistance: number;
+  coupleGap: number;
   /** Points count as separate sections when they are more than this far apart along the lap, in metres. */
   coupleMinArc: number;
   /** Steepest grass bank allowed between two tied sections, as a fraction (0.45 is a 45% slope). */
@@ -314,6 +370,8 @@ export interface RoadConfig {
   barrierHeight: number;
   /** On the outside of corners the barrier is painted in red and white blocks this long, in metres. */
   barrierBlock: number;
+  /** Where the walls stand. Everywhere else the roadside is open. */
+  walls: WallConfig;
   /** The start line is chequered in squares this size, in metres, two rows deep. */
   startSquare: number;
   /** The gate over the start: clear height under its beam, the beam's depth, and the thickness of its posts, in metres. */
@@ -337,14 +395,44 @@ export interface RoadConfig {
 }
 
 /**
+ * Where the walls beside the road stand (see gen/road/walls.ts). A wall is kept
+ * on the outside of corners, beside another part of the lap, beside steep
+ * ground and at the start gate; the rest of the roadside is open. Distances in metres.
+ */
+export interface WallConfig {
+  /** On the outside of a real corner the wall starts this far before the corner... */
+  cornerLead: number;
+  /** ...and runs this far past its end, where a car that has run wide is still drifting out. */
+  cornerTrail: number;
+  /** A wall stands wherever another part of the lap comes within this distance on that side, from road edge to road edge (the usual width's). */
+  closeGap: number;
+  /** The ground beside the road is looked at from the outer edge of the verge out to this distance... */
+  probeReach: number;
+  /** ...at steps of this. */
+  probeStep: number;
+  /** A wall stands where that ground has risen or fallen from the verge by more than this slope on average, as a fraction (0.25 is 25%)... */
+  maxSlope: number;
+  /** ...and by more than this height, so small bumps beside the road do not count. */
+  minRise: number;
+  /** Walls run this far each way from the start gate, whose posts stand outside them. */
+  gate: number;
+  /** An opening shorter than this is closed. */
+  minGap: number;
+  /** A wall shorter than this is lengthened. */
+  minWall: number;
+  /** A wall's end slopes down to the ground over this length. */
+  taper: number;
+}
+
+/**
  * How the road widens on seeds whose width varies. Only straights are widened:
  * the start straight always, other long straights and the straight after a
  * hairpin sometimes. Distances and widths in metres.
  */
 export interface WidthConfig {
-  /** A widened stretch is between this wide and this wide. */
-  min: number;
-  max: number;
+  /** A widened stretch is between this much and this much wider than the usual width (`track.roadWidth`). */
+  extraMin: number;
+  extraMax: number;
   /** The width changes over this length, and is back to the usual width before the straight ends. */
   ease: number;
   /** A straight at least this long may be widened. */
@@ -353,8 +441,8 @@ export interface WidthConfig {
   hairpinExitMin: number;
   /** Chance that such a straight is widened. The start straight always is. */
   chance: number;
-  /** The road is never widened where a separate part of the lap passes within this distance, centre to centre. */
-  clearance: number;
+  /** The road is never widened where a separate part of the lap passes within this distance of the usual width's edge. */
+  clearanceGap: number;
 }
 
 /** The ground the track is laid over. It depends only on the seed, never on the track. */
@@ -835,6 +923,13 @@ export interface RenderConfig {
   sky: SkyDomeConfig;
   water: WaterConfig;
   decor: DecorViewConfig;
+  /** How the car is drawn. */
+  car: KartViewConfig;
+  bloom: BloomConfig;
+  /** The fade to white and back over a respawn (step 8c), in seconds: up over the last `in` of the wait, back over `out` after. */
+  respawnFade: { in: number; out: number };
+  /** How long the readout says why a slide was cancelled (a hit, the brake, too slow, a respawn), in seconds (step 10a). */
+  cancelShown: number;
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -1023,6 +1118,75 @@ export interface DecorViewConfig {
   shade: Range;
 }
 
+/**
+ * How the kart is drawn (`render/carShape.ts`), in metres and radians. Its body is drawn inside the simulated box
+ * (`car.body`); the wheels are drawn where the simulation's wheel casts are, standing on the ground where they touch.
+ */
+export interface KartViewConfig {
+  /** The drawn tyres. Bigger than the 5 cm balls the simulation casts, which only find the ground. */
+  wheelRadius: number;
+  wheelWidth: number;
+  /** How far the front wheels are drawn turned with the stick right over. Drawn only: the steering itself is `car.steer`. */
+  steerAngle: number;
+  /**
+   * The sparks sprayed back, out and up from both rear wheels while sliding from the first tier (6h-5, sprites and
+   * bloom): for the three tiers, `perStep` new ones a wheel each step, flying at most `reach` metres, fanned out by
+   * `spread` (how far sideways, as a share). Each lives `life` seconds, a streak `length` long and `width` wide (both
+   * halves) stretched along its flight, with a bright head `head` across (half), white-hot as it leaves the tyre and
+   * cooling into the tier's colour. The glowing effects are drawn `glow` times brighter than the screen can show, so
+   * the bloom has something to spread (`render.bloom`).
+   */
+  sparks: {
+    perStep: readonly [number, number, number];
+    life: number;
+    reach: readonly [number, number, number];
+    spread: readonly [number, number, number];
+    length: number;
+    width: number;
+    head: number;
+    glow: number;
+  };
+  /** On letting go of a slide with a tier: a ring of `count` stars in the tier's colour, `size` across (half), spreading out to `reach` metres and fading over `life` seconds. */
+  burst: { life: number; count: number; reach: number; size: number };
+  /**
+   * Tyre smoke while sliding: a puff from each rear wheel every `every` steps, living `life` seconds, growing from
+   * `size[0]` to `size[1]` (half sizes) and rising `rise` metres as it fades from `alpha`. A puff is left behind at
+   * `drag` of the car's speed, so the smoke trails a few metres, not the whole way back to the camera.
+   */
+  smoke: { every: number; life: number; size: readonly [number, number]; rise: number; alpha: number; drag: number };
+  /**
+   * The boost flame: two jets pointing back from the engine, `spread` metres either side of its middle, in the boost's
+   * tier colour, `lengths` long for the three tiers and `width` wide (half), flickering by `flicker` of the length
+   * either way, step by step; a pale core `core` of the width inside each, and a flare `flare` across (half) where
+   * each leaves the exhaust. Never longer than the car.
+   */
+  flame: { lengths: readonly [number, number, number]; width: number; core: number; flicker: number; spread: number; flare: number };
+  /** In a slide the body leans out of the corner by up to `lean` radians, and the front wheels are drawn turned `counterSteer` radians against it; the hop squashes the body by up to `squash` of its height as it lands. All drawn only. */
+  lean: number;
+  counterSteer: number;
+  squash: number;
+  /**
+   * Thin pale streaks near the picture's edges while a boost runs: `count` of them, each living `life` seconds as it
+   * runs outwards, `length` long (a share of the half picture, least and most), never inside `inner` of the way from
+   * the middle to the edge, at most `alpha` opaque.
+   */
+  speedLines: { count: number; life: number; length: readonly [number, number]; inner: number; alpha: number };
+}
+
+/**
+ * The glow round the drift's effects (Tane, 6h-5: sprites and bloom). Only the effects are bloomed: they are drawn
+ * on their own (with the kart, which hides what is behind it) into a picture `scale` of the screen's size, spread
+ * by Three.js's `UnrealBloomPass` with `strength` and `radius`, and the spread light alone is added on top of the
+ * finished picture. With no effect on screen nothing is added, so the island is never softened. `bloom=0` in the
+ * address turns it off.
+ */
+export interface BloomConfig {
+  enabled: boolean;
+  strength: number;
+  radius: number;
+  scale: number;
+}
+
 /** How the clouds are drawn. */
 export interface CloudViewConfig {
   /** How fast they drift down the wind (`water.wind`), in metres per second. */
@@ -1174,6 +1338,11 @@ export interface CameraConfig {
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
   /**
+   * The close view of the car where it stands (`&look=car`): `distance` metres from its middle, tipped up `tilt`
+   * radians, from behind it and `side` radians round to its right, so its back and one side are seen.
+   */
+  car: { distance: number; tilt: number; side: number };
+  /**
    * The close view of the lap's highest point, facing the main summit (`&look=summit`). The camera stands
    * `back` metres behind the point, `lift` metres above the road, and steps further back until the point and
    * the summit are no more than `spread` radians apart as it sees them. With no mountain it looks `ahead`
@@ -1188,6 +1357,39 @@ export interface CameraConfig {
   climb: { window: number; distance: number; side: number; tilt: number; clearance: number };
   /** The camera that flies the lap. */
   fly: FlyConfig;
+  /** The camera behind the car while driving. */
+  chase: ChaseConfig;
+}
+
+/**
+ * The camera behind the car (`camera/chase.ts`). Distances in metres, times in seconds. It follows the way the car
+ * travels on the map, eased, and the car's height as it is.
+ */
+export interface ChaseConfig {
+  /** How far behind the car's middle it stands, and how far above it. */
+  back: number;
+  height: number;
+  /** It looks at a point this far in front of the car's middle, this far above it. */
+  lookAhead: number;
+  lookHeight: number;
+  /** How quickly it swings round behind the car after a turn: about two thirds of the way in this time. */
+  follow: number;
+  /** It never comes closer to the ground under it than this. */
+  clearance: number;
+  /** How tall its view is, in degrees (the other cameras use `render.fieldOfView`). */
+  fieldOfView: number;
+  /** Below this speed on the map, in metres per second, it follows the car's nose instead of the way it travels. */
+  travelBelow: number;
+  /**
+   * In a slide it swings round the car this far to the outside of the corner, in radians, easing there with a time of
+   * `swingTime` seconds (two thirds of the way in that time), and back the same way when the slide ends.
+   */
+  swing: number;
+  swingTime: number;
+  /** While a boost runs its view widens to this, in degrees, easing with a time of `boostIn` seconds, and back with `boostOut`. */
+  boostFieldOfView: number;
+  boostIn: number;
+  boostOut: number;
 }
 
 export interface FlyConfig {
@@ -1205,10 +1407,317 @@ export interface FlyConfig {
   clearance: number;
 }
 
+/** The simulation: its clock, where the car starts, and the shapes of what it can hit. */
+export interface SimConfig {
+  /** The simulation moves on by this many steps a second, always, whatever the screen's frame rate (brief: 60). */
+  stepsPerSecond: number;
+  /**
+   * The page takes at most this many steps in one frame; the rest of a long frame (a hidden tab, a stall) is dropped,
+   * so the car never races to catch up with time the player did not see. The page's limit: the simulation never reads it.
+   */
+  maxStepsPerFrame: number;
+  /** How hard everything is pulled down, in metres per second per second. */
+  gravity: number;
+  /** The car starts this far behind the start line, in metres, standing on its wheels at its ride height. */
+  start: { back: number };
+  colliders: ColliderConfig;
+  progress: ProgressConfig;
+  respawn: RespawnConfig;
+}
+
+/**
+ * When the car is brought back to the last checkpoint it passed (step 8b), and how soon. Times in seconds, distances
+ * in metres, heights against the sea (height 0).
+ */
+export interface RespawnConfig {
+  /** The wait between what starts a respawn and the car standing at the checkpoint; the pedals and stick do nothing meanwhile. */
+  delay: number;
+  /** The car's middle this far under the sea starts the wait. */
+  waterDepth: number;
+  /** The car's middle this close to the edge of the island's tile starts the wait. */
+  edge: number;
+  /** The car's middle this far under the sea starts the wait whatever is under it (it has fallen through something). */
+  deep: number;
+  /** Roof-up (the up of the car's roof, 1 upright, 0 on its side) under `roofUp` for `time` starts the wait. */
+  flipped: { roofUp: number; time: number };
+  /** The throttle or the brake down, with the car slower than `speed`, for `time` starts the wait. */
+  stuck: { speed: number; time: number };
+}
+
+/**
+ * The car's place on the lap (step 8a): metres along the centre line from the start line, and metres to its right.
+ * Distances in metres.
+ */
+export interface ProgressConfig {
+  /** The place is looked for within this far along the lap, either way, of where it was found on the last step. */
+  window: number;
+  /** If the nearest point found there is further than this from the car, the whole lap is searched instead. */
+  lost: number;
+  /** Checkpoints stand about this far apart: the lap is divided evenly into the nearest whole number of them. */
+  every: number;
+  /** A checkpoint counts only with the car within half the road's width plus this much of the centre line. */
+  margin: number;
+  /** A checkpoint counts only when the place moves forwards by less than this in one step (not a jump to another section). */
+  stride: number;
+}
+
+/** The car. Distances in metres, mass in kilograms, speeds in metres per second, pushes in metres per second gained each second. */
+export interface CarConfig {
+  /**
+   * The box that is the car's body: half its width, height and length; how much it grips what it rubs against (0 is
+   * ice, 1 is rubber) and how much of its speed it keeps when it bounces off something (0 is none). The wheels carry
+   * the car, so the body touches things only when it hits them: a low grip lets it slide along what it scrapes.
+   * `raise`: the box that meets things starts this far above the body's drawn floor, its weight and balance those of
+   * the whole box (Tane, 10a-6). An island's grass lies `road.sink` under its road, so from the grass the road's edge
+   * and a kerb's skirt stood at the height of the body's floor, which ran into them and was thrown.
+   * `round`: the box's edges and corners are rounded by this, in metres, its outer size the same (Tane, 10a-6b). An
+   * island's wall is a row of 2 m boxes, and a square box scraping along one caught on the seams between them.
+   */
+  body: { halfWidth: number; halfHeight: number; halfLength: number; grip: number; bounce: number; raise: number; round: number };
+  mass: number;
+  wheels: WheelConfig;
+  suspension: SuspensionConfig;
+  /**
+   * The tyres. `side` is the hardest they can push the car sideways, in metres per second per second: 9.81 is the
+   * car's own weight. `turn` is how quickly they can change the rate the car turns at, in radians per second per second.
+   */
+  grip: { side: number; turn: number };
+  /** The steering. `sideForce` must stay under `grip.side`, so ordinary steering never slides. */
+  steer: SteerConfig;
+  /** Keeping the car the right way up when no wheel is on the ground. */
+  stability: StabilityConfig;
+  /**
+   * While any wheel is on the ground, the car is pulled towards it by this times the speed squared, in metres per second
+   * per second (Tane, 10a-3): it keeps the wheels down over the generator's tightest crests (200 m) at top and boost
+   * speed, where gravity alone lets the car leave the ground above 44 m/s. Nothing in the air.
+   */
+  downforce: number;
+  engine: EngineConfig;
+  /** Drifting: the hop, the slide, the charge and its tiers (brief, "Drift-boost"). */
+  drift: DriftConfig;
+  /** The boost a drift gives when it is let go. */
+  boost: BoostConfig;
+  /** How fast the car can go on each surface, as a share of top speed. */
+  surfaces: SurfaceConfig;
+  /** Walls and the start gate: how they turn the car along them and push it off (step 7b). */
+  bump: BumpConfig;
+  /**
+   * The brake slows the car by `strength` metres per second each second. With no pedal pressed, a car slower than
+   * `holdBelow` is held still by the brake, so it stays put on a slope. With the brake pressed, a car slower than
+   * that reverses.
+   */
+  brake: { strength: number; holdBelow: number };
+  /** Reversing: its top speed, and its push from a standstill. It eases off towards its top speed as the engine does. */
+  reverse: { topSpeed: number; accel: number };
+}
+
+/**
+ * The steering: how fast the car turns with the stick right over. The stick sets the turn rate at once, with no
+ * easing (brief: input must feel instant); part way over, it asks for that share of it.
+ */
+export interface SteerConfig {
+  /** The tightest circle the car turns on, in metres: what full stick gives at low speed. */
+  minRadius: number;
+  /**
+   * The hardest full stick pushes the car sideways, in metres per second per second: at higher speeds the circle
+   * widens to keep to it. The two limits meet at the square root of `minRadius` times this. Keep it under `grip.side`.
+   */
+  sideForce: number;
+}
+
+/**
+ * In the air (no wheel on the ground) the car is turned back towards roof-up, so it lands on its wheels (brief: the
+ * car should never flip). With wheels down nothing more is needed: drive, brake and grip act through the body's
+ * middle, so they cannot roll it.
+ */
+export interface StabilityConfig {
+  /** How hard the roof is turned back up, in radians per second per second for each unit of tilt (the sine of the angle from straight up). */
+  upright: number;
+  /** How quickly a roll or a pitch dies away, as a share a second. Turning about the car's own upright axis is left alone. */
+  calm: number;
+}
+
+/**
+ * Drifting (step 6; the rules are in docs/plan/M3-driving.md). Times are in seconds, turned into whole steps once.
+ * Speeds are shares of `engine.topSpeed`.
+ */
+export interface DriftConfig {
+  /** A drift starts only going forwards at this share of top speed or more (brief: about 40%). */
+  startSpeed: number;
+  /** It is cancelled when the speed along the line of travel falls under this share. */
+  endSpeed: number;
+  /** The share of full stick, to one side, that starts the slide. */
+  steerToStart: number;
+  /** The hop at the start: how long and how high. Drawn only; the body stays on its springs. */
+  hop: { time: number; height: number };
+  /** How far the nose turns into the corner from the line of travel, in radians (Tane, 2026-11-17: 15 degrees, was 24). */
+  angle: number;
+  /** How long the nose takes to swing in at the start of a slide, and back out at its end. */
+  swing: number;
+  recover: number;
+  /**
+   * The circle the path of a slide follows, in metres, whatever the speed: `tight` with the stick fully into the
+   * corner (a key held), `middle` with it in the middle (no key), `wide` with it fully away (the other key), and
+   * evenly between them (in how much it curves) for a stick part way. Tane, 2026-11-17: it was a turn rate, which
+   * tightened the slide as the car slowed.
+   */
+  radius: { tight: number; middle: number; wide: number };
+  /** The hardest the tyres push sideways while sliding, in metres per second per second (in place of `grip.side`). */
+  grip: number;
+  /** How quickly the tyres change the rate the car turns at while sliding, in radians per second per second (in place of `grip.turn`). */
+  turnGrip: number;
+  /** How long a slide must last for each tier of charge (blue, orange, purple; brief: about 1, 2 and 3 seconds; Tane, 10a-7: 0.6, 1.2 and 1.8). */
+  tiers: readonly [number, number, number];
+  /** How long the boost for each tier lasts (brief: about 0.5, 1.0 and 1.6 seconds). */
+  boosts: readonly [number, number, number];
+  /** The brake pressed this far (a share) or more cancels a drift. */
+  brakeCancel: number;
+}
+
+/** The boost: while it runs, the top speed is `speed` times the usual and the engine pushes at `accel` with no easing. */
+export interface BoostConfig {
+  speed: number;
+  accel: number;
+}
+
+/**
+ * Off the road (step 7a): each surface's share of top speed. The car's share is the average over its wheels on the
+ * ground, so two wheels on a kerb or the grass cost little. It multiplies the top speed, a boost's included, and a car
+ * faster than that sheds `engine.shed` until it is down to it. Reversing is not slowed, so a car can always back out.
+ */
+export type SurfaceConfig = Record<'road' | 'kerb' | 'grass' | 'sand' | 'rock' | 'snow', number>;
+
+/**
+ * Walls and the start gate (step 7b; brief: barriers bounce the car back gently instead of stopping it dead). The
+ * physics stops the car going through; these turn it along the wall and send it off. (Not `WallConfig`: that is the
+ * generator's `road.walls`.)
+ */
+export interface BumpConfig {
+  /**
+   * While the body touches a wall, the turn rate asked for gains this, in radians per second, times how far the nose
+   * points into the wall plus `away` (sines of angles) and times how far it points along it (a cosine): it turns the
+   * nose along the wall, and on until it points a little away from it, so a car pressed flat against a wall leaves it.
+   */
+  turn: number;
+  /** How far the nose is turned away from the wall, as the sine of the angle: 0.05 is about 3 degrees. */
+  away: number;
+  /** On a new hit the car is sent off the wall at this speed, in metres per second. */
+  push: number;
+  /** A hit is new when the body has touched no wall for this long, in seconds. */
+  again: number;
+  /**
+   * Straight after a physics step in which the body touched a wall, the gate, a tree or a rock, and for `hold` after the
+   * last such step, its turning (about its up, and its roll and pitch with it) is held to this, in radians per second
+   * (Tane, 7c: a trunk clipped off centre at top speed spun it at 8 to 10).
+   */
+  spin: number;
+  /** How long after the body last touched something solid its turning and its rise are still held, in seconds (Tane, 10a-6). */
+  hold: number;
+  /** For the same time, its upward speed is held to this, in metres per second (Tane, 10a-6: a clipped trunk threw it 1.3 m up). */
+  lift: number;
+}
+
+/** The engine. */
+export interface EngineConfig {
+  /** The speed the car makes for with the throttle right down (brief: 30; Tane, check-in 2: 53). Part way down, it makes for that share of it. */
+  topSpeed: number;
+  /** Its full push, from a standstill up to where it starts to ease off. */
+  accel: number;
+  /**
+   * Over the last `taper` of top speed (0.3 is the last 30%) the push eases off evenly, to nothing at top speed. With
+   * `accel` this sets how long the car takes to reach it (brief: about 4 seconds). Above top speed the engine holds the car back as gently.
+   */
+  taper: number;
+  /** With no pedal pressed the car slows by this much each second. Also the hardest the engine holds the car back. */
+  coast: number;
+  /**
+   * The share of a slope's pull along the car that the engine makes up while a pedal drives it: 0 leaves the car to
+   * the slope, 1 makes a climb as fast as the flat. It also holds that share back downhill.
+   */
+  slopeHelp: number;
+  /**
+   * A car faster than its top speed (after a boost, or on running onto grass) slows by this much each second, or by
+   * the brake if that is harder, whatever the pedals, and no further than to its top speed.
+   */
+  shed: number;
+}
+
+/**
+ * The wheels: front left, front right, rear left, rear right. Each is felt for as a ball of `radius`, cast down from
+ * the body: a ball, not a bare ray, so it can never slip between two triangles of the ground (step 1). They are
+ * `halfTrack` either side of the car's middle line, the front pair `front` ahead of its middle and the rear pair `rear` behind.
+ */
+export interface WheelConfig {
+  radius: number;
+  halfTrack: number;
+  front: number;
+  rear: number;
+}
+
+/** The springs, one a wheel. */
+export interface SuspensionConfig {
+  /** How high the body's underside rides above level ground, at rest. Higher than a kerb. */
+  rideHeight: number;
+  /**
+   * How far the springs are squashed by the car's own weight at rest. More is softer. It is also how far a wheel
+   * can drop below where it rides before it leaves the ground.
+   */
+  sag: number;
+  /** How quickly a bounce dies away: 1 stops it dead, 0 lets it bounce for ever. */
+  damping: number;
+  /**
+   * The damper counts the speed it is closing at only up to this, in metres per second, as a real damper's valve
+   * blows off (Tane, 10a-6): a wheel landing on the edge of a kerb read the car's speed along the road as closing speed.
+   */
+  closingCap: number;
+  /**
+   * The cosine of the largest angle a wheel's ground direction may be from the other wheels' before it takes theirs for
+   * the step (Tane, 10a-4: a cast meeting the road mesh on an edge between triangles can tilt by 10 degrees and kick the
+   * car; a kerb's top is 5). See `steadyNormals`.
+   */
+  oddNormal: number;
+}
+
+/**
+ * The shapes the car collides with that are not already in the world as
+ * numbers. Walls, the gate, the road and the ground are collided with exactly
+ * as they are drawn; trees and rocks are drawn as leafy, lumpy shapes and
+ * collided with as these simple ones. Distances in metres.
+ */
+export interface ColliderConfig {
+  /** A tree is hit only on its trunk: a post of this radius, by kind, for a tree of size 1. It grows with the tree. */
+  trunkRadius: Record<TreeKind, number>;
+  /** The trunk stands this high above the ground under it, for a tree of size 1 and usual height. Well over a car's roof; the leaves above are not hit. */
+  trunkHeight: number;
+  /** It runs this far into the ground, so nothing passes under a tree that stands on a slope. */
+  trunkRoot: number;
+  /** A rock's middle lies this share of its size under the ground. Must match how rocks are drawn (`render.decor.rockSink`). */
+  rockSink: number;
+  /** A rock no higher than this above the ground is not hit: the car's body passes over it. Under the car's ride height. */
+  rockClear: number;
+  /**
+   * A taller rock is hit as an upright post as wide as the rock at the ground, at least this high (Tane, 7c), so the car
+   * meets an upright face and stops as at a trunk. As domes, rocks of 0.3 to 1.2 m threw a car at top speed 0.7 to 5 m up.
+   */
+  rockPostHeight: number;
+}
+
+/** How the keyboard and a controller are read. Nothing is smoothed (brief: input must feel instant). */
+export interface InputConfig {
+  /**
+   * A controller stick closer to its middle than this (0 to 1) reads as centred, since a stick at rest rarely reads
+   * exactly 0. The rest of its travel is stretched to reach full at the end.
+   */
+  deadZone: number;
+}
+
 export interface GameConfig {
   track: TrackConfig;
   road: RoadConfig;
   world: WorldConfig;
+  sim: SimConfig;
+  car: CarConfig;
+  input: InputConfig;
   render: RenderConfig;
   camera: CameraConfig;
 }
@@ -1216,15 +1725,23 @@ export interface GameConfig {
 /** The parts of the config that generation needs. */
 export type GenConfig = Pick<GameConfig, 'track' | 'road' | 'world'>;
 
+/** The parts of the config that the simulation needs: the road's walls and gate, its own settings, and the car. */
+export type PhysicsConfig = Pick<GameConfig, 'road' | 'sim' | 'car'>;
+
+/** How far a rock is sunk into the ground, as a share of its size: one number for how it is drawn and how it is hit. */
+const ROCK_SINK = 0.4;
+
 export const config: GameConfig = {
   track: {
     candidatesPerRound: 30,
     maxRounds: 5,
     startLineFraction: 0.4,
-    roadWidth: 12,
+    // Tane, 6h (2026-11-17): room for a drift, as kart racers have (was 12; the brief said 12 to 14).
+    roadWidth: 20,
     lapLengthMin: 1400,
     lapLengthMax: 2400,
-    minCornerRadius: 15,
+    // A radius of 15 m on a 12 m road (brief), 19 m on a 20 m one.
+    minInsideRadius: 9,
     sectionGapWidths: 2.5,
     sectionGapMinArc: 90,
     buildableRadius: 500,
@@ -1236,6 +1753,7 @@ export const config: GameConfig = {
       hilly: { turns: 4 },
       mountain: {
         turns: 8,
+        earthworksOnCentre: true,
         lapLength: [1600, 3000],
         buildableRadius: 600,
         weights: { straights: 0.1875, cornerMix: 0.1875, drift: 0.1875, flow: 0.1875, elevation: 0.25 },
@@ -1245,8 +1763,10 @@ export const config: GameConfig = {
       controlPointsMin: 10,
       controlPointsMax: 18,
       maxAttempts: 8,
-      minCornerRadius: 18,
-      clearance: 40,
+      // 18 m radius on a 12 m road, 22 m on a 20 m one.
+      minInsideRadius: 12,
+      // 40 m on a 12 m road.
+      clearanceWidths: 40 / 12,
       clearanceMinArc: 110,
       minEdge: 30,
       lapPerPerimeter: 0.93,
@@ -1257,7 +1777,9 @@ export const config: GameConfig = {
         round: { aspect: [1, 1.5], corners: [5, 7], perimeterShare: [0.7, 0.9] },
         folded: { aspect: [1.2, 2.4], corners: [4, 6], perimeterShare: [0.58, 0.8] },
         stretchedHalfLength: [300, 430],
-        stretchedHalfWidth: [24, 110],
+        // At least 30 m on a 20 m road: the long sides 3 widths apart, 2.64 once shrunk to fit (6h-3; 24 m on a 12 m road before,
+        // which left stretched tracks too round on a wide road).
+        stretchedHalfWidth: { leastWidths: 1.5, most: 110 },
         angleJitter: 0.3,
         radialJitter: 0.18,
       },
@@ -1265,17 +1787,21 @@ export const config: GameConfig = {
         shoulder: 55,
         depthMin: 110,
         outwardReach: 240,
-        hairpinWidth: [44, 66],
+        // 58 to 80 m on a 20 m road: legs at least 2.5 widths apart once shrunk to fit, and an end that turns no wider
+        // than a hairpin (45 m) once enlarged to fit (6h-3: scaled from 44 to 66 m on a 12 m road, only 90% of seeds kept one).
+        hairpinWidths: [2.9, 4],
         tipWidth: [90, 170],
         wideWidth: [100, 230],
         tipChance: 0.35,
         skew: 0.3,
       },
-      jog: { minEdge: 170, length: [34, 50], offset: [13, 22], margin: 65 },
+      // A sideways step of 13 to 22 m on a 12 m road.
+      jog: { minEdge: 170, length: [34, 50], offsetWidths: [13 / 12, 22 / 12], margin: 65 },
       bow: { minEdge: 200, push: [0.06, 0.16], outwardChance: 0.7 },
       radius: {
-        hairpin: [18, 32],
-        tip: [18, 30],
+        // Radii of 18 to 32 m and 18 to 30 m on a 12 m road.
+        hairpinInside: [12, 26],
+        tipInside: [12, 24],
         jog: [26, 42],
         bow: [140, 280],
         medium: [24, 60],
@@ -1332,9 +1858,11 @@ export const config: GameConfig = {
     maxGradient: { flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 },
     crestMinRadius: 200,
     minHeight: 2,
-    width: { min: 16, max: 22, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearance: 70 },
+    // 24 to 30 m on a 20 m road; kept 58 m from another section's edge (70 m centre to centre on a 12 m road).
+    width: { extraMin: 4, extraMax: 10, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearanceGap: 58 },
     verge: 4,
-    coupleDistance: 55,
+    // 55 m centre to centre on a 12 m road, 63 m on a 20 m one.
+    coupleGap: 43,
     coupleMinArc: 110,
     maxBankSlope: 0.45,
     bankSlack: 0.02,
@@ -1357,6 +1885,21 @@ export const config: GameConfig = {
     barrierWidth: 0.3,
     barrierHeight: 0.8,
     barrierBlock: 4,
+    walls: {
+      cornerLead: 15,
+      cornerTrail: 30,
+      // 80 m centre to centre on a 12 m road, 88 m on a 20 m one.
+      closeGap: 68,
+      probeReach: 16,
+      probeStep: 4,
+      // Tane, 6h-3: 45% on a 20 m road (40% before), whose taller cuttings left mountain laps under a quarter open.
+      maxSlope: 0.45,
+      minRise: 0.6,
+      gate: 14,
+      minGap: 40,
+      minWall: 24,
+      taper: 6,
+    },
     startSquare: 1,
     gateClearance: 6,
     gateBeam: 1.2,
@@ -1433,7 +1976,8 @@ export const config: GameConfig = {
       reach: [120, 600],
       scale: 1400,
       seasideDistance: 35,
-      seaside: { touches: [0.15, 0.4], coastal: [0.7, 0.95] },
+      // Tane, 6h-3: 15 to 30% on islands that touch the sea (was 15 to 40%; on a 20 m road seed 4's coast ran beside half its lap).
+      seaside: { touches: [0.15, 0.3], coastal: [0.7, 0.95] },
       inlandClear: 70,
       rise: 500,
       ramp: 0.18,
@@ -1533,6 +2077,89 @@ export const config: GameConfig = {
       scale: [0.7, 1.6],
     },
   },
+  sim: {
+    stepsPerSecond: 60,
+    maxStepsPerFrame: 5,
+    gravity: 9.81,
+    start: { back: 4 },
+    colliders: {
+      // The trunks as they are drawn at the ground (render/treeShapes.ts).
+      trunkRadius: { broadleaf: 0.38, pine: 0.32, palm: 0.28 },
+      trunkHeight: 2.5,
+      trunkRoot: 1,
+      rockSink: ROCK_SINK,
+      // 6 cm under the body's 26 cm ride height.
+      rockClear: 0.2,
+      // Over the top of the body (0.86 m), so it is always met on an upright face.
+      rockPostHeight: 1,
+    },
+    // The plan's values (docs/plan/M3-driving.md, step 8). Sections of the lap stand at least 67 m apart centre to centre
+    // on the 20 m road (seed 147, the closest of seeds 1 to 200), so a 40 m window cannot reach the next one.
+    progress: { window: 40, lost: 30, every: 100, margin: 6, stride: 40 },
+    // The plan's values (docs/plan/M3-driving.md, step 8): the brief's "after about 1 second".
+    respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
+  },
+  car: {
+    body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },
+    mass: 300,
+    wheels: { radius: 0.05, halfTrack: 0.6, front: 0.8, rear: 0.8 },
+    // About two bounces a second if nothing damped them: firm, for a kart. Ridden at 26 cm (was 18) so the body's corner
+    // clears a 45% bank met at an angle at speed instead of digging in and rolling the car (step 4e; Tane's choice).
+    // Damped to 0.5 (Tane, 7d; was 0.8): at 0.8 the 9 cm upright face of a kerb, crossed from the grass at 30 m/s, threw
+    // the front wheels off the ground and turned the car 4.2 degrees.
+    // oddNormal: the cosine of 8 degrees.
+    // closingCap: 4 m/s (Tane, 10a-6).
+    suspension: { rideHeight: 0.26, sag: 0.05, damping: 0.5, oddNormal: 0.990268, closingCap: 4 },
+    // Above what full stick asks at boost speed (25 times 1.15 squared: 33), so ordinary steering never slides (was 22
+    // with a side force of 15; 10a-4).
+    grip: { side: 35, turn: 30 },
+    // Full stick: a 6 m circle up to 12.2 m/s, 36 m at 30 m/s, 113 m at top speed (Tane, 10a-3: was 15, 187 m at 53 m/s,
+    // and the car could not turn back onto the road after a slide).
+    steer: { minRadius: 6, sideForce: 25 },
+    stability: { upright: 12, calm: 3 },
+    // 7 m/s2 at 53 m/s, 9.3 at 61 (the boost): enough for a 200 m crest at 61 m/s (18.6 needed, 9.8 from gravity).
+    downforce: 0.0025,
+    // 190 km/h (Tane, check-in 2: was 30 m/s, 108 km/h; the straights had nothing to do), with the push as it was: 95% of
+    // top speed in 7 s, and 108 km/h in 3.2 s.
+    // Above top speed the car sheds 9 m/s2: a boost's extra speed is gone within about a second of it ending.
+    engine: { topSpeed: 53, accel: 9.3, taper: 0.3, coast: 3, slopeHelp: 0.5, shed: 9 },
+    drift: {
+      // 21 m/s to start, 16 m/s to keep going (shares of top speed; 12 and 9 at 30 m/s measured the same in 10a-3).
+      startSpeed: 0.4,
+      endSpeed: 0.3,
+      steerToStart: 0.3,
+      hop: { time: 0.15, height: 0.08 },
+      // 15 degrees (Tane, 2026-11-17: 24 looked like turning into the barrier).
+      angle: 0.2618,
+      swing: 0.25,
+      recover: 0.2,
+      // Circles at any speed (Tane, 2026-11-17), the gentlest that pass the corner tests on the 20 m road (6h-4, from Tane's
+      // second drive: slides held into the corner hit the inner wall). A keyboard driver changing key at most every 0.15 s
+      // holds a slide through 97% of the corners of seeds 1 to 20; one changing key once a second through 96% of plain
+      // corners, every hairpin and 87% of chicanes (src/sim/car/corners.test.ts; was 22, 45 and 160 m on the 12 m road).
+      radius: { tight: 28, middle: 57, wide: 203 },
+      // Holds the tightest slide (28 m) up to 41 m/s; faster, it scrubs the car down to that (Tane, 10a-3: kept at 60).
+      grip: 60,
+      // 4 rad/s in one step: enough for the nose to swing in as a slide starts without the path turning away from the corner.
+      turnGrip: 240,
+      // 0.6, 1.2 and 1.8 s (Tane, 10a-7; were 1, 2 and 3, the brief's): at 53 m/s many slides are over in under a second, so
+      // a boost came too rarely. The bot's slides on seeds 1 to 20 earn one 99% of the time (80% at 1, 2, 3).
+      tiers: [0.6, 1.2, 1.8],
+      boosts: [0.5, 1.0, 1.6],
+      brakeCancel: 0.5,
+    },
+    // 61 m/s on the road while a boost runs (34.5 at the old 30 m/s; Tane, 6h: short and mild; was 1.3 at 30, 39 m/s,
+    // which threw the car into walls). Steering keeps its top-speed circle while boosting (steer.ts).
+    boost: { speed: 1.15, accel: 12 },
+    // 40% slower off the road (brief: grass and sand cut top speed by about 40%, so cutting corners rarely pays): 32 m/s.
+    surfaces: { road: 1, kerb: 1, grass: 0.6, sand: 0.6, rock: 0.6, snow: 0.6 },
+    // spin 3 (Tane, 10a-5; was 6): with the hold, a 60-degree hit stops against the wall instead of spinning round. It
+    // came in with the round-edged body (10a-6b): with square edges a car held to 3 was pinned on the wall's seams.
+    bump: { turn: 3, away: 0.05, push: 1.5, again: 0.5, spin: 3, hold: 0.25, lift: 0.5 },
+    brake: { strength: 20, holdBelow: 0.5 },
+    reverse: { topSpeed: 8, accel: 6 },
+  },
+  input: { deadZone: 0.15 },
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,
@@ -1620,7 +2247,28 @@ export const config: GameConfig = {
       glintDim: 0.65,
       stillTime: 0,
     },
-    decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: 0.4, shade: [0.8, 1.12] },
+    decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: ROCK_SINK, shade: [0.8, 1.12] },
+    car: {
+      wheelRadius: 0.28,
+      wheelWidth: 0.24,
+      steerAngle: 0.35,
+      // 6h-5 (Tane: sprites and bloom): a trickle of 15 a wheel at the first tier, a spray of 45 at the third. Twice as
+      // bright as the screen shows for the bloom: at 3 the many sparks where they are born summed to a white glow.
+      sparks: { perStep: [1, 2, 3], life: 0.25, reach: [0.6, 0.85, 1.1], spread: [0.35, 0.6, 0.9], length: 0.14, width: 0.03, head: 0.05, glow: 2 },
+      burst: { life: 0.2, count: 14, reach: 1.8, size: 0.22 },
+      smoke: { every: 2, life: 0.5, size: [0.2, 0.7], rise: 0.5, alpha: 0.35, drag: 0.15 },
+      flame: { lengths: [0.6, 0.9, 1.2], width: 0.12, core: 0.5, flicker: 1 / 6, spread: 0.2, flare: 0.12 },
+      // About 4 degrees of lean, 14 of counter-steer, 6% of squash.
+      lean: 0.07,
+      counterSteer: 0.25,
+      squash: 0.06,
+      speedLines: { count: 14, life: 0.25, length: [0.08, 0.2], inner: 0.6, alpha: 0.35 },
+    },
+    bloom: { enabled: true, strength: 0.7, radius: 0.5, scale: 0.5 },
+    // Short, so the car is seen going under and seen back on the road (step 8c, the plan's "a short fade").
+    respawnFade: { in: 0.3, out: 0.4 },
+    // Long enough to read after a slide ends mid-corner (Tane, check-in 2: a drift sometimes ended with no brake pressed).
+    cancelShown: 2,
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
@@ -1658,8 +2306,25 @@ export const config: GameConfig = {
       fit: 1.25,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
+    car: { distance: 7, tilt: 0.3, side: 0.7 },
     summit: { back: 70, lift: 15, spread: 0.6, ahead: 300, clearance: 4 },
     climb: { window: 40, distance: 80, side: 0.3, tilt: 0.12, clearance: 4 },
     fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },
+    chase: {
+      back: 6.5,
+      height: 2.4,
+      lookAhead: 5,
+      lookHeight: 1,
+      follow: 0.15,
+      clearance: 0.8,
+      fieldOfView: 60,
+      travelBelow: 2,
+      // About 7 degrees round to the outside of a slide; 10 degrees wider while a boost runs.
+      swing: 0.12,
+      swingTime: 0.3,
+      boostFieldOfView: 70,
+      boostIn: 0.25,
+      boostOut: 0.5,
+    },
   },
 };

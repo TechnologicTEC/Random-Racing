@@ -1,8 +1,9 @@
-import type { GenConfig, RoadConfig, TrackConfig } from '../../config';
+import type { GenConfig, RoadConfig, TrackRules } from '../../config';
 import { dcos, dsin, TAU } from '../../core/dmath';
 import { createRng } from '../../core/rng';
 import { pickCharacter } from '../character';
-import { findNeighbours, measureProfile, solveProfile } from '../road/profile';
+import { solveBanking } from '../road/banking';
+import { findNeighbours, measureProfile, roadEdges, solveProfile } from '../road/profile';
 import type { Candidate, CenterLine, Corner, ReliefKind, ScoreBreakdown, StraightSection, TrackResult, Violation } from '../types';
 import { createRelief, type Relief } from '../world/relief';
 import { GENERATOR_VERSION } from '../version';
@@ -94,7 +95,7 @@ function buildCandidate(
   controlPoints: Corner[],
   buildAttempts: number,
   line: CenterLine,
-  cfg: TrackConfig,
+  cfg: TrackRules,
   terrain: Terrain,
   alwaysScore: boolean,
 ): Candidate {
@@ -104,6 +105,8 @@ function buildCandidate(
   const turns = layoutViolations.length === 0 ? terrain.turns : 1;
   // Which sections run side by side depends on the lap's shape, not on which way it is turned.
   const neighbours = findNeighbours(line, terrain.road, cfg.roadWidth);
+  // So does the banking. Except on mountain seeds, the earthworks rule is held at the road's banked edges too.
+  const cross = cfg.byRelief[terrain.kind].earthworksOnCentre ? null : solveBanking(line, terrain.road);
   let best: Candidate | null = null;
   let unturned: Candidate | null = null;
   for (let k = 0; k < turns; k++) {
@@ -111,8 +114,9 @@ function buildCandidate(
     const angle = (k * TAU) / turns;
     const turned = turnLine(line, angle);
     const profile = solveProfile(turned, terrain.relief, terrain.road, cfg.roadWidth, terrain.road.maxGradient[terrain.kind], neighbours);
-    const elevation = measureProfile(turned, profile, terrain.road, cfg.roadWidth, neighbours);
-    const violations: Violation[] = [...layoutViolations, ...checkEarthworks(turned, profile, elevation, terrain.road, cfg.roadWidth, neighbours)];
+    const edges = cross ? roadEdges(turned, terrain.relief, cfg.roadWidth, cross) : undefined;
+    const elevation = measureProfile(turned, profile, terrain.road, cfg.roadWidth, neighbours, edges);
+    const violations: Violation[] = [...layoutViolations, ...checkEarthworks(turned, profile, elevation, terrain.road, cfg.roadWidth, neighbours, edges)];
     const score: ScoreBreakdown | null = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg, elevation, terrain.kind) : null;
     const candidate: Candidate = { index, controlPoints: turnPoints(controlPoints, angle), buildAttempts, turn, line: turned, profile, violations, sections, score };
     if (k === 0) unturned = candidate;
@@ -162,7 +166,7 @@ function bestCandidate(candidates: readonly Candidate[]): number {
 }
 
 /** A plain circle sized for a mid-length lap. Used only if no candidate is valid. */
-function fallbackOval(cfg: TrackConfig): Corner[] {
+function fallbackOval(cfg: TrackRules): Corner[] {
   const lap = (cfg.lapLengthMin + cfg.lapLengthMax) / 2;
   const radius = Math.min(lap / TAU, cfg.buildableRadius * 0.8);
   const points: Corner[] = [];
@@ -177,7 +181,7 @@ function fallbackOval(cfg: TrackConfig): Corner[] {
  * Moves the start of the lap onto the longest straight, so sample 0 is the
  * start/finish line with most of that straight ahead of it.
  */
-function placeStartLine(candidate: Candidate, cfg: TrackConfig): Candidate {
+function placeStartLine(candidate: Candidate, cfg: TrackRules): Candidate {
   let longest: StraightSection | null = null;
   for (const section of candidate.sections) {
     if (section.type === 'straight' && (!longest || section.length > longest.length)) longest = section;

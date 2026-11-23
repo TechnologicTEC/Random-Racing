@@ -10,6 +10,10 @@ import { solveWidth } from './width';
 
 const BASE = config.track.roadWidth;
 const rules = config.road.width;
+/** The widest a widened stretch may be, the least it is widened to, and how far from another section's middle the road stays its usual width. */
+const WIDEST = BASE + rules.extraMax;
+const LEAST = BASE + rules.extraMin;
+const CLEAR = rules.clearanceGap + BASE;
 const TINY = 1e-9;
 
 /** Two straights joined by half circles, with the lap starting part way down the first straight. */
@@ -56,20 +60,20 @@ describe('solveWidth on a simple lap', () => {
   });
 
   it('keeps a constant-width seed at the base width all the way round', () => {
-    expect(BASE).toBe(12);
+    expect(BASE).toBe(config.track.roadWidth);
     for (const width of constant) expect(width).toBe(BASE);
   });
 
-  it('keeps a varied seed between the base width and 22 m', () => {
-    expect(rules.max).toBe(22);
+  it('keeps a varied seed between the base width and 10 m wider', () => {
+    expect(rules.extraMax).toBe(10);
     for (const width of varied) {
       expect(width).toBeGreaterThanOrEqual(BASE - TINY);
-      expect(width).toBeLessThanOrEqual(rules.max + TINY);
+      expect(width).toBeLessThanOrEqual(WIDEST + TINY);
     }
   });
 
   it('always widens the start straight of a varied seed, to at least the smallest widening', () => {
-    expect(varied[0]!).toBeGreaterThanOrEqual(rules.min - TINY);
+    expect(varied[0]!).toBeGreaterThanOrEqual(LEAST - TINY);
   });
 
   it('holds the wider road for a good length, not just a bulge', () => {
@@ -96,7 +100,7 @@ describe('solveWidth on a simple lap', () => {
   it('eases every change of width over about 40 m', () => {
     expect(rules.ease).toBe(40);
     // An S-shaped change over the easing length is at its quickest in the middle, at twice the average rate.
-    const quickest = (2 * (rules.max - BASE)) / rules.ease;
+    const quickest = (2 * (WIDEST - BASE)) / rules.ease;
     let changes = 0;
     for (let i = 0; i < line.count; i++) {
       const step = Math.abs(varied[(i + 1) % line.count]! - varied[i]!);
@@ -121,23 +125,23 @@ describe('solveWidth on a simple lap', () => {
 
   it('picks different widths for different seeds, from the smallest widening up to the widest', () => {
     const starts = Array.from({ length: 60 }, (_, seed) => solveWidth(seed, line, sections, 'varied', config)[0]!);
-    expect(Math.min(...starts)).toBeGreaterThanOrEqual(rules.min - TINY);
-    expect(Math.min(...starts)).toBeLessThan(rules.min + 1.5);
-    expect(Math.max(...starts)).toBeGreaterThan(rules.max - 1.5);
+    expect(Math.min(...starts)).toBeGreaterThanOrEqual(LEAST - TINY);
+    expect(Math.min(...starts)).toBeLessThan(LEAST + 1.5);
+    expect(Math.max(...starts)).toBeGreaterThan(WIDEST - 1.5);
   });
 });
 
 describe('solveWidth beside a close section', () => {
-  it('never widens two straights that run 40 m apart', () => {
-    const { line, sections } = stadium(600, 20);
+  it('never widens two straights that run 10 m closer than the clearance', () => {
+    const { line, sections } = stadium(600, (CLEAR - 10) / 2);
     for (let seed = 0; seed < 10; seed++) {
       for (const width of solveWidth(seed, line, sections, 'varied', config)) expect(width).toBe(BASE);
     }
   });
 
   it('widens them once they are further apart than the clearance', () => {
-    const { line, sections } = stadium(600, rules.clearance / 2 + 5);
-    expect(solveWidth(3, line, sections, 'varied', config)[0]!).toBeGreaterThanOrEqual(rules.min - TINY);
+    const { line, sections } = stadium(600, CLEAR / 2 + 5);
+    expect(solveWidth(3, line, sections, 'varied', config)[0]!).toBeGreaterThanOrEqual(LEAST - TINY);
   });
 });
 
@@ -149,11 +153,11 @@ describe('solveWidth on generated tracks', () => {
     return { seed: track.seed, line, sections, width: solveWidth(track.seed, line, sections, 'varied', cfg) };
   });
 
-  it('stays between 12 and 22 m on every seed', () => {
+  it('stays between the base width and 10 m wider on every seed', () => {
     for (const { width, seed } of all) {
       for (const value of width) {
         expect(value, `seed ${seed}`).toBeGreaterThanOrEqual(BASE - TINY);
-        expect(value, `seed ${seed}`).toBeLessThanOrEqual(rules.max + TINY);
+        expect(value, `seed ${seed}`).toBeLessThanOrEqual(WIDEST + TINY);
       }
     }
   });
@@ -171,13 +175,13 @@ describe('solveWidth on generated tracks', () => {
     for (const { line, width, seed } of all) {
       const other = nearestOtherSection(line);
       for (let i = 0; i < line.count; i++) {
-        if (other[i]! < rules.clearance) expect(width[i]!, `seed ${seed} sample ${i}`).toBeCloseTo(BASE, 9);
+        if (other[i]! < CLEAR) expect(width[i]!, `seed ${seed} sample ${i}`).toBeCloseTo(BASE, 9);
       }
     }
   });
 
   it('eases every change', () => {
-    const quickest = (2 * (rules.max - BASE)) / rules.ease;
+    const quickest = (2 * (WIDEST - BASE)) / rules.ease;
     for (const { line, width, seed } of all) {
       for (let i = 0; i < line.count; i++) {
         const step = Math.abs(width[(i + 1) % line.count]! - width[i]!);
@@ -188,7 +192,7 @@ describe('solveWidth on generated tracks', () => {
 
   it('gives most varied seeds a clearly wider stretch, and varies how much of the lap is wide', () => {
     const widest = all.map(({ width }) => Math.max(...width));
-    expect(widest.filter((value) => value >= rules.min - 0.01).length).toBeGreaterThanOrEqual(all.length * 0.85);
+    expect(widest.filter((value) => value >= LEAST - 0.01).length).toBeGreaterThanOrEqual(all.length * 0.85);
     const shares = all.map(({ width }) => width.filter((value) => value > BASE + 1).length / width.length);
     expect(Math.max(...shares)).toBeGreaterThan(0.25);
     expect(Math.max(...shares)).toBeLessThan(0.75);

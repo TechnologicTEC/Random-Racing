@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { findViolations, importsThree } from './testing/architectureRules';
+import { findViolations, importsRapier, importsThree } from './testing/architectureRules';
 
 // Every non-test source file in the pure layers, loaded as text by Vite.
-const allPureFiles = import.meta.glob<string>(['./core/**/*.ts', './gen/**/*.ts'], {
+const allPureFiles = import.meta.glob<string>(['./core/**/*.ts', './gen/**/*.ts', './sim/**/*.ts'], {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -11,9 +11,10 @@ const pureSources = Object.fromEntries(
   Object.entries(allPureFiles).filter(([path]) => !path.endsWith('.test.ts')),
 );
 
-describe('architecture rules for src/core and src/gen', () => {
+describe('architecture rules for src/core, src/gen and src/sim', () => {
   it('finds the pure source files', () => {
     expect(Object.keys(pureSources).length).toBeGreaterThan(0);
+    expect(Object.keys(pureSources).some((path) => path.startsWith('./sim/'))).toBe(true);
   });
 
   it.each(Object.entries(pureSources))('%s follows the rules', (path, source) => {
@@ -46,6 +47,69 @@ describe('Three.js stays in src/render', () => {
     expect(importsThree(`// import * as THREE from 'three';
 export const x = 1;`)).toBe(false);
     expect(importsThree(`import { thing } from './three-quarters';`)).toBe(false);
+  });
+});
+
+describe('Rapier stays in src/sim/physics', () => {
+  const outsidePhysics = Object.entries(allFiles).filter(([path]) => !path.startsWith('./sim/physics/') && !path.endsWith('.test.ts'));
+
+  it('finds source files to check', () => {
+    expect(outsidePhysics.length).toBeGreaterThan(20);
+  });
+
+  it.each(outsidePhysics)('%s does not import Rapier', (_path, source) => {
+    expect(importsRapier(source)).toBe(false);
+  });
+
+  it('recognises every way of importing Rapier', () => {
+    expect(importsRapier(`import RAPIER from '@dimforge/rapier3d-deterministic-compat';`)).toBe(true);
+    expect(importsRapier(`import type { World } from "@dimforge/rapier3d-compat";`)).toBe(true);
+    expect(importsRapier(`const rapier = await import('@dimforge/rapier3d-deterministic-compat');`)).toBe(true);
+    expect(importsRapier(`// import RAPIER from '@dimforge/rapier3d-deterministic-compat';
+export const x = 1;`)).toBe(false);
+    expect(importsRapier(`import { loadRapier } from './physics/rapier';`)).toBe(false);
+  });
+});
+
+describe('findViolations in src/sim', () => {
+  it('lets the simulation use core, generation and itself', () => {
+    const source = `import { dsin } from '../core/dmath';
+import type { WorldResult } from '../gen/types';
+import { stepCar } from './car/drive';
+export const x = dsin(1);`;
+    expect(findViolations('./sim/sim.ts', source)).toEqual([]);
+  });
+
+  it('stops the simulation importing the page, the drawing, the input devices or the camera', () => {
+    expect(findViolations('./sim/sim.ts', `import { draw } from '../render/carView';`)).toHaveLength(1);
+    expect(findViolations('./sim/sim.ts', `import { mount } from '../app/drive';`)).toHaveLength(1);
+    expect(findViolations('./sim/car/steer.ts', `import { keys } from '../../input/keyboard';`)).toHaveLength(1);
+    expect(findViolations('./sim/sim.ts', `import { chase } from '../camera/chase';`)).toHaveLength(1);
+  });
+
+  it('stops the simulation reading config values directly, but allows config types', () => {
+    expect(findViolations('./sim/sim.ts', `import { config } from '../config';`)).toHaveLength(1);
+    expect(findViolations('./sim/sim.ts', `import type { SimConfig } from '../config';`)).toEqual([]);
+  });
+
+  it('catches chance, the clock and inexact maths in the simulation', () => {
+    expect(findViolations('./sim/sim.ts', 'const r = Math.random();')).toHaveLength(1);
+    expect(findViolations('./sim/sim.ts', 'const t = performance.now();')).toHaveLength(1);
+    expect(findViolations('./sim/car/steer.ts', 'const v = Math.sin(1);')).toHaveLength(1);
+    expect(findViolations('./sim/physics/carBody.ts', 'const v = Math.atan2(1, 2);')).toHaveLength(1);
+  });
+
+  it('lets only src/sim/physics import Rapier', () => {
+    const source = `import RAPIER from '@dimforge/rapier3d-deterministic-compat';`;
+    expect(findViolations('./sim/physics/rapier.ts', source)).toEqual([]);
+    expect(findViolations('./sim/sim.ts', source)).toHaveLength(1);
+    expect(findViolations('./sim/car/drive.ts', source)).toHaveLength(1);
+    expect(findViolations('./gen/a.ts', source)).toHaveLength(1);
+  });
+
+  it('never lets the simulation import Three.js, the physics folder included', () => {
+    expect(findViolations('./sim/sim.ts', `import { Vector3 } from 'three';`)).toHaveLength(1);
+    expect(findViolations('./sim/physics/colliders.ts', `import { Vector3 } from 'three';`)).toHaveLength(1);
   });
 });
 

@@ -11,15 +11,32 @@ describe('config', () => {
     expect(config.track.lapLengthMax).toBe(2400);
   });
 
-  it('makes the road 12 m wide, widening to at most 22 m in places', () => {
-    expect(config.track.roadWidth).toBe(12);
-    expect(config.road.width.max).toBe(22);
-    expect(config.road.width.min).toBeGreaterThan(config.track.roadWidth);
-    expect(config.road.width.min).toBeLessThan(config.road.width.max);
+  it('makes the road 20 m wide (Tane, 6h: room for a drift, as in kart racers), widening by 4 to 10 m on some straights', () => {
+    expect(config.track.roadWidth).toBe(20);
+    expect(config.road.width.extraMin).toBe(4);
+    expect(config.road.width.extraMax).toBe(10);
+    expect(config.road.width.extraMin).toBeLessThan(config.road.width.extraMax);
+  });
+
+  it('keeps the skeleton parts further apart than the brief section gap, even after the layout is shrunk to fit, at any road width', () => {
+    const { layout, sectionGapWidths } = config.track;
+    expect(layout.clearanceWidths * layout.scale[0]).toBeGreaterThan(sectionGapWidths);
+    // The two straights of a stretched base, and the two legs of a narrow fold, are separate sections.
+    expect(2 * layout.base.stretchedHalfWidth.leastWidths * layout.scale[0]).toBeGreaterThanOrEqual(sectionGapWidths);
+    expect(layout.fold.hairpinWidths[0] * layout.scale[0]).toBeGreaterThan(sectionGapWidths);
+  });
+
+  it('leaves room inside the tightest corner for the apron, the kerb, the verge and 1.5 m more, and keeps the builder above the hard limit', () => {
+    const { road, track } = config;
+    const { layout } = track;
+    expect(layout.minInsideRadius).toBeGreaterThanOrEqual(road.apronWidth + road.kerbWidth + road.verge + 1.5);
+    expect(track.minInsideRadius).toBeLessThan(layout.minInsideRadius);
+    expect(layout.radius.hairpinInside[0]).toBeGreaterThanOrEqual(layout.minInsideRadius);
+    expect(layout.radius.tipInside[0]).toBeGreaterThanOrEqual(layout.minInsideRadius);
   });
 
   it('keeps widened road clear of other sections: further apart than sections that share a bank', () => {
-    expect(config.road.width.clearance).toBeGreaterThan(config.road.coupleDistance);
+    expect(config.road.width.clearanceGap).toBeGreaterThan(config.road.coupleGap);
   });
 
   it('generates a 2700 m tile on a 3 m grid: room for mountains, at about 800,000 heights', () => {
@@ -38,6 +55,18 @@ describe('config', () => {
     // The coast is carved only beyond the verge and one more grid cell, so ground read between
     // cells under the barrier is never pulled down by a sea cliff.
     expect(config.world.coast.clear).toBeGreaterThanOrEqual(config.road.verge + config.world.tile.cell);
+  });
+
+  it('blooms the drift effects only, softly, at half the picture size (Tane, 6h-5: sprites and bloom)', () => {
+    const { bloom } = config.render;
+    expect(bloom.enabled).toBe(true);
+    expect(bloom.strength).toBeGreaterThan(0);
+    expect(bloom.strength).toBeLessThanOrEqual(2);
+    expect(bloom.radius).toBeGreaterThanOrEqual(0);
+    expect(bloom.radius).toBeLessThanOrEqual(1);
+    expect(bloom.scale).toBe(0.5);
+    // How much brighter than the screen can show the glowing effects are drawn, so the bloom has something to spread.
+    expect(config.render.car.sparks.glow).toBeGreaterThan(1);
   });
 
   it('generates about 30 candidates per seed', () => {

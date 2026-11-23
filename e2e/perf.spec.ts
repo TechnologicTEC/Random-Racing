@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { slideTo } from './drifting';
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -14,8 +15,8 @@ const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [1,
 const withParts = process.env.PARTS !== '0';
 const extra = process.env.EXTRA ? `&${process.env.EXTRA}` : '';
 
-/** The views measured: flying the lap, circling the island from above, and the close view of the lap's highest point. */
-const views: Record<string, string> = { fly: 'lap=0', circle: 'cam=orbit', summit: 'look=summit' };
+/** The views measured: flying the lap, circling the island from above, and the close view of the lap's highest point; and driving (10b). */
+const views: Record<string, string> = { fly: 'cam=fly&lap=0', circle: 'cam=orbit', summit: 'look=summit' };
 
 /** Parts of the picture switched off in turn on the flying view, to see what each costs. */
 const parts: Record<string, string> = {
@@ -40,11 +41,46 @@ interface Row {
 const rows: Row[] = [];
 let card = '';
 
+/**
+ * The drift's effects in the driving view (6h-5): a slide held at tier 3, with the bloom and without it. The
+ * difference between the two is what the bloom costs; it draws nothing while no effect is shown.
+ */
+const drift: Record<string, string> = { bloom: 'still=1', 'no bloom': 'still=1&bloom=0' };
+
+/**
+ * Brings the car into a tier 3 slide and keeps it there (`still=1` holds it). A held picture is drawn only when
+ * something changes, so the clock is set every frame: every frame is then drawn, with the sparks on it.
+ */
+async function holdSlide(page: Page): Promise<void> {
+  await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
+  expect(await slideTo(page, 3), 'a slide reaching tier 3').toBe(true);
+  await page.evaluate(() => {
+    const again = (): void => {
+      window.seedCircuit.view!.setClock(0);
+      requestAnimationFrame(again);
+    };
+    requestAnimationFrame(again);
+  });
+}
+
+/**
+ * The driving view (10b): the chase camera behind the car, with W held from the start line so the car drives off and
+ * the camera follows it for the whole measurement, as a player sees the island.
+ */
+async function holdThrottle(page: Page): Promise<void> {
+  await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(1000);
+  const speed = await page.evaluate(() => window.seedCircuit.drive!.state()!.speed);
+  expect(speed, 'the car drives off with W held').toBeGreaterThan(3);
+}
+
 /** Opens a view, lets it settle, then times three spells of three seconds and keeps the middle one. */
-async function measure(page: Page, seed: number, view: string, options: string, query: string): Promise<void> {
+async function measure(page: Page, seed: number, view: string, options: string, query: string, prepare?: (page: Page) => Promise<void>): Promise<void> {
   // sync=1: the page waits for the graphics card to finish each frame, so the time between frames is what a frame costs.
   await page.goto(`/?seed=${seed}&time=13:00&sync=1&${query}${extra}`);
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+  if (prepare) await prepare(page);
   card = await page.evaluate(() => window.seedCircuit.view!.graphics());
   // A headless or software-drawn browser would give numbers that mean nothing.
   expect(card, 'this browser is drawing in software, not on a graphics card').not.toMatch(/swiftshader|llvmpipe|software|basic render/i);
@@ -79,6 +115,9 @@ test.describe('at 1080p', () => {
         await measure(page, seed, view, 'whole', query);
       });
     }
+    test(`seed ${seed}, driving`, async ({ page }) => {
+      await measure(page, seed, 'drive', 'whole', 'cam=chase', holdThrottle);
+    });
   }
   if (withParts) {
     for (const seed of seeds.slice(0, 3)) {
@@ -87,6 +126,13 @@ test.describe('at 1080p', () => {
           await measure(page, seed, 'fly', name, `${views.fly}&${query}`);
         });
       }
+    }
+  }
+  for (const seed of seeds.slice(0, 3)) {
+    for (const [name, query] of Object.entries(drift)) {
+      test(`seed ${seed}, a tier 3 slide, ${name}`, async ({ page }) => {
+        await measure(page, seed, 'slide', name, query, holdSlide);
+      });
     }
   }
 });
@@ -100,6 +146,9 @@ test.describe('at 2880 by 1800', () => {
         await measure(page, seed, view, 'whole', query);
       });
     }
+    test(`seed ${seed}, driving`, async ({ page }) => {
+      await measure(page, seed, 'drive', 'whole', 'cam=chase', holdThrottle);
+    });
   }
 });
 

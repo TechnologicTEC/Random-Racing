@@ -105,6 +105,13 @@ describe('fitReport', () => {
     expect(fitReport(input, config).groundThroughRoad).toBeGreaterThan(0);
   });
 
+  it('looks for separate sections out to the coupling gap beyond the road edges', () => {
+    const reach = config.road.coupleGap + config.track.roadWidth;
+    const { report } = reportFor(stadiumLine(300, (reach - 2) / 2), 520, () => 10, () => 10);
+    expect(report.closestSections!.value).toBeCloseTo(reach - 2, 0);
+    expect(reportFor(stadiumLine(300, (reach + 2) / 2), 520, () => 10, () => 10).report.closestSections).toBeNull();
+  });
+
   it('reports how close separate sections of the lap come', () => {
     const { report } = reportFor(stadiumLine(300, 20), 520, () => 10, () => 10);
     expect(report.closestSections).not.toBeNull();

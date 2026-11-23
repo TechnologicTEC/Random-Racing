@@ -6,7 +6,7 @@ import { switchAddress } from '../../app/route';
 import { genClient } from '../../worker/client';
 import { drawLab, SECTION_COLORS, type TerrainPicture } from './draw';
 import { drawElevationChart } from './elevationChart';
-import { describeCharacter, describeClouds, describeDecor, describeFit, describeProfile, describeScorePart, describeSky, describeViolation, describeWidth } from './format';
+import { describeCharacter, describeClouds, describeDecor, describeFit, describeProfile, describeScorePart, describeSky, describeViolation, describeWalls, describeWidth } from './format';
 import { terrainPicture } from './terrainImage';
 import { fitView, panBy, zoomAt, type View } from './view';
 
@@ -118,7 +118,8 @@ function readRuleOverrides(params: URLSearchParams): { values: Partial<TrackConf
   const notes: string[] = [];
   const minRadius = Number(params.get('minRadius'));
   if (params.has('minRadius') && minRadius > 0 && minRadius < 1000) {
-    values.minCornerRadius = minRadius;
+    // The rule is kept as the room inside a corner; the address gives the corner's radius.
+    values.minInsideRadius = minRadius - config.track.roadWidth / 2;
     notes.push(`minimum corner radius ${minRadius} m`);
   }
   const gapWidths = Number(params.get('gapWidths'));
@@ -187,7 +188,7 @@ export function mountTrackLab(root: HTMLElement): void {
     const dpr = window.devicePixelRatio || 1;
     ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!result) {
-      drawLab(ctx!, view, null, cfg);
+      drawLab(ctx!, view, null, trackRulesFor(cfg, 'flat'));
       return;
     }
     const ghosts = ghostsBox.checked
@@ -197,10 +198,12 @@ export function mountTrackLab(root: HTMLElement): void {
     const terrain = isWinner && islandBox.checked ? islandPicture(tintBox.checked) : null;
     // Only the winner has had its width worked out; other candidates are drawn at the usual width.
     const width = isWinner && world ? world.road.width : null;
+    const walls = isWinner && world ? world.road.walls : null;
+    document.body.dataset.labWalls = String(walls ? walls.length : 0);
     // Trees and rocks stand on the island, so they are only marked when it is shown.
     const decor = terrain && world && decorBox.checked ? world.decor : null;
     // The seed's own track area: mountain seeds have a wider one.
-    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width, decor }, trackRulesFor(cfg, result.character.relief));
+    drawLab(ctx!, view, { selected: result.candidates[selectedIndex]!, isWinner, ghosts, terrain, width, decor, walls }, trackRulesFor(cfg, result.character.relief));
   }
 
   function resize(): void {
@@ -302,6 +305,7 @@ export function mountTrackLab(root: HTMLElement): void {
       // For the road's width, say what the winning road actually does.
       addFact(label, label === 'Road width' && world ? describeWidth(world.road.width) : value);
     }
+    if (world) addFact('Walls', describeWalls(world.road.walls, world.track.candidates[world.track.winnerIndex]!.line.count));
     if (world) addFact('Time of day', describeSky(world.sky));
     if (world) addFact('Woods', describeDecor(world.decor.woods, world.decor.trees.count, world.decor.rocks.count));
     if (world) addFact('Sky', describeClouds(world.clouds.cover, world.clouds.count));
@@ -356,7 +360,7 @@ export function mountTrackLab(root: HTMLElement): void {
   /** Lists how the winning road sits in its island. */
   function renderFit(report: FitReport): void {
     const fitEl = ref('fitFacts');
-    const { clean, facts } = describeFit(report, gameConfig.road.coupleDistance);
+    const { clean, facts } = describeFit(report, gameConfig.road.coupleGap + gameConfig.track.roadWidth);
     fitEl.innerHTML = '';
     fitEl.dataset.clean = String(clean);
     for (const [label, value] of facts) {

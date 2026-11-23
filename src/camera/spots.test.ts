@@ -4,7 +4,7 @@ import { config } from '../config';
 import { analyseSections } from '../gen/track/analysis';
 import { stadiumLine } from '../testing/trackFixtures';
 import { orbitEye, type Orbit } from './orbit';
-import { lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, ROAD_SPOT_NAMES, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
+import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, ROAD_SPOT_NAMES, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
 
 const spot = (x: number, z: number, sample = 0) => ({ x, z, value: 1, sample });
 const report: FitReport = {
@@ -221,5 +221,28 @@ describe('lookAtRoad', () => {
       const orbit = lookAtRoad('climb', line, height, [], () => 25)!;
       expect(orbitEye(orbit).y).toBeGreaterThan(25 + 2);
     });
+  });
+});
+
+describe('lookAtCar', () => {
+  const view = config.camera.car;
+  // A car facing along +x (turned a quarter to the right from facing -z), standing at (10, 3, -20).
+  const facingEast = { x: 0, y: -Math.SQRT1_2, z: 0, w: Math.SQRT1_2 };
+  const pose = { position: { x: 10, y: 3, z: -20 }, rotation: facingEast };
+
+  it('aims at the middle of the car, from the set distance', () => {
+    const orbit = lookAtCar(pose, view);
+    expect([orbit.targetX, orbit.targetY, orbit.targetZ]).toEqual([10, 3, -20]);
+    expect(orbit.distance).toBe(view.distance);
+    expect(orbit.tilt).toBe(view.tilt);
+  });
+
+  it('stands behind the car and off to one side, so its back and one side are seen', () => {
+    const eye = orbitEye(lookAtCar(pose, view));
+    const back = -(eye.x - 10);
+    const side = eye.z - -20;
+    expect(back).toBeGreaterThan(0);
+    expect(Math.abs(side)).toBeGreaterThan(1);
+    expect(Math.atan2(Math.abs(side), back)).toBeCloseTo(view.side, 6);
   });
 });

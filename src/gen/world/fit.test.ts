@@ -178,23 +178,25 @@ describe('fitRoad on a banked road', () => {
 });
 
 describe('fitRoad between two sections side by side', () => {
-  // Two 300 m straights 40 m apart: the near one (z = -20) at 10 m, the far one (z = +20) at 16 m.
-  const line = stadiumLine(300, 20);
+  // Two 300 m straights 10 m further apart than the closest the rules allow (40 m on a 12 m road):
+  // the near one (z = -G) at 10 m, the far one (z = +G) at 16 m.
+  const G = (config.track.roadWidth * config.track.sectionGapWidths + 10) / 2;
+  const line = stadiumLine(300, G);
   const natural = ground(520, () => 10);
-  const heightOf = (i: number): number => 13 + 3 * Math.max(-1, Math.min(1, line.z[i]! / 18));
+  const heightOf = (i: number): number => 13 + 3 * Math.max(-1, Math.min(1, line.z[i]! / (G - 2)));
   const { ground: fitted } = fit(line, natural, heightOf);
   const across = (z: number): number => sampleField(fitted, 0, z, 0);
 
   it('holds each section at its own height, untouched by its neighbour', () => {
     for (const d of [-CORRIDOR + 1, -HALF, 0, HALF, CORRIDOR - 1]) {
-      expect(across(-20 + d)).toBeCloseTo(10 - road.sink, 3);
-      expect(across(20 + d)).toBeCloseTo(16 - road.sink, 3);
+      expect(across(-G + d)).toBeCloseTo(10 - road.sink, 3);
+      expect(across(G + d)).toBeCloseTo(16 - road.sink, 3);
     }
   });
 
   it('joins them with one bank that only ever rises from the lower to the higher', () => {
-    let previous = across(-20 + CORRIDOR);
-    for (let z = -20 + CORRIDOR + 1; z <= 20 - CORRIDOR; z += 1) {
+    let previous = across(-G + CORRIDOR);
+    for (let z = -G + CORRIDOR + 1; z <= G - CORRIDOR; z += 1) {
       const here = across(z);
       expect(here).toBeGreaterThanOrEqual(previous - 1e-4);
       previous = here;
@@ -208,14 +210,15 @@ describe('fitRoad between two sections side by side', () => {
   });
 
   it('keeps that bank gentle enough to stand', () => {
-    expect(steepest(fitted, (x, z) => Math.abs(x) < 100 && Math.abs(z) < 12)).toBeLessThan(0.75);
+    expect(steepest(fitted, (x, z) => Math.abs(x) < 100 && Math.abs(z) < G - CORRIDOR)).toBeLessThan(0.75);
   });
 });
 
 describe('fitRoad under a wider road', () => {
   const line = circleLine(100);
   const natural = ground(400, () => 10);
-  const WIDE = 20;
+  // 8 m wider than the usual width (20 m on a 12 m road).
+  const WIDE = config.track.roadWidth + 8;
   const { ground: fitted, corridor } = fit(line, natural, () => 14, null, uniformWidth(line, WIDE));
   const outside = (distance: number): number => sampleField(fitted, 100 + distance, 0, 0);
   const marked = (x: number, z: number): number => corridor[Math.round((z + 200) / 2) * natural.size + Math.round((x + 200) / 2)]!;

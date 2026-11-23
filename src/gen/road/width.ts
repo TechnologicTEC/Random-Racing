@@ -47,7 +47,7 @@ export function solveWidth(
   // must stop this far short of anything that has to stay the usual width.
   const spread = window - 1;
 
-  const crowded = nearOtherSections(line, cfg.road, rules.clearance);
+  const crowded = nearOtherSections(line, cfg.road, rules.clearanceGap + base);
   const rng = createRng(seed, 'track').fork('width');
 
   const stretches: Stretch[] = [];
@@ -87,7 +87,7 @@ export function solveWidth(
     chosen.push(stretches.reduce((best, stretch) => (stretch.longest > best.longest ? stretch : best)));
   }
   for (const stretch of chosen) {
-    const width = rng.fork(`width-${stretch.section.startIndex}`).range(rules.min, rules.max);
+    const width = rng.fork(`width-${stretch.section.startIndex}`).range(base + rules.extraMin, base + rules.extraMax);
     for (const [start, count] of stretch.runs) {
       for (let k = 0; k < count; k++) wanted[(start + k) % n] = width;
     }
