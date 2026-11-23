@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 4, Time trial ([issue #4](https://github.com/TechnologicTEC/Random-Racing/issues/4)), on branch `milestone-4-time-trial` from `main`. Planned in plan mode and approved by Tane on 2026-11-23. Milestones 1 to 3 are merged and signed off (PR #7, #9, #10)
 - **Branch:** `milestone-4-time-trial`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** M4.4a, the `mode=` address: `mode=free` drives with no clock, `mode=race` races at once (it replaces M4.2c's `race=1`); every test address that drives says `mode=free`. The page still opens driving
-- **Next:** **M4.4b, the screens as a pure state machine** (`src/app/screens.ts`), then M4.4c, the page's title, pause and results cards (`docs/plan/M4-time-trial.md`, "M4.4", and the plan under "Milestone 4" below), tests first. Then the check-in with Tane
+- **Last finished part:** M4.4b, the screens as a pure state machine (`src/app/screens.ts`); the page does not use it yet
+- **Next:** **M4.4c, the page's title, pause and results cards**, menu keys and controller, C doing nothing in a race (`docs/plan/M4-time-trial.md`, "M4.4", and the plan under "Milestone 4" below), tests first. Then the check-in with Tane
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 4: time trial (2026-11-23)
@@ -32,7 +32,7 @@ Planned in plan mode and approved by Tane on 2026-11-23 (plan file: `C:\Users\ta
 | M4.3 | **The race on screen**: `formatRaceTime`; the countdown lights, the race card (lap, this lap, last and best, sector splits), "Finished" and the total; pictures | **Done** (below) |
 | M4.4 | **Screens and menus**, in three pieces (split 2026-11-23, each ending with passing tests and a commit): | |
 | M4.4a | The `mode=` address: `mode=free` and `mode=race` (for `race=1`); `mode=free` on every test address that drives; the page unchanged | **Done** (below) |
-| M4.4b | `src/app/screens.ts`, pure: the screens (title, loading, race, free drive, paused, results) and every move, the ones not allowed included; menu choice up and down | |
+| M4.4b | `src/app/screens.ts`, pure: the screens (title, loading, race, free drive, paused, results) and every move, the ones not allowed included; menu choice up and down | **Done** (below) |
 | M4.4c | The page: the title card opens the plain address; Race and Free drive; pause (Esc, Start, a hidden tab); the results; menu keys and controller; C does nothing in a race; `docs/VISUAL_BAR.md` gets the rule for cards in the middle | |
 | | **Check-in with Tane**: a few races (seeds 7, 1, 42, 2024, 5) | |
 | M4.5 | **New track, typed seed, restart**: share codes with a reason when bad (`seedInputProblem`), time of day, restart on the same world, the results' share code and name | |
@@ -66,6 +66,10 @@ Tests: `solveProfile` on a 30% hillside with the start at five places round the 
 | 7 | 57.273 | 54.500 | 54.516 | 166.289 |
 
 Lap 1 is about 3 s longer: the standing start and the 4 m to the line. 2,522 unit tests pass; type check clean; 348 browser tests pass (118 skipped, as usual).
+
+**M4.4b, done 2026-11-23.** `src/app/screens.ts`, pure: `Screen` (title; loading, then the title or free driving; race; free; paused, remembering a race or free driving; results), `move(screen, m)` for the ten moves (`start`, `freeDrive`, `pause`, `resume`, `restart`, `quit`, `newTrack`, `enterSeed`, `loaded`, `finished`), null where a screen does not allow one; `steps` (only a race and free driving step), `cameraFree` (C only in free driving), `backMove` (Esc and B: pause, resume, leave the results), `menuFor` (the title: Race, Free drive, New island; paused: Resume, Restart, Quit to title; the results: Race again, New island, Title) and `choiceAfter` (up and down, round the ends). 91 tests in `screens.test.ts`: every move from every screen, the ones not allowed included. 2,631 unit tests pass; type check clean; nothing on the page uses it yet, so the browser suite was not run.
+
+**Claude's calls in M4.4b, for Tane to judge:** a race is left only through the pause card or the results (no N in a race); N in free driving makes a new island and goes on driving, as before; a new island from the title or the results comes back to the title, so Race or Free drive is picked on it; Esc on the results goes back to the title.
 
 **M4.4a, done 2026-11-23.** `openingScreen` (`src/app/route.ts`): `mode=race` races at once, `mode=free` drives with no clock, and so does any address that asks for a camera or a place (`cam=`, `lap=`, `look=`, `at=`), so the visual bar's pictures keep their addresses; every other address drives freely too until M4.4c gives it the title card. `mode=race` replaces M4.2c's `race=1` (never released; the M4.2c and M4.3 notes below say `race=1`). `mode=free` added to the test addresses that drive (`e2e/drive.spec.ts`'s `openDriving`, the sliding-lap replays, the driving screenshots, `npm run perf`, `drive-start.jpg` in `scripts/visual-bar-pictures.mjs`). 4 unit tests (`route.test.ts`) and 1 browser test (`e2e/race.spec.ts`: `mode=race` counts down, `mode=free` has no race; written with the page's change, not before it). 2,540 unit and 354 browser tests pass (118 skipped, as usual); type check clean.
 
@@ -353,3 +357,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-23 (Milestone 4, Opus 5.5):** M4.2c done, which ends M4.2: the bot races 3 laps of seeds 1 to 5 (`raceRun`), `race=1` opens the page racing, and the bot's race of seed 7 gives the same fingerprints and the same lap times to the bit in Node, Chromium and Firefox (details and times under "Milestone 4"). Next: M4.3, the race on screen.
 - **2026-11-23 (Milestone 4, Opus 5.5):** M4.3 done: with `race=1` the page shows the countdown's three lights at the top middle (red one a second, green on "go", gone a second later) and a race card in the top right corner (lap, this lap's time, last and best, the sectors with their gaps; "Finished", the total and the laps), every time from the simulation's steps (`src/app/raceCard.ts`). Details under "Milestone 4". Next: M4.4, screens and menus.
 - **2026-11-23 (Milestone 4, Opus 5.5):** M4.4 split into M4.4a to M4.4c. M4.4a done: the `mode=` address (`mode=free`, and `mode=race` for `race=1`), on every test address that drives; the page still opens driving. Next: M4.4b, the screens as a pure state machine.
+- **2026-11-23 (Milestone 4, Opus 5.5):** M4.4b done: the screens as a pure state machine, `src/app/screens.ts`, with every move from every screen tested (91 tests). Next: M4.4c, the cards on the page.

@@ -70,7 +70,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **M4.3** The race on screen (2026-11-23)
 - **M4.4** Screens and menus:
   - [x] **M4.4a** The `mode=` address (`mode=free`, `mode=race`) on every test address that drives (2026-11-23)
-  - [ ] **M4.4b** The screens as a pure state machine (`src/app/screens.ts`)
+  - [x] **M4.4b** The screens as a pure state machine (`src/app/screens.ts`) (2026-11-23)
   - [ ] **M4.4c** The title, pause and results cards on the page; menu keys and controller; C does nothing in a race
 - [ ] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5)
 - [ ] **M4.5** New track, typed seed, restart
