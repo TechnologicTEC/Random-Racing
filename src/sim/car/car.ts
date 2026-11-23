@@ -98,6 +98,8 @@ export interface Car {
   halt(): void;
   /** The car has been put back (a respawn): nothing remembered, as on the start line. */
   clear(): void;
+  /** Starts a boost of this tier, as a slide let go at that tier would (M4.2b: the start boost); one running longer is kept. */
+  boost(tier: 1 | 2 | 3): void;
   /** What the car remembers now. */
   save(): CarMemory;
   /** Goes back to what it remembered at a saved moment. */
@@ -203,6 +205,10 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       sinceWall = again;
       odd = [...NONE_ODD];
       sinceHit = NO_HIT;
+    },
+    boost(tier) {
+      const left = steps.boosts[tier - 1];
+      if (left > drift.boostLeft) drift = { ...drift, boostLeft: left, boostTier: tier };
     },
     save: () => ({ drift, sinceWall, odd: [...odd], sinceHit }),
     load(memory) {
