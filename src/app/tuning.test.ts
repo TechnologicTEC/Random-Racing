@@ -56,15 +56,17 @@ describe('tuningFields', () => {
 describe('setTuned and tunedCopy', () => {
   it('changes the copy, never the shared config', () => {
     const before = config.car.engine.topSpeed;
+    const tiersBefore = [...config.car.drift.tiers];
+    const [first, , third] = tiersBefore;
     const tuned = tunedCopy(config);
     setTuned(tuned, 'car.engine.topSpeed', 20);
     setTuned(tuned, 'car.drift.tiers.1', 2.5);
     setTuned(tuned, 'camera.chase.swing', 0.2);
     expect(tuned.car.engine.topSpeed).toBe(20);
-    expect(tuned.car.drift.tiers).toEqual([1, 2.5, 3]);
+    expect(tuned.car.drift.tiers).toEqual([first, 2.5, third]);
     expect(tuned.camera.chase.swing).toBe(0.2);
     expect(config.car.engine.topSpeed).toBe(before);
-    expect(config.car.drift.tiers).toEqual([1, 2, 3]);
+    expect(config.car.drift.tiers).toEqual(tiersBefore);
     expect(config.camera.chase.swing).toBe(0.12);
   });
 
@@ -90,7 +92,7 @@ describe('tuningText', () => {
     expect(text).toContain('topSpeed: 20,');
     // Rounded so float noise does not show.
     expect(text).toContain('angle: 0.3,');
-    expect(text).toContain('tiers: [1, 2, 3],');
+    expect(text).toContain(`tiers: [${config.car.drift.tiers.join(', ')}],`);
     const read = new Function(`return {${text}};`)() as ReturnType<typeof pick>;
     const want = pick(tuned);
     want.car.drift = { ...want.car.drift, angle: 0.3 };

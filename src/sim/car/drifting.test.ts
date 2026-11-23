@@ -153,11 +153,13 @@ describe('the boost', () => {
   }
 
   // How long the boost takes to reach its top speed, and how long the shed takes to bring the car back from it.
+  // A tier 2 slide, from the config: halfway between the tier 2 and tier 3 times (10a-7: was a fixed 2.1 s, tier 2 then).
+  const tierTwo = (car.drift.tiers[1] + car.drift.tiers[2]) / 2;
   const reachTime = (boostTop - topSpeed) / car.boost.accel;
   const shedTime = (boostTop - topSpeed) / shed;
 
-  it(`after a 2.1 s slide: over top speed on the next step, at ${boostTop} m/s within ${(reachTime + 0.1).toFixed(2)} s, held there to its last step, back to top speed within ${(shedTime + 0.2).toFixed(2)} s more, never over`, () => {
-    const { atRelease, after } = release(Math.round(2.1 * perSecond));
+  it(`after a ${tierTwo} s slide (tier 2): over top speed on the next step, at ${boostTop} m/s within ${(reachTime + 0.1).toFixed(2)} s, held there to its last step, back to top speed within ${(shedTime + 0.2).toFixed(2)} s more, never over`, () => {
+    const { atRelease, after } = release(Math.round(tierTwo * perSecond));
     const boostSteps = Math.round(car.drift.boosts[1] * perSecond);
     expect(after[0]!.drift.boostLeft).toBeGreaterThan(0);
     // Faster on the next step than at the release (10a-4: at 53 m/s the slide comes out at 52.7, a little under top speed).
@@ -192,7 +194,7 @@ describe('the boost', () => {
 
   it('lets a boosted car steer round the circle it has at top speed (Tane, 6h-4), not a wider one', () => {
     const sim = atTopSpeed();
-    slide(sim, 1, 0, Math.round(2.1 * perSecond));
+    slide(sim, 1, 0, Math.round(tierTwo * perSecond));
     // Let go with full stick; once the nose is back and the boost is well past top speed, measure the circle.
     const after = steps(sim, { throttle: 1, steer: 1 }, Math.round(car.drift.boosts[1] * perSecond));
     const fast = after.slice(Math.round(car.drift.recover * perSecond) + 1).filter((state) => state.drift.boostLeft > 0 && flatSpeed(state) > topSpeed + 2);
@@ -218,7 +220,8 @@ describe('what the car reads out about the drift', () => {
     const [first] = slide(sim, 1, 1, 1);
     expect(first!.drift).toMatchObject({ phase: 'slide', dir: 1, tier: 0 });
     expect(first!.drift.hop).toBeGreaterThan(0);
-    const later = slide(sim, 1, 1, 130).pop()!;
+    // To halfway between the tier 2 and tier 3 times (10a-7: was 130 steps, tier 2 then).
+    const later = slide(sim, 1, 1, Math.round(((car.drift.tiers[1] + car.drift.tiers[2]) / 2) * perSecond) - 1).pop()!;
     expect(later.drift).toMatchObject({ phase: 'slide', dir: 1, tier: 2, hop: 0 });
     expect(later.drift.angle).toBeCloseTo(car.drift.angle, 12);
     const [letGo] = steps(sim, { throttle: 1 }, 1);

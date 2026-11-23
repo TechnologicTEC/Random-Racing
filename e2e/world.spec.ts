@@ -837,9 +837,9 @@ test.describe('3D screenshots', () => {
         expect(await slideTo(page, tier, seed), `a slide reaching tier ${tier}`).toBe(true);
         await page.screenshot({ path: `test-results/screens/world-${name}-drive-slide-${tier}.png` });
       }
-      // Tier 3 where the seed has a 3 s slide on the road; tier 2 where it has none (10a-4: at 53 m/s a 3 s slide needs over
-      // 100 m of corner, and seed 42 has none: the bot's longest slide on its lap is 2.8 s).
-      expect(await slideAtLeast(page, 3, seed), 'a slide reaching tier 3, or 2').toBeGreaterThanOrEqual(2);
+      // Tier 3 (10a-7: at 1.8 s of sliding, which every seed's bot lap reaches; 10a-4 had fallen back to tier 2 where a seed
+      // had no 3 s slide on the road, as seed 42 had none).
+      expect(await slideAtLeast(page, 3, seed), 'a slide reaching tier 3').toBe(3);
       await page.screenshot({ path: `test-results/screens/world-${name}-drive-slide.png` });
       await letGo(page);
       await page.screenshot({ path: `test-results/screens/world-${name}-drive-boost.png` });

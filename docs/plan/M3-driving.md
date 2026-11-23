@@ -140,7 +140,7 @@ car.drift: {
   radius: { tight: 28, middle: 57, wide: 203 }, // metres, at any speed (6h-4 on the 20 m road; 22/45/160 in 6g; first a turn rate)
   grip: 60,                            // m/s2
   turnGrip: 240,                       // rad/s2: 4 rad/s in one step
-  tiers: [1, 2, 3],                    // seconds (brief)
+  tiers: [1, 2, 3],                    // seconds (brief; Tane, 10a-7: 0.6, 1.2, 1.8)
   boosts: [0.5, 1.0, 1.6],             // seconds (brief)
   brakeCancel: 0.5,                    // share of the brake pedal
 }
@@ -337,6 +337,6 @@ Then **check-in 2 with Tane**: the feel of the drift, with the tuning panel.
 | 10a-5 Tane's drive after 10a-4: measure | Throwaway: an island-like road edge (road, apron, kerb and skirt, grass 0.25 m down, wall 1.65 m out); the kerb crossed from the grass at 0 to 31 m/s, walls hit at 10 to 60 degrees at 30 and 53 m/s, trunks; the same on `34e4184`; kerb, hit and tier options | The cause and the tables in STATE.md ("10a-5"); Tane picks. **Done 2026-11-22**: the grass beside the road is 25 cm low and the body rides 26 cm up, so the kerb's skirt and the road's edge are steps at body height |
 | 10a-6a Hits and kerbs | Tane's picks from 10a-5 but the cap: the body's box from 0.15 m above its floor, the damper's closing speed capped at 4 m/s, turning and lift held for 0.25 s after a hit; `roadEdgeGround`, an island's road edge built by the generator's own code | Tests first, seen failing: grass to road over a kerb and a bare edge from rest to grass top speed; the clipped trunk; every test passes; one fingerprint in every browser. **Done 2026-11-22**; found the wall seams |
 | 10a-6b Wall seams, then the cap of 3 | Measure: walls as a triangle mesh with `FIX_INTERNAL_EDGES`, a round-edged body box, longer boxes for straight runs; Tane picks; then `bump.spin` 3 | Walls with a kerb in front and bare at 5, 10 and 30 degrees at 53 and 32 m/s: low, level, along the wall a second later with 65% of its speed (Tane); 60 degrees never spun round; every test passes. **Done 2026-11-22**: a 10 cm round-edged body box (Tane's pick of the measured options), `bump.spin` 3 |
-| 10a-7 Boost tiers | Tane's pick (likely 0.5, 1 and 1.5 s; boosts unchanged) | `drift.test.ts`'s step counts and the two `drifting.test.ts` tests sized to the old tiers read the config; the corner proof and sliding laps measured again; drive pictures on several seeds |
+| 10a-7 Boost tiers | Tane's pick: 0.6, 1.2 and 1.8 s; boosts unchanged | `drift.test.ts`'s step counts and the two `drifting.test.ts` tests sized to the old tiers read the config; the corner proof and sliding laps measured again; drive pictures on several seeds. **Done 2026-11-23**: 0.6, 1.2 and 1.8 s (Tane) |
 | **10b Speed** | `npm run perf` with the chase view added to its views | 16.7 ms a frame or less on High at 1080p on the Arc graphics; a step under 1 ms on seed 8 (the most wooded) |
 | **10c Docs and the pull request** | README, CLAUDE.md (controls, addresses, commands), STATE.md and the plan, one pull request for the milestone | Tane's playtest sign-off, then merge |

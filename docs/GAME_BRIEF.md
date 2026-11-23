@@ -38,7 +38,7 @@ The car handles like a Mario Kart kart: grippy and forgiving by default, with dr
 
 - Hold drift while steering above about 40% of top speed to start a drift. The car hops slightly and slides at an angle.
 - During a drift, steering changes how tight the slide is rather than its direction, so you commit to a corner.
-- Charge builds in three tiers, shown by spark colour: blue at about 1 second, orange at about 2 seconds, purple at about 3 seconds.
+- Charge builds in three tiers, shown by spark colour: blue at about 1 second, orange at about 2 seconds, purple at about 3 seconds. (Tane, 2026-11-22, step 10a-7: 0.6, 1.2 and 1.8 seconds, since at the top speed of 53 m/s many slides last under a second.)
 - Releasing gives a boost of about 0.5, 1.0 or 1.6 seconds for the three tiers.
 - Hitting a wall or braking hard cancels the drift and loses the charge.
 - A well-timed throttle press during the start countdown gives a small starting boost.

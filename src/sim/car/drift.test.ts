@@ -27,7 +27,8 @@ const slidFor = (count: number, change: Partial<DriftAsk> = {}): DriftState => r
 
 describe('driftSteps: every time in whole steps, worked out once', () => {
   it('turns the starting values into steps at 60 a second', () => {
-    expect(steps).toEqual({ hop: 9, swing: 15, recover: 12, tiers: [60, 120, 180], boosts: [30, 60, 96] });
+    // Tiers at 0.6, 1.2 and 1.8 s (Tane, 10a-7; were 1, 2 and 3 s).
+    expect(steps).toEqual({ hop: 9, swing: 15, recover: 12, tiers: [36, 72, 108], boosts: [30, 60, 96] });
   });
 });
 
@@ -128,23 +129,23 @@ describe('stepDrift', () => {
   });
 
   describe('rule 5: the charge', () => {
-    it('goes up by one each step of the slide: tiers on steps 60, 120 and 180 exactly', () => {
-      expect(tierOf(slidFor(59).charge, steps)).toBe(0);
-      expect(tierOf(slidFor(60).charge, steps)).toBe(1);
-      expect(tierOf(slidFor(119).charge, steps)).toBe(1);
-      expect(tierOf(slidFor(120).charge, steps)).toBe(2);
-      expect(tierOf(slidFor(179).charge, steps)).toBe(2);
-      expect(tierOf(slidFor(180).charge, steps)).toBe(3);
+    it('goes up by one each step of the slide: tiers on steps 36, 72 and 108 exactly', () => {
+      expect(tierOf(slidFor(35).charge, steps)).toBe(0);
+      expect(tierOf(slidFor(36).charge, steps)).toBe(1);
+      expect(tierOf(slidFor(71).charge, steps)).toBe(1);
+      expect(tierOf(slidFor(72).charge, steps)).toBe(2);
+      expect(tierOf(slidFor(107).charge, steps)).toBe(2);
+      expect(tierOf(slidFor(108).charge, steps)).toBe(3);
       expect(tierOf(slidFor(400).charge, steps)).toBe(3);
     });
   });
 
   describe('rule 6: the release', () => {
-    it('gives boosts of 30, 60 and 96 steps for the three tiers, and none at 59', () => {
-      expect(stepDrift(slidFor(59), UP, car, steps)).toMatchObject({ phase: 'none', charge: 0, boostLeft: 0, boostTier: 0 });
-      expect(stepDrift(slidFor(60), UP, car, steps)).toMatchObject({ phase: 'none', charge: 0, boostLeft: 30, boostTier: 1 });
-      expect(stepDrift(slidFor(120), UP, car, steps)).toMatchObject({ boostLeft: 60, boostTier: 2 });
-      expect(stepDrift(slidFor(180), UP, car, steps)).toMatchObject({ boostLeft: 96, boostTier: 3 });
+    it('gives boosts of 30, 60 and 96 steps for the three tiers, and none at 35', () => {
+      expect(stepDrift(slidFor(35), UP, car, steps)).toMatchObject({ phase: 'none', charge: 0, boostLeft: 0, boostTier: 0 });
+      expect(stepDrift(slidFor(36), UP, car, steps)).toMatchObject({ phase: 'none', charge: 0, boostLeft: 30, boostTier: 1 });
+      expect(stepDrift(slidFor(72), UP, car, steps)).toMatchObject({ boostLeft: 60, boostTier: 2 });
+      expect(stepDrift(slidFor(108), UP, car, steps)).toMatchObject({ boostLeft: 96, boostTier: 3 });
     });
 
     it('swings the nose back out evenly over 12 steps, keeping the side until it is back', () => {
@@ -161,13 +162,13 @@ describe('stepDrift', () => {
 
     it('keeps the longer boost, with its tier, when one is still running', () => {
       // A tier 3 boost (96 steps from the release step), ten steps on: 86 left.
-      const long = run(slidFor(180), times(11, UP));
+      const long = run(slidFor(108), times(11, UP));
       expect(long.boostLeft).toBe(86);
-      // 60 steps of a new slide take it to 26, the release step to 25: the new tier 1 boost (30) is longer.
+      // 60 steps of a new slide (tier 1) take it to 26, the release step to 25: the new tier 1 boost (30) is longer.
       const short = run(long, [...times(60, ask()), UP]);
       expect(short).toMatchObject({ boostLeft: 30, boostTier: 1 });
       // Released at once into a new slide: 96 less 60 less 1 is 35, over the new 30, so the tier 3 boost is kept.
-      const kept = run(slidFor(180), [UP, ...times(60, ask()), UP]);
+      const kept = run(slidFor(108), [UP, ...times(60, ask()), UP]);
       expect(kept).toMatchObject({ boostLeft: 35, boostTier: 3 });
     });
   });

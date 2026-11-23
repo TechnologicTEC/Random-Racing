@@ -1566,7 +1566,7 @@ export interface DriftConfig {
   grip: number;
   /** How quickly the tyres change the rate the car turns at while sliding, in radians per second per second (in place of `grip.turn`). */
   turnGrip: number;
-  /** How long a slide must last for each tier of charge (blue, orange, purple; brief: about 1, 2 and 3 seconds). */
+  /** How long a slide must last for each tier of charge (blue, orange, purple; brief: about 1, 2 and 3 seconds; Tane, 10a-7: 0.6, 1.2 and 1.8). */
   tiers: readonly [number, number, number];
   /** How long the boost for each tier lasts (brief: about 0.5, 1.0 and 1.6 seconds). */
   boosts: readonly [number, number, number];
@@ -2142,7 +2142,9 @@ export const config: GameConfig = {
       grip: 60,
       // 4 rad/s in one step: enough for the nose to swing in as a slide starts without the path turning away from the corner.
       turnGrip: 240,
-      tiers: [1, 2, 3],
+      // 0.6, 1.2 and 1.8 s (Tane, 10a-7; were 1, 2 and 3, the brief's): at 53 m/s many slides are over in under a second, so
+      // a boost came too rarely. The bot's slides on seeds 1 to 20 earn one 99% of the time (80% at 1, 2, 3).
+      tiers: [0.6, 1.2, 1.8],
       boosts: [0.5, 1.0, 1.6],
       brakeCancel: 0.5,
     },
