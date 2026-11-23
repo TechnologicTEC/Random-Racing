@@ -108,7 +108,7 @@ export function lapRing(line: CenterLine, height: ArrayLike<number>, count = 24)
 
 /**
  * The circling camera behind the title and results cards: round the middle of the lap, `title` times the lap's radius
- * away, from the opening angle and tilt, never round a point under the ground (the middle of an island can be a hill
+ * away, from the opening compass angle, low (`titleTilt`) so it looks at the island from the side, never round a point under the ground (the middle of an island can be a hill
  * higher than its lap). Close in round the track: it turns, so the rest of the lap comes round in time.
  */
 export function titleOrbit(line: CenterLine, height: ArrayLike<number>, groundAt: (x: number, z: number) => number, cfg: CameraConfig['orbit']): Orbit {
@@ -120,7 +120,7 @@ export function titleOrbit(line: CenterLine, height: ArrayLike<number>, groundAt
     targetY: Math.max(mean, groundAt(centre.x, centre.z)),
     targetZ: centre.z,
     angle: cfg.start.angle,
-    tilt: cfg.start.tilt,
+    tilt: cfg.titleTilt,
     distance: Math.min(cfg.furthest, Math.max(cfg.nearest, cfg.title * radius)),
   };
 }

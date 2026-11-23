@@ -1350,6 +1350,8 @@ export interface CameraConfig {
      * after the check-in after M4.4: close in round the track; it turns, so the rest of the lap comes round in time).
      */
     title: number;
+    /** ...and this low, tipped up from the level in radians, looking at the island from the side (Tane: 43 degrees was too much from above). */
+    titleTilt: number;
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
@@ -2349,6 +2351,8 @@ export const config: GameConfig = {
       clearance: 5,
       // About two thirds of the lap shows round the card, and never under two fifths (seeds 1 to 20, eight ways each); the whole lap fitted at about 2.85.
       title: 1.2,
+      // About 16 degrees: the horizon a fifth of the way down the picture, as in Tane's picture.
+      titleTilt: 0.28,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
     car: { distance: 7, tilt: 0.3, side: 0.7 },
