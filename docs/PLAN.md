@@ -66,7 +66,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M4.2** The race rules in the simulation:
   - [x] **M4.2a** The race rules, pure (`src/sim/race.ts`) (2026-11-23)
   - [x] **M4.2b** The race in the simulation (opt-in; held, start boost, finished) (2026-11-23)
-  - [ ] **M4.2c** The bot races 3 laps; one fingerprint in Node, Chromium and Firefox
+  - [x] **M4.2c** The bot races 3 laps; one fingerprint in Node, Chromium and Firefox (2026-11-23)
 - [ ] **M4.3** The race on screen
 - [ ] **M4.4** Screens and menus
 - [ ] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5)

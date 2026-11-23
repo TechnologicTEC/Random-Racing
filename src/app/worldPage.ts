@@ -141,7 +141,8 @@ const NEXT_VIEW: Record<CameraMode, string> = { chase: 'Drive', fly: 'Fly the la
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
  * `shadows=off` to leave out every shadow; `shadowSky=0.5` for a shadow to take that share of the sky's light (0 to 1); `quality=low` (or high) to open at that quality, which the page otherwise
  * remembers from last time (the Quality button and the Q key switch it);
- * `sync=1` to wait for the graphics card to finish each frame before the next, so frame times are what frames cost (for `npm run perf`).
+ * `sync=1` to wait for the graphics card to finish each frame before the next, so frame times are what frames cost (for `npm run perf`);
+ * `race=1` to race (M4.2c): the car held through a 3-second countdown, then 3 laps timed (nothing on screen shows it yet).
  */
 export function mountWorldPage(root: HTMLElement): ViewHandle {
   root.innerHTML = TEMPLATE;
@@ -157,6 +158,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const at = params.get('at') ?? '';
   const startLap = Number(params.get('lap') ?? '0');
   const askedTime = parseClock(params.get('time') ?? '');
+  // A race asked for in the address: the simulation runs its countdown, laps and times (M4.2c).
+  const simOptions = { race: params.get('race') === '1' };
   const [earliest, latest] = config.world.sky.hours;
   /** Holds a time of day to the hours seeds pick from. */
   const daylightHour = (hour: number): number => Math.min(latest, Math.max(earliest, hour));
@@ -319,7 +322,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const startSim = (world: WorldResult, engine: Rapier): void => {
     const started = performance.now();
     dropSim();
-    sim = createSim(engine, world, tuned);
+    sim = createSim(engine, world, tuned, simOptions);
     driving.setSim(sim);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
     document.body.dataset.driveStep = String(sim.state().step);
@@ -348,7 +351,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     rebuildWanted = false;
     const started = performance.now();
     const [world, engine] = [shown, rapier];
-    sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg), tuned);
+    sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg, simOptions), tuned);
     driving.replaceSim(sim);
     rebuilds++;
     document.body.dataset.tuningBuilds = String(rebuilds);

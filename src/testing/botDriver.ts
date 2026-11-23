@@ -25,6 +25,7 @@ import type { CenterLine, CornerSection, Section, WorldResult } from '../gen/typ
 import type { Hit } from '../sim/car/drift';
 import { makeInput, packInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
+import { raceSteps, type RaceState } from '../sim/race';
 import { createSim, createSimOn, type CarState } from '../sim/sim';
 import { checkpointCount } from '../sim/track/progress';
 import { lapPose } from './cornerDriver';
@@ -305,6 +306,48 @@ export function lapRun(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig, b
   const respawns = state.respawn.respawns;
   sim.free();
   return { laps: done, respawns, wallHits, otherHits, inputs };
+}
+
+/** How a race went (M4.2c). */
+export interface RaceRun {
+  /** The race as it ended: finished, unless the bot ran out of time. */
+  race: RaceState;
+  /**
+   * The steps since "go" on which the car passed the start line with every checkpoint of a lap behind it, as step 8a
+   * counts them (`progress.passed` reaching `k * n + 1`): the race places each lap's end inside that step.
+   */
+  lineSteps: number[];
+  /** How many times the car was brought back to a checkpoint. */
+  respawns: number;
+  /** Every step's input, packed (`packInput`), from the first step of the countdown to the finish. */
+  inputs: number[];
+  /** The simulation's fingerprint at the finish. */
+  hash: string;
+}
+
+/**
+ * Races a world with a bot (M4.2c): a simulation with a race, the bot asked what to press from the first step of the
+ * countdown (it is held until "go") to the step the race is finished. Gives up after `BOT.lapLimit` seconds a lap.
+ */
+export function raceRun(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig, bot: Bot): RaceRun {
+  const { line } = world.track.candidates[world.track.winnerIndex]!;
+  const n = checkpointCount(line, cfg.sim.progress);
+  const countdown = raceSteps(cfg.sim.race, cfg.sim.stepsPerSecond).countdown;
+  const limit = countdown + cfg.sim.race.laps * BOT.lapLimit * cfg.sim.stepsPerSecond;
+  const sim = createSim(rapier, world, cfg, { race: true });
+  const inputs: number[] = [];
+  const lineSteps: number[] = [];
+  let state = sim.state();
+  while (state.race!.phase !== 'finished' && state.step < limit) {
+    const input = makeInput(bot(state));
+    inputs.push(packInput(input));
+    sim.step(input);
+    state = sim.state();
+    if (state.progress!.passed >= (lineSteps.length + 1) * n + 1) lineSteps.push(state.step - countdown);
+  }
+  const run = { race: state.race!, lineSteps, respawns: state.respawn.respawns, inputs, hash: sim.hash() };
+  sim.free();
+  return run;
 }
 
 /** A corner of one seed's lap, for the corner proof. */

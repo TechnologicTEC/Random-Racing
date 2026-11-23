@@ -7,7 +7,7 @@ import { loadRapier } from '../src/sim/physics/rapier';
 import { scriptedFingerprint } from '../src/sim/script';
 import { createSim } from '../src/sim/sim';
 import { checkpointCount } from '../src/sim/track/progress';
-import { createBot, lapRun } from '../src/testing/botDriver';
+import { createBot, lapRun, raceRun } from '../src/testing/botDriver';
 
 /**
  * Pillar 5, "same seed, same everything": the track a seed produces must be
@@ -112,6 +112,48 @@ for (const seed of [1, 7]) {
     expect(passed).toBe(node.checkpoints + 1);
   });
 }
+
+/**
+ * M4.2c: the bot's 3-lap race on seed 7, worked out in Node and replayed on the 3D page opened with `race=1`. The page's
+ * simulation must reach Node's fingerprint after every 600 steps, and give the same lap, sector and race times to the
+ * last bit: the race is timed in steps, never by the clock, so a time is the same on every computer.
+ */
+async function botRace(seed: number): Promise<{ inputs: number[]; hashes: string[]; laps: number[]; splits: number[]; total: number }> {
+  const rapier = await loadRapier();
+  const world = generateWorld(seed, config);
+  const run = raceRun(rapier, world, config, createBot(world, config));
+  expect(run.race.phase, `the bot finished its race of seed ${seed} in Node`).toBe('finished');
+  const sim = createSim(rapier, world, config, { race: true });
+  const hashes: string[] = [];
+  for (let i = 0; i < run.inputs.length; i++) {
+    sim.step(unpackInput(run.inputs[i]!));
+    if ((i + 1) % REPLAY_CHUNK === 0 || i === run.inputs.length - 1) hashes.push(sim.hash());
+  }
+  sim.free();
+  expect(hashes[hashes.length - 1]).toBe(run.hash);
+  return { inputs: run.inputs, hashes, laps: [...run.race.laps], splits: [...run.race.splits], total: run.race.total };
+}
+
+test("the bot's 3-lap race on seed 7 gives the same fingerprint and times in this browser as in Node", async ({ page, browserName }) => {
+  test.setTimeout(420_000);
+  const node = await botRace(7);
+  await page.goto('/?seed=7&still=1&race=1');
+  await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+  await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
+  const start = await page.evaluate(() => window.seedCircuit.drive!.state());
+  expect(start!.race?.phase, 'race=1 starts the page in the countdown').toBe('countdown');
+  let race = start!.race;
+  for (let k = 0; k < node.hashes.length; k++) {
+    const chunk = node.inputs.slice(k * REPLAY_CHUNK, (k + 1) * REPLAY_CHUNK);
+    race = (await page.evaluate((list) => window.seedCircuit.drive!.replay(list), chunk)).race;
+    const hash = await page.evaluate(() => window.seedCircuit.drive!.hash());
+    expect(hash, `seed 7's race in ${browserName} after ${k * REPLAY_CHUNK + chunk.length} steps`).toBe(node.hashes[k]);
+  }
+  expect(race!.phase).toBe('finished');
+  expect(race!.laps).toEqual(node.laps);
+  expect(race!.splits).toEqual(node.splits);
+  expect(race!.total).toBe(node.total);
+});
 
 test('generation runs in a Web Worker, not on the page', async ({ page }) => {
   await page.goto('/?lab=1&seed=1');
