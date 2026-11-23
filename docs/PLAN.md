@@ -72,7 +72,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M4.4a** The `mode=` address (`mode=free`, `mode=race`) on every test address that drives (2026-11-23)
   - [x] **M4.4b** The screens as a pure state machine (`src/app/screens.ts`) (2026-11-23)
   - [x] **M4.4c** The title, pause and results cards on the page; menu keys and controller; C does nothing in a race (2026-11-23)
-- [ ] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5)
+- [x] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5) (2026-11-23: good; the title shows the whole island and the circling camera never goes under it)
 - [ ] **M4.5** New track, typed seed, restart
 - [ ] **M4.6** A whole race in the browser tests; check-in; tuning; pull request; **sign-off**; merge
 
@@ -189,7 +189,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3** |
 | Flat seeds show large sandy patches; the mown strip is the same width everywhere; nothing cleared round trees in long grass; the wind blows the same way on every island | **M6.3** candidates (small) |
 | From far above, islands look fairly bare; tree shadows small at midday | Tane, **M6.3** (`world.decor.trees` levels) |
-| The circling camera frames only part of the biggest islands; it can look through clouds | Left (it is a debug and title view); **M4.4** if the title screen uses it |
+| The circling camera frames only part of the biggest islands; it can look through clouds | Behind the title and results cards it frames the whole island (the check-in after M4.4); elsewhere left (a debug view) |
 | A close camera checks the ground, not trees | Left (close views are for screenshots) |
 | The verge dips a little at its outer edge on steep banks | Left; the barrier footing hides it |
 | Islands big and blobby; coastal mountain seeds keep the sea further out and have less sea beside the road; mountains lower than asked; circling summits lower; fewer circling laps go round the summit; not every island gets a peak; a bay reaches 10 m only beside low road; enclosed water possible | Left: generator character Tane has seen and accepted. Revisit only if Tane asks before **M6.8** |

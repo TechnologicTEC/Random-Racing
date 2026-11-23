@@ -2,6 +2,7 @@ import './world.css';
 import { chaseStart, type ChaseView } from '../camera/chase';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
+import { clearOrbit, fitOrbit, landRing } from '../camera/orbitFit';
 import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
@@ -61,7 +62,7 @@ export interface ViewHandle {
   pixelCounts(): PixelCounts;
   orbit(): Orbit;
   /** The flying camera: how far round the lap it is, and whether it is moving. */
-  camera(): { mode: CameraMode; distance: number; lapLength: number; playing: boolean; speed: number };
+  camera(): { mode: CameraMode; distance: number; lapLength: number; playing: boolean; speed: number; eye: { x: number; y: number; z: number } };
   /** The fit report of the world being shown, once there is one. */
   report(): FitReport | null;
   /** What the latest frames took, in milliseconds. Only frames drawn one straight after another are counted. */
@@ -489,18 +490,24 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     dirty = true;
   };
 
+  /** Where the camera was last put, for checks. */
+  let shownEye = { x: 0, y: 0, z: 0 };
   const aimCamera = (): void => {
     const chase = mode === 'chase' ? (driving.view() ?? waitingView) : null;
     if (chase) {
+      shownEye = chase.eye;
       view.setCamera(chase.eye, chase.look);
       // Wider while a boost runs (the view only changes its projection when the angle does).
       view.setFieldOfView(chase.fieldOfView);
       document.body.dataset.driveFieldOfView = chase.fieldOfView.toFixed(1);
     } else if (mode === 'fly' && flight) {
       const pose = flight.poseAt(distance);
+      shownEye = pose.eye;
       view.setCamera(pose.eye, pose.look);
     } else {
-      view.setCamera(orbitEye(orbit), { x: orbit.targetX, y: orbit.targetY, z: orbit.targetZ });
+      // Never under the ground or the sea, however it is dragged, zoomed or turned (Tane, the check-in after M4.4).
+      shownEye = orbitEye(clearOrbit(orbit, groundAt, config.camera.orbit.clearance));
+      view.setCamera(shownEye, { x: orbit.targetX, y: orbit.targetY, z: orbit.targetZ });
     }
   };
 
@@ -623,6 +630,24 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       targetZ: (minZ + maxZ) / 2,
       distance: Math.min(config.camera.orbit.furthest, span * config.camera.orbit.fit),
     };
+  };
+
+  /** The ring round the land of the island shown, worked out once an island (`landRing`). */
+  let ringOf: { world: WorldResult; ring: ReturnType<typeof landRing> } | null = null;
+  /**
+   * Points the circling camera at the middle of the island's land from the opening angle, pulled back just far enough
+   * to see all of it whichever way it faces: behind the title and results cards (Tane, the check-in after M4.4).
+   */
+  const frameWholeIsland = (world: WorldResult): void => {
+    frameIsland(world);
+    if (ringOf?.world !== world) ringOf = { world, ring: landRing(world.ground) };
+    const { centre, points } = ringOf.ring;
+    if (points.length === 0) return;
+    const aspect = canvas.clientWidth > 0 && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 16 / 9;
+    const cfg = config.camera.orbit;
+    // Never a point under the ground: the middle of an island can be a hill higher than its lap.
+    const targetY = Math.max(orbit.targetY, groundAt(centre.x, centre.z));
+    orbit = fitOrbit(points, { ...orbit, targetX: centre.x, targetY, targetZ: centre.z }, config.render.fieldOfView, aspect, cfg.fill, cfg.nearest, cfg.furthest);
   };
 
   /** A view from just behind a point on the road, looking level towards where the sun is now. */
@@ -851,8 +876,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     } else if (m === 'pause') {
       devices.release();
     } else if (m === 'quit' || m === 'finished' || m === 'loaded') {
-      // Off the road: the camera circles the island behind the card. Back on the title the car is put back on the line.
-      if (shown) frameIsland(shown);
+      // Off the road: the camera circles the whole island behind the card. Back on the title the car is put back on the line.
+      if (shown) frameWholeIsland(shown);
       if (m === 'quit' && shown && rapier) startSim(shown, rapier);
       setMode('orbit');
       if (m !== 'finished') driven = false;
@@ -883,7 +908,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     stats: () => view.stats(),
     pixelCounts: () => view.pixelCounts(),
     orbit: () => orbit,
-    camera: () => ({ mode, distance, lapLength: flight?.length ?? 0, playing, speed }),
+    camera: () => ({ mode, distance, lapLength: flight?.length ?? 0, playing, speed, eye: { ...shownEye } }),
     report: () => report,
     frames: () => meter.stats(),
     resetFrames: () => meter.reset(),

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { formatRaceTime } from '../src/app/raceCard';
+import { landRing, onScreen } from '../src/camera/orbitFit';
+import { sampleField } from '../src/gen/world/heightfield';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
 import { loadRapier } from '../src/sim/physics/rapier';
@@ -177,4 +179,43 @@ test.describe('pictures of the title card', () => {
       await page.screenshot({ path: `test-results/screens/${name}.png` });
     });
   }
+});
+
+test.describe('the circling camera behind the cards (Tane, the check-in after M4.4)', () => {
+  for (const seed of [1, 42]) {
+    test(`frames the whole island of seed ${seed} behind the title card`, async ({ page }) => {
+      await openTitle(page, `seed=${seed}&still=1`);
+      const { points } = landRing(generateWorld(seed, config).ground);
+      const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
+      const size = page.viewportSize()!;
+      for (const p of points) {
+        const seen = onScreen(p, orbit, config.render.fieldOfView, size.width / size.height);
+        expect(seen, `a point of the ring round seed ${seed}'s land is behind the camera`).not.toBeNull();
+        expect(Math.abs(seen!.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(seen!.y)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+
+  test('never goes under the ground or the sea, however it is dragged and zoomed', async ({ page }) => {
+    // Every move of the mouse draws a frame close to the ground, slow in a browser drawing in software.
+    test.setTimeout(180_000);
+    await openTitle(page, 'seed=7&still=1');
+    const world = generateWorld(7, config);
+    const canvas = page.getByTestId('world-canvas');
+    const box = (await canvas.boundingBox())!;
+    // Dragged up as far as it goes (down to the lowest tilt), round, and zoomed right in, the way the picture was taken.
+    for (let k = 0; k < 4; k++) {
+      await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.9);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.05, { steps: 4 });
+      await page.mouse.up();
+      await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
+      await page.mouse.wheel(0, -1500);
+      await page.waitForTimeout(100);
+      const eye = (await page.evaluate(() => window.seedCircuit.view!.camera())).eye;
+      const ground = Math.max(sampleField(world.ground, eye.x, eye.z, 0), 0);
+      expect(eye.y, `the camera after drag ${k + 1}`).toBeGreaterThanOrEqual(ground + config.camera.orbit.clearance - 0.01);
+    }
+  });
 });

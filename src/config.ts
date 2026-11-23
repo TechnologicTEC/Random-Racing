@@ -1343,6 +1343,10 @@ export interface CameraConfig {
     fit: number;
     /** How fast it circles the island by itself behind the title and results cards (M4.4), in radians a second. */
     turn: number;
+    /** It never comes closer than this to the ground or the sea under it, in metres, so the empty space under the island never shows (Tane, check-in after M4.4). */
+    clearance: number;
+    /** Behind the title and results cards the whole island is framed, its furthest land this far from the middle of the picture to its edge (1). */
+    fill: number;
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
@@ -2339,6 +2343,8 @@ export const config: GameConfig = {
       fit: 1.25,
       // About two minutes a turn: slow enough to read the card over it.
       turn: 0.05,
+      clearance: 5,
+      fill: 0.9,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
     car: { distance: 7, tilt: 0.3, side: 0.7 },
