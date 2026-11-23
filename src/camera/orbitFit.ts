@@ -1,8 +1,9 @@
+import type { CameraConfig } from '../config';
 import type { CenterLine } from '../gen/types';
 import { MAX_TILT, orbitEye, type Orbit } from './orbit';
 
 /**
- * The circling camera kept to what should be seen (the check-in after M4.4, Tane): it frames the whole lap behind
+ * The circling camera kept to what should be seen (the check-in after M4.4, Tane): close in round the track behind
  * the title and results cards, and it never goes under the ground or the sea, where the empty space under the island
  * shows. Plain numbers, as `orbit.ts`; nothing here knows about Three.js.
  */
@@ -35,34 +36,6 @@ export function onScreen(p: Point, orbit: Orbit, fieldOfView: number, aspect: nu
   if (ahead <= 1e-6) return null;
   const half = Math.tan(((fieldOfView / 2) * Math.PI) / 180);
   return { x: (dx * rx + dz * rz) / (ahead * half * aspect), y: (dx * ux + dy * uy + dz * uz) / (ahead * half) };
-}
-
-/** How far from the middle of the picture points may be, to each side, to the top and to the bottom (1 is its edge). */
-export interface Bounds {
-  side: number;
-  top: number;
-  bottom: number;
-}
-
-/**
- * The orbit pulled back, on its own line of sight, just far enough that every point is within the bounds, and kept
- * between the nearest and furthest distances.
- */
-export function fitOrbit(points: readonly Point[], orbit: Orbit, fieldOfView: number, aspect: number, bounds: Bounds, nearest: number, furthest: number): Orbit {
-  const fits = (distance: number): boolean =>
-    points.every((p) => {
-      const seen = onScreen(p, { ...orbit, distance }, fieldOfView, aspect);
-      return seen !== null && Math.abs(seen.x) <= bounds.side && seen.y <= bounds.top && seen.y >= -bounds.bottom;
-    });
-  if (!fits(furthest)) return { ...orbit, distance: furthest };
-  if (fits(nearest)) return { ...orbit, distance: nearest };
-  let [lo, hi] = [nearest, furthest];
-  for (let k = 0; k < 50; k++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) hi = mid;
-    else lo = mid;
-  }
-  return { ...orbit, distance: hi };
 }
 
 /**
@@ -131,4 +104,23 @@ export function lapRing(line: CenterLine, height: ArrayLike<number>, count = 24)
     }
   }
   return { centre, radius, points };
+}
+
+/**
+ * The circling camera behind the title and results cards: round the middle of the lap, `title` times the lap's radius
+ * away, from the opening angle and tilt, never round a point under the ground (the middle of an island can be a hill
+ * higher than its lap). Close in round the track: it turns, so the rest of the lap comes round in time.
+ */
+export function titleOrbit(line: CenterLine, height: ArrayLike<number>, groundAt: (x: number, z: number) => number, cfg: CameraConfig['orbit']): Orbit {
+  const { centre, radius } = lapRing(line, height);
+  let mean = 0;
+  for (let i = 0; i < line.count; i++) mean += height[i]! / line.count;
+  return {
+    targetX: centre.x,
+    targetY: Math.max(mean, groundAt(centre.x, centre.z)),
+    targetZ: centre.z,
+    angle: cfg.start.angle,
+    tilt: cfg.start.tilt,
+    distance: Math.min(cfg.furthest, Math.max(cfg.nearest, cfg.title * radius)),
+  };
 }

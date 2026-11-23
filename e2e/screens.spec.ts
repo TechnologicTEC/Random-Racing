@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { formatRaceTime } from '../src/app/raceCard';
-import { lapRing, onScreen } from '../src/camera/orbitFit';
+import { lapRing } from '../src/camera/orbitFit';
+import { trackShown } from '../src/testing/titleView';
 import { sampleField } from '../src/gen/world/heightfield';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
@@ -183,30 +184,21 @@ test.describe('pictures of the title card', () => {
 
 test.describe('the circling camera behind the cards (Tane, the check-in after M4.4)', () => {
   for (const seed of [1, 42]) {
-    test(`frames the whole lap of seed ${seed} behind the title card, close in round it`, async ({ page }) => {
-      // Tane, after the check-in: framed round all the land the island was too small, under the card. Round the lap instead.
+    test(`circles close in round the lap of seed ${seed}, showing the track round the card`, async ({ page }) => {
+      // Tane, after the check-in: the track is what matters, and it need not all show at once, since the camera turns.
       await openTitle(page, `seed=${seed}&still=1`);
       const world = generateWorld(seed, config);
       const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
-      const { points } = lapRing(line, profile.height);
       const orbit = await page.evaluate(() => window.seedCircuit.view!.orbit());
+      expect(orbit.distance).toBeCloseTo(config.camera.orbit.title * lapRing(line, profile.height).radius, 3);
       const size = page.viewportSize()!;
-      // Above the bar of buttons along the bottom, too, where the lap would be hidden.
-      const barTop = (await page.getByTestId('world-controls').boundingBox())!.y;
-      const aboveBar = 1 - (2 * barTop) / size.height;
-      let furthest = 0;
-      let lowest = 1;
-      for (const p of points) {
-        const seen = onScreen(p, orbit, config.render.fieldOfView, size.width / size.height);
-        expect(seen, `a point of the ring round seed ${seed}'s lap is behind the camera`).not.toBeNull();
-        expect(Math.abs(seen!.x)).toBeLessThanOrEqual(1);
-        expect(seen!.y).toBeLessThanOrEqual(1);
-        expect(seen!.y, `a point of the ring round seed ${seed}'s lap is under the bar`).toBeGreaterThanOrEqual(aboveBar);
-        furthest = Math.max(furthest, Math.abs(seen!.x), seen!.y);
-        lowest = Math.min(lowest, seen!.y);
-      }
-      // Close in: the ring reaches the sides or the top of the picture, or comes down to the bar.
-      expect(furthest > 0.85 || lowest < aboveBar + 0.15, `furthest ${furthest}, lowest ${lowest}, the bar at ${aboveBar}`).toBe(true);
+      const across = (px: number): number => (2 * px) / size.width - 1;
+      const up = (px: number): number => 1 - (2 * px) / size.height;
+      const card = (await page.getByTestId('menu').boundingBox())!;
+      const bar = (await page.getByTestId('world-controls').boundingBox())!;
+      const covered = { left: across(card.x), right: across(card.x + card.width), bottom: up(card.y + card.height), top: up(card.y) };
+      const shown = trackShown(line, profile.height, orbit, config.render.fieldOfView, size.width / size.height, [covered], up(bar.y));
+      expect(shown, `the share of seed ${seed}'s lap shown round the card`).toBeGreaterThan(0.4);
     });
   }
 

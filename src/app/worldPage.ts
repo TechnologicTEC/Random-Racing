@@ -2,7 +2,7 @@ import './world.css';
 import { chaseStart, type ChaseView } from '../camera/chase';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
-import { clearOrbit, fitOrbit, lapRing } from '../camera/orbitFit';
+import { clearOrbit, titleOrbit } from '../camera/orbitFit';
 import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
@@ -632,26 +632,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     };
   };
 
-  /**
-   * Points the circling camera at the middle of the lap from the opening angle, pulled back just far enough to see all
-   * of the lap whichever way it faces: behind the title and results cards (Tane, at the check-in after M4.4 and after it:
-   * the whole island at first, then closer in round the track, which the card covered less).
-   */
-  const frameWholeLap = (world: WorldResult): void => {
-    frameIsland(world);
+  /** The circling camera behind the title and results cards: close in round the track (`titleOrbit`, Tane after the check-in). */
+  const frameTrack = (world: WorldResult): void => {
     const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
-    const { centre, points } = lapRing(line, profile.height);
-    if (points.length === 0) return;
-    const aspect = canvas.clientWidth > 0 && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 16 / 9;
-    const cfg = config.camera.orbit;
-    // Never a point under the ground: the middle of an island can be a hill higher than its lap.
-    const targetY = Math.max(orbit.targetY, groundAt(centre.x, centre.z));
-    // Above the bar of buttons along the bottom too, where the lap would be hidden: its top edge, from the middle of the picture.
-    const bar = ref('controls').getBoundingClientRect();
-    const picture = canvas.getBoundingClientRect();
-    const barTop = picture.height > 0 && bar.height > 0 ? (2 * (bar.top - picture.top)) / picture.height - 1 : cfg.fill;
-    const bounds = { side: cfg.fill, top: cfg.fill, bottom: Math.min(cfg.fill, barTop - (1 - cfg.fill)) };
-    orbit = fitOrbit(points, { ...orbit, targetX: centre.x, targetY, targetZ: centre.z }, config.render.fieldOfView, aspect, bounds, cfg.nearest, cfg.furthest);
+    orbit = titleOrbit(line, profile.height, groundAt, config.camera.orbit);
   };
 
   /** A view from just behind a point on the road, looking level towards where the sun is now. */
@@ -880,8 +864,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     } else if (m === 'pause') {
       devices.release();
     } else if (m === 'quit' || m === 'finished' || m === 'loaded') {
-      // Off the road: the camera circles the whole lap behind the card. Back on the title the car is put back on the line.
-      if (shown) frameWholeLap(shown);
+      // Off the road: the camera circles close in round the track behind the card. Back on the title the car is put back on the line.
+      if (shown) frameTrack(shown);
       if (m === 'quit' && shown && rapier) startSim(shown, rapier);
       setMode('orbit');
       if (m !== 'finished') driven = false;

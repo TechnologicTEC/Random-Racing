@@ -3,7 +3,7 @@ import { config } from '../config';
 import { generateWorld } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { orbitEye, type Orbit } from './orbit';
-import { clearOrbit, fitOrbit, lapRing, onScreen } from './orbitFit';
+import { clearOrbit, lapRing, onScreen } from './orbitFit';
 
 /**
  * The circling camera at the check-in after M4.4 (Tane): it frames the whole island behind the title card, and it
@@ -33,36 +33,6 @@ describe('onScreen', () => {
     expect(top.x).toBeCloseTo(0, 9);
     const side = onScreen({ x: Math.tan(half) * ASPECT * 900, y: 0, z: 0 }, level, FOV, ASPECT)!;
     expect(Math.abs(side.x)).toBeCloseTo(1, 9);
-  });
-});
-
-describe('fitOrbit', () => {
-  const ring = Array.from({ length: 16 }, (_, k) => ({ x: 600 * Math.cos((k * Math.PI) / 8), y: 0, z: 600 * Math.sin((k * Math.PI) / 8) }));
-
-  it('pulls back just far enough to show every point inside the picture, at any compass angle', () => {
-    for (const angle of [0, 1, 2.5, 4]) {
-      const fitted = fitOrbit(ring, { ...base, angle }, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.9 }, 30, 5000);
-      const seen = ring.map((p) => onScreen(p, fitted, FOV, ASPECT)!);
-      for (const s of seen) {
-        expect(Math.abs(s.x)).toBeLessThanOrEqual(0.9 + 1e-6);
-        expect(Math.abs(s.y)).toBeLessThanOrEqual(0.9 + 1e-6);
-      }
-      // Just far enough: one point touches the edge.
-      expect(Math.max(...seen.map((s) => Math.max(Math.abs(s.x), Math.abs(s.y))))).toBeGreaterThan(0.89);
-    }
-  });
-
-  it('keeps to the furthest distance allowed', () => {
-    expect(fitOrbit(ring, base, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.9 }, 30, 500).distance).toBe(500);
-  });
-
-  it('keeps every point above a lower edge of its own, as a bar along the bottom of the picture needs', () => {
-    const fitted = fitOrbit(ring, base, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.6 }, 30, 5000);
-    const seen = ring.map((p) => onScreen(p, fitted, FOV, ASPECT)!);
-    expect(Math.min(...seen.map((s) => s.y))).toBeGreaterThanOrEqual(-0.6 - 1e-6);
-    expect(Math.min(...seen.map((s) => s.y))).toBeLessThan(-0.59);
-    // Further back than with the bottom at 0.9.
-    expect(fitted.distance).toBeGreaterThan(fitOrbit(ring, base, FOV, ASPECT, { side: 0.9, top: 0.9, bottom: 0.9 }, 30, 5000).distance);
   });
 });
 
