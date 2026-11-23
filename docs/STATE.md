@@ -6,10 +6,10 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 ## Where we are
 
-- **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
+- **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)), **signed off by Tane on 2026-11-23** and merged (PR #10). Milestones 1 and 2 are merged and signed off (PR #7, PR #9). Next is Milestone 4
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
 - **Last finished part:** 10c's docs (README, CLAUDE.md, this file) and the pull request for Milestone 3 (PR #10). Before it, 10b (driving takes 9 to 11 ms a frame at 1080p, a step 0.9 ms on seed 8) and 10a-5 to 10a-7 (crossing from the grass is tame, wall hits end along the wall or stopped against it, boost tiers at 0.6, 1.2 and 1.8 s)
-- **Next:** **Tane's playtest sign-off** on the pull request (the brief's "done when": drift-boost works through every corner type, and the handling passes a playtest), with `drive-slide.jpg` and `drive-boost.jpg` accepted or not as references. Then merge and delete the branch, and Milestone 4 in a fresh session, planned in plan mode first. Then **10a-7**, tiers 0.6, 1.2 and 1.8 s, tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Next:** **Milestone 4, time trial**, in a fresh session on a new branch `milestone-4-time-trial` from `main` (issue #4): read `docs/plan/M4-time-trial.md` and plan it in plan mode first (`docs/PLAN.md`, M4.0). Then **10a-7**, tiers 0.6, 1.2 and 1.8 s, tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -32,7 +32,7 @@ Tests first, watched failing. Unit and browser suites pass before each commit; c
 | 8 | **Progress and respawn.** Place on the lap, checkpoints, water, off the map, upside down, stuck, R | Tests on real seeds: drive into the sea and come back at the last checkpoint 1 s later, facing along the road | Done |
 | 9 | **Bot driver and the corner proof** (`src/testing/botDriver.ts`: follows the centre line, drifts where told). It laps seeds 1 to 20 in Node, and drifts through a hairpin, a sweeper, a chicane and a plain corner on real seeds. A scripted lap gives the same fingerprint in Node, Chromium and Firefox | Table here: lap times, wall hits, respawns (must be 0), drift exit speed against no-drift per corner type, the 3 km 15% seeds included | Done |
 | | **Check-in 2 with Tane:** drift feel, with the tuning panel | Feedback | Done (2026-11-22) |
-| 10 | Tuning from feedback; `npm run perf` with the car; README, CLAUDE.md and this file; pull request | **Tane's playtest sign-off**, then merge | |
+| 10 | Tuning from feedback; `npm run perf` with the car; README, CLAUDE.md and this file; pull request | **Tane's playtest sign-off**, then merge | Done (2026-11-23) |
 
 ### Step 3 parts
 
@@ -891,7 +891,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | 10a-6b | **Wall seams**, then the cap of 3 | Done |
 | 10a-7 | **Boost tiers**, with Tane's pick | Done |
 | 10b | **Speed with the car** (`npm run perf`) | Done |
-| 10c | **Docs, the pull request, sign-off** | Pull request open; sign-off waits |
+| 10c | **Docs, the pull request, sign-off** | Done: Tane signed off 2026-11-23 |
 
 ### 10a-1: why a drift ended
 
@@ -1320,7 +1320,6 @@ The design notes for Milestones 4, 5 and 6, and their steps, are in `docs/PLAN.m
 - **"Gives the same picture of a slide and of a boost twice" fails now and then in Firefox in a full run**: on the slide's picture in 6h-5, on the boost's in 8a (a run with the laptop in standby twice), passing in every run alone (33 so far); the cause is unknown (see "6h-5"). Since 8a the pictures that differ are written to the test's folder in `test-results/` (`slide-round-1.png` and so on): look at them before running anything else, since every Playwright run empties `test-results/`.
 - **A slide gains little in wide corners** (9b): 0.01 to 0.29 s in 65 to 90 m corners, where the car is nearly flat out on grip and the boost is the whole gain; seed 20's 65 m corner by 0.01 s, so a weaker boost at 10a would tip it. For check-in 2 (question 4).
 - **The bot's lap with slides touches a wall on seeds 7 (once) and 8 (four times)** (9b), and seed 7's 22 m, 101-degree corner is quicker with the slide but touches the wall at every margin. Recorded, not tested; nothing is respawned. Worth a look by hand at check-in 2.
-- **The drift's look waits for Tane** (check-in 2): tier 3's purple reads lilac at the spray's white-hot heads, and `drive-slide.jpg` and `drive-boost.jpg` are only proposed references.
 - **The chase camera can be cut by a steep slope beside it** (seed 1, sliding onto a hillside, step 6d's pictures): it keeps clear of the ground under it, not beside it. For check-in 2 and step 8 (off the road).
 - **From the chase camera in long meadow grass, the flower dabs look large and busy** (seed 7, 6d's pictures). `render.grass.flowers` has their size; for check-in 2 or M6.3.
 - **No person has driven with a controller yet** (5a, 5e): the controller is read and tested by numbers only. Tane does not use one (check-in 1). The dead zone (0.15) and the triggers are untried by hand.
@@ -1461,3 +1460,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-23 (Milestone 3, Opus 5.5):** 10a-7 done, which ends 10a: boost tiers at 0.6, 1.2 and 1.8 s of sliding (Tane; were 1, 2 and 3), boosts unchanged; 99% of the bot's slides earn a boost (80% before). Tests sized to the old tiers read the config; the slide picture expects tier 3 on every seed. 2,474 unit tests pass; all 346 browser tests passed in one run (22.2 minutes). Pictures looked at (the slide and boost pictures of seeds 1, 7, 42, 100, 2024 and 48213): every seed shows a tier 3 slide with purple sparks; seed 42's is on the road now (it fell back to tier 2 before), its boost on the road at 179 km/h; nothing fails the visual bar. Next: 10b.
 - **2026-11-23 (Milestone 3, Opus 5.5):** 10b done: `npm run perf` measures the driving view (W held, the chase camera following); run by Claude on the Arc graphics, driving takes 9.0 to 11.0 ms a frame at 1080p (95th 11.2 to 13.1, none over 16.7), the other views as before; seed 20's first driving run had a slow spell (95th 22.6) that a second run did not (12.3). A step on seed 8 takes 0.86 to 0.93 ms on average in Node. Both bars met. Next: 10c.
 - **2026-11-23 (Milestone 3, Opus 5.5):** 10c: README (where the game is now, the driving and controller keys, the road's width and corner limit as they are), CLAUDE.md (the drift, tuning and new-island keys; perf takes about 11 minutes) and this file brought up to date; the pull request for Milestone 3 opened. Next: Tane's playtest sign-off, then merge.
+- **2026-11-23 (Milestone 3, Opus 5.5):** **Tane signed Milestone 3 off**: "it looks good, I think it's working well"; `drive-slide.jpg` and `drive-boost.jpg` accepted as references. Asked whether the step 9 bot follows the new speed and grip: yes (10a-4 made it brake for its slide corners and look ahead by the braking from boost speed; it reads the config, and its tests pass at the final one). PR #10 merged and the branch deleted. Next: Milestone 4, planned in plan mode first.

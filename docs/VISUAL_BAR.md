@@ -51,8 +51,8 @@ Open the address after `http://127.0.0.1:5173/?` with `npm run dev` running. Whe
 | `sunrise.jpg` | `seed=7&still=1&look=sun&time=07:00` | with `TIMES=07:00`: `world-00007-at-0700-sun.png` |
 | `drive-start.jpg` | `seed=42&still=1` | `world-00042-drive-start.png` |
 | `car-close.jpg` | `seed=42&still=1&look=car` | `world-00042-car.png` |
-| `drive-slide.jpg` (proposed, 6h-5) | `seed=7&still=1`, then a slide to tier 3 (`slideTo` in `e2e/drifting.ts`) | `world-00007-drive-slide.png` |
-| `drive-boost.jpg` (proposed, 6h-5) | the same, 10 steps after letting go | `world-00007-drive-boost.png` |
+| `drive-slide.jpg` (accepted 2026-11-23) | `seed=7&still=1`, then a slide to tier 3 (`slideTo` in `e2e/drifting.ts`) | `world-00007-drive-slide.png` |
+| `drive-boost.jpg` (accepted 2026-11-23) | the same, 10 steps after letting go | `world-00007-drive-boost.png` |
 
 The page opens driving since step 5e; `cam=fly` keeps these addresses on the flying camera, and the car is not drawn in them. The generator is `v0`: if a later change moves a seed's world, take the picture again and say so here.
 
@@ -75,7 +75,7 @@ The car was drawn in step 5c, to the proposal below, and Tane approved it at che
 - **The readout** is a card like the others, in a bottom corner: the speed in large figures, the surface, the place on the lap in small figures ("1.23 of 2.61 km · next checkpoint 13 of 25"), the drift tier as a dot of the tier's colour.
 - **A respawn** (8c) whites the picture out into the cards' pale off-white (`RESPAWN_FADE`) over the last 0.3 s of the wait and clears it over 0.4 s with the car back on the road; the cards stay on top, readable. Nothing else is drawn for it.
 
-`drive-slide.jpg` and `drive-boost.jpg` were taken on 2026-11-18 (6h-5) from the browser suite's `world-00007-drive-slide.png` and `-drive-boost.png` (headless Chromium, 1280 by 720, saved as JPEG at quality 85 like the others). They stay "proposed" in the table above until Tane accepts them at check-in 2. Seed 7's long slide runs onto the grass beside the road, so the sparks are seen over grass.
+`drive-slide.jpg` and `drive-boost.jpg` were taken on 2026-11-18 (6h-5) from the browser suite's `world-00007-drive-slide.png` and `-drive-boost.png` (headless Chromium, 1280 by 720, saved as JPEG at quality 85 like the others). Tane accepted them at Milestone 3's sign-off (2026-11-23). Seed 7's long slide runs onto the grass beside the road, so the sparks are seen over grass.
 
 ## What fails the bar
 
