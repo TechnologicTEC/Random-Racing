@@ -320,6 +320,11 @@ export interface RoadConfig {
   maxGradient: Record<ReliefKind, number>;
   /** Hill tops and dips are rounded to at least this radius, in metres, so the car is never launched. */
   crestMinRadius: number;
+  /**
+   * The start area (M4.1): from `before` metres before the start line to `after` metres past it, the road
+   * climbs or drops no more steeply than `gradient`, a fraction, so the grid and the countdown sit on the level.
+   */
+  start: { before: number; after: number; gradient: number };
   /** The road stays at least this far above the sea, in metres. */
   minHeight: number;
   /** Where the road is wider than its usual width, on seeds whose width varies. */
@@ -1857,6 +1862,9 @@ export const config: GameConfig = {
   road: {
     maxGradient: { flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 },
     crestMinRadius: 200,
+    // Tane, M4.1: 30 m before the line, not the plan's 100. One car stands 4 m behind it; held level for 100 m, climbing
+    // laps needed cuttings that broke the island's fit (seed 10) and mountain laps lost their climb.
+    start: { before: 30, after: 30, gradient: 0.02 },
     minHeight: 2,
     // 24 to 30 m on a 20 m road; kept 58 m from another section's edge (70 m centre to centre on a 12 m road).
     width: { extraMin: 4, extraMax: 10, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearanceGap: 58 },

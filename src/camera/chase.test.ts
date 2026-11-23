@@ -131,8 +131,8 @@ describe('the chase camera', () => {
     expect(view.eye.y).toBeCloseTo(5 + cfg.clearance, 9);
   });
 
-  it('never comes within 0.8 m of the ground through the gorge of seed 42, where a range stands over the road', () => {
-    const world = generateWorld(42, config);
+  it('never comes within 0.8 m of the ground through the gorge of seed 39898, where a range stands over the road', () => {
+    const world = generateWorld(39898, config);
     const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
     // The middle of the gorge: the sample nearest the deepest cutting.
     const cut = world.report.deepestCut;

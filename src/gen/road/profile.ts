@@ -62,6 +62,7 @@ export function cutAndFill(i: number, profile: RoadProfile, edges?: RoadEdges): 
  * @param ground height of the natural ground at a point, in metres above the sea
  * @param maxGradient steepest climb or descent allowed, as a fraction (it depends on the seed's relief)
  * @param neighbours the line's close sections, if already found (they do not change when the line is turned)
+ * @param start the sample the start line will be on, if known: around it the road is held to `cfg.start.gradient` (M4.1)
  */
 export function solveProfile(
   line: CenterLine,
@@ -70,6 +71,7 @@ export function solveProfile(
   roadWidth: number,
   maxGradient: number,
   neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
+  start?: number,
 ): RoadProfile {
   const n = line.count;
   const groundAt = new Float64Array(n);
@@ -77,12 +79,23 @@ export function solveProfile(
 
   // What the road aims for. It starts as the ground itself and is only changed to tie sections together.
   const target = groundAt.map((height) => Math.max(height, cfg.minHeight));
-  const maxStep = maxGradient * line.spacing;
 
   // Averaging over this many samples spreads any change of slope over enough
   // road that the crest (or dip) it makes is no tighter than the minimum radius.
   let window = Math.ceil((2 * maxGradient * cfg.crestMinRadius) / line.spacing);
   if (window % 2 === 0) window++;
+
+  // The highest the road may rise or fall from each sample to the next, in metres.
+  const maxStep = new Float64Array(n).fill(maxGradient * line.spacing);
+  if (start !== undefined) {
+    // The smoothing averages each slope with those up to half a window either side, so the start area's
+    // limit reaches that much further each way: a steeper slope outside it can then never be carried in.
+    const half = (window - 1) / 2;
+    const flat = Math.min(maxGradient, cfg.start.gradient) * line.spacing;
+    const from = -Math.ceil(cfg.start.before / line.spacing) - half;
+    const to = Math.ceil(cfg.start.after / line.spacing) + half;
+    for (let k = from; k <= to; k++) maxStep[(((start + k) % n) + n) % n] = flat;
+  }
 
   let height = smoothLoop(limitGradient(target, maxStep), window);
   for (let round = 1; round < cfg.solverRounds; round++) {
@@ -239,11 +252,11 @@ function pullTogether(target: Float64Array, height: Float64Array, neighbours: Ne
 }
 
 /**
- * The closest loop to `values` whose neighbouring samples never differ by
- * more than maxStep: half way between the lowest such loop that stays above
+ * The closest loop to `values` whose neighbouring samples never differ by more than the
+ * smaller of their two `maxStep`s: half way between the lowest such loop that stays above
  * the values and the highest one that stays below them.
  */
-function limitGradient(values: Float64Array, maxStep: number): Float64Array {
+function limitGradient(values: Float64Array, maxStep: Float64Array): Float64Array {
   const n = values.length;
   const above = Float64Array.from(values);
   const below = Float64Array.from(values);
@@ -251,14 +264,16 @@ function limitGradient(values: Float64Array, maxStep: number): Float64Array {
   for (let k = 1; k <= 2 * n; k++) {
     const i = k % n;
     const before = (k - 1) % n;
-    above[i] = Math.max(above[i]!, above[before]! - maxStep);
-    below[i] = Math.min(below[i]!, below[before]! + maxStep);
+    const step = Math.min(maxStep[i]!, maxStep[before]!);
+    above[i] = Math.max(above[i]!, above[before]! - step);
+    below[i] = Math.min(below[i]!, below[before]! + step);
   }
   for (let k = 2 * n - 1; k >= 0; k--) {
     const i = k % n;
     const after = (k + 1) % n;
-    above[i] = Math.max(above[i]!, above[after]! - maxStep);
-    below[i] = Math.min(below[i]!, below[after]! + maxStep);
+    const step = Math.min(maxStep[i]!, maxStep[after]!);
+    above[i] = Math.max(above[i]!, above[after]! - step);
+    below[i] = Math.min(below[i]!, below[after]! + step);
   }
   const out = new Float64Array(n);
   for (let i = 0; i < n; i++) out[i] = (above[i]! + below[i]!) / 2;

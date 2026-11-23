@@ -92,9 +92,10 @@ describe('off the road, on the grass test ground', () => {
   });
 });
 
-describe('off the road on seed 7', () => {
+// Seed 7 lost its beach in M4.1, when its lap came to fit the ground best turned the other way round.
+describe('off the road on seed 2', () => {
   it('reads sand on the beach, and holds the car to the same top speed there', () => {
-    const world = generateWorld(7, config);
+    const world = generateWorld(2, config);
     const { ground, cover } = world;
     // The middle of a patch of ground wholly under sand, 2 cells each way, above the sea.
     let spot: { x: number; z: number } | null = null;
@@ -110,7 +111,7 @@ describe('off the road on seed 7', () => {
         if (all) spot = { x: worldX(ground, ix), z: worldZ(ground, iz) };
       }
     }
-    expect(spot, 'no beach on seed 7').not.toBeNull();
+    expect(spot, 'no beach on seed 2').not.toBeNull();
     const height = (x: number, z: number): number => sampleField(ground, x, z, 0);
     const sim = createSimOn(rapier, { kind: 'island', world }, config, poseOn({ height }, spot!.x, spot!.z, AHEAD, config));
     hold(sim, {}, 0.5);

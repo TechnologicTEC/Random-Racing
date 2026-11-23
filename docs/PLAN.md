@@ -62,7 +62,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 **Milestone 4: time trial** (new branch `milestone-4-time-trial` from `main`, issue #4; plan it in plan mode first; the steps: [`docs/plan/M4-time-trial.md`](plan/M4-time-trial.md))
 
 - [x] **M4.0** Plan approved; steps recorded in STATE.md (2026-11-23; Tane's answers and the parts in STATE.md, "Milestone 4")
-- [ ] **M4.1** Flatten the start area
+- [x] **M4.1** Flatten the start area (2026-11-23; 30 m each side of the line, Tane's choice)
 - **M4.2** The race rules in the simulation:
   - [ ] **M4.2a** The race rules, pure (`src/sim/race.ts`)
   - [ ] **M4.2b** The race in the simulation (opt-in; held, start boost, finished)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config, type RoadConfig } from '../../config';
 import { circleLine, stadiumLine } from '../../testing/trackFixtures';
+import { steepestAround } from '../../testing/startArea';
 import { generateTrack } from '../track/pipeline';
 import { findNeighbours, measureProfile, solveProfile } from './profile';
 
@@ -60,6 +61,32 @@ describe('solveProfile on hand-made ground', () => {
     const profile = solveProfile(line, (x) => 30 - Math.abs(x) * 0.07, road, WIDTH, GRADIENT);
     const stats = measureProfile(line, profile, road, WIDTH);
     expect(stats.tightestCrestRadius).toBeGreaterThanOrEqual(road.crestMinRadius - 1e-6);
+  });
+
+  describe('the start area (M4.1)', () => {
+    const line = circleLine(150);
+    const hillside = (x: number): number => 50 + x * 0.3;
+    const quarter = Math.floor(line.count / 4);
+
+    it.each([0, quarter, 2 * quarter, 3 * quarter, line.count - 3])(
+      'holds the road to the start gradient from 30 m before the line at sample %i to 30 m after it, over a steep hillside',
+      (start) => {
+        // Without the start area the road there climbs at nearly the lap's limit.
+        const plain = solveProfile(line, hillside, road, WIDTH, GRADIENT);
+        expect(steepestAround(line, plain.height, start)).toBeGreaterThan(0.05);
+        const flattened = solveProfile(line, hillside, road, WIDTH, GRADIENT, undefined, start);
+        expect(road.start.gradient).toBe(0.02);
+        expect(steepestAround(line, flattened.height, start)).toBeLessThanOrEqual(road.start.gradient + TINY);
+      },
+    );
+
+    it('keeps the lap limit and the crest radius everywhere else', () => {
+      const flattened = solveProfile(line, hillside, road, WIDTH, GRADIENT, undefined, quarter);
+      const stats = measureProfile(line, flattened, road, WIDTH);
+      expect(stats.maxGradient).toBeLessThanOrEqual(GRADIENT + TINY);
+      expect(stats.maxGradient).toBeGreaterThan(GRADIENT * 0.9);
+      expect(stats.tightestCrestRadius).toBeGreaterThanOrEqual(road.crestMinRadius - 1e-6);
+    });
   });
 
   it('treats the lap as a loop: the join between last and first sample obeys the limits too', () => {
