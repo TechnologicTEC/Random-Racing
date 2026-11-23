@@ -15,7 +15,7 @@ const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [1,
 const withParts = process.env.PARTS !== '0';
 const extra = process.env.EXTRA ? `&${process.env.EXTRA}` : '';
 
-/** The views measured: flying the lap, circling the island from above, and the close view of the lap's highest point. */
+/** The views measured: flying the lap, circling the island from above, and the close view of the lap's highest point; and driving (10b). */
 const views: Record<string, string> = { fly: 'cam=fly&lap=0', circle: 'cam=orbit', summit: 'look=summit' };
 
 /** Parts of the picture switched off in turn on the flying view, to see what each costs. */
@@ -63,6 +63,18 @@ async function holdSlide(page: Page): Promise<void> {
   });
 }
 
+/**
+ * The driving view (10b): the chase camera behind the car, with W held from the start line so the car drives off and
+ * the camera follows it for the whole measurement, as a player sees the island.
+ */
+async function holdThrottle(page: Page): Promise<void> {
+  await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(1000);
+  const speed = await page.evaluate(() => window.seedCircuit.drive!.state()!.speed);
+  expect(speed, 'the car drives off with W held').toBeGreaterThan(3);
+}
+
 /** Opens a view, lets it settle, then times three spells of three seconds and keeps the middle one. */
 async function measure(page: Page, seed: number, view: string, options: string, query: string, prepare?: (page: Page) => Promise<void>): Promise<void> {
   // sync=1: the page waits for the graphics card to finish each frame, so the time between frames is what a frame costs.
@@ -103,6 +115,9 @@ test.describe('at 1080p', () => {
         await measure(page, seed, view, 'whole', query);
       });
     }
+    test(`seed ${seed}, driving`, async ({ page }) => {
+      await measure(page, seed, 'drive', 'whole', 'cam=chase', holdThrottle);
+    });
   }
   if (withParts) {
     for (const seed of seeds.slice(0, 3)) {
@@ -131,6 +146,9 @@ test.describe('at 2880 by 1800', () => {
         await measure(page, seed, view, 'whole', query);
       });
     }
+    test(`seed ${seed}, driving`, async ({ page }) => {
+      await measure(page, seed, 'drive', 'whole', 'cam=chase', holdThrottle);
+    });
   }
 });
 

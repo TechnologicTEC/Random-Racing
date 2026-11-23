@@ -56,7 +56,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **10a-6a** The body's box raised, the damper capped, a hit held (Tane's picks but the cap)
   - [x] **10a-6b** Wall seams: measure, Tane picks; then the cap of 3 (a 10 cm round-edged body box)
   - [x] **10a-7** Boost tiers, with Tane's pick (0.6, 1.2 and 1.8 s)
-- [ ] **10b** Speed, with the car
+- [x] **10b** Speed, with the car (driving 9 to 11 ms a frame at 1080p; a step 0.9 ms on seed 8)
 - [ ] **10c** README, CLAUDE.md, STATE.md, the pull request; **Tane's playtest sign-off**; merge and delete the branch
 
 **Milestone 4: time trial** (new branch `milestone-4-time-trial` from `main`, issue #4; plan it in plan mode first; the steps: [`docs/plan/M4-time-trial.md`](plan/M4-time-trial.md))

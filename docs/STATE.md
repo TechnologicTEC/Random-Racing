@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 3, Driving ([issue #3](https://github.com/TechnologicTEC/Random-Racing/issues/3)). Milestones 1 and 2 are merged and signed off (PR #7, PR #9)
 - **Branch:** `milestone-3-driving`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** 10a-7 (see "Step 10", "10a-7"): boost tiers at 0.6, 1.2 and 1.8 s of sliding (Tane). **This ends 10a.** With 10a-6: crossing from the grass is tame, and wall hits end along the wall or stopped against it, never spun round
-- **Next:** `docs/PLAN.md`'s **10b**, speed with the car: the chase view added to `npm run perf` (Claude runs it, Tane's answer); then 10c. Then **10a-7**, tiers 0.6, 1.2 and 1.8 s, tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
+- **Last finished part:** 10b (see "Step 10", "10b"): `npm run perf` with the driving view; driving takes 9 to 11 ms a frame at 1080p on the Arc graphics, and a step 0.9 ms on seed 8. Before it, 10a-5 to 10a-7: crossing from the grass is tame, wall hits end along the wall or stopped against it, and boost tiers are 0.6, 1.2 and 1.8 s
+- **Next:** `docs/PLAN.md`'s **10c**: README, CLAUDE.md (controls, addresses, commands), STATE.md and the plan; the pull request; Tane's playtest sign-off (with `drive-slide.jpg` and `drive-boost.jpg` as references); merge and delete the branch. Then **10a-7**, tiers 0.6, 1.2 and 1.8 s, tests first; then `docs/PLAN.md`'s **10b** (`npm run perf`: Claude runs it) and 10c. `drive-slide.jpg` and `drive-boost.jpg` wait in `docs/visual-bar/` for Tane to accept at the sign-off
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 3 steps
@@ -890,7 +890,7 @@ Planned in plan mode and approved by Tane on 2026-11-22 (plan file: `C:\Users\ta
 | 10a-6a | **The body's box raised, the damper capped, a hit held** | Done |
 | 10a-6b | **Wall seams**, then the cap of 3 | Done |
 | 10a-7 | **Boost tiers**, with Tane's pick | Done |
-| 10b | **Speed with the car** (`npm run perf`) | |
+| 10b | **Speed with the car** (`npm run perf`) | Done |
 | 10c | **Docs, the pull request, sign-off** | |
 
 ### 10a-1: why a drift ended
@@ -1188,6 +1188,26 @@ Throwaway code in Node (deleted), with the walls built by the generator's own co
 
 **Tests:** `drift.test.ts`'s step counts (tiers on steps 36, 72 and 108; none at 35; the longer boost kept), seen failing on the old tiers. Made to read the config, no meaning lost (Claude's calls): `drifting.test.ts`'s tier 2 slide is halfway between the tier 2 and tier 3 times (was a fixed 2.1 s, tier 3 now), in the boost test, the steering-while-boosting test and the drawing-state test; `tuning.test.ts`'s panel tests take the tiers from the config. **Stricter:** the browser picture of a slide now expects tier 3 on every seed (10a-4 had let seed 42 fall back to tier 2). 2,474 unit tests pass; all 346 browser tests passed in one run (22.2 minutes). Pictures looked at (the slide and boost pictures of seeds 1, 7, 42, 100, 2024 and 48213): every seed shows a tier 3 slide with purple sparks; seed 42's is on the road now (it fell back to tier 2 before), its boost on the road at 179 km/h; nothing fails the visual bar.
 
+### 10b: speed with the car (2026-11-23)
+
+**`e2e/perf.spec.ts` gains the driving view**: the chase camera behind the car with W held from the start line (`holdThrottle`), so the car drives off and the camera follows it through the whole measurement; at 1080p on all five seeds and at the laptop's screen on the first three. Run by Claude (Tane's answer), with the laptop plugged in and left alone: 50 views in 10.9 minutes, Intel Arc graphics (Direct3D 11), Chromium, 13:00.
+
+| View, 1920 by 1080 | Median ms | 95th ms | Worst ms | Over 16.7 ms |
+| --- | --- | --- | --- | --- |
+| **Driving** (seeds 1, 7, 8, 20, 2024) | 9.0 to 11.0 | 11.2 to 13.1 | 12.7 to 17.5 | 0% |
+| Flying the lap | 8.3 to 9.6 | 9.3 to 11.8 | 10.3 to 35.0 | 0 to 1% |
+| Circling from above | 12.2 to 14.3 | 13.9 to 17.0 | 15.4 to 34.0 | 0 to 5% (seed 8) |
+| The summit, close | 7.6 to 10.8 | 9.5 to 12.0 | 12.4 to 18.0 | 0% |
+| A tier 3 slide, with and without the bloom (seeds 1, 7, 8) | 10.1 to 10.9; 8.3 to 9.6 | 10.9 to 12.1; 9.9 to 10.6 | 11.7 to 15.1 | 0% |
+
+- **Seed 20 driving was 13.2 ms (95th 22.6, 11% of frames over 16.7) in the first run**; run again alone with seed 7 it was 11.0 ms (95th 12.3, none over), and seed 7 the same in both. A one-off slow spell, not the view: the table gives the second run for seed 20.
+- **At the laptop's screen** (2116 by 1322, the pixel budget's cap): driving 11.8 to 12.7 ms (95th 13.2 to 14.4); circling from above 15.1 to 15.9 ms with 2 to 15% of frames over 16.7, as before (the known issue).
+- Driving draws 278k to 601k triangles in 54 to 161 calls; the views without effects are as in 6h-5.
+
+**The step** (throwaway code in Node, the sliding bot's lap for 60 s, 3,600 steps): seed 8, the most wooded, 0.86 to 0.93 ms on average (median 0.69 to 0.76, 95th 1.5 to 1.6, the odd step 3 to 10 ms); seed 7 0.49 to 0.51 ms. The round-edged box costs nothing measurable (0.94 ms with a square box on the same lap). Step 1 measured 0.67 ms for a tumbling box on seed 8.
+
+**Both of 10b's bars are met**: 16.7 ms a frame or less on High at 1080p (the median in every view; the 95th under 20 ms in every view, the goal of Milestone 2), and a step under 1 ms on seed 8 on average.
+
 ## Working agreements
 
 - Branch + pull request per milestone. Commit and push after each step. Direct pushes to `main` are blocked, including docs updates.
@@ -1439,3 +1459,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-6b measured (throwaway code; table under "10a-6b"): of the three ways to take away the wall seams, two leave no hit pinned at cap 3 on straight and curved walls: the drawn wall as one triangle mesh with Rapier's `FIX_INTERNAL_EDGES`, and a body box with 10 cm round edges. Merging straight runs leaves every curved hit pinned. The round body keeps every sim test but one new bar (a 30-degree hit keeps 66 to 69% of its speed, bar 70%). Docs only. Next: Tane picks.
 - **2026-11-22 (Milestone 3, Opus 5.5):** 10a-6b done, with Tane's picks: the body's box has 10 cm round edges (the same outer size), so it slides past the seams between an island wall's 2 m boxes, and a hit's turning is held to 3 rad/s for 0.25 s. Wall hits behind a kerb and beside a bare edge, at 5 to 30 degrees and 32 and 53 m/s, end along the wall with 65% of their speed or more; 60-degree hits stop against the wall instead of spinning round. 2,474 unit tests pass; all 346 browser tests passed in one run (23.2 minutes). Pictures looked at (the drive pictures of seeds 1, 7, 42, 100, 2024 and 48213, against 10a-6a's): nothing drawn changed; seed 2024's slide onto the grass ends at 36 km/h, not 42, a few metres on; the rest show the same. Next: 10a-7, the boost tiers.
 - **2026-11-23 (Milestone 3, Opus 5.5):** 10a-7 done, which ends 10a: boost tiers at 0.6, 1.2 and 1.8 s of sliding (Tane; were 1, 2 and 3), boosts unchanged; 99% of the bot's slides earn a boost (80% before). Tests sized to the old tiers read the config; the slide picture expects tier 3 on every seed. 2,474 unit tests pass; all 346 browser tests passed in one run (22.2 minutes). Pictures looked at (the slide and boost pictures of seeds 1, 7, 42, 100, 2024 and 48213): every seed shows a tier 3 slide with purple sparks; seed 42's is on the road now (it fell back to tier 2 before), its boost on the road at 179 km/h; nothing fails the visual bar. Next: 10b.
+- **2026-11-23 (Milestone 3, Opus 5.5):** 10b done: `npm run perf` measures the driving view (W held, the chase camera following); run by Claude on the Arc graphics, driving takes 9.0 to 11.0 ms a frame at 1080p (95th 11.2 to 13.1, none over 16.7), the other views as before; seed 20's first driving run had a slow spell (95th 22.6) that a second run did not (12.3). A step on seed 8 takes 0.86 to 0.93 ms on average in Node. Both bars met. Next: 10c.
