@@ -7,7 +7,7 @@ import { createBot, raceRun } from '../src/testing/botDriver';
 
 /**
  * The race on screen (M4.3): the countdown's lights at the top middle and the race card in the top right corner, on
- * the 3D page opened with `race=1`. The bot's race of seed 7 is worked out in Node and replayed through `drive.replay`.
+ * the 3D page opened with `mode=race`. The bot's race of seed 7 is worked out in Node and replayed through `drive.replay`.
  */
 const SPS = config.sim.stepsPerSecond;
 const COUNTDOWN = config.sim.race.countdown * SPS;
@@ -21,9 +21,16 @@ async function openRace(page: Page, query: string): Promise<void> {
 const replay = (page: Page, inputs: number[]) => page.evaluate((list) => window.seedCircuit.drive!.replay(list), inputs);
 
 test('shows no race cards without a race', async ({ page }) => {
-  await openRace(page, 'seed=7&still=1');
+  await openRace(page, 'seed=7&still=1&mode=free');
   await expect(page.getByTestId('race-card')).toBeHidden();
   await expect(page.getByTestId('race-lights')).toBeHidden();
+});
+
+test('races at once for mode=race, and drives with no clock for mode=free', async ({ page }) => {
+  await openRace(page, 'seed=7&still=1&mode=race');
+  expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.race?.phase).toBe('countdown');
+  await openRace(page, 'seed=7&still=1&mode=free');
+  expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.race).toBeNull();
 });
 
 test("shows the countdown, the laps and the finish of the bot's race on seed 7, with the simulation's times", async ({ page, browserName }) => {
@@ -34,7 +41,7 @@ test("shows the countdown, the laps and the finish of the bot's race on seed 7, 
   const lap1End = COUNTDOWN + run.lineSteps[0]!;
   const shots = browserName === 'chromium';
 
-  await openRace(page, 'seed=7&still=1&race=1');
+  await openRace(page, 'seed=7&still=1&mode=race');
   const card = page.getByTestId('race-card');
   const lights = page.getByTestId('race-lights');
   await expect(card).toBeVisible();

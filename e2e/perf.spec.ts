@@ -78,7 +78,7 @@ async function holdThrottle(page: Page): Promise<void> {
 /** Opens a view, lets it settle, then times three spells of three seconds and keeps the middle one. */
 async function measure(page: Page, seed: number, view: string, options: string, query: string, prepare?: (page: Page) => Promise<void>): Promise<void> {
   // sync=1: the page waits for the graphics card to finish each frame, so the time between frames is what a frame costs.
-  await page.goto(`/?seed=${seed}&time=13:00&sync=1&${query}${extra}`);
+  await page.goto(`/?seed=${seed}&time=13:00&sync=1&mode=free&${query}${extra}`);
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   if (prepare) await prepare(page);
   card = await page.evaluate(() => window.seedCircuit.view!.graphics());

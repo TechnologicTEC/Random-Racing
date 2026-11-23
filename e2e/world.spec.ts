@@ -819,7 +819,7 @@ test.describe('3D screenshots', () => {
       });
     }
     test(`island ${seed}, driving: at the start and after 5 s of full throttle`, async ({ page }) => {
-      await openWorld(page, `seed=${seed}&still=1`);
+      await openWorld(page, `seed=${seed}&still=1&mode=free`);
       // The car is drawn once the island's simulation is built, just after the island itself.
       await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
       await page.screenshot({ path: `test-results/screens/world-${name}-drive-start.png` });
@@ -830,7 +830,7 @@ test.describe('3D screenshots', () => {
       // A slide may take several tries from the start line (`slideTo`), each drawing frames in software, and then the bot's
       // lap worked out in Node (10a-4: seed 42 took 2.5 min alone, over 3 in a full run).
       test.setTimeout(300_000);
-      await openWorld(page, `seed=${seed}&still=1`);
+      await openWorld(page, `seed=${seed}&still=1&mode=free`);
       await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
       // Earlier tiers too with TIERS, for example: $env:TIERS = "1,2"
       for (const tier of tiers) {

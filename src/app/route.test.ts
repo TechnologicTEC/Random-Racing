@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { choosePage, nextCamera, openingCamera, switchAddress } from './route';
+import { choosePage, nextCamera, openingCamera, openingScreen, switchAddress } from './route';
 
 const page = (query: string) => choosePage(new URLSearchParams(query));
 const BASE = 'http://127.0.0.1:5173/';
@@ -103,6 +103,32 @@ describe('openingCamera: which camera the 3D view opens with', () => {
     expect(camera('?seed=5&still=1')).toBe('chase');
     expect(camera('?seed=5&cam=chase')).toBe('chase');
     expect(camera('?seed=5&cam=nonsense')).toBe('chase');
+  });
+});
+
+describe('openingScreen: what the 3D view opens on (M4.4)', () => {
+  const screen = (query: string) => openingScreen(new URLSearchParams(query));
+
+  it('races straight away for mode=race', () => {
+    expect(screen('?seed=7&mode=race')).toBe('race');
+    expect(screen('?seed=7&still=1&mode=race')).toBe('race');
+  });
+
+  it('drives freely for mode=free', () => {
+    expect(screen('?seed=7&mode=free')).toBe('free');
+    expect(screen('?seed=7&still=1&mode=free')).toBe('free');
+  });
+
+  it('drives freely for an address that asks for a camera or a place, so its picture is as it was', () => {
+    for (const query of ['?seed=7&cam=fly', '?seed=7&cam=orbit', '?seed=7&cam=chase', '?seed=7&lap=0.3', '?seed=7&look=start', '?seed=7&at=10,20']) {
+      expect(screen(query), query).toBe('free');
+    }
+  });
+
+  it('drives freely at the plain address, for now (the title card comes in M4.4c)', () => {
+    expect(screen('')).toBe('free');
+    expect(screen('?seed=7&still=1')).toBe('free');
+    expect(screen('?seed=7&mode=nonsense')).toBe('free');
   });
 });
 

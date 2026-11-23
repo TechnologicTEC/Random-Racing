@@ -97,7 +97,7 @@ for (const seed of [1, 7]) {
   test(`the bot's lap with slides on seed ${seed} gives the same fingerprint in this browser as in Node`, async ({ page, browserName }) => {
     test.setTimeout(180_000);
     const node = await slidingLap(seed);
-    await page.goto(`/?seed=${seed}&still=1`);
+    await page.goto(`/?seed=${seed}&still=1&mode=free`);
     await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
     await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
     let passed = 0;
@@ -114,7 +114,7 @@ for (const seed of [1, 7]) {
 }
 
 /**
- * M4.2c: the bot's 3-lap race on seed 7, worked out in Node and replayed on the 3D page opened with `race=1`. The page's
+ * M4.2c: the bot's 3-lap race on seed 7, worked out in Node and replayed on the 3D page opened with `mode=race`. The page's
  * simulation must reach Node's fingerprint after every 600 steps, and give the same lap, sector and race times to the
  * last bit: the race is timed in steps, never by the clock, so a time is the same on every computer.
  */
@@ -137,11 +137,11 @@ async function botRace(seed: number): Promise<{ inputs: number[]; hashes: string
 test("the bot's 3-lap race on seed 7 gives the same fingerprint and times in this browser as in Node", async ({ page, browserName }) => {
   test.setTimeout(420_000);
   const node = await botRace(7);
-  await page.goto('/?seed=7&still=1&race=1');
+  await page.goto('/?seed=7&still=1&mode=race');
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
   const start = await page.evaluate(() => window.seedCircuit.drive!.state());
-  expect(start!.race?.phase, 'race=1 starts the page in the countdown').toBe('countdown');
+  expect(start!.race?.phase, 'mode=race starts the page in the countdown').toBe('countdown');
   let race = start!.race;
   for (let k = 0; k < node.hashes.length; k++) {
     const chunk = node.inputs.slice(k * REPLAY_CHUNK, (k + 1) * REPLAY_CHUNK);

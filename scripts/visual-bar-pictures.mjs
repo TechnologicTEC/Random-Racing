@@ -14,7 +14,7 @@ const REFS = [
   ['mountain.jpg', 'seed=1&still=1&look=summit'],
   ['island-from-above.jpg', 'seed=2024&still=1&cam=orbit'],
   ['sunrise.jpg', 'seed=7&still=1&look=sun&time=07:00'],
-  ['drive-start.jpg', 'seed=42&still=1', true],
+  ['drive-start.jpg', 'seed=42&still=1&mode=free', true],
   ['car-close.jpg', 'seed=42&still=1&look=car', true],
 ];
 
