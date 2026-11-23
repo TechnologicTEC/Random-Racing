@@ -1428,6 +1428,23 @@ export interface SimConfig {
   colliders: ColliderConfig;
   progress: ProgressConfig;
   respawn: RespawnConfig;
+  race: RaceConfig;
+}
+
+/** The race (M4.2): its countdown, laps and sectors. Times in seconds; they are turned into whole steps once (`raceSteps`). */
+export interface RaceConfig {
+  /** Laps in a race. */
+  laps: number;
+  /** The countdown before "go"; the car is held meanwhile. */
+  countdown: number;
+  /** A throttle first pressed within this long before "go" gives a tier 1 boost at "go"; one pressed earlier gives none. */
+  startBoostWindow: number;
+  /** Each lap is timed in this many sectors, each a whole number of checkpoints. */
+  sectors: number;
+  /** How long "Finished" shows before the results. */
+  finishedFor: number;
+  /** The throttle counts as pressed at this much or more, from 0 to 1, so a trigger resting slightly down does not jump the start. */
+  pressed: number;
 }
 
 /**
@@ -2106,6 +2123,8 @@ export const config: GameConfig = {
     progress: { window: 40, lost: 30, every: 100, margin: 6, stride: 40 },
     // The plan's values (docs/plan/M3-driving.md, step 8): the brief's "after about 1 second".
     respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
+    // The plan's values (docs/plan/M4-time-trial.md, M4.2); the throttle at half or more is Claude's call (STATE.md).
+    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 3, finishedFor: 2, pressed: 0.5 },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },
