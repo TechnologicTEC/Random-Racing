@@ -310,3 +310,90 @@ body,
   margin-top: 8px;
   font: 11px/1.4 ui-monospace, monospace;
 }
+
+/* The countdown (M4.3, Tane at M4.0): a small card at the top middle with three lights, red one a second, green on "go". */
+.world-lights {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  pointer-events: none;
+}
+
+.world-lights[hidden] {
+  display: none;
+}
+
+.world-light {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+/* The race card (M4.3): the lap, this lap's time in large figures, then last, best and the sectors, in the top right corner. */
+.world-race {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 12.5rem;
+  padding: 10px 16px 12px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-race[hidden] {
+  display: none;
+}
+
+.world-race p {
+  margin: 0;
+}
+
+.world-race-lap {
+  color: #1a7d77;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.world-race-time {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.world-race-rows {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(22, 52, 47, 0.15);
+}
+
+.world-race-row {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr 3.8rem;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.world-race-row > span:nth-child(2),
+.world-race-gap {
+  text-align: right;
+}
+
+.world-race-sector {
+  color: #4c665f;
+}
+
+.world-race-gap {
+  color: #4c665f;
+  font-size: 12px;
+}
+
+/* Quicker than the best (a sector), or the best (a lap): the accent. */
+.world-race-accent {
+  color: #1a7d77;
+}

@@ -17,15 +17,17 @@ import { loadEffectTextures } from '../render/effectTextures';
 import { createFrameMeter, type FrameStats } from '../render/frameMeter';
 import { createWorldView, type PixelCounts, type ViewStats, type WorldView } from '../render/worldView';
 import { createDevices } from '../input/devices';
-import { RESPAWN_FADE } from '../render/palette';
+import { RACE_LIGHTS, RESPAWN_FADE, type Rgb } from '../render/palette';
 import { makeInput, unpackInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
+import { raceSteps } from '../sim/race';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { checkpointCount } from '../sim/track/progress';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen } from './drive';
 import { createDriving } from './driving';
+import { countdownLights, raceCard, type RaceCard } from './raceCard';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
 import { nextCamera, openingCamera, switchAddress, type CameraMode } from './route';
@@ -105,6 +107,14 @@ const TEMPLATE = `
       <p class="world-place" data-ref="place" data-testid="world-place"></p>
       <p class="world-drift" data-ref="drift" data-testid="world-drift"><span class="world-tier" data-ref="tier" hidden></span><span data-ref="boost"></span></p>
       <p class="world-cancel" data-ref="cancel" data-testid="world-cancel" hidden></p>
+    </div>
+    <div class="world-card world-lights" data-ref="lights" data-testid="race-lights" aria-hidden="true" hidden>
+      <span class="world-light" data-ref="light1"></span><span class="world-light" data-ref="light2"></span><span class="world-light" data-ref="light3"></span>
+    </div>
+    <div class="world-card world-race" data-ref="race" data-testid="race-card" hidden>
+      <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
+      <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
+      <div class="world-race-rows" data-ref="raceRows"></div>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
@@ -272,6 +282,36 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const groundAt = (x: number, z: number): number => (shown ? sampleField(shown.ground, x, z, 0) : 0);
   /** The car as it is drawn: between the last two steps while driving, as the simulation has it otherwise. */
   const carState = (): CarState | null => (sim ? (driving.shown() ?? sim.state()) : null);
+  /** The race's cards as last written, so each is written again only when it changes. */
+  let raceRowsShown = '';
+  /** The countdown's lights at the top middle and the race card in the top right corner, while a race is driven (M4.3). */
+  const drawRace = (state: CarState | null): void => {
+    const race = state?.race ?? null;
+    const sps = tuned.sim.stepsPerSecond;
+    const lights = countdownLights(race, raceSteps(tuned.sim.race, sps), sps, tuned.render.race);
+    const box = ref('lights');
+    box.hidden = !lights.shown;
+    box.dataset.lit = String(lights.lit);
+    box.dataset.green = String(lights.green);
+    const opacity = lights.opacity.toFixed(3);
+    if (box.style.opacity !== opacity) box.style.opacity = opacity;
+    for (const k of [1, 2, 3]) {
+      const colour = cssColour(k > lights.lit ? RACE_LIGHTS.off : lights.green ? RACE_LIGHTS.green : RACE_LIGHTS.red);
+      const light = ref(`light${k}`);
+      if (light.style.backgroundColor !== colour) light.style.backgroundColor = colour;
+    }
+    const card = ref('race');
+    card.hidden = race === null;
+    if (!race) return;
+    const view = raceCard(race, tuned.sim.race, sps);
+    if (ref('raceLap').textContent !== view.lap) ref('raceLap').textContent = view.lap;
+    if (ref('raceTime').textContent !== view.time) ref('raceTime').textContent = view.time;
+    const rows = raceRows(view);
+    if (rows !== raceRowsShown) {
+      ref('raceRows').innerHTML = rows;
+      raceRowsShown = rows;
+    }
+  };
   /** Draws the car, or hides it, and writes the readout. */
   const drawCar = (): void => {
     const state = sim && (mode === 'chase' || lookingAtCar || driven) ? carState() : null;
@@ -304,6 +344,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (ref('place').textContent !== place) ref('place').textContent = place;
       document.body.dataset.driveRespawns = String(state.respawn.respawns);
     }
+    drawRace(state && mode === 'chase' ? state : null);
     const fade = state && mode === 'chase' ? respawnFade(state.respawn, state.step, tuned.render.respawnFade, tuned.sim.stepsPerSecond) : 0;
     const opacity = fade.toFixed(3);
     if (ref('fade').style.opacity !== opacity) ref('fade').style.opacity = opacity;
@@ -729,4 +770,21 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       reset: resetCar,
     },
   };
+}
+
+/** A palette colour (0 to 1) as a CSS colour. */
+function cssColour(colour: Rgb): string {
+  return `rgb(${colour.map((c) => Math.round(c * 255)).join(', ')})`;
+}
+
+/** The race card's rows under its time: last and best and the sectors while racing, every lap once finished. */
+function raceRows(view: RaceCard): string {
+  const row = (testId: string, name: string, time: string, extra = '', accent = false): string =>
+    `<p class="world-race-row${accent ? ' world-race-accent' : ''}" data-testid="${testId}-row"><span>${name}</span><span data-testid="${testId}">${time}</span>${extra}</p>`;
+  if (view.finished) return view.laps.map((lap, i) => row('race-lap-time', `Lap ${i + 1}`, lap.time, '', lap.best)).join('');
+  const sectors = view.sectors.map((sector, k) => {
+    const gap = sector?.gap ? `<span class="world-race-gap${sector.quicker ? ' world-race-accent' : ''}">${sector.gap}</span>` : '<span class="world-race-gap"></span>';
+    return `<p class="world-race-row world-race-sector" data-testid="race-sector"><span>S${k + 1}</span><span>${sector?.time ?? '–'}</span>${gap}</p>`;
+  });
+  return row('race-last', 'Last', view.last ?? '–') + row('race-best', 'Best', view.best ?? '–') + sectors.join('');
 }

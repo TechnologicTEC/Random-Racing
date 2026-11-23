@@ -935,6 +935,8 @@ export interface RenderConfig {
   respawnFade: { in: number; out: number };
   /** How long the readout says why a slide was cancelled (a hit, the brake, too slow, a respawn), in seconds (step 10a). */
   cancelShown: number;
+  /** The race on screen (M4.3): how long the countdown's lights stay green after "go", then how long they take to fade, in seconds. */
+  race: { goShown: number; goFade: number };
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -2296,6 +2298,8 @@ export const config: GameConfig = {
     respawnFade: { in: 0.3, out: 0.4 },
     // Long enough to read after a slide ends mid-corner (Tane, check-in 2: a drift sometimes ended with no brake pressed).
     cancelShown: 2,
+    // Tane, M4.0: the lights turn green on "go" and the card fades out a second later.
+    race: { goShown: 1, goFade: 0.25 },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
