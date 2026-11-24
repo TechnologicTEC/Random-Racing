@@ -11,7 +11,7 @@ import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
 import { parseQuality, qualitySettings, type QualityLevel } from '../render/quality';
-import { kartPose } from '../render/carShape';
+import { ghostPose, kartPose, type KartPose } from '../render/carShape';
 import type { EffectTextures } from '../render/carView';
 import { speedLines } from '../render/driftEffects';
 import { loadEffectTextures } from '../render/effectTextures';
@@ -21,16 +21,18 @@ import { createDevices } from '../input/devices';
 import { RACE_LIGHTS, RESPAWN_FADE, type Rgb } from '../render/palette';
 import { makeInput, unpackInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
+import { hashHandling, unpackRun, type RunRecord } from '../sim/record';
 import { raceSteps } from '../sim/race';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { checkpointCount } from '../sim/track/progress';
 import { genClient } from '../worker/client';
-import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen } from './drive';
+import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
+import { ghostPlace } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
-import { openStore, type Favourite, type Store } from './store';
+import { ghostKey, openStore, type Favourite, type Store } from './store';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
 import { nextCamera, openingCamera, openingScreen, switchAddress, type CameraMode } from './route';
@@ -71,6 +73,16 @@ export interface StoreHandle {
   removeFavourite(seed: number): Promise<void>;
 }
 
+/** What the ghost of the island shown is, and where it is drawn (M5.3), for browser tests. */
+export interface GhostHandle {
+  /** `loading` while it is read from the store, then `none`, `current` (today's handling) or `older` (other handling). */
+  status(): GhostStatus;
+  /** Where the ghost was last drawn, or null when it is not drawn. */
+  shown(): Place | null;
+}
+
+export type GhostStatus = 'loading' | 'none' | 'current' | 'older';
+
 /** What the page offers to automated checks. */
 export interface ViewHandle {
   stats(): ViewStats;
@@ -94,6 +106,8 @@ export interface ViewHandle {
   drive: DriveHandle;
   /** Where ghosts and favourites are kept. */
   store: StoreHandle;
+  /** The ghost of the island shown. */
+  ghost: GhostHandle;
 }
 
 const TEMPLATE = `
@@ -310,6 +324,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let sim: Sim | null = null;
   /** What the readout last saw of the slides' ends (step 10a). */
   let cancelSeen: CancelSeen | null = null;
+  /** The ghost of the island shown, read from the store when it comes in (M5.3), and where it was last drawn. */
+  let ghost: { record: RunRecord; status: 'current' | 'older' } | null = null;
+  let ghostStatus: GhostStatus = 'loading';
+  let ghostShown: Place | null = null;
+  /** The kart at rest on the start line, whose wheels the ghost is drawn with. */
+  let restingKart: KartPose | null = null;
   /**
    * The page's own copy of the config, which the tuning panel (T) changes: the simulation, the chase camera and the
    * car's drawing use it. The shared config, and every fingerprint made from it, never change.
@@ -368,6 +388,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const drawCar = (): void => {
     const state = sim && (mode === 'chase' || lookingAtCar || driven) ? carState() : null;
     view.setCar(state ? kartPose(state, tuned) : null);
+    // The ghost, in a race in the driving view: at the moment the car is drawn, by step (M5.3).
+    const moment = driving.moment();
+    ghostShown = state?.race && mode === 'chase' && ghost && moment !== null ? ghostPlace(ghost.record, moment) : null;
+    view.setGhost(ghostShown && restingKart ? ghostPose(ghostShown, restingKart) : null, config.ghost.opacity);
+    document.body.dataset.ghostShown = String(ghostShown !== null);
     // Speed lines while a boost runs, in the driving view only.
     view.setSpeedLines(state && mode === 'chase' ? speedLines(state.drift, state.step, tuned.render.car, tuned.sim.stepsPerSecond) : []);
     document.body.dataset.driveCar = state ? 'shown' : 'hidden';
@@ -417,6 +442,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     dropSim();
     // A race only on the race's screen: the title, free driving and the rest drive with no clock.
     sim = createSim(engine, world, tuned, { race: screen.name === 'race' });
+    restingKart = kartPose(sim.state(), tuned);
     driving.setSim(sim);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
     document.body.dataset.driveStep = String(sim.state().step);
@@ -683,6 +709,27 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     return { targetX: x, targetY: height + 8, targetZ: z, angle: -towardsSun, tilt: 0.08, distance: 60 };
   };
 
+  /** Reads the ghost of an island that has just come in from the store, unless another island has been asked for meanwhile. */
+  const loadGhost = async (world: WorldResult): Promise<void> => {
+    const store = await storeReady;
+    const bytes = await store.getGhost(ghostKey(world.seed, world.generatorVersion, 'player'));
+    if (shown !== world) return;
+    let record: RunRecord | null = null;
+    try {
+      record = bytes && unpackRun(bytes);
+    } catch {
+      // Bytes that are not a record of this format are no ghost.
+      record = null;
+    }
+    ghost = record && record.seed === world.seed && record.generator === world.generatorVersion
+      ? { record, status: record.handling === hashHandling(config) ? 'current' : 'older' }
+      : null;
+    ghostStatus = ghost ? ghost.status : 'none';
+    document.body.dataset.ghost = ghostStatus;
+    // Drawn again only if there is a ghost to draw: a picture held still must not change for nothing (`frame times`).
+    if (ghost) drawCar();
+  };
+
   /** The seed last asked for. Its world may still be on its way from the worker. */
   let wantedSeed = -1;
   /** How many islands have been asked of the worker: a restart builds none (M4.5). */
@@ -693,6 +740,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     worldBuilds++;
     document.body.dataset.worldBuilds = String(worldBuilds);
     dropSim();
+    ghost = null;
+    ghostStatus = 'loading';
+    document.body.dataset.ghost = ghostStatus;
     loading.hidden = false;
     ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
@@ -709,6 +759,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       view.load(result);
       report = result.report;
       shown = result;
+      void loadGhost(result);
       // Only the page's first island honours the address's time; a new island has its own.
       bearing = result.sky.bearing;
       seedHour = result.sky.hour;
@@ -1038,6 +1089,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       listFavourites: async () => (await storeReady).listFavourites(),
       putFavourite: async (favourite) => (await storeReady).putFavourite(favourite),
       removeFavourite: async (seed) => (await storeReady).removeFavourite(seed),
+    },
+    ghost: {
+      status: () => ghostStatus,
+      shown: () => ghostShown && { position: { ...ghostShown.position }, rotation: { ...ghostShown.rotation } },
     },
   };
 }

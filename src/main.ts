@@ -1,6 +1,6 @@
 import { config } from './config';
 import { choosePage } from './app/route';
-import type { DriveHandle, StoreHandle, ViewHandle } from './app/worldPage';
+import type { DriveHandle, GhostHandle, StoreHandle, ViewHandle } from './app/worldPage';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
 import { hashTrack, hashWorld } from './gen';
@@ -18,6 +18,7 @@ if (page.kind === 'world') {
     window.seedCircuit.view = view;
     window.seedCircuit.drive = view.drive;
     window.seedCircuit.store = view.store;
+    window.seedCircuit.ghost = view.ghost;
   });
 } else if (page.kind === 'sheet') {
   mountContactSheet(app, page.seeds, page.run);
@@ -44,6 +45,8 @@ declare global {
       drive?: DriveHandle;
       /** Where the 3D page keeps ghosts and favourites, when that is the page being shown. */
       store?: StoreHandle;
+      /** The ghost of the island on the 3D page, when that is the page being shown. */
+      ghost?: GhostHandle;
     };
   }
 }

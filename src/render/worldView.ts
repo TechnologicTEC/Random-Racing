@@ -6,7 +6,7 @@ import type { HeightField, WorldResult } from '../gen/types';
 import { sampleField } from '../gen/world/heightfield';
 import { createBloom } from './bloom';
 import type { KartPose } from './carShape';
-import { createCarView, type EffectTextures } from './carView';
+import { createCarView, createGhostView, type EffectTextures } from './carView';
 import type { SpeedLine } from './driftEffects';
 import { createSpeedLinesView } from './speedLinesView';
 import { createCloudView } from './cloudView';
@@ -106,6 +106,8 @@ export interface WorldView {
   setFieldOfView(degrees: number): void;
   /** Draws the kart where the pose says (`kartPose`), or hides it for null. */
   setCar(pose: KartPose | null): void;
+  /** Draws a ghost where the pose says (`ghostPose`), `opacity` solid, or hides it for null (M5.3). */
+  setGhost(pose: KartPose | null, opacity: number): void;
   /** The pictures the drift's effects are drawn with, once loaded (`loadEffectTextures`). */
   setEffectTextures(textures: EffectTextures): void;
   /** The speed lines over the picture while a boost runs (`speedLines`); none for an empty list. */
@@ -200,6 +202,9 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   // The kart, hidden until it is given a pose; it takes the land's and clouds' shadows like the road.
   const car = createCarView(cfg.car, (material) => shade.patch(material));
   scene.add(car.object);
+  // A ghost of a run on record, see-through, hidden until it is given a pose (M5.3).
+  const ghost = createGhostView(cfg.car, (material) => shade.patch(material));
+  scene.add(ghost.object);
   // The glow round the drift's effects, and the speed lines over the picture (6h-5).
   const bloom = createBloom(renderer, cfg.bloom);
   const speedLinesView = createSpeedLinesView();
@@ -352,6 +357,10 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       car.set(pose);
     },
 
+    setGhost(pose, opacity) {
+      ghost.set(pose, opacity);
+    },
+
     setEffectTextures(textures) {
       car.setTextures(textures);
     },
@@ -495,6 +504,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       sky.dispose();
       decor.dispose();
       car.dispose();
+      ghost.dispose();
       bloom.dispose();
       speedLinesView.dispose();
       clouds.dispose();

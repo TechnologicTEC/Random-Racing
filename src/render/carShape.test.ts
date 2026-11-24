@@ -7,7 +7,7 @@ import { rotate } from '../sim/quat';
 import { createSimOn, type CarState } from '../sim/sim';
 import { hold } from '../testing/simDriving';
 import { flatGround } from '../testing/testGrounds';
-import { kartBody, kartPose, kartWheel } from './carShape';
+import { ghostPose, kartBody, kartPose, kartWheel } from './carShape';
 import { KART } from './palette';
 
 const car = config.car;
@@ -177,5 +177,20 @@ describe('kartPose', () => {
   it('draws the boost flame while a boost runs', () => {
     const pose = kartPose({ ...resting, drift: { ...resting.drift, boostLeft: 0.4, boostTier: 3 } }, config);
     expect(pose.sprites.filter((s) => s.kind === 'flame').length).toBeGreaterThan(0);
+  });
+});
+
+describe('ghostPose (M5.3)', () => {
+  it('draws the kart at a kept place with the resting kart wheels, unturned, and nothing of a drift', () => {
+    const atRest = kartPose({ ...resting, input: makeInput({ steer: 1 }) }, config);
+    const place = { position: { x: 10, y: 2, z: -40 }, rotation: { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_2 } };
+    const pose = ghostPose(place, atRest);
+    expect(pose.position).toEqual(place.position);
+    expect(pose.rotation).toEqual(place.rotation);
+    expect(pose.wheels.map((wheel) => wheel.at)).toEqual(atRest.wheels.map((wheel) => wheel.at));
+    expect(pose.wheels.every((wheel) => wheel.turn === 0)).toBe(true);
+    expect(pose.sprites).toEqual([]);
+    expect(pose.lean).toBe(0);
+    expect(pose.squash).toBe(1);
   });
 });
