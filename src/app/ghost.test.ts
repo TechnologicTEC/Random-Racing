@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { hashHandling, RECORD_FORMAT, type RunRecord } from '../sim/record';
 import { startRace, raceSteps, type RaceState } from '../sim/race';
-import { chooseGhost, ghostGap, ghostPlace, ghostRow, saveVerdict } from './ghost';
+import { chooseGhost, ghostGap, ghostPlace, ghostRows, saveVerdict, titleTimes } from './ghost';
 
 const HALF = Math.SQRT1_2;
 /** A made-up record: three places, 6 steps apart, the car moving along x and turning a quarter round about up. */
@@ -113,24 +113,54 @@ describe('the gap to the ghost (ghostGap, M5.4b)', () => {
   });
 });
 
-describe("the race card's ghost row (ghostRow)", () => {
+describe("the race card's ghost rows (ghostRows; the times since the check-in after M5.4)", () => {
   const sps = config.sim.stepsPerSecond;
-  const bot = { record: { ...madeUp(), driver: 'bot' as const }, driver: 'bot' as const, older: false };
-  const own = { record: madeUp(), driver: 'player' as const, older: false };
+  const today = hashHandling(config);
+  const botRun = { ...madeUp(), driver: 'bot' as const, total: 8374.68 };
+  const ownRun = { ...madeUp(), total: 8706.24 };
+  const bot = { record: botRun, driver: 'bot' as const, older: false };
+  const own = { record: ownRun, driver: 'player' as const, older: false };
 
-  it('names whose ghost it is, says when it is from an older version, and when it is hidden', () => {
-    expect(ghostRow(null, true, null, sps)).toBeNull();
-    expect(ghostRow(bot, true, null, sps)).toEqual({ label: "Bot's ghost", gap: null, ahead: false });
-    expect(ghostRow(own, true, null, sps)).toEqual({ label: 'Your ghost', gap: null, ahead: false });
-    expect(ghostRow({ ...own, older: true }, true, null, sps)).toEqual({ label: 'Your ghost · older version', gap: null, ahead: false });
-    expect(ghostRow(bot, false, null, sps)).toEqual({ label: 'Ghost hidden (G)', gap: null, ahead: false });
+  it('names the ghost by its total: the bot, or the best of the player', () => {
+    expect(ghostRows(null, null, true, null, today, sps)).toEqual([]);
+    expect(ghostRows(bot, null, true, null, today, sps)).toEqual([{ label: 'Bot 2:19.578', gap: null, ahead: false }]);
+    expect(ghostRows(own, ownRun, true, null, today, sps)).toEqual([{ label: 'Your best 2:25.104', gap: null, ahead: false }]);
+    expect(ghostRows({ ...own, older: true }, ownRun, true, null, today, sps)).toEqual([{ label: 'Your best 2:25.104 · older version', gap: null, ahead: false }]);
   });
 
-  it('gives the gap at the last sector, ahead when it is less, even with the ghost hidden; none against an older version', () => {
-    expect(ghostRow(bot, true, -12, sps)).toEqual({ label: "Bot's ghost", gap: '−0.200', ahead: true });
-    expect(ghostRow(own, true, 30, sps)).toEqual({ label: 'Your ghost', gap: '+0.500', ahead: false });
-    expect(ghostRow(bot, false, 6, sps)).toEqual({ label: 'Ghost hidden (G)', gap: '+0.100', ahead: false });
-    expect(ghostRow({ ...own, older: true }, true, -60, sps)).toEqual({ label: 'Your ghost · older version', gap: null, ahead: false });
+  it("gives the player's best on a second row while the bot is still the ghost", () => {
+    expect(ghostRows(bot, ownRun, true, -12, today, sps)).toEqual([
+      { label: 'Bot 2:19.578', gap: '−0.200', ahead: true },
+      { label: 'Your best 2:25.104', gap: null, ahead: false },
+    ]);
+    // A best of an older version is not given beside the bot.
+    expect(ghostRows(bot, { ...ownRun, handling: 'deadbeef' }, true, null, today, sps)).toHaveLength(1);
+  });
+
+  it('says the ghost is hidden, keeping its time and the gap; never a gap against an older version', () => {
+    expect(ghostRows(bot, null, false, 6, today, sps)).toEqual([{ label: 'Bot 2:19.578 (hidden)', gap: '+0.100', ahead: false }]);
+    expect(ghostRows(own, ownRun, true, 30, today, sps)[0]).toEqual({ label: 'Your best 2:25.104', gap: '+0.500', ahead: false });
+    expect(ghostRows({ ...own, older: true }, ownRun, true, -60, today, sps)[0]!.gap).toBeNull();
+  });
+});
+
+describe("the title's times (titleTimes, the check-in after M5.4)", () => {
+  const sps = config.sim.stepsPerSecond;
+  const today = hashHandling(config);
+  const bot = { ...madeUp(), driver: 'bot' as const, total: 8374.68 };
+  const own = (total: number, handling = today): RunRecord => ({ ...madeUp(), total, handling });
+
+  it("gives the bot's time until it is beaten, and the player's best until it is bettered", () => {
+    expect(titleTimes(null, null, today, sps)).toBeNull();
+    expect(titleTimes(null, bot, today, sps)).toBe('Bot 2:19.578');
+    expect(titleTimes(own(8706.24), bot, today, sps)).toBe('Bot 2:19.578 · Your best 2:25.104');
+    expect(titleTimes(own(8300), bot, today, sps)).toBe('Your best 2:18.333');
+    expect(titleTimes(own(8300), null, today, sps)).toBe('Your best 2:18.333');
+  });
+
+  it("leaves out a best of an older version and a bot's race of other handling", () => {
+    expect(titleTimes(own(8000, 'deadbeef'), bot, today, sps)).toBe('Bot 2:19.578');
+    expect(titleTimes(null, { ...bot, handling: 'deadbeef' }, today, sps)).toBeNull();
   });
 });
 

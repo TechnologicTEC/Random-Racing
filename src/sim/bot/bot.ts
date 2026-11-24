@@ -278,12 +278,14 @@ export function raceRun(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig, 
 
 /**
  * The bot's race of a world as a run on record (M5.3b): its ghost, driven from the first step of the countdown to the
- * finish with the handling given. Null if it does not finish within `lapLimit` seconds a lap.
+ * finish with the handling given. It slides through the generator's drift corners (Tane at the check-in after M5.4: a
+ * better picture of what the track allows; 18 to 34 s quicker over 3 laps than on grip, seeds 1 to 20). Null if it
+ * does not finish within `lapLimit` seconds a lap.
  */
 export function botRecord(rapier: Rapier, world: WorldResult, cfg: BotConfig & Pick<GameConfig, 'ghost'>, lapLimit = BOT.lapLimit): RunRecord | null {
   const countdown = raceSteps(cfg.sim.race, cfg.sim.stepsPerSecond).countdown;
   const limit = countdown + cfg.sim.race.laps * lapLimit * cfg.sim.stepsPerSecond;
-  const bot = createBot(world, cfg);
+  const bot = createBot(world, cfg, { slide: true });
   const sim = recordRun(createSim(rapier, world, cfg, { race: true }), {
     seed: world.seed,
     generator: world.generatorVersion,

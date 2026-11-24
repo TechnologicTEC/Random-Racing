@@ -188,3 +188,6 @@ export const RACE_LIGHTS = {
 
 /** The fade over a respawn (step 8c): the cards' pale off-white, so the picture whites out into the page's own light. */
 export const RESPAWN_FADE: Rgb = [0.965, 0.98, 0.969];
+
+/** The ghost (M5.3): a see-through white kart (Tane at the check-in after M5.4: it was the kart's own colours). */
+export const GHOST: Rgb = [1, 1, 1];

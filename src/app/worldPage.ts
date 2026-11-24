@@ -30,7 +30,7 @@ import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
-import { chooseGhost, ghostGap, ghostPlace, ghostRow, saveVerdict, type ChosenGhost } from './ghost';
+import { chooseGhost, ghostGap, ghostPlace, ghostRows, saveVerdict, titleTimes, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
 import { ghostKey, openStore, type Favourite, type Store } from './store';
@@ -154,11 +154,15 @@ const TEMPLATE = `
       <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
       <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
       <div class="world-race-rows" data-ref="raceRows"></div>
-      <p class="world-race-row world-race-ghost" data-ref="raceGhost" data-testid="race-ghost-row" hidden><span data-ref="raceGhostName" data-testid="race-ghost"></span><span class="world-race-gap" data-ref="raceGhostGap" data-testid="race-ghost-gap"></span></p>
+      <div class="world-race-ghosts" data-ref="raceGhosts" hidden>
+        <p class="world-race-row world-race-ghost" data-testid="race-ghost-row"><span data-ref="raceGhostName" data-testid="race-ghost"></span><span class="world-race-gap" data-ref="raceGhostGap" data-testid="race-ghost-gap"></span></p>
+        <p class="world-race-row world-race-ghost world-race-best" data-ref="raceBest" data-testid="race-your-best" hidden></p>
+      </div>
     </div>
     <div class="world-card world-menu" data-ref="menu" data-testid="menu" hidden>
       <h2 data-ref="menuHeading" data-testid="menu-heading"></h2>
       <div class="world-menu-body" data-ref="menuBody"></div>
+      <p class="world-menu-quiet world-menu-ghost-note" data-ref="titleTimes" data-testid="menu-times" hidden></p>
       <p class="world-menu-quiet world-menu-ghost-note" data-ref="ghostNote" data-testid="menu-ghost-note" hidden>Your ghost is from an older version</p>
       <div class="world-menu-choices" data-ref="menuChoices"></div>
       <form class="world-menu-seed" data-ref="seedForm" data-testid="seed-form" hidden>
@@ -414,9 +418,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     card.hidden = race === null;
     if (!race) return;
     // Whose ghost the race is run against, or that it is hidden (M5.3b).
-    // and the split against it at the last sector done (M5.4b).
-    const row = ghostRow(ghost, ghostVisible, ghost && ghostGap(race, ghost.record), sps);
-    ref('raceGhost').hidden = row === null;
+    // and the split against it at the last sector done (M5.4b), by its total, with the player's best under it while the
+    // bot is still the ghost (the check-in after M5.4).
+    const [row, best] = ghostRows(ghost, ownGhost, ghostVisible, ghost && ghostGap(race, ghost.record), hashHandling(config), sps);
+    ref('raceGhosts').hidden = row === undefined;
     if (row) {
       const name = ref('raceGhostName');
       if (name.textContent !== row.label) name.textContent = row.label;
@@ -424,6 +429,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (gap.textContent !== (row.gap ?? '')) gap.textContent = row.gap ?? '';
       gap.classList.toggle('world-race-accent', row.ahead);
     }
+    const bestLine = ref('raceBest');
+    bestLine.hidden = best === undefined;
+    if (best && bestLine.textContent !== best.label) bestLine.textContent = best.label;
     const view = raceCard(race, tuned.sim.race, sps);
     if (ref('raceLap').textContent !== view.lap) ref('raceLap').textContent = view.lap;
     if (ref('raceTime').textContent !== view.time) ref('raceTime').textContent = view.time;
@@ -775,7 +783,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   /** Picks the ghost a race is run against from those read and worked out (`chooseGhost`), and says which on the page. */
   /** On the title, a line when the player's ghost of this island was driven with other handling (M5.4b). */
   const renderGhostNote = (): void => {
-    ref('ghostNote').hidden = !(screen.name === 'title' && ownGhost !== null && ownGhost.handling !== hashHandling(config));
+    const title = screen.name === 'title';
+    ref('ghostNote').hidden = !(title && ownGhost !== null && ownGhost.handling !== hashHandling(config));
+    // The bot's time until it is beaten and the player's best until it is bettered (the check-in after M5.4).
+    const times = title ? titleTimes(ownGhost, botWanted ? botGhost : null, hashHandling(config), config.sim.stepsPerSecond) : null;
+    ref('titleTimes').hidden = times === null;
+    if (times !== null && ref('titleTimes').textContent !== times) ref('titleTimes').textContent = times;
   };
   const pickGhost = (): void => {
     ghost = chooseGhost(ownGhost, botWanted ? botGhost : null, hashHandling(config));

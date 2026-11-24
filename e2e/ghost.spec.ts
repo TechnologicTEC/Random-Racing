@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { formatRaceTime } from '../src/app/raceCard';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
 import { makeInput } from '../src/sim/input';
@@ -123,12 +124,14 @@ test.describe("the bot's ghost", () => {
     expect(await shownPlace(page)).toEqual(placeAt(bot, 0));
     await page.evaluate(() => window.seedCircuit.drive!.run(600));
     expect(await shownPlace(page)).toEqual(placeAt(bot, 600));
-    await expect(page.getByTestId('race-ghost')).toHaveText("Bot's ghost");
+    const botTime = `Bot ${formatRaceTime(bot.total, config.sim.stepsPerSecond)}`;
+    await expect(page.getByTestId('race-ghost')).toHaveText(botTime);
+    await expect(page.getByTestId('race-your-best')).toBeHidden();
     await page.screenshot({ path: `${shots}/ghost-00007-bot-${browserName}.png` });
     // G hides it; the race goes on, paused and resumed, and G shows it again where it was.
     await page.keyboard.press('g');
     expect(await shownPlace(page)).toBeNull();
-    await expect(page.getByTestId('race-ghost')).toHaveText('Ghost hidden (G)');
+    await expect(page.getByTestId('race-ghost')).toHaveText(`${botTime} (hidden)`);
     await page.screenshot({ path: `${shots}/ghost-00007-hidden-${browserName}.png` });
     await page.keyboard.press('Escape');
     await expect(page.locator('body')).toHaveAttribute('data-screen', 'paused');
@@ -136,7 +139,7 @@ test.describe("the bot's ghost", () => {
     await expect(page.locator('body')).toHaveAttribute('data-screen', 'race');
     await page.keyboard.press('g');
     expect(await shownPlace(page)).toEqual(placeAt(bot, 600));
-    await expect(page.getByTestId('race-ghost')).toHaveText("Bot's ghost");
+    await expect(page.getByTestId('race-ghost')).toHaveText(botTime);
     expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.step).toBe(600);
     // The bot's race was kept: the page opened again asks the worker for none.
     await open(page, 'seed=7&still=1&mode=race');
@@ -152,11 +155,13 @@ test.describe("the bot's ghost", () => {
     await raceWithGhost(page, { ...bot, driver: 'player', total: bot.total + 60 }, '', 'current');
     await expect(page.locator('body')).toHaveAttribute('data-bot-ghost', 'ready', BOT_READY);
     await expect(page.locator('body')).toHaveAttribute('data-ghost-driver', 'bot');
+    // The player's best on a row of its own while the bot is still the ghost.
+    await expect(page.getByTestId('race-your-best')).toHaveText(`Your best ${formatRaceTime(bot.total + 60, config.sim.stepsPerSecond)}`);
     // A second faster: the player's is drawn.
     await raceWithGhost(page, { ...bot, driver: 'player', total: bot.total - 60 }, '', 'current');
     await expect(page.locator('body')).toHaveAttribute('data-bot-ghost', 'ready', { timeout: 15_000 });
     await expect(page.locator('body')).toHaveAttribute('data-ghost-driver', 'player');
-    await expect(page.getByTestId('race-ghost')).toHaveText('Your ghost');
+    await expect(page.getByTestId('race-ghost')).toHaveText(`Your best ${formatRaceTime(bot.total - 60, config.sim.stepsPerSecond)}`);
   });
 
   test('asks for no bot race in free driving, and none at all for bot=off', async ({ page }) => {

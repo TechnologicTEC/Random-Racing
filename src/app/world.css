@@ -405,18 +405,22 @@ body,
 }
 
 /* Whose ghost the race is run against (M5.3b) and the split against it (M5.4b): one line under the rows, in the muted grey. */
+.world-race-ghosts {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(22, 52, 47, 0.15);
+}
+
+.world-race-ghosts[hidden],
+.world-race-ghost[hidden] {
+  display: none;
+}
+
 .world-race-row.world-race-ghost {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(22, 52, 47, 0.15);
   color: #4c665f;
-}
-
-.world-race-ghost[hidden] {
-  display: none;
 }
 
 .world-race-gap {

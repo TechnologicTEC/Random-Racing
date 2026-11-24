@@ -11,9 +11,9 @@ function fakeStorage(): Pick<Storage, 'getItem' | 'setItem'> & { items: Map<stri
 }
 
 describe('ghost keys', () => {
-  it("are the share code, with bot: in front for the bot's race", () => {
+  it("are the share code, with bot2: in front for the bot's race (2: the bot that drifts; bot: was the bot on grip)", () => {
     expect(ghostKey(7, 0, 'player')).toBe('v0-7');
-    expect(ghostKey(48213, 1, 'bot')).toBe('bot:v1-48213');
+    expect(ghostKey(48213, 1, 'bot')).toBe('bot2:v1-48213');
   });
 });
 

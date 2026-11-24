@@ -71,26 +71,46 @@ export function ghostGap(race: RaceState, record: RunRecord): number | null {
   return gap;
 }
 
-/** The race card's row for the ghost: whose it is, or that it is hidden, and the split against it. */
+/** A row of the race card's ghost rows: a name with a time, and the split against the ghost. */
 export interface GhostRow {
   label: string;
-  /** The gap at the last sector done (`formatGap`), or null: none yet, or against an older version's ghost. */
+  /** The gap at the last sector done (`formatGap`), or null: none yet, or not against this row's run. */
   gap: string | null;
   /** Ahead of the ghost: the gap in the teal accent. */
   ahead: boolean;
 }
 
 /**
- * The race card's ghost row: none without a ghost. The gap shows with the ghost hidden too, and never against a ghost
- * from an older version, which is not the time to beat.
+ * The race card's ghost rows (M5.3b; the times since the check-in after M5.4): the ghost by its total ("Bot 2:19.578",
+ * "Your best 2:25.104"), with the split against it, and "(hidden)" while G has hidden it; then, while the bot is still
+ * the ghost, the player's best of today's handling on a row of its own. No split against a ghost of an older version,
+ * which is not the time to beat.
  *
+ * @param own the player's best kept for this island, if any
  * @param gap the split against the ghost (`ghostGap`), in steps
  */
-export function ghostRow(chosen: ChosenGhost | null, shown: boolean, gap: number | null, stepsPerSecond: number): GhostRow | null {
-  if (!chosen) return null;
-  const label = !shown ? 'Ghost hidden (G)' : chosen.driver === 'bot' ? "Bot's ghost" : chosen.older ? 'Your ghost · older version' : 'Your ghost';
-  if (chosen.older || gap === null) return { label, gap: null, ahead: false };
-  return { label, gap: formatGap(gap, stepsPerSecond), ahead: gap < 0 };
+export function ghostRows(chosen: ChosenGhost | null, own: RunRecord | null, shown: boolean, gap: number | null, today: string, stepsPerSecond: number): GhostRow[] {
+  if (!chosen) return [];
+  const time = formatRaceTime(chosen.record.total, stepsPerSecond);
+  const name = chosen.driver === 'bot' ? `Bot ${time}` : `Your best ${time}${chosen.older ? ' · older version' : ''}`;
+  const label = shown ? name : `${name} (hidden)`;
+  const first: GhostRow = chosen.older || gap === null ? { label, gap: null, ahead: false } : { label, gap: formatGap(gap, stepsPerSecond), ahead: gap < 0 };
+  const rows = [first];
+  if (chosen.driver === 'bot' && own && own.handling === today) rows.push({ label: `Your best ${formatRaceTime(own.total, stepsPerSecond)}`, gap: null, ahead: false });
+  return rows;
+}
+
+/**
+ * The title card's line of times (the check-in after M5.4): the bot's total until the player beats it, and the
+ * player's best until they better it, each of today's handling. Null with neither.
+ */
+export function titleTimes(own: RunRecord | null, bot: RunRecord | null, today: string, stepsPerSecond: number): string | null {
+  const ownNow = own && own.handling === today ? own : null;
+  const botNow = bot && bot.handling === today ? bot : null;
+  const parts: string[] = [];
+  if (botNow && !(ownNow && ownNow.total < botNow.total)) parts.push(`Bot ${formatRaceTime(botNow.total, stepsPerSecond)}`);
+  if (ownNow) parts.push(`Your best ${formatRaceTime(ownNow.total, stepsPerSecond)}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 /** What is known at the finish of a race for deciding whether it is saved (M5.4a). */

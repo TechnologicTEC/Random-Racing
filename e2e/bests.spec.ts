@@ -91,23 +91,32 @@ test.describe('personal bests', () => {
 
   test("keeps a race slower than the bot's as the best while the bot stays the ghost, and one faster takes the ghost", async ({ page, browserName }) => {
     // The bot's race kept a second faster than the player's: the player's is kept, the bot's is still drawn.
-    await keep(page, [['bot:v0-7', { ...race, total: race.total - 60 }]]);
+    await keep(page, [['bot2:v0-7', { ...race, total: race.total - 60 }]]);
     await open(page, 'seed=7&still=1&mode=race');
     await expect(page.locator('body')).toHaveAttribute('data-bot-ghost', 'ready');
     await finish(page);
     await expect(page.getByTestId('menu-saved')).toHaveText(`New best. The bot's ${formatRaceTime(race.total - 60, SPS)} is still the ghost to beat`);
     await expect.poll(() => keptTotal(page)).toBe(race.total);
     await expect(page.locator('body')).toHaveAttribute('data-ghost-driver', 'bot');
+    // On the title: the bot's time, still to beat, and the player's best (the check-in after M5.4).
+    await page.getByTestId('menu-choice').filter({ hasText: 'Title' }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'title');
+    await expect(page.getByTestId('menu-times')).toHaveText(`Bot ${formatRaceTime(race.total - 60, SPS)} · Your best ${formatRaceTime(race.total, SPS)}`);
+    await page.screenshot({ path: `test-results/screens/menu-00007-times-${browserName}.png` });
 
     // The bot's a second slower: the player's race takes the ghost.
-    await keep(page, [['bot:v0-7', { ...race, total: race.total + 60 }], ['v0-7', slower(120)]]);
+    await keep(page, [['bot2:v0-7', { ...race, total: race.total + 60 }], ['v0-7', slower(120)]]);
     await open(page, 'seed=7&still=1&mode=race');
     await expect(page.locator('body')).toHaveAttribute('data-ghost-driver', 'bot');
+    await expect(page.getByTestId('race-your-best')).toHaveText(`Your best ${formatRaceTime(race.total + 120, SPS)}`);
     await finish(page);
     await expect(page.getByTestId('menu-saved')).toHaveText("New best: your ghost replaces the bot's");
     await page.screenshot({ path: `test-results/screens/results-00007-saved-${browserName}.png` });
     await expect(page.locator('body')).toHaveAttribute('data-ghost-driver', 'player');
     await expect.poll(() => keptTotal(page)).toBe(race.total);
+    // The bot beaten: the title gives only the player's best.
+    await page.getByTestId('menu-choice').filter({ hasText: 'Title' }).click();
+    await expect(page.getByTestId('menu-times')).toHaveText(`Your best ${formatRaceTime(race.total, SPS)}`);
   });
 
   test('never saves a race in which the tuning panel changed anything', async ({ page }) => {
@@ -159,7 +168,7 @@ test.describe('the split and the older ghost', () => {
     await keep(page, [['v0-7', { ...slower(270), splits: race.splits.map((steps) => steps + 30) }]]);
     await open(page, 'seed=7&still=1&mode=race&bot=off');
     const gap = page.getByTestId('race-ghost-gap');
-    await expect(page.getByTestId('race-ghost')).toHaveText('Your ghost');
+    await expect(page.getByTestId('race-ghost')).toHaveText(`Your best ${formatRaceTime(race.total + 270, SPS)}`);
     await expect(gap).toHaveText('');
     let done = 0;
     for (const [k, end] of sectorEnds.entries()) {
@@ -171,7 +180,7 @@ test.describe('the split and the older ghost', () => {
     await page.screenshot({ path: `test-results/screens/race-00007-ghost-split-${browserName}.png` });
     // Hidden, the ghost's split still shows.
     await page.keyboard.press('g');
-    await expect(page.getByTestId('race-ghost')).toHaveText('Ghost hidden (G)');
+    await expect(page.getByTestId('race-ghost')).toHaveText(`Your best ${formatRaceTime(race.total + 270, SPS)} (hidden)`);
     await expect(gap).toHaveText(formatGap(-90, SPS));
   });
 
@@ -188,7 +197,7 @@ test.describe('the split and the older ghost', () => {
     await expect(page.locator('body')).toHaveAttribute('data-screen', 'race');
     await expect(page.getByTestId('menu-ghost-note')).toBeHidden();
     await page.evaluate((list) => window.seedCircuit.drive!.replay(list), Array.from(race.inputs.subarray(0, sectorEnds[0])));
-    await expect(page.getByTestId('race-ghost')).toHaveText('Your ghost · older version');
+    await expect(page.getByTestId('race-ghost')).toHaveText(`Your best ${formatRaceTime(race.total - 600, SPS)} · older version`);
     await expect(page.getByTestId('race-ghost-gap')).toHaveText('');
     // Its time is not the one to beat: a race ten seconds slower replaces it.
     await page.evaluate((list) => window.seedCircuit.drive!.replay(list), Array.from(race.inputs.subarray(sectorEnds[0])));

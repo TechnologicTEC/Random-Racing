@@ -56,10 +56,14 @@ const GHOSTS = 'ghosts';
 /** How long to wait for the database to open before keeping ghosts in memory: a blocked open can wait for ever. */
 const OPEN_WAIT_MS = 3000;
 
-/** A ghost's key: its island's share code (`v0-7`), with `bot:` in front for the bot's race, so a ghost of another generator version is never found. */
+/**
+ * A ghost's key: its island's share code (`v0-7`), so a ghost of another generator version is never found; with
+ * `bot2:` in front for the bot's race. 2 is the bot that drifts (the check-in after M5.4); the bot on grip's races were
+ * kept as `bot:`, and are left unread, so the drifting bot's race is worked out in their place.
+ */
 export function ghostKey(seed: number, generator: number, driver: Driver): string {
   const code = formatSeedCode(seed, generator);
-  return driver === 'bot' ? `bot:${code}` : code;
+  return driver === 'bot' ? `bot2:${code}` : code;
 }
 
 function memoryGhosts(): GhostShelf {

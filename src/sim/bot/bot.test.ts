@@ -15,9 +15,11 @@ beforeAll(async () => {
 }, 60_000);
 
 describe("the bot's race on record (botRecord)", () => {
-  it("is the bot's race of M4.2c, recorded from the first step of the countdown, and replays to its fingerprint", () => {
+  it("is the race of the bot that drifts (Tane at the check-in after M5.4), recorded from the first light, and replays to its fingerprint", () => {
     const record = botRecord(rapier, world, config)!;
-    const plain = raceRun(rapier, world, config, createBot(world, config));
+    const plain = raceRun(rapier, world, config, createBot(world, config, { slide: true }));
+    const grip = raceRun(rapier, world, config, createBot(world, config));
+    expect(plain.race.total).toBeLessThan(grip.race.total - 600);
     expect(record).not.toBeNull();
     expect(record).toMatchObject({ seed: 7, generator: world.generatorVersion, driver: 'bot', every: config.ghost.every, handling: hashHandling(config) });
     expect([...record.inputs]).toEqual(plain.inputs);

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
-import { BLOOM_LAYER, createCarView } from './carView';
+import { BLOOM_LAYER, createCarView, createGhostView } from './carView';
+import { GHOST } from './palette';
 import { CASTER_LAYER } from './decorView';
 import type { KartPose } from './carShape';
 
@@ -89,5 +90,34 @@ describe('the car view', () => {
     const car = createCarView(config.render.car);
     for (const mesh of lit(car)) expect(mesh.receiveShadow).toBe(true);
     car.dispose();
+  });
+});
+
+describe('the ghost view (M5.3; white since the check-in after M5.4)', () => {
+  it('draws the kart in see-through white, not its own colours, with no shadow and out of the bloom', () => {
+    const ghost = createGhostView(config.render.car);
+    const parts = meshes(ghost.object);
+    expect(parts).toHaveLength(5);
+    for (const part of parts) {
+      const material = part.material as THREE.MeshStandardMaterial;
+      expect(material).toBeInstanceOf(THREE.MeshStandardMaterial);
+      expect(material.vertexColors).toBe(false);
+      expect(material.color.toArray()).toEqual(new THREE.Color(...GHOST).toArray());
+      expect(material.transparent).toBe(true);
+      expect(material.depthWrite).toBe(true);
+      expect(part.castShadow).toBe(false);
+      expect(part.receiveShadow).toBe(false);
+      expect(part.layers.isEnabled(BLOOM_LAYER)).toBe(false);
+    }
+    expect(GHOST).toEqual([1, 1, 1]);
+  });
+
+  it('is drawn at the opacity given, and hidden for no pose', () => {
+    const ghost = createGhostView(config.render.car);
+    ghost.set(STILL, config.ghost.opacity);
+    expect(ghost.object.visible).toBe(true);
+    expect((meshes(ghost.object)[0]!.material as THREE.MeshStandardMaterial).opacity).toBe(config.ghost.opacity);
+    ghost.set(null, config.ghost.opacity);
+    expect(ghost.object.visible).toBe(false);
   });
 });

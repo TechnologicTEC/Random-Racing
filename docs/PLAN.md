@@ -90,7 +90,8 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M5.4** Personal bests:
   - [x] **M5.4a** Personal bests saved; the results' line (2026-11-24)
   - [x] **M5.4b** The split against the ghost; the older-version ghost (2026-11-24)
-- [ ] **Check-in with Tane** after M5.4: race the ghost on seeds 7, 1, 42, 2024
+- [x] **Check-in with Tane** after M5.4: race the ghost on seeds 7, 1, 42, 2024 (2026-11-24: a white ghost, the bot drifting, the times shown; answers in STATE.md)
+  - [x] **M5.4c** The check-in's changes (2026-11-24)
 - **M5.5** Favourites:
   - [ ] **M5.5a** The favourites screen and the star, pure
   - [ ] **M5.5b** Favourites on the page
