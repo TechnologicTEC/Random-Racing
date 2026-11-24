@@ -1,6 +1,6 @@
 import { config } from './config';
 import { choosePage } from './app/route';
-import type { DriveHandle, ViewHandle } from './app/worldPage';
+import type { DriveHandle, StoreHandle, ViewHandle } from './app/worldPage';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
 import { hashTrack, hashWorld } from './gen';
@@ -17,6 +17,7 @@ if (page.kind === 'world') {
     const view = mountWorldPage(app);
     window.seedCircuit.view = view;
     window.seedCircuit.drive = view.drive;
+    window.seedCircuit.store = view.store;
   });
 } else if (page.kind === 'sheet') {
   mountContactSheet(app, page.seeds, page.run);
@@ -41,6 +42,8 @@ declare global {
       view?: ViewHandle;
       /** The simulation of the island on the 3D page, when that is the page being shown. */
       drive?: DriveHandle;
+      /** Where the 3D page keeps ghosts and favourites, when that is the page being shown. */
+      store?: StoreHandle;
     };
   }
 }

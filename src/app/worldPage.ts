@@ -30,6 +30,7 @@ import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, ty
 import { createDriving } from './driving';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
+import { openStore, type Favourite, type Store } from './store';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
 import { nextCamera, openingCamera, openingScreen, switchAddress, type CameraMode } from './route';
@@ -56,6 +57,20 @@ export interface DriveHandle {
   reset(): void;
 }
 
+/**
+ * The page's store of ghosts and favourites (M5.2), for browser tests and the console. Bytes go in and out as plain
+ * lists of numbers, which `page.evaluate` can carry.
+ */
+export interface StoreHandle {
+  /** Whether what is written survives a reload (false when the browser refused storage). */
+  kept(): Promise<boolean>;
+  getGhost(key: string): Promise<number[] | null>;
+  putGhost(key: string, bytes: number[]): Promise<void>;
+  listFavourites(): Promise<Favourite[]>;
+  putFavourite(favourite: Favourite): Promise<void>;
+  removeFavourite(seed: number): Promise<void>;
+}
+
 /** What the page offers to automated checks. */
 export interface ViewHandle {
   stats(): ViewStats;
@@ -77,6 +92,8 @@ export interface ViewHandle {
   decor(): { woods: WoodsKind; trees: number; rocks: number; sky: CloudCover; clouds: number; puffs: number } | null;
   /** The simulation of the island shown. */
   drive: DriveHandle;
+  /** Where ghosts and favourites are kept. */
+  store: StoreHandle;
 }
 
 const TEMPLATE = `
@@ -245,6 +262,14 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       // The effects are still drawn, as soft dots.
       document.body.dataset.effects = 'failed';
     });
+  // Ghosts and favourites (M5.2): kept by the browser, or in memory if it refuses; `data-storage` says which.
+  document.body.dataset.storage = 'opening';
+  const storeReady: Promise<Store> = openStore(window, () => {
+    document.body.dataset.storage = 'memory';
+  }).then((store) => {
+    document.body.dataset.storage = store.kept ? 'kept' : 'memory';
+    return store;
+  });
   const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
   const readout = ref('frames');
   readout.hidden = params.get('fps') !== '1';
@@ -1002,6 +1027,17 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         return state;
       },
       reset: resetCar,
+    },
+    store: {
+      kept: async () => (await storeReady).kept,
+      getGhost: async (key) => {
+        const bytes = await (await storeReady).getGhost(key);
+        return bytes ? Array.from(bytes) : null;
+      },
+      putGhost: async (key, bytes) => (await storeReady).putGhost(key, Uint8Array.from(bytes)),
+      listFavourites: async () => (await storeReady).listFavourites(),
+      putFavourite: async (favourite) => (await storeReady).putFavourite(favourite),
+      removeFavourite: async (seed) => (await storeReady).removeFavourite(seed),
     },
   };
 }

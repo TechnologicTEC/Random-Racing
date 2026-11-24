@@ -82,7 +82,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M5.1** The run record and its replay:
   - [x] **M5.1a** The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun` (2026-11-24)
   - [x] **M5.1b** Recording a run and replaying it; one fingerprint in Node, Chromium and Firefox (2026-11-24)
-- [ ] **M5.2** Storage
+- [x] **M5.2** Storage (2026-11-24)
 - **M5.3** The ghost drawn:
   - [ ] **M5.3** The ghost drawn from its record, by step
   - [ ] **M5.3b** The bot's ghost (Tane, M5.0): the bot's race worked out in the worker; G and X show or hide the ghost
