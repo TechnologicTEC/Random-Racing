@@ -39,6 +39,8 @@ declare global {
       simHashFor(seed: number): Promise<string>;
       /** The fingerprint a packed run record (`sim/record.ts`, given as its bytes) replays to on its own island, to confirm every browser replays a ghost alike (M5.1b). */
       replayHashFor(bytes: number[]): Promise<string>;
+      /** The bot's race of a seed from the bot's worker (M5.3b), packed, or null if it did not finish; and how long it took. */
+      botRaceFor(seed: number): Promise<{ bytes: number[] | null; ms: number }>;
       /** The 3D view, when that is the page being shown. */
       view?: ViewHandle;
       /** The simulation of the island on the 3D page, when that is the page being shown. */
@@ -75,5 +77,10 @@ window.seedCircuit = {
     const record = unpackRun(Uint8Array.from(bytes));
     const { result } = await genClient().world(record.seed, config);
     return replayRun(await loadRapier(), result, config, record);
+  },
+  botRaceFor: async (seed) => {
+    const { botClient } = await import('./worker/botClient');
+    const { bytes, ms } = await botClient().race(seed, config);
+    return { bytes: bytes && Array.from(bytes), ms };
   },
 };

@@ -17,5 +17,5 @@
     "noEmit": true
   },
   "include": ["src"],
-  "exclude": ["src/worker/gen.worker.ts"]
+  "exclude": ["src/worker/gen.worker.ts", "src/worker/bot.worker.ts"]
 }

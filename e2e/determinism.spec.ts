@@ -5,6 +5,7 @@ import { makeInput, unpackInput } from '../src/sim/input';
 import { dropFingerprint } from '../src/sim/physics/proof';
 import { loadRapier } from '../src/sim/physics/rapier';
 import { scriptedFingerprint } from '../src/sim/script';
+import { botRecord } from '../src/sim/bot/bot';
 import { hashHandling, packRun, recordRun } from '../src/sim/record';
 import { createSim } from '../src/sim/sim';
 import { checkpointCount } from '../src/sim/track/progress';
@@ -184,6 +185,21 @@ test("the bot's packed race record on seed 7 replays to Node's fingerprint in th
   await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
   const hash = await page.evaluate((bytes) => window.seedCircuit.replayHashFor(bytes), Array.from(packRun(record)));
   expect(hash, `seed 7's recorded race replayed in ${browserName}`).toBe(record.hash);
+});
+
+/**
+ * M5.3b: the bot's ghost is worked out in this browser's own bot worker. Its packed record of seed 7 must be Node's,
+ * byte for byte: the same race, the same places and the same fingerprint.
+ */
+test("the bot's worker gives Node's packed race of seed 7, byte for byte", async ({ page, browserName }) => {
+  test.setTimeout(300_000);
+  const node = botRecord(await loadRapier(), generateWorld(7, config), config);
+  expect(node, "the bot finished seed 7's race in Node").not.toBeNull();
+  await page.goto('/?lab=1&seed=7');
+  await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true');
+  const { bytes, ms } = await page.evaluate(() => window.seedCircuit.botRaceFor(7));
+  console.log(`the bot's race of seed 7 in ${browserName}'s bot worker: ${(ms / 1000).toFixed(1)} s`);
+  expect(bytes, `${browserName}'s bot worker`).toEqual(Array.from(packRun(node!)));
 });
 
 test('generation runs in a Web Worker, not on the page', async ({ page }) => {
