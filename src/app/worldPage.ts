@@ -21,7 +21,7 @@ import { createDevices } from '../input/devices';
 import { RACE_LIGHTS, RESPAWN_FADE, type Rgb } from '../render/palette';
 import { makeInput, unpackInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
-import { hashHandling, unpackRun, type RunRecord } from '../sim/record';
+import { hashHandling, packRun, recordRun, unpackRun, type RecordingSim, type RunRecord } from '../sim/record';
 import { raceSteps } from '../sim/race';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
@@ -30,7 +30,7 @@ import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
-import { chooseGhost, ghostPlace, ghostRow, type ChosenGhost } from './ghost';
+import { chooseGhost, ghostPlace, ghostRow, saveVerdict, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
 import { ghostKey, openStore, type Favourite, type Store } from './store';
@@ -286,10 +286,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     });
   // Ghosts and favourites (M5.2): kept by the browser, or in memory if it refuses; `data-storage` says which.
   document.body.dataset.storage = 'opening';
+  /** The store once it is open, for what the results say about a save. */
+  let storeNow: Store | null = null;
   const storeReady: Promise<Store> = openStore(window, () => {
     document.body.dataset.storage = 'memory';
   }).then((store) => {
     document.body.dataset.storage = store.kept ? 'kept' : 'memory';
+    storeNow = store;
     return store;
   });
   const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
@@ -337,6 +340,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
    * bot's worked out in its worker if it is not kept; the one a race is run against (`chooseGhost`); where it was last
    * drawn; and whether it is shown (G and X). `bot=off` leaves the bot's out (for tests).
    */
+  /** The race being recorded, whether it was tuned, and what the results say about saving it (M5.4a). */
+  let recording: RecordingSim | null = null;
+  let tunedRace = false;
+  let savedLine = '';
   let ownGhost: RunRecord | null = null;
   let botGhost: RunRecord | null = null;
   let ghost: ChosenGhost | null = null;
@@ -476,7 +483,16 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const started = performance.now();
     dropSim();
     // A race only on the race's screen: the title, free driving and the rest drive with no clock.
-    sim = createSim(engine, world, tuned, { race: screen.name === 'race' });
+    const made = createSim(engine, world, tuned, { race: screen.name === 'race' });
+    // A race is recorded from its first step (M5.4a): it may become the player's ghost. A race started with tuned
+    // handling is never saved, nor one in which the tuning panel changes anything.
+    recording =
+      screen.name === 'race'
+        ? recordRun(made, { seed: world.seed, generator: world.generatorVersion, driver: 'player', every: config.ghost.every, handling: hashHandling(tuned) })
+        : null;
+    sim = recording ?? made;
+    tunedRace = hashHandling(tuned) !== hashHandling(config);
+    savedLine = '';
     restingKart = kartPose(sim.state(), tuned);
     driving.setSim(sim);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
@@ -498,6 +514,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const panel = createTuningPanel(ref('dash').parentElement!, tuned, (path) => {
     // The camera reads its settings afresh each frame; the car's are built into its simulation.
     if (needsRebuild(path)) rebuildWanted = true;
+    // A race in which the panel changed anything is never saved (M5.4a).
+    if (sim?.state().race) tunedRace = true;
     dirty = true;
   });
   /** Builds the simulation again with the tuned settings, carrying on from where the car is: at most once a frame. */
@@ -509,6 +527,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const race = sim.state().race !== null;
     sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg, { race }), tuned);
     driving.replaceSim(sim);
+    // The rebuilt simulation carries on from a snapshot, so the run is no longer one recording from the start.
+    recording = null;
     rebuilds++;
     document.body.dataset.tuningBuilds = String(rebuilds);
     document.body.dataset.tuningMs = (performance.now() - started).toFixed(0);
@@ -815,6 +835,31 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         document.body.dataset.botGhost = 'failed';
       });
   };
+  /**
+   * At the finish (M5.4a): saves the race as the player's ghost if it is their best and the car was not tuned
+   * (`saveVerdict`), and words the results' line about it. The ghost a next race is run against is chosen again.
+   */
+  const saveRace = (): void => {
+    const world = shown;
+    const race = sim?.state().race;
+    savedLine = '';
+    if (!world || !race || race.phase !== 'finished') return;
+    let record: RunRecord | null = null;
+    try {
+      record = recording?.record() ?? null;
+    } catch {
+      record = null;
+    }
+    const today = hashHandling(config);
+    const verdict = saveVerdict(race.total, { tuned: tunedRace || !record, kept: storeNow?.kept ?? false, own: ownGhost, bot: botWanted ? botGhost : null, today }, config.sim.stepsPerSecond);
+    savedLine = verdict.line;
+    document.body.dataset.saved = String(verdict.save);
+    if (!verdict.save || !record) return;
+    ownGhost = record;
+    pickGhost();
+    const bytes = packRun(record);
+    void storeReady.then((store) => store.putGhost(ghostKey(world.seed, world.generatorVersion, 'player'), bytes));
+  };
   /** Shows or hides the ghost (G, or X on a controller), and remembers it. */
   const toggleGhost = (): void => {
     ghostVisible = !ghostVisible;
@@ -1067,6 +1112,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
           body.push(row);
         });
       }
+      // Whether the race was saved as the player's best, and why not (M5.4a).
+      if (savedLine) body.push(line(savedLine, 'world-menu-quiet world-menu-saved', 'menu-saved'));
     }
     ref('menuBody').replaceChildren(...body);
     ref('menuChoices').replaceChildren(
@@ -1099,6 +1146,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     } else if (m === 'pause') {
       devices.release();
     } else if (m === 'quit' || m === 'finished' || m === 'loaded') {
+      if (m === 'finished') saveRace();
       // Off the road: the camera circles close in round the track behind the card. Back on the title the car is put back on the line.
       if (shown) frameTrack(shown);
       if (m === 'quit' && shown && rapier) startSim(shown, rapier);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { hashHandling, RECORD_FORMAT, type RunRecord } from '../sim/record';
-import { chooseGhost, ghostPlace, ghostRow } from './ghost';
+import { chooseGhost, ghostPlace, ghostRow, saveVerdict } from './ghost';
 
 const HALF = Math.SQRT1_2;
 /** A made-up record: three places, 6 steps apart, the car moving along x and turning a quarter round about up. */
@@ -101,5 +101,47 @@ describe("the race card's ghost row (ghostRow)", () => {
     expect(ghostRow(own, true)).toEqual({ label: 'Your ghost' });
     expect(ghostRow({ ...own, older: true }, true)).toEqual({ label: 'Your ghost · older version' });
     expect(ghostRow(bot, false)).toEqual({ label: 'Ghost hidden (G)' });
+  });
+});
+
+describe('saving a personal best (saveVerdict, M5.4a)', () => {
+  const today = hashHandling(config);
+  const sps = config.sim.stepsPerSecond;
+  const run = (driver: 'player' | 'bot', total: number, handling = today): RunRecord => ({ ...madeUp(), driver, total, handling });
+  const base = { tuned: false, kept: true, own: null, bot: null, today };
+
+  it('saves a first race, and says so', () => {
+    expect(saveVerdict(9000, base, sps)).toEqual({ save: true, line: 'New best, ghost saved' });
+  });
+
+  it("saves a race faster than the player's best, and not one as fast or slower, giving the best", () => {
+    const own = run('player', 9000);
+    expect(saveVerdict(8999, { ...base, own }, sps)).toEqual({ save: true, line: 'New best, ghost saved' });
+    expect(saveVerdict(9000, { ...base, own }, sps)).toEqual({ save: false, line: 'Not saved: slower than your best 2:30.000' });
+    expect(saveVerdict(9600, { ...base, own }, sps).save).toBe(false);
+  });
+
+  it("saves any race over a best from an older version, which is not the time to beat", () => {
+    expect(saveVerdict(12000, { ...base, own: run('player', 9000, 'deadbeef') }, sps)).toEqual({ save: true, line: 'New best, ghost saved' });
+  });
+
+  it("says whether the new best takes the ghost from the bot, or the bot stays the ghost to beat", () => {
+    const bot = run('bot', 9000);
+    expect(saveVerdict(8990, { ...base, bot }, sps)).toEqual({ save: true, line: "New best: your ghost replaces the bot's" });
+    expect(saveVerdict(9500, { ...base, bot }, sps)).toEqual({ save: true, line: "New best. The bot's 2:30.000 is still the ghost to beat" });
+    expect(saveVerdict(9000, { ...base, bot }, sps).line).toBe("New best. The bot's 2:30.000 is still the ghost to beat");
+    // Already faster than the bot: the player's ghost was the one to beat.
+    expect(saveVerdict(8000, { ...base, bot, own: run('player', 8500) }, sps)).toEqual({ save: true, line: 'New best, ghost saved' });
+    // Slower than the bot, faster than the player's last: kept as the best, the bot still the ghost.
+    expect(saveVerdict(9200, { ...base, bot, own: run('player', 9400) }, sps)).toEqual({ save: true, line: "New best. The bot's 2:30.000 is still the ghost to beat" });
+  });
+
+  it('never saves a race in which the car was tuned', () => {
+    expect(saveVerdict(1000, { ...base, tuned: true }, sps)).toEqual({ save: false, line: 'Not saved: the car was tuned' });
+  });
+
+  it('keeps a best for the page but says it is not saved when the browser keeps no data', () => {
+    expect(saveVerdict(9000, { ...base, kept: false }, sps)).toEqual({ save: true, line: 'Not saved: this browser keeps no data' });
+    expect(saveVerdict(9000, { ...base, kept: false, tuned: true }, sps).line).toBe('Not saved: the car was tuned');
   });
 });

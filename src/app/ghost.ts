@@ -1,5 +1,6 @@
 import { PLACE_SIZE, type RunRecord } from '../sim/record';
 import { blendPlace, type Place } from './drive';
+import { formatRaceTime } from './raceCard';
 
 /**
  * The ghost (M5): where a run on record had its car at a moment of a race,
@@ -62,4 +63,37 @@ export function ghostRow(chosen: ChosenGhost | null, shown: boolean): { label: s
   if (!shown) return { label: 'Ghost hidden (G)' };
   if (chosen.driver === 'bot') return { label: "Bot's ghost" };
   return { label: chosen.older ? 'Your ghost · older version' : 'Your ghost' };
+}
+
+/** What is known at the finish of a race for deciding whether it is saved (M5.4a). */
+export interface SaveContext {
+  /** Whether the tuning panel changed anything during the race, or it started with tuned handling. */
+  tuned: boolean;
+  /** Whether the store keeps what is written through a reload (`Store.kept`). */
+  kept: boolean;
+  /** The player's best kept for this island, and the bot's race of today's handling, if any. */
+  own: RunRecord | null;
+  bot: RunRecord | null;
+  /** The handling's fingerprint now (`hashHandling(config)`). */
+  today: string;
+}
+
+/**
+ * Whether a finished race is saved as the player's best, and the line the results card says about it. Saved when the
+ * car was not tuned and it is faster in total than the player's best of today's handling (or there is none, or only an
+ * older version's). A best is kept even when the bot is still faster (the bot stays the ghost until it is beaten). In a
+ * browser that keeps no data it is still kept for the page, and the line says it is not saved.
+ *
+ * @param total the race's total, in steps
+ */
+export function saveVerdict(total: number, ctx: SaveContext, stepsPerSecond: number): { save: boolean; line: string } {
+  if (ctx.tuned) return { save: false, line: 'Not saved: the car was tuned' };
+  const own = ctx.own && ctx.own.handling === ctx.today ? ctx.own : null;
+  if (own && total >= own.total) return { save: false, line: `Not saved: slower than your best ${formatRaceTime(own.total, stepsPerSecond)}` };
+  if (!ctx.kept) return { save: true, line: 'Not saved: this browser keeps no data' };
+  const bot = ctx.bot && ctx.bot.handling === ctx.today ? ctx.bot : null;
+  if (bot && total >= bot.total) return { save: true, line: `New best. The bot's ${formatRaceTime(bot.total, stepsPerSecond)} is still the ghost to beat` };
+  // The bot was the ghost until now unless the player's best had already beaten it.
+  if (bot && !(own && own.total < bot.total)) return { save: true, line: "New best: your ghost replaces the bot's" };
+  return { save: true, line: 'New best, ghost saved' };
 }

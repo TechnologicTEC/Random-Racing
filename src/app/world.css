@@ -475,6 +475,11 @@ body,
   font-weight: 600;
 }
 
+/* Whether the race was saved as the player's best (M5.4a), a little apart from the laps. */
+.world-menu-saved {
+  margin-top: 10px !important;
+}
+
 .world-menu-choices {
   display: flex;
   flex-direction: column;
