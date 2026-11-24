@@ -470,6 +470,65 @@ body,
   color: #ffffff;
 }
 
+/* A seed or share code typed on the title card (M4.5): a box and its button under the choices. */
+.world-menu-seed {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(22, 52, 47, 0.12);
+}
+
+.world-menu-seed[hidden] {
+  display: none;
+}
+
+.world-menu-seed input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(22, 52, 47, 0.25);
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+
+.world-menu-seed input::placeholder {
+  color: #4c665f;
+}
+
+.world-menu-seed input:focus-visible,
+.world-menu-seed button:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}
+
+.world-menu-seed button {
+  font: inherit;
+  font-weight: 600;
+  color: #1a7d77;
+  background: transparent;
+  border: 1.5px solid #1a7d77;
+  border-radius: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+/* Why a typed code cannot be opened: wrapped to the card's width, not widening it. */
+.world-menu-problem {
+  width: 0;
+  min-width: 100%;
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.world-menu-problem[hidden] {
+  display: none;
+}
+
 .world-menu-choices button:focus-visible {
   outline: 2px solid #15302b;
   outline-offset: 2px;

@@ -3,7 +3,9 @@ import { formatRaceTime } from '../src/app/raceCard';
 import { lapRing } from '../src/camera/orbitFit';
 import { trackShown } from '../src/testing/titleView';
 import { sampleField } from '../src/gen/world/heightfield';
-import { config } from '../src/config';
+import { config, GENERATOR_VERSION } from '../src/config';
+import { seedInputProblem } from '../src/core/seedCode';
+import { formatClock } from '../src/debug/trackLab/format';
 import { generateWorld } from '../src/gen';
 import { loadRapier } from '../src/sim/physics/rapier';
 import { createBot, raceRun, type RaceRun } from '../src/testing/botDriver';
@@ -169,6 +171,120 @@ test('drives with no clock from Free drive, where C changes the camera, and N br
   await expect(screen(page)).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   await expect(screen(page)).toHaveAttribute('data-screen', 'title');
   await expect(choices(page).first()).toBeFocused();
+});
+
+test.describe('a new island, a typed seed, the time of day and restart (M4.5)', () => {
+  const builds = (page: Page) => screen(page).getAttribute('data-world-builds');
+
+  test('opens a typed share code, v0-48213, on the title card', async ({ page }) => {
+    await openTitle(page);
+    await expect(page.getByTestId('seed-problem')).toBeHidden();
+    await page.getByTestId('seed-input').fill('v0-48213');
+    await page.getByTestId('seed-input').press('Enter');
+    await expect(screen(page)).toHaveAttribute('data-world-seed', '48213', { timeout: 45_000 });
+    await expect(screen(page)).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+    await expect(screen(page)).toHaveAttribute('data-screen', 'title');
+    await expect(page.getByTestId('menu-heading')).toHaveText(generateWorld(48213, config).track.name);
+    await expect(page.getByTestId('menu-code')).toHaveText('Seed 48213 · v0-48213');
+    expect(new URL(page.url()).searchParams.get('seed')).toBe('48213');
+    await expect(page.getByTestId('seed-problem')).toBeHidden();
+  });
+
+  test('says why a typed code is bad, and stays on the island shown', async ({ page, browserName }) => {
+    await openTitle(page);
+    const before = await builds(page);
+    for (const text of ['v1-48213', 'abc', '5000000000', '']) {
+      await page.getByTestId('seed-input').fill(text);
+      // Enter in the box and the button beside it do the same.
+      if (text === 'abc') await page.getByTestId('seed-go').click();
+      else await page.getByTestId('seed-input').press('Enter');
+      await expect(page.getByTestId('seed-problem')).toHaveText(seedInputProblem(text, GENERATOR_VERSION)!);
+      await expect(page.getByTestId('seed-problem')).toBeVisible();
+      if (text === 'v1-48213' && browserName === 'chromium') await page.screenshot({ path: 'test-results/screens/menu-00007-bad-code.png' });
+    }
+    await expect(screen(page)).toHaveAttribute('data-screen', 'title');
+    await expect(screen(page)).toHaveAttribute('data-world-seed', '7');
+    expect(await builds(page)).toBe(before);
+  });
+
+  test('restarts the countdown within half a second with the times cleared, on the same island, from the pause and the results', async ({ page }) => {
+    test.setTimeout(240_000);
+    await openTitle(page);
+    const before = await builds(page);
+    const run = await race7();
+    /** Picks a menu choice by its words and gives what the race was straight after, and how long that took. */
+    const pick = (label: string) =>
+      page.evaluate((label) => {
+        const button = [...document.querySelectorAll<HTMLButtonElement>('[data-testid="menu-choice"]')].find((b) => b.textContent === label)!;
+        const started = performance.now();
+        button.click();
+        const state = window.seedCircuit.drive!.state()!;
+        return { ms: performance.now() - started, step: state.step, race: state.race };
+      }, label);
+    const expectFresh = async (restarted: Awaited<ReturnType<typeof pick>>): Promise<void> => {
+      expect(restarted.ms).toBeLessThan(500);
+      expect(restarted.step).toBe(0);
+      expect(restarted.race?.phase).toBe('countdown');
+      expect(restarted.race?.countdownLeft).toBe(config.sim.race.countdown * SPS);
+      expect(restarted.race?.laps).toEqual([]);
+      expect(restarted.race?.clock).toBe(0);
+      await expect(screen(page)).toHaveAttribute('data-screen', 'race');
+      await expect(page.getByTestId('race-lights')).toBeVisible();
+      await expect(page.getByTestId('race-lap')).toHaveText('Lap 1/3');
+      await expect(page.getByTestId('race-time')).toHaveText(formatRaceTime(0, SPS));
+      await expect(page.getByTestId('race-last')).toHaveText('–');
+      // The same island, not built again.
+      await expect(screen(page)).toHaveAttribute('data-world-seed', '7');
+      expect(await builds(page)).toBe(before);
+    };
+
+    await page.keyboard.press('Enter');
+    await expect(screen(page)).toHaveAttribute('data-screen', 'race');
+    // Half the race: lap 1 done and timed.
+    await page.evaluate((list) => window.seedCircuit.drive!.replay(list), run.inputs.slice(0, Math.floor(run.inputs.length / 2)));
+    expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.race!.laps.length).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await expect(screen(page)).toHaveAttribute('data-screen', 'paused');
+    await expectFresh(await pick('Restart'));
+
+    await finishRace(page);
+    await expect(screen(page)).toHaveAttribute('data-screen', 'results');
+    // The results say which island this was: its name and its share code.
+    await expect(page.getByTestId('menu-name')).toHaveText('Halmore Speedway');
+    await expect(page.getByTestId('menu-code')).toHaveText('Seed 7 · v0-7');
+    await expectFresh(await pick('Race again'));
+  });
+
+  test('keeps a time of day chosen on the title in the address and through a race; a new island has its own', async ({ page }) => {
+    test.setTimeout(120_000);
+    await openTitle(page);
+    const time = () => new URL(page.url()).searchParams.get('time');
+    expect(time()).toBeNull();
+    await page.getByTestId('world-time-slider').fill(String(7.5 * 60));
+    await expect(screen(page)).toHaveAttribute('data-world-time', '07:30');
+    expect(time()).toBe('07:30');
+    await page.getByTestId('menu-choice').first().click();
+    await expect(screen(page)).toHaveAttribute('data-screen', 'race');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('menu-choice').filter({ hasText: 'Quit to title' }).click();
+    await expect(screen(page)).toHaveAttribute('data-screen', 'title');
+    await expect(screen(page)).toHaveAttribute('data-world-time', '07:30');
+    // The address shares the time: opened again, the island is at 07:30.
+    await page.reload();
+    await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
+    await expect(screen(page)).toHaveAttribute('data-world-time', '07:30');
+    // The seed's own time takes it out of the address again.
+    await page.getByTestId('world-seed-time').click();
+    await expect(screen(page)).toHaveAttribute('data-world-time', formatClock(generateWorld(7, config).sky.hour));
+    expect(time()).toBeNull();
+    // A typed island comes in at its own time, whatever was chosen for the last.
+    await page.getByTestId('world-time-slider').fill(String(7.5 * 60));
+    await page.getByTestId('seed-input').fill('42');
+    await page.getByTestId('seed-input').press('Enter');
+    await expect(screen(page)).toHaveAttribute('data-world-seed', '42', { timeout: 45_000 });
+    await expect(screen(page)).toHaveAttribute('data-world-time', formatClock(generateWorld(42, config).sky.hour));
+    expect(time()).toBeNull();
+  });
 });
 
 test.describe('pictures of the title card', () => {

@@ -4,8 +4,8 @@ import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
 import { clearOrbit, titleOrbit } from '../camera/orbitFit';
 import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
-import { config } from '../config';
-import { formatSeedCode, MAX_SEED, parseSeedInput } from '../core/seedCode';
+import { config, GENERATOR_VERSION } from '../config';
+import { formatSeedCode, MAX_SEED, parseSeedInput, seedInputProblem } from '../core/seedCode';
 import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
@@ -122,6 +122,11 @@ const TEMPLATE = `
       <h2 data-ref="menuHeading" data-testid="menu-heading"></h2>
       <div class="world-menu-body" data-ref="menuBody"></div>
       <div class="world-menu-choices" data-ref="menuChoices"></div>
+      <form class="world-menu-seed" data-ref="seedForm" data-testid="seed-form" hidden>
+        <input type="text" data-ref="seedInput" data-testid="seed-input" placeholder="Seed or share code" aria-label="Seed or share code" autocomplete="off" spellcheck="false" />
+        <button type="submit" data-testid="seed-go">Go</button>
+      </form>
+      <p class="world-menu-problem" data-ref="seedProblem" data-testid="seed-problem" role="alert" hidden></p>
     </div>
     <div class="world-loading" data-ref="loading" role="status">
       <div class="world-card" data-ref="loadingText">Raising a new island…</div>
@@ -648,15 +653,21 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
 
   /** The seed last asked for. Its world may still be on its way from the worker. */
   let wantedSeed = -1;
+  /** How many islands have been asked of the worker: a restart builds none (M4.5). */
+  let worldBuilds = 0;
   const show = async (seed: number, opening: boolean): Promise<void> => {
     wantedSeed = seed;
     building = true;
+    worldBuilds++;
+    document.body.dataset.worldBuilds = String(worldBuilds);
     dropSim();
     loading.hidden = false;
     ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
     const url = new URL(window.location.href);
     url.searchParams.set('seed', String(seed));
+    // A new island comes in at its own time of day, so the address no longer names one.
+    if (!opening) url.searchParams.delete('time');
     window.history.replaceState(null, '', url);
     try {
       const { result, ms } = await genClient().world(seed, config);
@@ -725,10 +736,41 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const slider = ref<HTMLInputElement>('slider');
   slider.min = String(earliest * 60);
   slider.max = String(latest * 60);
-  slider.addEventListener('input', () => setTime(Number(slider.value) / 60));
+  /** Writes the time of day chosen into the address as `time=`, or takes it out (null: the seed's own), so the address shares it (M4.5). */
+  const addressTime = (chosen: number | null): void => {
+    const url = new URL(window.location.href);
+    if (chosen === null) url.searchParams.delete('time');
+    else url.searchParams.set('time', formatClock(chosen));
+    window.history.replaceState(null, '', url);
+  };
+  slider.addEventListener('input', () => {
+    setTime(Number(slider.value) / 60);
+    addressTime(hour);
+  });
   ref('seedTime').addEventListener('click', () => {
     slider.blur();
     setTime(seedHour);
+    addressTime(null);
+  });
+  // A seed or share code typed on the title card (M4.5): opened if it reads as a seed of this generator, or why not said under it.
+  const seedInput = ref<HTMLInputElement>('seedInput');
+  const seedProblem = ref('seedProblem');
+  ref('seedForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const problem = seedInputProblem(seedInput.value, GENERATOR_VERSION);
+    seedProblem.textContent = problem ?? '';
+    seedProblem.hidden = problem === null;
+    const parsed = parseSeedInput(seedInput.value);
+    if (problem !== null || !parsed) return;
+    seedInput.value = '';
+    seedInput.blur();
+    act('enterSeed', parsed.seed);
+  });
+  // Esc in the box goes back to the choices, as the other keys there are the box's own.
+  seedInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    setChoice(choice);
   });
   ref('play').addEventListener('click', () => setPlaying(!playing));
   ref('toggle').addEventListener('click', () => setMode(nextCamera(mode)));
@@ -807,18 +849,23 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     ref('menu').hidden = menu.length === 0;
     // On the title the card in the middle has the island's name, so the corner card stands aside.
     ref('titleCard').hidden = screen.name === 'title';
+    // A seed or share code is typed on the title only; what was wrong with the last one goes with it.
+    ref('seedForm').hidden = screen.name !== 'title';
+    seedProblem.hidden = true;
     if (menu.length === 0) return;
     const name = shown?.track.name ?? 'Seed Circuit';
+    const code = ref('code').textContent ?? '';
     const body: HTMLElement[] = [];
     if (screen.name === 'title') {
       ref('menuHeading').textContent = name;
-      body.push(line(ref('code').textContent ?? ''), line(ref('character').textContent ?? '', 'world-menu-quiet'));
+      body.push(line(code, '', 'menu-code'), line(ref('character').textContent ?? '', 'world-menu-quiet'));
     } else if (screen.name === 'paused') {
       ref('menuHeading').textContent = 'Paused';
       body.push(line(name, 'world-menu-quiet'));
     } else {
+      // The results say which island this was, with the code to share it by (M4.5).
       ref('menuHeading').textContent = 'Finished';
-      body.push(line(name, 'world-menu-quiet'));
+      body.push(line(name, 'world-menu-quiet', 'menu-name'), line(code, 'world-menu-quiet', 'menu-code'));
       const race = sim?.state().race;
       if (race) {
         const card = raceCard(race, tuned.sim.race, tuned.sim.stepsPerSecond);
@@ -852,7 +899,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     setChoice(0);
   };
   /** Makes a move between the screens (`screens.ts`), if the screen allows it, and shows where it leads. */
-  function act(m: Move): void {
+  function act(m: Move, seed?: number): void {
     const next = move(screen, m);
     if (!next) return;
     screen = next;
@@ -869,8 +916,9 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (m === 'quit' && shown && rapier) startSim(shown, rapier);
       setMode('orbit');
       if (m !== 'finished') driven = false;
-    } else if (m === 'newTrack') {
-      void show(randomSeed(), false);
+    } else if (m === 'newTrack' || m === 'enterSeed') {
+      // A new island: the one typed, or any.
+      void show(seed ?? randomSeed(), false);
     }
     renderScreen();
     renderControls();
