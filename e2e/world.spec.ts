@@ -70,11 +70,12 @@ test('generates the 3D world in the worker within the 3-second budget @budget', 
   expect(fastest).toBeLessThan(3000);
 });
 
-test('opens the 3D view at the plain address, driving, on a random seed that it records', async ({ page }) => {
+test('opens the 3D view at the plain address, on the title card over the circling island, on a random seed that it records', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   await expect(page.getByTestId('world-canvas')).toBeVisible();
-  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'title');
+  await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'orbit');
   const seed = await page.locator('body').getAttribute('data-world-seed');
   expect(Number(seed)).toBeGreaterThanOrEqual(1);
   expect(Number(seed)).toBeLessThanOrEqual(99999);
@@ -531,6 +532,10 @@ test.describe('grass', () => {
     await page.getByTestId('world-new').click();
     await expect(page.locator('body')).not.toHaveAttribute('data-world-seed', '7');
     await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true');
+    // A new island comes in on the title card, its camera high over it, where no blade is drawn (M4.4): drive it to see the grass.
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'title');
+    await page.getByTestId('menu-choice').filter({ hasText: 'Free drive' }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-world-camera', 'chase');
     const stats = await page.evaluate(() => window.seedCircuit.view!.stats());
     expect(stats.blades).toBeGreaterThan(50_000);
   });
@@ -819,7 +824,7 @@ test.describe('3D screenshots', () => {
       });
     }
     test(`island ${seed}, driving: at the start and after 5 s of full throttle`, async ({ page }) => {
-      await openWorld(page, `seed=${seed}&still=1`);
+      await openWorld(page, `seed=${seed}&still=1&mode=free`);
       // The car is drawn once the island's simulation is built, just after the island itself.
       await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
       await page.screenshot({ path: `test-results/screens/world-${name}-drive-start.png` });
@@ -830,7 +835,7 @@ test.describe('3D screenshots', () => {
       // A slide may take several tries from the start line (`slideTo`), each drawing frames in software, and then the bot's
       // lap worked out in Node (10a-4: seed 42 took 2.5 min alone, over 3 in a full run).
       test.setTimeout(300_000);
-      await openWorld(page, `seed=${seed}&still=1`);
+      await openWorld(page, `seed=${seed}&still=1&mode=free`);
       await expect(page.locator('body')).toHaveAttribute('data-drive-car', 'shown', { timeout: 30_000 });
       // Earlier tiers too with TIERS, for example: $env:TIERS = "1,2"
       for (const tier of tiers) {

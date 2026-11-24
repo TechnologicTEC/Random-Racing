@@ -10,7 +10,7 @@ import { createSim, createSimOn, type Sim } from './sim';
 import { startPose } from './start';
 import type { ProgressState } from './track/progress';
 
-/** Seed 42 and seed 7, a hilly seed, have different starts; seed 5 starts on an 8% slope (since the 20 m road of 6h-3; seed 42 did before). */
+/** Seed 42 and seed 7, a hilly seed, have different starts; seed 5 started on an 8% slope until M4.1 held every start to 2%. */
 const SEEDS = [42, 7, 5];
 
 let rapier: Rapier;
@@ -91,12 +91,12 @@ describe('createSim', () => {
     sim.free();
   });
 
-  it('settles on a sloped start and stays put for 10 seconds (seed 5)', () => {
+  it('settles at the start and stays put for 10 seconds (seed 5, which started on 8% before M4.1)', () => {
     const world = worlds.get(5)!;
     const { line, profile } = winner(world);
-    // The start of seed 5 really is on a slope.
+    // Since M4.1 every start is held to 2%; a car parked on a steeper slope is tested in car/standing.test.ts.
     const slope = (profile.height[0]! - profile.height[line.count - 1]!) / line.spacing;
-    expect(Math.abs(slope)).toBeGreaterThan(0.04);
+    expect(Math.abs(slope)).toBeLessThanOrEqual(config.road.start.gradient + 1e-9);
 
     const sim = createSim(rapier, world, config);
     idle(sim, 2 * config.sim.stepsPerSecond);

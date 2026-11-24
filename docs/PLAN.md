@@ -61,13 +61,20 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 **Milestone 4: time trial** (new branch `milestone-4-time-trial` from `main`, issue #4; plan it in plan mode first; the steps: [`docs/plan/M4-time-trial.md`](plan/M4-time-trial.md))
 
-- [ ] **M4.0** Plan approved; steps recorded in STATE.md
-- [ ] **M4.1** Flatten the start area
-- [ ] **M4.2** The race rules in the simulation
-- [ ] **M4.3** The race on screen
-- [ ] **M4.4** Screens and menus
-- [ ] **M4.5** New track, typed seed, restart
-- [ ] **M4.6** A whole race in the browser tests; check-in; tuning; pull request; **sign-off**; merge
+- [x] **M4.0** Plan approved; steps recorded in STATE.md (2026-11-23; Tane's answers and the parts in STATE.md, "Milestone 4")
+- [x] **M4.1** Flatten the start area (2026-11-23; 30 m each side of the line, Tane's choice)
+- **M4.2** The race rules in the simulation:
+  - [x] **M4.2a** The race rules, pure (`src/sim/race.ts`) (2026-11-23)
+  - [x] **M4.2b** The race in the simulation (opt-in; held, start boost, finished) (2026-11-23)
+  - [x] **M4.2c** The bot races 3 laps; one fingerprint in Node, Chromium and Firefox (2026-11-23)
+- [x] **M4.3** The race on screen (2026-11-23)
+- **M4.4** Screens and menus:
+  - [x] **M4.4a** The `mode=` address (`mode=free`, `mode=race`) on every test address that drives (2026-11-23)
+  - [x] **M4.4b** The screens as a pure state machine (`src/app/screens.ts`) (2026-11-23)
+  - [x] **M4.4c** The title, pause and results cards on the page; menu keys and controller; C does nothing in a race (2026-11-23)
+- [x] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5) (2026-11-23: good; the title camera circles close in round the track, low, from the side (2026-11-24), and the circling camera never goes under the island)
+- [x] **M4.5** New track, typed seed, restart (2026-11-24)
+- [x] **M4.6** A whole race in the browser tests; check-in; tuning; pull request; **sign-off**; merge (signed off 2026-11-24, PR #11)
 
 **Milestone 5: ghosts and favourites** (branch `milestone-5-ghosts`, issue #5; plan first; the steps: [`docs/plan/M5-ghosts.md`](plan/M5-ghosts.md))
 
@@ -182,7 +189,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3** |
 | Flat seeds show large sandy patches; the mown strip is the same width everywhere; nothing cleared round trees in long grass; the wind blows the same way on every island | **M6.3** candidates (small) |
 | From far above, islands look fairly bare; tree shadows small at midday | Tane, **M6.3** (`world.decor.trees` levels) |
-| The circling camera frames only part of the biggest islands; it can look through clouds | Left (it is a debug and title view); **M4.4** if the title screen uses it |
+| The circling camera frames only part of the biggest islands; it can look through clouds | Behind the title and results cards it circles close in round the track (the check-in after M4.4); elsewhere left (a debug view) |
 | A close camera checks the ground, not trees | Left (close views are for screenshots) |
 | The verge dips a little at its outer edge on steep banks | Left; the barrier footing hides it |
 | Islands big and blobby; coastal mountain seeds keep the sea further out and have less sea beside the road; mountains lower than asked; circling summits lower; fewer circling laps go round the summit; not every island gets a peak; a bay reaches 10 m only beside low road; enclosed water possible | Left: generator character Tane has seen and accepted. Revisit only if Tane asks before **M6.8** |

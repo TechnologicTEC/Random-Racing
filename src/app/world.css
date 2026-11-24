@@ -310,3 +310,242 @@ body,
   margin-top: 8px;
   font: 11px/1.4 ui-monospace, monospace;
 }
+
+/* The countdown (M4.3, Tane at M4.0): a small card at the top middle with three lights, red one a second, green on "go". */
+.world-lights {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  pointer-events: none;
+}
+
+.world-light-row {
+  display: flex;
+  gap: 10px;
+}
+
+/* How the start went, under the green lights (Tane at the sign-off): the accent for a boost, plain text for too early. */
+.world-start-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.world-start-note[hidden] {
+  display: none;
+}
+
+.world-lights[hidden] {
+  display: none;
+}
+
+.world-light {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+/* The race card (M4.3): the lap, this lap's time in large figures, then last, best and the sectors, in the top right corner. */
+.world-race {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 12.5rem;
+  padding: 10px 16px 12px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-race[hidden] {
+  display: none;
+}
+
+.world-race p {
+  margin: 0;
+}
+
+.world-race-lap {
+  color: #1a7d77;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.world-race-time {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.world-race-rows {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(22, 52, 47, 0.15);
+}
+
+.world-race-row {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr 3.8rem;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.world-race-row > span:nth-child(2),
+.world-race-gap {
+  text-align: right;
+}
+
+.world-race-sector {
+  color: #4c665f;
+}
+
+.world-race-gap {
+  color: #4c665f;
+  font-size: 12px;
+}
+
+/* Quicker than the best (a sector), or the best (a lap): the accent. */
+.world-race-accent {
+  color: #1a7d77;
+}
+
+/* The menu card (M4.4): the title, pause and results, in the middle of the screen while the car is not driven (Tane, M4.0). */
+.world-menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 17rem;
+  padding: 18px 22px 20px;
+  text-align: center;
+}
+
+.world-menu[hidden] {
+  display: none;
+}
+
+.world-menu h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.world-menu-body p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-menu-quiet {
+  color: #4c665f;
+}
+
+.world-menu-total {
+  margin-top: 8px !important;
+  font-size: 30px !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.world-menu-lap {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 11rem;
+  margin: 2px auto 0 !important;
+  font-weight: 600;
+}
+
+.world-menu-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.world-menu-choices button {
+  font: inherit;
+  font-weight: 600;
+  color: #1a7d77;
+  background: transparent;
+  border: 1.5px solid #1a7d77;
+  border-radius: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+
+/* The choice Enter and the controller's A pick: filled, as the page's main button is. */
+.world-menu-choices button.chosen {
+  background: #1a7d77;
+  color: #ffffff;
+}
+
+/* A seed or share code typed on the title card (M4.5): a box and its button under the choices. */
+.world-menu-seed {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(22, 52, 47, 0.12);
+}
+
+.world-menu-seed[hidden] {
+  display: none;
+}
+
+.world-menu-seed input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(22, 52, 47, 0.25);
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+
+.world-menu-seed input::placeholder {
+  color: #4c665f;
+}
+
+.world-menu-seed input:focus-visible,
+.world-menu-seed button:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}
+
+.world-menu-seed button {
+  font: inherit;
+  font-weight: 600;
+  color: #1a7d77;
+  background: transparent;
+  border: 1.5px solid #1a7d77;
+  border-radius: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+/* Why a typed code cannot be opened: wrapped to the card's width, not widening it. */
+.world-menu-problem {
+  width: 0;
+  min-width: 100%;
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.world-menu-problem[hidden] {
+  display: none;
+}
+
+.world-menu-choices button:focus-visible {
+  outline: 2px solid #15302b;
+  outline-offset: 2px;
+}

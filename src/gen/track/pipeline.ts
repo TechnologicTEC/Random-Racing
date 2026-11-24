@@ -107,13 +107,15 @@ function buildCandidate(
   const neighbours = findNeighbours(line, terrain.road, cfg.roadWidth);
   // So does the banking. Except on mountain seeds, the earthworks rule is held at the road's banked edges too.
   const cross = cfg.byRelief[terrain.kind].earthworksOnCentre ? null : solveBanking(line, terrain.road);
+  // And so does where the start line goes, so the road can be held level around it before it is chosen (M4.1).
+  const start = startIndexOf(sections, line.count, cfg);
   let best: Candidate | null = null;
   let unturned: Candidate | null = null;
   for (let k = 0; k < turns; k++) {
     const turn = (k * 360) / turns;
     const angle = (k * TAU) / turns;
     const turned = turnLine(line, angle);
-    const profile = solveProfile(turned, terrain.relief, terrain.road, cfg.roadWidth, terrain.road.maxGradient[terrain.kind], neighbours);
+    const profile = solveProfile(turned, terrain.relief, terrain.road, cfg.roadWidth, terrain.road.maxGradient[terrain.kind], neighbours, start);
     const edges = cross ? roadEdges(turned, terrain.relief, cfg.roadWidth, cross) : undefined;
     const elevation = measureProfile(turned, profile, terrain.road, cfg.roadWidth, neighbours, edges);
     const violations: Violation[] = [...layoutViolations, ...checkEarthworks(turned, profile, elevation, terrain.road, cfg.roadWidth, neighbours, edges)];
@@ -182,19 +184,24 @@ function fallbackOval(cfg: TrackRules): Corner[] {
  * start/finish line with most of that straight ahead of it.
  */
 function placeStartLine(candidate: Candidate, cfg: TrackRules): Candidate {
-  let longest: StraightSection | null = null;
-  for (const section of candidate.sections) {
-    if (section.type === 'straight' && (!longest || section.length > longest.length)) longest = section;
-  }
-  if (!longest) return candidate;
-
-  const startIndex = (longest.startIndex + Math.floor(longest.sampleCount * cfg.startLineFraction)) % candidate.line.count;
+  const startIndex = startIndexOf(candidate.sections, candidate.line.count, cfg);
+  if (startIndex === 0) return candidate;
   const line = rotateCenterLine(candidate.line, startIndex);
   const profile = {
     height: rotateSamples(candidate.profile.height, startIndex),
     ground: rotateSamples(candidate.profile.ground, startIndex),
   };
   return { ...candidate, line, profile, sections: analyseSections(line, cfg) };
+}
+
+/** The sample the start line goes on: part way along the longest straight, or sample 0 on a lap with no straight. */
+function startIndexOf(sections: Candidate['sections'], count: number, cfg: TrackRules): number {
+  let longest: StraightSection | null = null;
+  for (const section of sections) {
+    if (section.type === 'straight' && (!longest || section.length > longest.length)) longest = section;
+  }
+  if (!longest) return 0;
+  return (longest.startIndex + Math.floor(longest.sampleCount * cfg.startLineFraction)) % count;
 }
 
 /** The same per-sample values, renumbered so the given sample becomes sample 0. */

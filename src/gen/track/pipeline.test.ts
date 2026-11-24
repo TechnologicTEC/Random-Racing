@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config, type GenConfig, type TrackConfig } from '../../config';
 import { withCharacter } from '../../testing/characters';
+import { steepestAround } from '../../testing/startArea';
 import type { Candidate, CornerSection, StraightSection, TrackResult } from '../types';
 import { hashTrack } from './hash';
 import { generateTrack } from './pipeline';
@@ -101,6 +102,13 @@ describe('generateTrack across many seeds', () => {
     }
   });
 
+  it('holds the road to 2% from 30 m before the start line to 30 m after it on every seed (M4.1)', () => {
+    for (const r of results) {
+      const { line, profile } = winnerOf(r);
+      expect(steepestAround(line, profile.height, 0), `seed ${r.seed}`).toBeLessThanOrEqual(config.road.start.gradient + 1e-9);
+    }
+  });
+
   it('keeps nearly every candidate valid, so all 30 compete on fun', () => {
     const all = results.flatMap((r) => r.candidates);
     const valid = all.filter((c) => c.violations.length === 0).length;
@@ -130,8 +138,11 @@ describe('generateTrack across many seeds', () => {
     expect(clockwise).toBeLessThan(results.length * 0.7);
   });
 
-  it('keeps real corner counts in the range that feels right (7 to 14)', () => {
+  it('keeps real corner counts in the range that feels right (7 to 14), but for seed 146', () => {
+    // The range is not a rule of the generator. Mountain seed 146 has one valid candidate since the level start
+    // area (M4.1), with 16 corners; Tane chose to let it keep them (2026-11-23).
     for (const r of results) {
+      if (r.seed === 146) continue;
       const real = cornersOf(r).filter((c) => c.kind !== 'kink').length;
       expect(real, `seed ${r.seed}`).toBeGreaterThanOrEqual(7);
       expect(real, `seed ${r.seed}`).toBeLessThanOrEqual(14);

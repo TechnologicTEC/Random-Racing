@@ -23,9 +23,10 @@ export const FRESH_SEEDS: readonly number[] = [
  * it in a gorge, deeper than the cut limit and with sides as steep as the range. Mountains are meant to
  * stay 60 m from the road, but placing them checks a foot at only 32 points round its outline, and a range
  * a kilometre across can reach the road between them. Tane saw the gorges in step 17 and chose to keep them.
- * Which seeds have one changed with the 20 m road (6h-3): 42 gained one, 28496 lost its gorge at the start.
+ * Which seeds have one changed with the 20 m road (6h-3): 42 gained one, 28496 lost its gorge at the start; 42 lost its
+ * again with the level start area (M4.1).
  */
-export const GORGE_SEEDS: readonly number[] = [39898, 42];
+export const GORGE_SEEDS: readonly number[] = [39898];
 
 /** A place where the roadside is open and gentle ground runs from the road down into the sea. */
 export interface SeaOpening {

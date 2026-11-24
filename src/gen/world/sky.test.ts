@@ -52,9 +52,10 @@ describe('pickSky', () => {
   });
 
   it('leaves every track exactly as it was: seeds 1 to 40', { timeout: 60_000 }, () => {
-    // Fingerprint of the tracks of seeds 1 to 40, taken before the sky was added, and again when the road became 20 m wide (6h-3).
+    // Fingerprint of the tracks of seeds 1 to 40, taken before the sky was added, again when the road became 20 m wide (6h-3),
+    // and again when the start area was held level (M4.1).
     const hasher = createHasher();
     for (let seed = 1; seed <= 40; seed++) hasher.text(hashTrack(generateTrack(seed, config)));
-    expect(hasher.digest()).toBe('a82dfb45');
+    expect(hasher.digest()).toBe('dcb76ebf');
   });
 });

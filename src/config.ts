@@ -320,6 +320,11 @@ export interface RoadConfig {
   maxGradient: Record<ReliefKind, number>;
   /** Hill tops and dips are rounded to at least this radius, in metres, so the car is never launched. */
   crestMinRadius: number;
+  /**
+   * The start area (M4.1): from `before` metres before the start line to `after` metres past it, the road
+   * climbs or drops no more steeply than `gradient`, a fraction, so the grid and the countdown sit on the level.
+   */
+  start: { before: number; after: number; gradient: number };
   /** The road stays at least this far above the sea, in metres. */
   minHeight: number;
   /** Where the road is wider than its usual width, on seeds whose width varies. */
@@ -930,6 +935,8 @@ export interface RenderConfig {
   respawnFade: { in: number; out: number };
   /** How long the readout says why a slide was cancelled (a hit, the brake, too slow, a respawn), in seconds (step 10a). */
   cancelShown: number;
+  /** The race on screen (M4.3): how long the countdown's lights stay green after "go", then how long they take to fade, in seconds. */
+  race: { goShown: number; goFade: number };
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
@@ -1334,6 +1341,17 @@ export interface CameraConfig {
     furthest: number;
     /** When framing an island, the distance is this many times the longer side of the track. */
     fit: number;
+    /** How fast it circles the island by itself behind the title and results cards (M4.4), in radians a second. */
+    turn: number;
+    /** It never comes closer than this to the ground or the sea under it, in metres, so the empty space under the island never shows (Tane, check-in after M4.4). */
+    clearance: number;
+    /**
+     * Behind the title and results cards it circles the middle of the lap this many times the lap's radius away (Tane,
+     * after the check-in after M4.4: close in round the track; it turns, so the rest of the lap comes round in time).
+     */
+    title: number;
+    /** ...and this low, tipped up from the level in radians, looking at the island from the side (Tane: 43 degrees was too much from above). */
+    titleTilt: number;
   };
   /** The close view of one of the fit report's worst spots (`&look=cut` and so on). */
   spot: { angle: number; tilt: number; distance: number };
@@ -1423,6 +1441,28 @@ export interface SimConfig {
   colliders: ColliderConfig;
   progress: ProgressConfig;
   respawn: RespawnConfig;
+  race: RaceConfig;
+}
+
+/** The race (M4.2): its countdown, laps and sectors. Times in seconds; they are turned into whole steps once (`raceSteps`). */
+export interface RaceConfig {
+  /** Laps in a race. */
+  laps: number;
+  /** The countdown before "go"; the car is held meanwhile. */
+  countdown: number;
+  /** A throttle first pressed within this long before "go" gives a tier 1 boost at "go"; one pressed earlier gives none. */
+  startBoostWindow: number;
+  /** Each lap is timed in this many sectors, each a whole number of checkpoints. */
+  sectors: number;
+  /** How long "Finished" shows before the results. */
+  finishedFor: number;
+  /** The throttle counts as pressed at this much or more, from 0 to 1, so a trigger resting slightly down does not jump the start. */
+  pressed: number;
+  /**
+   * A boosted start's launch: from "go" the engine pushes at `accel` m/s² for `time` seconds, with no easing, as a boost
+   * does (the tier 1 boost's flame shows with it). Decided by the race's steps, so a ghost replays it.
+   */
+  launch: { accel: number; time: number };
 }
 
 /**
@@ -1857,6 +1897,9 @@ export const config: GameConfig = {
   road: {
     maxGradient: { flat: 0.08, rolling: 0.08, hilly: 0.08, mountain: 0.15 },
     crestMinRadius: 200,
+    // Tane, M4.1: 30 m before the line, not the plan's 100. One car stands 4 m behind it; held level for 100 m, climbing
+    // laps needed cuttings that broke the island's fit (seed 10) and mountain laps lost their climb.
+    start: { before: 30, after: 30, gradient: 0.02 },
     minHeight: 2,
     // 24 to 30 m on a 20 m road; kept 58 m from another section's edge (70 m centre to centre on a 12 m road).
     width: { extraMin: 4, extraMax: 10, ease: 40, straightMin: 150, hairpinExitMin: 100, chance: 0.6, clearanceGap: 58 },
@@ -2098,6 +2141,10 @@ export const config: GameConfig = {
     progress: { window: 40, lost: 30, every: 100, margin: 6, stride: 40 },
     // The plan's values (docs/plan/M3-driving.md, step 8): the brief's "after about 1 second".
     respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
+    // The plan's values (docs/plan/M4-time-trial.md, M4.2); the throttle at half or more is Claude's call (STATE.md).
+    // launch (Tane at the sign-off, from four measured options): the tier 1 boost alone gained 5 km/h and 0.13 s on lap 1,
+    // which nobody could feel; 20 m/s2 for 1 s gives 71 km/h one second after "go" against 33, lap 1 about 0.9 s quicker.
+    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 3, finishedFor: 2, pressed: 0.5, launch: { accel: 20, time: 1 } },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },
@@ -2269,6 +2316,8 @@ export const config: GameConfig = {
     respawnFade: { in: 0.3, out: 0.4 },
     // Long enough to read after a slide ends mid-corner (Tane, check-in 2: a drift sometimes ended with no brake pressed).
     cancelShown: 2,
+    // Tane, M4.0: the lights turn green on "go" and the card fades out a second later.
+    race: { goShown: 1, goFade: 0.25 },
     clouds: { speed: 10, edgeFade: 400, glow: 0.7, thin: [120, 360] },
     grass: {
       tiers: [
@@ -2304,6 +2353,13 @@ export const config: GameConfig = {
       nearest: 30,
       furthest: 3600,
       fit: 1.25,
+      // About two minutes a turn: slow enough to read the card over it.
+      turn: 0.05,
+      clearance: 5,
+      // About two thirds of the lap shows round the card, and never under two fifths (seeds 1 to 20, eight ways each); the whole lap fitted at about 2.85.
+      title: 1.2,
+      // About 16 degrees: the horizon a fifth of the way down the picture, as in Tane's picture.
+      titleTilt: 0.28,
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
     car: { distance: 7, tilt: 0.3, side: 0.7 },

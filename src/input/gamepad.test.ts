@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { makeInput } from '../sim/input';
-import { padPresses, padToInput } from './gamepad';
+import { padMenu, padPresses, padToInput } from './gamepad';
 
 const cfg = config.input;
 
@@ -49,6 +49,28 @@ describe('padToInput', () => {
 
   it('copes with a pad that reports fewer axes or buttons', () => {
     expect(padToInput([], [], cfg)).toEqual({ throttle: 0, brake: 0, steer: 0, drift: false, reset: false });
+  });
+});
+
+describe('padMenu (M4.4)', () => {
+  it('gives nothing for a pad at rest', () => {
+    expect(padMenu([0, 0, 0, 0], buttons())).toEqual({ up: false, down: false, confirm: false, back: false });
+  });
+
+  it('moves up and down on the D-pad', () => {
+    expect(padMenu([0, 0, 0, 0], buttons({ 12: 1 }))).toMatchObject({ up: true, down: false });
+    expect(padMenu([0, 0, 0, 0], buttons({ 13: 1 }))).toMatchObject({ up: false, down: true });
+  });
+
+  it('moves up and down on the left stick pushed over half way, up being negative', () => {
+    expect(padMenu([0, -0.6, 0, 0], buttons())).toMatchObject({ up: true, down: false });
+    expect(padMenu([0, 0.6, 0, 0], buttons())).toMatchObject({ up: false, down: true });
+    expect(padMenu([0, 0.4, 0, 0], buttons())).toMatchObject({ up: false, down: false });
+  });
+
+  it('picks with A and goes back with B', () => {
+    expect(padMenu([0, 0, 0, 0], buttons({ 0: 1 }))).toMatchObject({ confirm: true, back: false });
+    expect(padMenu([0, 0, 0, 0], buttons({ 1: 1 }))).toMatchObject({ confirm: false, back: true });
   });
 });
 

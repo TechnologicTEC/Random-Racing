@@ -19,7 +19,8 @@ import { letGo, slideTo } from './drifting';
 
 /** Opens the 3D page and waits until the island is drawn and its simulation built. */
 async function openDriving(page: Page, query: string): Promise<void> {
-  await page.goto(`/?${query}`);
+  // Free driving, as the page opened before the title card (M4.4).
+  await page.goto(`/?${query}&mode=free`);
   await expect(page.locator('body')).toHaveAttribute('data-world-ready', 'true', { timeout: 45_000 });
   await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
 }

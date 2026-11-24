@@ -9,6 +9,7 @@ import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input
 import { createCarPhysics, type BodyMotion, type Touch } from './physics/carBody';
 import type { Rapier } from './physics/rapier';
 import { rotate } from './quat';
+import { launching, raceSteps, startRace, stepRace, type RacePhase, type RaceState } from './race';
 import { NO_RESPAWN, RESPAWN_REASONS, respawnSteps, watchCar, type RespawnState } from './respawn';
 import { checkpointPose, startPose, type Pose } from './start';
 import { checkpointAt, checkpointCount, startProgress, stepProgress, type ProgressState } from './track/progress';
@@ -51,6 +52,17 @@ export interface CarState extends BodyMotion, CarReading {
   progress: ProgressState | null;
   /** Bringing the car back: the wait under way, if any, and the last time it was put back. */
   respawn: RespawnState;
+  /** The race (M4.2b): its countdown, laps and times; null in a simulation started without one. */
+  race: RaceState | null;
+}
+
+/** How a simulation is started. */
+export interface SimOptions {
+  /**
+   * Run a race (M4.2b): a countdown with the car held, then the laps timed, then the car left to coast once finished.
+   * Only on an island, which has a lap. Without it the car is driven from the first step and nothing is timed.
+   */
+  race?: boolean;
 }
 
 /** A saved moment of a simulation. */
@@ -68,10 +80,13 @@ export interface SimSnapshot {
   progress: ProgressState | null;
   /** Bringing the car back. */
   respawn: RespawnState;
+  /** The race; null without one. */
+  race: RaceState | null;
 }
 
 /** Each phase and each thing touched as a number for the fingerprint, in a fixed order. */
 const PHASES = ['none', 'hop', 'slide'] as const;
+const RACE_PHASES: readonly RacePhase[] = ['countdown', 'racing', 'finished'];
 const TOUCHES: readonly Hit[] = [null, 'wall', 'gate', 'tree', 'rock'];
 const NO_SLOPE = { x: 0, y: 0, z: 0 };
 const UP = { x: 0, y: 1, z: 0 };
@@ -82,8 +97,8 @@ const UP = { x: 0, y: 1, z: 0 };
  *
  * @param rapier the physics engine, already loaded (`loadRapier`)
  */
-export function createSim(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): Sim {
-  return createSimOn(rapier, { kind: 'island', world }, cfg, startPose(world, cfg));
+export function createSim(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig, options: SimOptions = {}): Sim {
+  return createSimOn(rapier, { kind: 'island', world }, cfg, startPose(world, cfg), undefined, options);
 }
 
 /**
@@ -94,7 +109,7 @@ export function createSim(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig
  * start pose behind the start line unless another is given, on a plain test ground the pose it started at unless
  * another is given (a test of landing upside down starts the car upside down, and wants it back on its wheels).
  */
-export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose, home?: Pose): Sim {
+export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, start: Pose, home?: Pose, options: SimOptions = {}): Sim {
   const physics = createCarPhysics(rapier, course, cfg, start);
   const ground = course.kind === 'island' ? { field: course.world.ground, cover: course.world.cover } : null;
   const car = createCar(physics, cfg, surfaceFinder(physics.colliders, ground));
@@ -107,6 +122,10 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
   const rules = cfg.sim.respawn;
   const waits = respawnSteps(rules, cfg.sim.stepsPerSecond);
   let respawn: RespawnState = NO_RESPAWN;
+  // The race, if one was asked for: it needs the lap, so a plain test ground has none.
+  const raceTimes = raceSteps(cfg.sim.race, cfg.sim.stepsPerSecond);
+  const raceTrack = lap && { length: lap.line.length, count: checkpointCount(lap.line, cfg.sim.progress) };
+  let race: RaceState | null = options.race && raceTrack ? startRace(raceTimes) : null;
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
   let touch: Touch | null = null;
@@ -130,20 +149,27 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
 
   return {
     step(next) {
+      // During a race's countdown the car is held, and once it is finished it is left to coast: nothing pressed acts, R included.
+      const held = race !== null && race.phase !== 'racing';
       // R, on the step it goes down: the car is put back at once, wait or no wait.
-      const reset = next.reset === 1 && input.reset === 0;
+      const reset = !held && next.reset === 1 && input.reset === 0;
       input = next;
       let waiting = respawn.waitLeft > 0;
       if (waiting) respawn = { ...respawn, waitLeft: respawn.waitLeft - 1 };
       const placing = reset || (waiting && respawn.waitLeft === 0);
+      // The checkpoint passed on this step, if any, and where the car was on the lap before its move.
+      let passed = -1;
+      let wasAlong = progress?.along ?? 0;
       if (placing) {
         putBack();
         waiting = false;
       }
       // While waiting, and on the step the car is put back, nothing the driver presses acts.
-      const driven = waiting || placing ? NEUTRAL_INPUT : next;
+      const driven = waiting || placing || held ? NEUTRAL_INPUT : next;
       // The car's own pushes first, from where it is now; then the physics moves everything on.
-      car.step(driven, touch);
+      // A boosted start's launch, for its first second from "go" (Tane at the sign-off).
+      const launch = race && launching(race, raceTimes) ? cfg.sim.race.launch.accel : null;
+      car.step(driven, touch, launch);
       physics.step();
       // What the body is against now: the car's next step reads it (a hit cancels a drift; a wall turns and pushes the car).
       touch = physics.touching();
@@ -152,7 +178,12 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       if (!waiting) {
         const motion = physics.motion();
         const { position, velocity } = motion;
-        if (lap && progress) progress = stepProgress(progress, lap.line, lap.width, position.x, position.z, cfg.sim.progress);
+        if (lap && progress) {
+          const was = progress;
+          wasAlong = was.along;
+          progress = stepProgress(was, lap.line, lap.width, position.x, position.z, cfg.sim.progress);
+          if (progress.passed > was.passed) passed = was.next;
+        }
         const seen = {
           position,
           roofUp: rotate(motion.rotation, UP).y,
@@ -162,6 +193,13 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
         respawn = watchCar(respawn, seen, tile, rules, waits);
         // A wait has begun: the drift ends with no boost (rule 7).
         if (respawn.waitLeft > 0) car.halt();
+      }
+      if (race && raceTrack) {
+        const counting = race.phase === 'countdown';
+        const ask = { throttle: next.throttle, before: wasAlong, after: progress?.along ?? wasAlong, checkpoint: passed };
+        race = stepRace(race, ask, raceTrack, cfg.sim.race, raceTimes);
+        // "Go": a start that earned it gets a tier 1 boost, running from the next step.
+        if (counting && race.phase === 'racing' && race.startBoost) car.boost(1);
       }
       step++;
     },
@@ -173,13 +211,14 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       touch: touch?.thing ?? null,
       progress: progress && { ...progress },
       respawn: { ...respawn },
+      race: copyRace(race),
     }),
     hash() {
       const { position, rotation, velocity, spin } = physics.motion();
       const memory = car.save();
       const d = memory.drift;
       const slope = touch?.normal ?? NO_SLOPE;
-      return createHasher()
+      const hasher = createHasher()
         .numbers([step, packInput(input)])
         .numbers([position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, rotation.w])
         .numbers([velocity.x, velocity.y, velocity.z, spin.x, spin.y, spin.z])
@@ -188,19 +227,41 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
         .numbers([slope.x, slope.y, slope.z, memory.sinceWall, memory.sinceHit])
         .numbers(memory.odd.map((wheel) => (wheel ? 1 : 0)))
         .numbers(progress ? [1, progress.near, progress.along, progress.off, progress.next, progress.passed] : [0])
-        .numbers([respawn.waitLeft, respawn.flippedFor, respawn.stuckFor, RESPAWN_REASONS.indexOf(respawn.why), respawn.placedAt, respawn.respawns])
-        .digest();
+        .numbers([respawn.waitLeft, respawn.flippedFor, respawn.stuckFor, RESPAWN_REASONS.indexOf(respawn.why), respawn.placedAt, respawn.respawns]);
+      // Only a race adds to the fingerprint, so a simulation without one has exactly the fingerprints it had before M4.
+      if (race) {
+        hasher
+          .numbers([RACE_PHASES.indexOf(race.phase), race.countdownLeft, race.pressedOn, race.startBoost ? 1 : 0, race.clock, race.lap, race.started ? 1 : 0])
+          .numbers([race.next, race.lapStart, race.sectorStart, race.total, race.finishedSteps, race.laps.length, race.splits.length])
+          .numbers([...race.laps, ...race.splits]);
+      }
+      return hasher.digest();
     },
-    snapshot: () => ({ step, input: packInput(input), physics: physics.snapshot(), car: car.save(), touch, progress: progress && { ...progress }, respawn: { ...respawn } }),
+    snapshot: () => ({
+      step,
+      input: packInput(input),
+      physics: physics.snapshot(),
+      car: car.save(),
+      touch,
+      progress: progress && { ...progress },
+      respawn: { ...respawn },
+      race: copyRace(race),
+    }),
     restore(saved) {
       physics.restore(saved.physics);
       car.load(saved.car);
       touch = saved.touch && { thing: saved.touch.thing, normal: { ...saved.touch.normal } };
       progress = saved.progress && { ...saved.progress };
       respawn = { ...saved.respawn };
+      race = copyRace(saved.race);
       step = saved.step;
       input = unpackInput(saved.input);
     },
     free: () => physics.free(),
   };
+}
+
+/** A race's state with its own lists, so nothing outside can change the simulation's. */
+function copyRace(race: RaceState | null): RaceState | null {
+  return race && { ...race, laps: [...race.laps], splits: [...race.splits] };
 }

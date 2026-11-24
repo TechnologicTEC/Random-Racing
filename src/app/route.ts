@@ -52,6 +52,23 @@ export function openingCamera(params: URLSearchParams): CameraMode {
   return 'chase';
 }
 
+/** What the 3D view opens on (M4.4): the title card, free driving, or a race. */
+export type OpeningScreen = 'title' | 'free' | 'race';
+
+/** Options that ask for a camera or a place: an address with one of them opens free, so its picture is as it was. */
+const VIEW_OPTIONS = ['cam', 'lap', 'look', 'at'] as const;
+
+/**
+ * What the 3D view opens on: `mode=race` races at once, `mode=free` drives freely with no clock, and so does an
+ * address that asks for a camera or a place (`cam=`, `lap=`, `look=`, `at=`). Any other address, the plain one
+ * among them, opens on the title card over the circling island (Tane, M4.0).
+ */
+export function openingScreen(params: URLSearchParams): OpeningScreen {
+  if (params.get('mode') === 'race') return 'race';
+  if (params.get('mode') === 'free' || VIEW_OPTIONS.some((name) => params.has(name))) return 'free';
+  return 'title';
+}
+
 /** The camera C changes to: driving, flying, circling, and back to driving. */
 export function nextCamera(mode: CameraMode): CameraMode {
   return mode === 'chase' ? 'fly' : mode === 'fly' ? 'orbit' : 'chase';

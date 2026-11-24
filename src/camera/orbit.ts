@@ -16,7 +16,8 @@ export interface Orbit {
 }
 
 const MIN_TILT = 0.08;
-const MAX_TILT = Math.PI / 2 - 0.02;
+/** The steepest it tips: a little short of straight down, so its view keeps an up. */
+export const MAX_TILT = Math.PI / 2 - 0.02;
 
 /** Radians turned per pixel dragged. */
 const DRAG = 0.005;
