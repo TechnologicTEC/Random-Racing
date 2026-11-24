@@ -383,6 +383,8 @@ export interface RoadConfig {
   gateClearance: number;
   gateBeam: number;
   gatePost: number;
+  /** The gates a lap is counted by (M5.4d), built like the start gate with a teal beam and no paint. */
+  lapGates: LapGatesConfig;
   /** Steepest banking, in degrees (brief: up to about 8 in fast corners). */
   bankMax: number;
   /** Corners of this radius or tighter get only `bankSlowShare` of the full bank; corners of `bankFastRadius` or wider get all of it. In metres. */
@@ -1742,6 +1744,16 @@ export interface ColliderConfig {
   rockPostHeight: number;
 }
 
+/** Where the lap gates stand (M5.4d, `gen/road/lapGates.ts`). */
+export interface LapGatesConfig {
+  /** How many gates a lap has besides the start line. Each ends a sector of the race. */
+  count: number;
+  /** No gate stands nearer than this to the start line or another gate, in metres. */
+  minGap: number;
+  /** A corner's apex counts as this many metres further from a gate's aim than it is, so a straight's middle is taken first. */
+  cornerPenalty: number;
+}
+
 /** How the keyboard and a controller are read. Nothing is smoothed (brief: input must feel instant). */
 export interface InputConfig {
   /**
@@ -1956,6 +1968,9 @@ export const config: GameConfig = {
     gateClearance: 6,
     gateBeam: 1.2,
     gatePost: 0.6,
+    // Tane, 2026-11-25: 4 gates a lap the player can see, at a straight's middle or a corner's apex (Claude: straights
+    // first, since an apex can be cut), in place of the hidden checkpoints that a run wide of the road missed unseen.
+    lapGates: { count: 4, minGap: 150, cornerPenalty: 100 },
     bankMax: 8,
     bankSlowRadius: 20,
     bankFastRadius: 70,

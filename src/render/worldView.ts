@@ -273,13 +273,15 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       const kerbs = createRoadMesh(world.road.kerbs.mesh, roadMaterial);
       const barriers = createRoadMesh(world.road.barriers, roadMaterial);
       const gate = createRoadMesh(world.road.gate, roadMaterial);
-      for (const mesh of [asphalt, kerbs, barriers, gate]) mesh.receiveShadow = true;
-      // Kerbs lie flat on the road; the barriers and the gate stand up and cast.
-      for (const mesh of [barriers, gate]) {
+      // The gates a lap is counted by (M5.4d).
+      const lapGates = createRoadMesh(world.road.lapGates.mesh, roadMaterial);
+      for (const mesh of [asphalt, kerbs, barriers, gate, lapGates]) mesh.receiveShadow = true;
+      // Kerbs lie flat on the road; the barriers and the gates stand up and cast.
+      for (const mesh of [barriers, gate, lapGates]) {
         mesh.castShadow = true;
         mesh.layers.enable(CASTER_LAYER);
       }
-      road.add(asphalt, kerbs, barriers, gate);
+      road.add(asphalt, kerbs, barriers, gate, lapGates);
       decor.load(world.decor);
       shade.setGround(world.ground);
       shade.setClouds(world.clouds);

@@ -17,6 +17,8 @@ Issue #5. **Done when** (the brief): a ghost replays a lap exactly on the same s
 
 **The check-in after M5.4 (Tane, 2026-11-24)** added **M5.4c**: the ghost a see-through white; the bot's ghost is the bot that drifts (kept as `bot2:v0-7`); the bot's time until it is beaten and the player's best until it is bettered, on the title card and the race card.
 
+**M5.4d, lap gates (Tane, 2026-11-25; approved plan, the plan file's addition):** a lap was lost unseen when a hidden checkpoint was crossed more than 6 m past the road's edge. Laps are now counted by **4 visible gates** (a straight's middle or a corner's apex, at least 150 m apart, built like the start gate with a teal beam), each ending a sector (5 a lap); the checkpoints only say where a respawn puts the car, and after a missed gate it is put before that gate. **M5.4d-1**: the gates in the world. **M5.4d-2**: the race on them, a card while a gate is missed ("Missed gate 2: drive back through it, or press R"), `RECORD_FORMAT` 2; its test includes the bot pushed 21 m wide at seed 7's checkpoint 2 finishing in the usual steps.
+
 **Traps:** saving the places as numbers from the drawing (they must come from the simulation's state); starting the record after the countdown (a start boost would not replay); a reset (R) not recorded; reading the ghost by wall-clock time instead of by step.
 
 ## Decisions, what to reuse, and traps

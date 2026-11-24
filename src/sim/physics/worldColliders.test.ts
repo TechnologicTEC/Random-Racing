@@ -132,7 +132,8 @@ describe('wallColliders', () => {
 describe('gateColliders', () => {
   it('stands a post outside each wall and hangs the beam over the road', () => {
     const colliders = gateColliders(rapier, world, config);
-    expect(colliders).toHaveLength(3);
+    // The start gate's three boxes first, then three for each lap gate (M5.4d).
+    expect(colliders).toHaveLength(3 + 3 * config.road.lapGates.count);
     const physics = worldOf(colliders);
     const { line, profile } = winner();
     const [left, right, beam] = gateBoxes(line, profile.height, world.road.cross, world.road.width, config);
@@ -240,7 +241,7 @@ describe('addWorldColliders', () => {
     const added = addWorldColliders(rapier, physics, world, config);
     const pieces = world.road.walls.reduce((sum, wall) => sum + Math.min(wall.pieceCount, winner().line.count), 0);
     expect(added.walls).toHaveLength(pieces);
-    expect(added.gate).toHaveLength(3);
+    expect(added.gate).toHaveLength(3 + 3 * config.road.lapGates.count);
     expect(added.trees).toHaveLength(world.decor.trees.count);
     expect(added.rocks).toHaveLength(world.decor.rocks.count);
     // A rock too low for the body to reach has no collider (7c).
@@ -297,5 +298,21 @@ describe('addWorldColliders', () => {
     const through = find(0);
     expect(roll(stopped)).toBeLessThan(world.road.width[stopped]! / 2 + road.barrierOffset);
     expect(roll(through)).toBeGreaterThan(world.road.width[through]! / 2 + road.barrierOffset + road.barrierWidth + 1);
+  });
+});
+
+describe('the lap gates as colliders (M5.4d)', () => {
+  it("stands each lap gate's posts and beam where its boxes say, a ray along the road passing between the posts", () => {
+    const physics = worldOf(gateColliders(rapier, world, config));
+    const { line, profile } = winner();
+    for (const s of world.road.lapGates.samples) {
+      const along = { x: line.tx[s]!, y: 0, z: line.tz[s]! };
+      const from = { x: line.x[s]! - along.x * 5, y: profile.height[s]! + 1, z: line.z[s]! - along.z * 5 };
+      expect(cast(physics, from, along, 10), `gate at sample ${s}`).toBeNull();
+      // Straight up from the middle of the gate: the underside of its beam, at least the clearance above the road.
+      const up = cast(physics, { x: line.x[s]!, y: profile.height[s]!, z: line.z[s]! }, { x: 0, y: 1, z: 0 }, 50);
+      expect(up!, `gate at sample ${s}`).toBeGreaterThanOrEqual(road.gateClearance - 0.01);
+    }
+    physics.free();
   });
 });

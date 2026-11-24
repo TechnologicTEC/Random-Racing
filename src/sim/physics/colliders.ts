@@ -2,6 +2,7 @@ import type { PhysicsConfig } from '../../config';
 import { dcos, dsin } from '../../core/dmath';
 import { BARRIER_FOOTING, wallPieces, type WallPiece } from '../../gen/road/barriers';
 import { gateBoxes } from '../../gen/road/startGate';
+import { sampleField } from '../../gen/world/heightfield';
 import type { HeightField, MeshData, WorldResult } from '../../gen/types';
 import { TREE_KINDS } from '../../gen/world/decor';
 import type { Course } from '../course';
@@ -112,10 +113,18 @@ export function wallColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
   });
 }
 
-/** The start gate as three boxes, as it is drawn: the left post, the right post, then the beam. */
+/**
+ * The start gate as three boxes, as it is drawn: the left post, the right post, then the beam; then each lap gate's
+ * three (M5.4d), its posts reaching the ground as they are drawn. All of them are "the gate" to the car.
+ */
 export function gateColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): ColliderDesc[] {
   const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
-  return gateBoxes(line, profile.height, world.road.cross, world.road.width, cfg).map((box) =>
+  const groundAt = (x: number, z: number): number => sampleField(world.ground, x, z, 0);
+  const boxes = [
+    ...gateBoxes(line, profile.height, world.road.cross, world.road.width, cfg),
+    ...world.road.lapGates.samples.flatMap((sample) => gateBoxes(line, profile.height, world.road.cross, world.road.width, cfg, sample, groundAt)),
+  ];
+  return boxes.map((box) =>
     rapier.ColliderDesc.cuboid(box.halfAcross, box.halfUp, box.halfAlong)
       .setTranslation(box.x, box.y, box.z)
       // Across the road (to the left of the direction of travel), up, and along the road.
