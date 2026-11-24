@@ -173,6 +173,45 @@ test('drives with no clock from Free drive, where C changes the camera, and N br
   await expect(choices(page).first()).toBeFocused();
 });
 
+test('the whole race (M4.6): from the title, 3 laps of seed 7, the results equal to Node’s to the millisecond, and back', async ({ page }) => {
+  test.setTimeout(240_000);
+  const run = await race7();
+  await openTitle(page);
+  await page.keyboard.press('Enter');
+  await expect(screen(page)).toHaveAttribute('data-screen', 'race');
+  // The bot's race, worked out in Node, fed in 600 steps at a time; after the last the race is Node's to the bit.
+  for (let from = 0; from < run.inputs.length; from += 600) {
+    await page.evaluate((list) => window.seedCircuit.drive!.replay(list), run.inputs.slice(from, from + 600));
+  }
+  const ended = (await page.evaluate(() => ({ state: window.seedCircuit.drive!.state(), hash: window.seedCircuit.drive!.hash() })))!;
+  expect(ended.hash).toBe(run.hash);
+  expect(ended.state!.race!.phase).toBe('finished');
+  expect(ended.state!.race!.total).toBe(run.race.total);
+  expect(ended.state!.race!.laps).toEqual(run.race.laps);
+  expect(ended.state!.race!.splits).toEqual(run.race.splits);
+  // "Finished" on the race card, with Node's total and laps.
+  await expect(page.getByTestId('race-lap')).toHaveText('Finished');
+  await expect(page.getByTestId('race-time')).toHaveText(formatRaceTime(run.race.total, SPS));
+  await expect(page.getByTestId('race-lap-time')).toHaveText(run.race.laps.map((steps) => formatRaceTime(steps, SPS)));
+
+  // Two seconds later, the results: Node's total and laps, the best lap marked.
+  await page.evaluate((steps) => window.seedCircuit.drive!.run(steps), FINISHED_FOR + 1);
+  await expect(screen(page)).toHaveAttribute('data-screen', 'results');
+  await expect(page.getByTestId('menu-total')).toHaveText(formatRaceTime(run.race.total, SPS));
+  await expect(page.getByTestId('menu-lap')).toHaveText(run.race.laps.map((steps, i) => `Lap ${i + 1}${formatRaceTime(steps, SPS)}`));
+  const best = run.race.laps.indexOf(Math.min(...run.race.laps));
+  await expect(page.getByTestId('menu-lap').nth(best)).toHaveClass(/world-race-accent/);
+  await expect(page.locator('[data-testid="menu-lap"].world-race-accent')).toHaveCount(1);
+
+  // And back to the title: the island circling behind its card, no car and no race card.
+  await page.getByTestId('menu-choice').filter({ hasText: 'Title' }).click();
+  await expect(screen(page)).toHaveAttribute('data-screen', 'title');
+  await expect(screen(page)).toHaveAttribute('data-world-camera', 'orbit');
+  await expect(page.getByTestId('menu-heading')).toHaveText('Halmore Speedway');
+  await expect(page.getByTestId('race-card')).toBeHidden();
+  await expect(screen(page)).toHaveAttribute('data-drive-car', 'hidden');
+});
+
 test.describe('a new island, a typed seed, the time of day and restart (M4.5)', () => {
   const builds = (page: Page) => screen(page).getAttribute('data-world-builds');
 
