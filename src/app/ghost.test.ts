@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { hashHandling, RECORD_FORMAT, type RunRecord } from '../sim/record';
-import { chooseGhost, ghostPlace, ghostRow, saveVerdict } from './ghost';
+import { startRace, raceSteps, type RaceState } from '../sim/race';
+import { chooseGhost, ghostGap, ghostPlace, ghostRow, saveVerdict } from './ghost';
 
 const HALF = Math.SQRT1_2;
 /** A made-up record: three places, 6 steps apart, the car moving along x and turning a quarter round about up. */
@@ -92,15 +93,44 @@ describe('which ghost is drawn (chooseGhost: the bot until the player beats it, 
   });
 });
 
+describe('the gap to the ghost (ghostGap, M5.4b)', () => {
+  const sps = config.sim.stepsPerSecond;
+  const race = (splits: number[]): RaceState => ({ ...startRace(raceSteps(config.sim.race, sps)), splits });
+  const ghost = { ...madeUp(), splits: [1100, 1200, 1150, 1000, 1050, 1080, 1000, 1040, 1070] };
+
+  it('is nothing before the first sector is done', () => {
+    expect(ghostGap(race([]), ghost)).toBeNull();
+  });
+
+  it('is the time to the end of the last sector done against the ghost\'s to the same sector', () => {
+    expect(ghostGap(race([1090]), ghost)).toBe(-10);
+    expect(ghostGap(race([1090, 1230]), ghost)).toBe(20);
+    expect(ghostGap(race([1100, 1200, 1150, 990]), ghost)).toBe(-10);
+  });
+
+  it('is nothing past the sectors the ghost has, as for a ghost that did not finish', () => {
+    expect(ghostGap(race([1100, 1200]), { ...ghost, splits: [1100] })).toBeNull();
+  });
+});
+
 describe("the race card's ghost row (ghostRow)", () => {
+  const sps = config.sim.stepsPerSecond;
+  const bot = { record: { ...madeUp(), driver: 'bot' as const }, driver: 'bot' as const, older: false };
+  const own = { record: madeUp(), driver: 'player' as const, older: false };
+
   it('names whose ghost it is, says when it is from an older version, and when it is hidden', () => {
-    const bot = { record: { ...madeUp(), driver: 'bot' as const }, driver: 'bot' as const, older: false };
-    const own = { record: madeUp(), driver: 'player' as const, older: false };
-    expect(ghostRow(null, true)).toBeNull();
-    expect(ghostRow(bot, true)).toEqual({ label: "Bot's ghost" });
-    expect(ghostRow(own, true)).toEqual({ label: 'Your ghost' });
-    expect(ghostRow({ ...own, older: true }, true)).toEqual({ label: 'Your ghost · older version' });
-    expect(ghostRow(bot, false)).toEqual({ label: 'Ghost hidden (G)' });
+    expect(ghostRow(null, true, null, sps)).toBeNull();
+    expect(ghostRow(bot, true, null, sps)).toEqual({ label: "Bot's ghost", gap: null, ahead: false });
+    expect(ghostRow(own, true, null, sps)).toEqual({ label: 'Your ghost', gap: null, ahead: false });
+    expect(ghostRow({ ...own, older: true }, true, null, sps)).toEqual({ label: 'Your ghost · older version', gap: null, ahead: false });
+    expect(ghostRow(bot, false, null, sps)).toEqual({ label: 'Ghost hidden (G)', gap: null, ahead: false });
+  });
+
+  it('gives the gap at the last sector, ahead when it is less, even with the ghost hidden; none against an older version', () => {
+    expect(ghostRow(bot, true, -12, sps)).toEqual({ label: "Bot's ghost", gap: '−0.200', ahead: true });
+    expect(ghostRow(own, true, 30, sps)).toEqual({ label: 'Your ghost', gap: '+0.500', ahead: false });
+    expect(ghostRow(bot, false, 6, sps)).toEqual({ label: 'Ghost hidden (G)', gap: '+0.100', ahead: false });
+    expect(ghostRow({ ...own, older: true }, true, -60, sps)).toEqual({ label: 'Your ghost · older version', gap: null, ahead: false });
   });
 });
 

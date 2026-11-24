@@ -1,6 +1,7 @@
 import { PLACE_SIZE, type RunRecord } from '../sim/record';
 import { blendPlace, type Place } from './drive';
-import { formatRaceTime } from './raceCard';
+import type { RaceState } from '../sim/race';
+import { formatGap, formatRaceTime } from './raceCard';
 
 /**
  * The ghost (M5): where a run on record had its car at a moment of a race,
@@ -57,12 +58,39 @@ export function chooseGhost(own: RunRecord | null, bot: RunRecord | null, today:
   return null;
 }
 
-/** The race card's row for the ghost: whose it is, or that it is hidden; none without a ghost. M5.4b adds the gap to it. */
-export function ghostRow(chosen: ChosenGhost | null, shown: boolean): { label: string } | null {
+/**
+ * The split against the ghost (M5.4b): this race's time to the end of the last sector it has done against the ghost's
+ * time to the end of the same sector, from its saved splits, in steps; less than 0 is ahead. Nothing before the first
+ * sector is done, or past the sectors the ghost has.
+ */
+export function ghostGap(race: RaceState, record: RunRecord): number | null {
+  const done = race.splits.length;
+  if (done === 0 || record.splits.length < done) return null;
+  let gap = 0;
+  for (let k = 0; k < done; k++) gap += race.splits[k]! - record.splits[k]!;
+  return gap;
+}
+
+/** The race card's row for the ghost: whose it is, or that it is hidden, and the split against it. */
+export interface GhostRow {
+  label: string;
+  /** The gap at the last sector done (`formatGap`), or null: none yet, or against an older version's ghost. */
+  gap: string | null;
+  /** Ahead of the ghost: the gap in the teal accent. */
+  ahead: boolean;
+}
+
+/**
+ * The race card's ghost row: none without a ghost. The gap shows with the ghost hidden too, and never against a ghost
+ * from an older version, which is not the time to beat.
+ *
+ * @param gap the split against the ghost (`ghostGap`), in steps
+ */
+export function ghostRow(chosen: ChosenGhost | null, shown: boolean, gap: number | null, stepsPerSecond: number): GhostRow | null {
   if (!chosen) return null;
-  if (!shown) return { label: 'Ghost hidden (G)' };
-  if (chosen.driver === 'bot') return { label: "Bot's ghost" };
-  return { label: chosen.older ? 'Your ghost · older version' : 'Your ghost' };
+  const label = !shown ? 'Ghost hidden (G)' : chosen.driver === 'bot' ? "Bot's ghost" : chosen.older ? 'Your ghost · older version' : 'Your ghost';
+  if (chosen.older || gap === null) return { label, gap: null, ahead: false };
+  return { label, gap: formatGap(gap, stepsPerSecond), ahead: gap < 0 };
 }
 
 /** What is known at the finish of a race for deciding whether it is saved (M5.4a). */

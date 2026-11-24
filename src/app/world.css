@@ -404,9 +404,11 @@ body,
   color: #4c665f;
 }
 
-/* Whose ghost the race is run against (M5.3b): one line under the rows, in the muted grey. */
+/* Whose ghost the race is run against (M5.3b) and the split against it (M5.4b): one line under the rows, in the muted grey. */
 .world-race-row.world-race-ghost {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid rgba(22, 52, 47, 0.15);
@@ -473,6 +475,16 @@ body,
   max-width: 11rem;
   margin: 2px auto 0 !important;
   font-weight: 600;
+}
+
+/* On the title: the player's ghost of this island is from an older version (M5.4b). */
+.world-menu-ghost-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.world-menu-ghost-note[hidden] {
+  display: none;
 }
 
 /* Whether the race was saved as the player's best (M5.4a), a little apart from the laps. */

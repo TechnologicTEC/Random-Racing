@@ -1,9 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { formatRaceTime } from '../src/app/raceCard';
+import { formatGap, formatRaceTime } from '../src/app/raceCard';
 import { config } from '../src/config';
 import { generateWorld } from '../src/gen';
 import { loadRapier } from '../src/sim/physics/rapier';
-import { packRun, unpackRun, type RunRecord } from '../src/sim/record';
+import { unpackInput } from '../src/sim/input';
+import { hashHandling, packRun, unpackRun, type RunRecord } from '../src/sim/record';
+import { createSim } from '../src/sim/sim';
 import { botRecord } from '../src/testing/botDriver';
 
 /**
@@ -15,8 +17,18 @@ import { botRecord } from '../src/testing/botDriver';
 const SPS = config.sim.stepsPerSecond;
 const FINISHED_FOR = config.sim.race.finishedFor * SPS;
 let race: RunRecord;
+/** The step after which the race has done 1, 2 and 3 sectors (lap 1), worked out in Node. */
+const sectorEnds: number[] = [];
 test.beforeAll(async () => {
-  race = botRecord(await loadRapier(), generateWorld(7, config), config)!;
+  const rapier = await loadRapier();
+  const world = generateWorld(7, config);
+  race = botRecord(rapier, world, config)!;
+  const sim = createSim(rapier, world, config, { race: true });
+  for (let i = 0; i < race.inputs.length && sectorEnds.length < 3; i++) {
+    sim.step(unpackInput(race.inputs[i]!));
+    if (sim.state().race!.splits.length > sectorEnds.length) sectorEnds.push(i + 1);
+  }
+  sim.free();
 });
 
 async function open(page: Page, query: string): Promise<void> {
@@ -131,5 +143,62 @@ test.describe('with storage refused', () => {
     await open(page, 'seed=7&still=1&mode=race&bot=off');
     await finish(page);
     await expect(page.getByTestId('menu-saved')).toHaveText('Not saved: this browser keeps no data');
+  });
+});
+
+/**
+ * The split against the ghost and the older ghost (M5.4b): at each sector the race card gives this race's time against
+ * the ghost's to the same sector; a ghost driven with other handling is drawn marked "older version", has no split, is
+ * not the time to beat, and the title says so.
+ */
+test.describe('the split and the older ghost', () => {
+  test.setTimeout(240_000);
+
+  test("gives the gap to the player's ghost at the end of each sector, in the accent when ahead", async ({ page, browserName }) => {
+    // The same race with every sector half a second slower: this race is 0.5, 1.0 and 1.5 s ahead after sectors 1 to 3.
+    await keep(page, [['v0-7', { ...slower(270), splits: race.splits.map((steps) => steps + 30) }]]);
+    await open(page, 'seed=7&still=1&mode=race&bot=off');
+    const gap = page.getByTestId('race-ghost-gap');
+    await expect(page.getByTestId('race-ghost')).toHaveText('Your ghost');
+    await expect(gap).toHaveText('');
+    let done = 0;
+    for (const [k, end] of sectorEnds.entries()) {
+      await page.evaluate((list) => window.seedCircuit.drive!.replay(list), Array.from(race.inputs.subarray(done, end)));
+      done = end;
+      await expect(gap).toHaveText(formatGap(-30 * (k + 1), SPS));
+      await expect(gap).toHaveClass(/world-race-accent/);
+    }
+    await page.screenshot({ path: `test-results/screens/race-00007-ghost-split-${browserName}.png` });
+    // Hidden, the ghost's split still shows.
+    await page.keyboard.press('g');
+    await expect(page.getByTestId('race-ghost')).toHaveText('Ghost hidden (G)');
+    await expect(gap).toHaveText(formatGap(-90, SPS));
+  });
+
+  test('draws a ghost of other handling as older, with no split, says so on the title, and replaces it with a slower race', async ({ page, browserName }) => {
+    const other = structuredClone(config);
+    other.car.engine.topSpeed += 2;
+    await keep(page, [['v0-7', { ...slower(-600), handling: hashHandling(other) }]]);
+    await open(page, 'seed=7&still=1&bot=off');
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'title');
+    await expect(page.locator('body')).toHaveAttribute('data-ghost', 'older');
+    await expect(page.getByTestId('menu-ghost-note')).toHaveText('Your ghost is from an older version');
+    await page.screenshot({ path: `test-results/screens/menu-00007-older-ghost-${browserName}.png` });
+    await page.keyboard.press('Enter');
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'race');
+    await expect(page.getByTestId('menu-ghost-note')).toBeHidden();
+    await page.evaluate((list) => window.seedCircuit.drive!.replay(list), Array.from(race.inputs.subarray(0, sectorEnds[0])));
+    await expect(page.getByTestId('race-ghost')).toHaveText('Your ghost · older version');
+    await expect(page.getByTestId('race-ghost-gap')).toHaveText('');
+    // Its time is not the one to beat: a race ten seconds slower replaces it.
+    await page.evaluate((list) => window.seedCircuit.drive!.replay(list), Array.from(race.inputs.subarray(sectorEnds[0])));
+    await page.evaluate((steps) => window.seedCircuit.drive!.run(steps), FINISHED_FOR + 1);
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'results');
+    await expect(page.getByTestId('menu-saved')).toHaveText('New best, ghost saved');
+    await expect(page.locator('body')).toHaveAttribute('data-ghost', 'current');
+    await expect.poll(async () => {
+      const bytes = await page.evaluate(() => window.seedCircuit.store!.getGhost('v0-7'));
+      return bytes && unpackRun(Uint8Array.from(bytes)).handling;
+    }).toBe(hashHandling(config));
   });
 });

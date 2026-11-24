@@ -30,7 +30,7 @@ import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
-import { chooseGhost, ghostPlace, ghostRow, saveVerdict, type ChosenGhost } from './ghost';
+import { chooseGhost, ghostGap, ghostPlace, ghostRow, saveVerdict, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
 import { ghostKey, openStore, type Favourite, type Store } from './store';
@@ -154,11 +154,12 @@ const TEMPLATE = `
       <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
       <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
       <div class="world-race-rows" data-ref="raceRows"></div>
-      <p class="world-race-row world-race-ghost" data-ref="raceGhost" data-testid="race-ghost" hidden></p>
+      <p class="world-race-row world-race-ghost" data-ref="raceGhost" data-testid="race-ghost-row" hidden><span data-ref="raceGhostName" data-testid="race-ghost"></span><span class="world-race-gap" data-ref="raceGhostGap" data-testid="race-ghost-gap"></span></p>
     </div>
     <div class="world-card world-menu" data-ref="menu" data-testid="menu" hidden>
       <h2 data-ref="menuHeading" data-testid="menu-heading"></h2>
       <div class="world-menu-body" data-ref="menuBody"></div>
+      <p class="world-menu-quiet world-menu-ghost-note" data-ref="ghostNote" data-testid="menu-ghost-note" hidden>Your ghost is from an older version</p>
       <div class="world-menu-choices" data-ref="menuChoices"></div>
       <form class="world-menu-seed" data-ref="seedForm" data-testid="seed-form" hidden>
         <input type="text" data-ref="seedInput" data-testid="seed-input" placeholder="Seed or share code" aria-label="Seed or share code" autocomplete="off" spellcheck="false" />
@@ -413,10 +414,16 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     card.hidden = race === null;
     if (!race) return;
     // Whose ghost the race is run against, or that it is hidden (M5.3b).
-    const row = ghostRow(ghost, ghostVisible);
-    const ghostLine = ref('raceGhost');
-    ghostLine.hidden = row === null;
-    if (row && ghostLine.textContent !== row.label) ghostLine.textContent = row.label;
+    // and the split against it at the last sector done (M5.4b).
+    const row = ghostRow(ghost, ghostVisible, ghost && ghostGap(race, ghost.record), sps);
+    ref('raceGhost').hidden = row === null;
+    if (row) {
+      const name = ref('raceGhostName');
+      if (name.textContent !== row.label) name.textContent = row.label;
+      const gap = ref('raceGhostGap');
+      if (gap.textContent !== (row.gap ?? '')) gap.textContent = row.gap ?? '';
+      gap.classList.toggle('world-race-accent', row.ahead);
+    }
     const view = raceCard(race, tuned.sim.race, sps);
     if (ref('raceLap').textContent !== view.lap) ref('raceLap').textContent = view.lap;
     if (ref('raceTime').textContent !== view.time) ref('raceTime').textContent = view.time;
@@ -766,11 +773,16 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   };
 
   /** Picks the ghost a race is run against from those read and worked out (`chooseGhost`), and says which on the page. */
+  /** On the title, a line when the player's ghost of this island was driven with other handling (M5.4b). */
+  const renderGhostNote = (): void => {
+    ref('ghostNote').hidden = !(screen.name === 'title' && ownGhost !== null && ownGhost.handling !== hashHandling(config));
+  };
   const pickGhost = (): void => {
     ghost = chooseGhost(ownGhost, botWanted ? botGhost : null, hashHandling(config));
     ghostStatus = ghost ? (ghost.older ? 'older' : 'current') : 'none';
     document.body.dataset.ghost = ghostStatus;
     document.body.dataset.ghostDriver = ghost?.driver ?? '';
+    renderGhostNote();
   };
   /** A ghost's bytes read as a record of this island, or null for none, or for bytes that are not one. */
   const recordOf = (bytes: Uint8Array | null, world: WorldResult): RunRecord | null => {
@@ -1083,6 +1095,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     ref('titleCard').hidden = screen.name === 'title';
     // A seed or share code is typed on the title only; what was wrong with the last one goes with it.
     ref('seedForm').hidden = screen.name !== 'title';
+    renderGhostNote();
     seedProblem.hidden = true;
     if (menu.length === 0) return;
     const name = shown?.track.name ?? 'Seed Circuit';
