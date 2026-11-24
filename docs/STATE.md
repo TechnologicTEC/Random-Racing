@@ -6,11 +6,39 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 ## Where we are
 
-- **Current milestone:** none in progress. Milestone 4, Time trial ([issue #4](https://github.com/TechnologicTEC/Random-Racing/issues/4)), was signed off by Tane on 2026-11-24 and merged (PR #11). Milestones 1 to 4 are merged and signed off (PR #7, #9, #10, #11)
-- **Branch:** `main`. It is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
-- **Last finished part:** M4.6 and Tane's sign-off of Milestone 4 (2026-11-24), after the start boost was made a launch of 20 m/s² for 1 s with a note under the lights
-- **Next:** **Milestone 5, ghosts and favourites** (`docs/PLAN.md`, M5.0; `docs/plan/M5-ghosts.md`): a new branch `milestone-5-ghosts` from `main`, planned in plan mode first, with Tane's answers on pace and check-ins
+- **Current milestone:** **Milestone 5, Ghosts and favourites** ([issue #5](https://github.com/TechnologicTEC/Random-Racing/issues/5)), planned and approved 2026-11-24 (below). Milestones 1 to 4 are merged and signed off (PR #7, #9, #10, #11)
+- **Branch:** `milestone-5-ghosts`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
+- **Last finished part:** M5.0, the plan approved (2026-11-24)
+- **Next:** **M5.1a**, the run record packed and unpacked (`src/sim/record.ts`; below, and `docs/plan/M5-ghosts.md`)
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
+
+## Milestone 5: ghosts and favourites (2026-11-24)
+
+Planned in plan mode and approved by Tane on 2026-11-24 (plan file: `C:\Users\tanee\.claude\plans\random-racing-milestone-5-zany-gray-of-cf7ed05c-8847-4786-89d0-c9636180bf4c.md`). The steps, rules and "done when" tests are those of `docs/plan/M5-ghosts.md`, split into lettered parts there. **Done when** (the brief): a ghost replays a lap exactly on the same seed after reloading the page.
+
+**Tane's answers at M5.0:**
+- **Pace:** a short report after each part; **one check-in, after M5.4** (racing your own ghost, with the split), then M5.5, M5.6 and the sign-off.
+- **A ghost is the whole 3-lap race**, recorded from the first step of the countdown, so the start boost replays.
+- **Favourites saved under generator v0 may stop rebuilding at v1**: kept and listed, with a note on screen; a ghost of another generator version is set aside.
+- **Favourites get their own card:** a fourth title choice, Favourites, opens a card in the middle (up and down choose, Enter races, X or Delete removes, Esc back), so a controller reaches it too.
+- **The bot's ghost (Tane's idea, in plan mode):** with no ghost of your own to beat, you race a ghost of the bot's race on that seed. **The bot stays the ghost until you beat it**: a finished race slower than the bot is still kept as your best (its time on favourites and the results), but the ghost becomes yours only once your total is faster than the bot's. **A button pressed while racing shows or hides the ghost** (G; X on a controller), whichever ghost it is.
+
+| Part | What | Status |
+| --- | --- | --- |
+| M5.0 | Plan approved; this section; the build order split into parts | Done |
+| M5.1a | The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun` | |
+| M5.1b | Recording a run and replaying it (`recordRun`, `replayRun`); the same fingerprint in Node, Chromium and Firefox | |
+| M5.2 | Storage: IndexedDB for ghosts, `localStorage` for favourites, memory when refused | |
+| M5.3 | The ghost drawn, see-through, by step | |
+| M5.3b | The bot's ghost: the bot moved into the game, its race worked out in the worker and kept; which ghost is drawn; G and X show or hide it | |
+| M5.4a | Personal bests saved (not when tuned); the results' line | |
+| M5.4b | The split against the ghost on the race card; the older-version ghost | |
+| | **Check-in with Tane**: race the ghost on seeds 7, 1, 42, 2024 | |
+| M5.5a | The favourites screen and the star, pure (`screens.ts`, `favourites.ts`) | |
+| M5.5b | Favourites on the page: the star, the Favourites card, the v0 note | |
+| M5.6 | The reload test in Chromium and Firefox; README, CLAUDE.md, this file; the pull request; **Tane's sign-off**; merge | |
+
+**Claude's calls in the plan, for Tane to judge (the check-in):** the ghost is drawn only during a race, from the first light, and goes when its record ends; it keeps the kart's colours at 40% opacity (`config.ghost`, outside `car` and `sim`, so not in the handling fingerprint); ghosts are kept by share code (`v0-7`), so one from another generator version is never found; a race that beats an older-version ghost replaces it whatever its time; the bot's ghost is M4.2c's grip-only bot (the sliding bot touches walls on some seeds), and a seed whose bot does not finish has none; an older-version ghost of your own is drawn only when there is no bot's (the plan file said "still drawn"); the toggle does not hide the split; G was free in a race, and X is the one controller face button not yet used; the bot's race is worked out in the worker, never on the page's thread; picking a favourite races at once.
 
 ## Milestone 4: time trial (2026-11-23)
 

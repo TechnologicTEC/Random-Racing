@@ -78,12 +78,21 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 **Milestone 5: ghosts and favourites** (branch `milestone-5-ghosts`, issue #5; plan first; the steps: [`docs/plan/M5-ghosts.md`](plan/M5-ghosts.md))
 
-- [ ] **M5.0** Plan approved
-- [ ] **M5.1** The run record and its replay
+- [x] **M5.0** Plan approved (2026-11-24; Tane's answers and the parts in STATE.md, "Milestone 5")
+- **M5.1** The run record and its replay:
+  - [ ] **M5.1a** The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun`
+  - [ ] **M5.1b** Recording a run and replaying it; one fingerprint in Node, Chromium and Firefox
 - [ ] **M5.2** Storage
-- [ ] **M5.3** The ghost drawn
-- [ ] **M5.4** Personal bests
-- [ ] **M5.5** Favourites
+- **M5.3** The ghost drawn:
+  - [ ] **M5.3** The ghost drawn from its record, by step
+  - [ ] **M5.3b** The bot's ghost (Tane, M5.0): the bot's race worked out in the worker; G and X show or hide the ghost
+- **M5.4** Personal bests:
+  - [ ] **M5.4a** Personal bests saved; the results' line
+  - [ ] **M5.4b** The split against the ghost; the older-version ghost
+- [ ] **Check-in with Tane** after M5.4: race the ghost on seeds 7, 1, 42, 2024
+- **M5.5** Favourites:
+  - [ ] **M5.5a** The favourites screen and the star, pure
+  - [ ] **M5.5b** Favourites on the page
 - [ ] **M5.6** The reload test; pull request; **sign-off**; merge
 
 **Milestone 6: polish** (branch `milestone-6-polish`, issue #6; plan first; the steps: [`docs/plan/M6-polish.md`](plan/M6-polish.md))
@@ -161,8 +170,8 @@ The check-ins are lines in the build order. Bring the page running, a short list
 
 | Question | Needed by |
 | --- | --- |
-| How many laps does a ghost cover: the best single lap, or the whole 3-lap race? (This plan assumes the whole race) | M5.0 |
-| May a favourite saved before the generator is `v1` stop rebuilding when the generator changes? (This plan assumes yes, with a note on screen) | M5.0 |
+| How many laps does a ghost cover: the best single lap, or the whole 3-lap race? (Tane, M5.0: the whole race) | M5.0 |
+| May a favourite saved before the generator is `v1` stop rebuilding when the generator changes? (Tane, M5.0: yes, with a note on screen) | M5.0 |
 | What is cut from Milestone 6 if it runs long, and in what order are its steps wanted? | M6.0 |
 | When the generator changes after `v1`: keep every released version runnable, or store each favourite's centre line? (The brief allows either) | M6.8 |
 | Where is version 1 hosted, and under which name ("Seed Circuit" is a working title)? | M6.9 |
