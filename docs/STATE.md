@@ -6,10 +6,10 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 ## Where we are
 
-- **Current milestone:** 4, Time trial ([issue #4](https://github.com/TechnologicTEC/Random-Racing/issues/4)), on branch `milestone-4-time-trial` from `main`. Planned in plan mode and approved by Tane on 2026-11-23. Milestones 1 to 3 are merged and signed off (PR #7, #9, #10)
-- **Branch:** `milestone-4-time-trial`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** M4.6's test and docs (2026-11-24): the whole race from the title in the browser tests, its results equal to Node's to the millisecond in Chromium and Firefox; README and CLAUDE.md brought up to Milestone 4; the pull request opened ([PR #11](https://github.com/TechnologicTEC/Random-Racing/pull/11))
-- **Next:** **Tane's sign-off** of Milestone 4 (play a few races from the title; Claude's calls of M4.2a to M4.5 for Tane to judge are listed under "Milestone 4"), then merge the pull request and delete the branch. Then Milestone 5 (`docs/PLAN.md`), planned in plan mode first
+- **Current milestone:** none in progress. Milestone 4, Time trial ([issue #4](https://github.com/TechnologicTEC/Random-Racing/issues/4)), was signed off by Tane on 2026-11-24 and merged (PR #11). Milestones 1 to 4 are merged and signed off (PR #7, #9, #10, #11)
+- **Branch:** `main`. It is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
+- **Last finished part:** M4.6 and Tane's sign-off of Milestone 4 (2026-11-24), after the start boost was made a launch of 20 m/s² for 1 s with a note under the lights
+- **Next:** **Milestone 5, ghosts and favourites** (`docs/PLAN.md`, M5.0; `docs/plan/M5-ghosts.md`): a new branch `milestone-5-ghosts` from `main`, planned in plan mode first, with Tane's answers on pace and check-ins
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 4: time trial (2026-11-23)
@@ -36,7 +36,7 @@ Planned in plan mode and approved by Tane on 2026-11-23 (plan file: `C:\Users\ta
 | M4.4c | The page: the title card opens the plain address; Race and Free drive; pause (Esc, Start, a hidden tab); the results; menu keys and controller; C does nothing in a race; `docs/VISUAL_BAR.md` gets the rule for cards in the middle | **Done** (below) |
 | | **Check-in with Tane**: a few races (seeds 7, 1, 42, 2024, 5) | **Done** (below) |
 | M4.5 | **New track, typed seed, restart**: share codes with a reason when bad (`seedInputProblem`), time of day, restart on the same world, the results' share code and name | **Done** (below) |
-| M4.6 | **The whole race** in the browser tests (results equal Node's to the millisecond in both browsers); tuning; README, CLAUDE.md, this file; the pull request; **Tane's sign-off**; merge | Test, docs and pull request **done** (below); sign-off waiting |
+| M4.6 | **The whole race** in the browser tests (results equal Node's to the millisecond in both browsers); tuning; README, CLAUDE.md, this file; the pull request; **Tane's sign-off**; merge | **Done**: signed off by Tane 2026-11-24 after the start launch (below); PR #11 merged |
 
 **M4.1, done 2026-11-23.** `solveProfile` (`gen/road/profile.ts`) takes the start's sample and holds the road to `road.start.gradient` (2%) from `before` metres before it to `after` metres after it, and half a smoothing window further each way; `limitGradient` takes a limit per sample (each pair of samples keeps the smaller of their two). The pipeline finds the start's sample from the layout's sections before the road is solved (`startIndexOf`, the same rule `placeStartLine` used). **Tane chose 30 m before the line, not the plan's 100** (decisions): at 100 m nine tests failed, among them seed 10's fit (a 127% bank beside the road), mountain climbing laps in their height band (72%, bar 80%) and the keyboard slide test (89.4%, bar 90%); at 50 m the mountain elevation score still missed (0.595, bar 0.6). Measured over seeds 1 to 200:
 
@@ -152,6 +152,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 
 | Date | Decision | Why |
 | --- | --- | --- |
+| 2026-11-24 | **Milestone 4 signed off** (Tane: "signed off, merge it"); PR #11 merged | The whole race plays from the title and back with correct times, in both browsers |
 | 2026-11-24 | **A boosted race start launches at 20 m/s² for 1 s** (`sim.race.launch`), and the lights card says "Boost start!" or "Too early" | Tane at the sign-off, from four measured options: the tier 1 boost alone gained 5 km/h and 0.13 s on lap 1, which could not be felt; this gives 71 km/h one second after "go" against 33, about 0.9 s on lap 1 |
 | 2026-11-24 | **Behind the title and results cards the camera circles close in round the track, low, from the side** (1.2 lap radii, 16 degrees; the card stays in the middle) | Tane, three times: the whole island, then the whole lap, left the track small and under the card; "the main part is the track", the turning camera shows the rest; and from 43 degrees it looked down on the track too much |
 | 2026-11-23 | **Check-in after M4.4 (Tane):** the round from the title is good; the title camera pulled back to show the whole island; the circling camera never shows the space under the island | Tane's answers at the check-in. Every Claude's call of M4.2a to M4.4c stands |
@@ -394,3 +395,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-24 (Milestone 4, Opus 5.5):** M4.5 done: a seed or share code typed on the title card opens that island, or says why it cannot (`seedInputProblem`); the time of day chosen is kept in the address (`time=`); Restart and Race again start the countdown again on the same island within 0.5 s, the times cleared (tested); the results show the island's name and share code (details under "Milestone 4"). Next: M4.6, the whole race, then the sign-off.
 - **2026-11-24 (Milestone 4, Opus 5.5):** M4.6: the whole race from the title in the browser tests (seed 7, the bot's race fed in; the results equal Node's to the millisecond in Chromium and Firefox, and back to the title); README and CLAUDE.md brought up to Milestone 4; no tuning changed; the pull request opened. 2,657 unit and 385 browser tests pass. Next: Tane's sign-off, then merge.
 - **2026-11-24 (Milestone 4, Opus 5.5):** at the sign-off Tane found the start boost made no difference that could be felt (measured: 0.13 s on lap 1). From four measured options Tane chose a launch of 20 m/s² for 1 s after a boosted start (`sim.race.launch`; about 0.9 s on lap 1) and a note under the green lights ("Boost start!", "Too early"). Fingerprints without a boosted start unchanged. 2,663 unit and 387 browser tests pass. Next: the rest of Tane's sign-off, then merge.
+- **2026-11-24 (Milestone 4, Opus 5.5):** Tane signed off Milestone 4; PR #11 merged and the branch deleted. Next: Milestone 5, planned in plan mode first.

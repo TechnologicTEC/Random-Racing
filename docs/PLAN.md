@@ -74,7 +74,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M4.4c** The title, pause and results cards on the page; menu keys and controller; C does nothing in a race (2026-11-23)
 - [x] **Check-in with Tane** after M4.4: a few races from the title (seeds 7, 1, 42, 2024, 5) (2026-11-23: good; the title camera circles close in round the track, low, from the side (2026-11-24), and the circling camera never goes under the island)
 - [x] **M4.5** New track, typed seed, restart (2026-11-24)
-- [ ] **M4.6** A whole race in the browser tests; check-in; tuning; pull request; **sign-off**; merge
+- [x] **M4.6** A whole race in the browser tests; check-in; tuning; pull request; **sign-off**; merge (signed off 2026-11-24, PR #11)
 
 **Milestone 5: ghosts and favourites** (branch `milestone-5-ghosts`, issue #5; plan first; the steps: [`docs/plan/M5-ghosts.md`](plan/M5-ghosts.md))
 
