@@ -35,6 +35,8 @@ declare global {
       physicsHashFor(seed: number): Promise<string>;
       /** The fingerprint of the scripted run on a seed (`sim/script.ts`), to confirm every browser's simulation agrees. */
       simHashFor(seed: number): Promise<string>;
+      /** The fingerprint a packed run record (`sim/record.ts`, given as its bytes) replays to on its own island, to confirm every browser replays a ghost alike (M5.1b). */
+      replayHashFor(bytes: number[]): Promise<string>;
       /** The 3D view, when that is the page being shown. */
       view?: ViewHandle;
       /** The simulation of the island on the 3D page, when that is the page being shown. */
@@ -61,5 +63,11 @@ window.seedCircuit = {
       genClient().world(seed, config),
     ]);
     return scriptedFingerprint(await loadRapier(), result, config);
+  },
+  replayHashFor: async (bytes) => {
+    const [{ loadRapier }, { replayRun, unpackRun }] = await Promise.all([import('./sim/physics/rapier'), import('./sim/record')]);
+    const record = unpackRun(Uint8Array.from(bytes));
+    const { result } = await genClient().world(record.seed, config);
+    return replayRun(await loadRapier(), result, config, record);
   },
 };

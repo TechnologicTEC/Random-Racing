@@ -1751,6 +1751,14 @@ export interface InputConfig {
   deadZone: number;
 }
 
+/** Ghosts (M5): what a run on record keeps, and how its ghost is drawn. Outside `car` and `sim`, so not in the handling fingerprint. */
+export interface GhostConfig {
+  /** A place (position and turn) is kept every this many steps, from step 0: ten a second at 60 steps a second. */
+  every: number;
+  /** How solid the ghost is drawn, from 0 (unseen) to 1 (solid). */
+  opacity: number;
+}
+
 export interface GameConfig {
   track: TrackConfig;
   road: RoadConfig;
@@ -1758,6 +1766,7 @@ export interface GameConfig {
   sim: SimConfig;
   car: CarConfig;
   input: InputConfig;
+  ghost: GhostConfig;
   render: RenderConfig;
   camera: CameraConfig;
 }
@@ -2207,6 +2216,8 @@ export const config: GameConfig = {
     reverse: { topSpeed: 8, accel: 6 },
   },
   input: { deadZone: 0.15 },
+  // The plan's values (docs/plan/M5-ghosts.md): a place ten times a second, and see-through at about 40%.
+  ghost: { every: 6, opacity: 0.4 },
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,

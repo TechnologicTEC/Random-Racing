@@ -1,5 +1,9 @@
-import type { GameConfig } from '../config';
+import type { GameConfig, PhysicsConfig } from '../config';
 import { createHasher, type Hasher } from '../core/hash';
+import type { WorldResult } from '../gen/types';
+import { packInput, unpackInput } from './input';
+import type { Rapier } from './physics/rapier';
+import { createSim, type Sim } from './sim';
 
 /**
  * A run on record (M5): everything a ghost needs. The inputs are the proof:
@@ -153,3 +157,73 @@ export function unpackRun(bytes: Uint8Array): RunRecord {
 }
 
 const hex = (value: number): string => value.toString(16).padStart(8, '0');
+
+/** What a record says about its run besides the run itself. */
+export type RecordMeta = Pick<RunRecord, 'seed' | 'generator' | 'driver' | 'every' | 'handling'>;
+
+/** A simulation that keeps a record of its run as it is driven. */
+export interface RecordingSim extends Sim {
+  /** The run so far: every step's input, the places, and the race and fingerprint as they are now. */
+  record(): RunRecord;
+}
+
+/**
+ * Wraps a simulation so that it records its run: each step's input, packed, and the car's place every `every` steps
+ * from the step it was wrapped on, read from the simulation's own state (never from the drawing). Wrap it before its
+ * first step, so a race is recorded from the first step of the countdown and its start replays.
+ */
+export function recordRun(sim: Sim, meta: RecordMeta): RecordingSim {
+  const inputs: number[] = [];
+  const places: number[] = [];
+  let wentBack = false;
+  const keepPlace = (): void => {
+    const { position: p, rotation: r } = sim.state();
+    places.push(p.x, p.y, p.z, r.x, r.y, r.z, r.w);
+  };
+  keepPlace();
+  return {
+    step(input) {
+      sim.step(input);
+      inputs.push(packInput(input));
+      if (inputs.length % meta.every === 0) keepPlace();
+    },
+    state: () => sim.state(),
+    hash: () => sim.hash(),
+    snapshot: () => sim.snapshot(),
+    restore(saved) {
+      // A run that went back to a saved moment is no longer one run from the start.
+      wentBack = true;
+      sim.restore(saved);
+    },
+    free: () => sim.free(),
+    record() {
+      if (wentBack) throw new Error('This run went back to a saved moment, so its inputs no longer replay it from the start');
+      const race = sim.state().race;
+      return {
+        format: RECORD_FORMAT,
+        ...meta,
+        inputs: Uint32Array.from(inputs),
+        places: Float32Array.from(places),
+        laps: race ? [...race.laps] : [],
+        splits: race ? [...race.splits] : [],
+        total: race ? race.total : 0,
+        hash: sim.hash(),
+      };
+    },
+  };
+}
+
+/**
+ * Runs a record's inputs in a fresh simulation of its island, with a race, and gives the fingerprint it ends on: the
+ * record's own `hash` exactly when the island, the handling and every input are the same as when it was driven.
+ */
+export function replayRun(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig, record: RunRecord): string {
+  if (world.seed !== record.seed) throw new Error(`This record is of seed ${record.seed}, not of seed ${world.seed}`);
+  const sim = createSim(rapier, world, cfg, { race: true });
+  try {
+    for (const packed of record.inputs) sim.step(unpackInput(packed));
+    return sim.hash();
+  } finally {
+    sim.free();
+  }
+}
