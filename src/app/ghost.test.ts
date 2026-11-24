@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { hashHandling, RECORD_FORMAT, type RunRecord } from '../sim/record';
-import { ghostPlace } from './ghost';
+import { chooseGhost, ghostPlace, ghostRow } from './ghost';
 
 const HALF = Math.SQRT1_2;
 /** A made-up record: three places, 6 steps apart, the car moving along x and turning a quarter round about up. */
@@ -54,5 +54,52 @@ describe('where the ghost is (ghostPlace)', () => {
     expect(ghostPlace(record, 400)).toBeNull();
     expect(ghostPlace(record, -1)).toBeNull();
     expect(ghostPlace({ ...madeUp(), places: new Float32Array(0) }, 0)).toBeNull();
+  });
+});
+
+describe('which ghost is drawn (chooseGhost: the bot until the player beats it, Tane at M5.0)', () => {
+  const today = hashHandling(config);
+  const run = (driver: 'player' | 'bot', total: number, handling = today): RunRecord => ({ ...madeUp(), driver, total, handling });
+
+  it("is the bot's while there is no ghost of the player's", () => {
+    const bot = run('bot', 9000);
+    expect(chooseGhost(null, bot, today)).toEqual({ record: bot, driver: 'bot', older: false });
+  });
+
+  it("is the player's once faster than the bot, and the bot's while it is not", () => {
+    const bot = run('bot', 9000);
+    const quicker = run('player', 8999.5);
+    expect(chooseGhost(quicker, bot, today)).toEqual({ record: quicker, driver: 'player', older: false });
+    expect(chooseGhost(run('player', 9000), bot, today)!.driver).toBe('bot');
+    expect(chooseGhost(run('player', 9500), bot, today)!.driver).toBe('bot');
+  });
+
+  it("is the player's with no bot's (not worked out yet, left out, or the bot did not finish)", () => {
+    const own = run('player', 9500);
+    expect(chooseGhost(own, null, today)).toEqual({ record: own, driver: 'player', older: false });
+  });
+
+  it("puts an older version's ghost of the player's behind the bot's, and draws it marked older only with no bot's", () => {
+    const old = run('player', 5000, 'deadbeef');
+    const bot = run('bot', 9000);
+    expect(chooseGhost(old, bot, today)!.driver).toBe('bot');
+    expect(chooseGhost(old, null, today)).toEqual({ record: old, driver: 'player', older: true });
+  });
+
+  it("never draws a bot's race of other handling, and gives none with nothing kept", () => {
+    expect(chooseGhost(null, run('bot', 9000, 'deadbeef'), today)).toBeNull();
+    expect(chooseGhost(null, null, today)).toBeNull();
+  });
+});
+
+describe("the race card's ghost row (ghostRow)", () => {
+  it('names whose ghost it is, says when it is from an older version, and when it is hidden', () => {
+    const bot = { record: { ...madeUp(), driver: 'bot' as const }, driver: 'bot' as const, older: false };
+    const own = { record: madeUp(), driver: 'player' as const, older: false };
+    expect(ghostRow(null, true)).toBeNull();
+    expect(ghostRow(bot, true)).toEqual({ label: "Bot's ghost" });
+    expect(ghostRow(own, true)).toEqual({ label: 'Your ghost' });
+    expect(ghostRow({ ...own, older: true }, true)).toEqual({ label: 'Your ghost · older version' });
+    expect(ghostRow(bot, false)).toEqual({ label: 'Ghost hidden (G)' });
   });
 });

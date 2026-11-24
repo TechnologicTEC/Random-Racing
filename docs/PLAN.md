@@ -86,7 +86,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M5.3** The ghost drawn:
   - [x] **M5.3** The ghost drawn from its record, by step (2026-11-24)
   - [x] **M5.3b-1** The bot moved into the game; its race worked out in its own worker (2026-11-24)
-  - [ ] **M5.3b-2** The bot's ghost on the page (Tane, M5.0): kept, chosen, G and X show or hide the ghost
+  - [x] **M5.3b-2** The bot's ghost on the page (Tane, M5.0): kept, chosen, G and X show or hide the ghost (2026-11-24)
 - **M5.4** Personal bests:
   - [ ] **M5.4a** Personal bests saved; the results' line
   - [ ] **M5.4b** The split against the ghost; the older-version ghost

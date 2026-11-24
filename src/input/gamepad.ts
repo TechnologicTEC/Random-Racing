@@ -7,6 +7,7 @@ const LEFT_TRIGGER = 6;
 const RIGHT_BUMPER = 5;
 const BACK = 8;
 const Y = 3;
+const X = 2;
 const START = 9;
 const LEFT_STICK_ACROSS = 0;
 
@@ -49,9 +50,9 @@ export function padMenu(axes: readonly number[], buttons: readonly number[]): { 
   };
 }
 
-/** The controller's buttons that are for the page, not the car: Y changes the camera, Start pauses. */
-export function padPresses(buttons: readonly number[]): { camera: boolean; pause: boolean } {
-  return { camera: (buttons[Y] ?? 0) > 0.5, pause: (buttons[START] ?? 0) > 0.5 };
+/** The controller's buttons that are for the page, not the car: Y changes the camera, Start pauses, X shows or hides the ghost (M5.3b). */
+export function padPresses(buttons: readonly number[]): { camera: boolean; pause: boolean; ghost: boolean } {
+  return { camera: (buttons[Y] ?? 0) > 0.5, pause: (buttons[START] ?? 0) > 0.5, ghost: (buttons[X] ?? 0) > 0.5 };
 }
 
 /**

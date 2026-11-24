@@ -31,3 +31,35 @@ export function ghostPlace(record: RunRecord, moment: number): Place | null {
   const t = at - k;
   return t === 0 ? placeOf(record, k) : blendPlace(placeOf(record, k), placeOf(record, k + 1), t);
 }
+
+/** The ghost drawn in a race: whose run it is, and whether it is from an older version of the handling. */
+export interface ChosenGhost {
+  record: RunRecord;
+  driver: 'player' | 'bot';
+  /** Driven with other handling (`hashHandling`): drawn, but not the time to beat. */
+  older: boolean;
+}
+
+/**
+ * Which ghost a race is run against (Tane, M5.0: the bot until the player beats it). The player's own, if it was
+ * driven with today's handling and is faster in total than the bot's; otherwise the bot's; otherwise the player's own
+ * from an older version, marked so. A bot's race of other handling is never drawn: it is worked out again.
+ *
+ * @param today the handling's fingerprint now (`hashHandling(config)`)
+ */
+export function chooseGhost(own: RunRecord | null, bot: RunRecord | null, today: string): ChosenGhost | null {
+  const botNow = bot && bot.handling === today ? bot : null;
+  const ownNow = own && own.handling === today ? own : null;
+  if (ownNow && (!botNow || ownNow.total < botNow.total)) return { record: ownNow, driver: 'player', older: false };
+  if (botNow) return { record: botNow, driver: 'bot', older: false };
+  if (own) return { record: own, driver: 'player', older: true };
+  return null;
+}
+
+/** The race card's row for the ghost: whose it is, or that it is hidden; none without a ghost. M5.4b adds the gap to it. */
+export function ghostRow(chosen: ChosenGhost | null, shown: boolean): { label: string } | null {
+  if (!chosen) return null;
+  if (!shown) return { label: 'Ghost hidden (G)' };
+  if (chosen.driver === 'bot') return { label: "Bot's ghost" };
+  return { label: chosen.older ? 'Your ghost · older version' : 'Your ghost' };
+}

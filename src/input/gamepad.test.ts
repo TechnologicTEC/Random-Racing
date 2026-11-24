@@ -76,8 +76,10 @@ describe('padMenu (M4.4)', () => {
 
 describe('padPresses', () => {
   it('gives Y for the camera and Start for pause, which are for the page', () => {
-    expect(padPresses(buttons({ 3: 1 }))).toEqual({ camera: true, pause: false });
-    expect(padPresses(buttons({ 9: 1 }))).toEqual({ camera: false, pause: true });
-    expect(padPresses(buttons())).toEqual({ camera: false, pause: false });
+    expect(padPresses(buttons({ 3: 1 }))).toEqual({ camera: true, pause: false, ghost: false });
+    expect(padPresses(buttons({ 9: 1 }))).toEqual({ camera: false, pause: true, ghost: false });
+    expect(padPresses(buttons())).toEqual({ camera: false, pause: false, ghost: false });
+    // X shows or hides the ghost in a race (Tane, M5.0).
+    expect(padPresses(buttons({ 2: 1 }))).toEqual({ camera: false, pause: false, ghost: true });
   });
 });

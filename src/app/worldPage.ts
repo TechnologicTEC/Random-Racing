@@ -26,10 +26,11 @@ import { raceSteps } from '../sim/race';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { checkpointCount } from '../sim/track/progress';
+import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
-import { ghostPlace } from './ghost';
+import { chooseGhost, ghostPlace, ghostRow, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
 import { ghostKey, openStore, type Favourite, type Store } from './store';
@@ -79,6 +80,10 @@ export interface GhostHandle {
   status(): GhostStatus;
   /** Where the ghost was last drawn, or null when it is not drawn. */
   shown(): Place | null;
+  /** Whose ghost is drawn in a race (M5.3b): the player's, the bot's, or none. */
+  driver(): 'player' | 'bot' | null;
+  /** Whether the ghost is shown (G and X hide it and show it again). */
+  visible(): boolean;
 }
 
 export type GhostStatus = 'loading' | 'none' | 'current' | 'older';
@@ -149,6 +154,7 @@ const TEMPLATE = `
       <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
       <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
       <div class="world-race-rows" data-ref="raceRows"></div>
+      <p class="world-race-row world-race-ghost" data-ref="raceGhost" data-testid="race-ghost" hidden></p>
     </div>
     <div class="world-card world-menu" data-ref="menu" data-testid="menu" hidden>
       <h2 data-ref="menuHeading" data-testid="menu-heading"></h2>
@@ -171,6 +177,8 @@ const QUALITY_KEY = 'seedCircuit.quality';
 
 /** The keys for driving, said on the corner card in a race and in free driving. */
 const DRIVING_HINT = 'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R goes back to the last checkpoint.';
+/** Whether the ghost is shown or hidden, remembered between visits (M5.3b). */
+const GHOST_SHOWN_KEY = 'seedCircuit.ghostShown';
 /** On a menu card: the keys and the controller's buttons for it. */
 const MENU_HINT = 'Up and down choose, Enter picks, Esc goes back; on a controller the D-pad or stick, A and B. L opens the lab.';
 
@@ -324,10 +332,32 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let sim: Sim | null = null;
   /** What the readout last saw of the slides' ends (step 10a). */
   let cancelSeen: CancelSeen | null = null;
-  /** The ghost of the island shown, read from the store when it comes in (M5.3), and where it was last drawn. */
-  let ghost: { record: RunRecord; status: 'current' | 'older' } | null = null;
+  /**
+   * The ghosts of the island shown (M5.3, M5.3b): the player's and the bot's, read from the store when it comes in, the
+   * bot's worked out in its worker if it is not kept; the one a race is run against (`chooseGhost`); where it was last
+   * drawn; and whether it is shown (G and X). `bot=off` leaves the bot's out (for tests).
+   */
+  let ownGhost: RunRecord | null = null;
+  let botGhost: RunRecord | null = null;
+  let ghost: ChosenGhost | null = null;
   let ghostStatus: GhostStatus = 'loading';
   let ghostShown: Place | null = null;
+  const botWanted = params.get('bot') !== 'off';
+  /** The island whose ghosts have been read from the store, and the one the bot's race has been asked for. */
+  let ghostsReadFor: WorldResult | null = null;
+  let botAskedFor: WorldResult | null = null;
+  let botPending = false;
+  let botRaces = 0;
+  document.body.dataset.botRaces = '0';
+  document.body.dataset.botGhost = botWanted ? 'idle' : 'off';
+  let ghostVisible = ((): boolean => {
+    try {
+      return window.localStorage.getItem(GHOST_SHOWN_KEY) !== 'hidden';
+    } catch {
+      return true;
+    }
+  })();
+  document.body.dataset.ghostVisible = String(ghostVisible);
   /** The kart at rest on the start line, whose wheels the ghost is drawn with. */
   let restingKart: KartPose | null = null;
   /**
@@ -375,6 +405,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const card = ref('race');
     card.hidden = race === null;
     if (!race) return;
+    // Whose ghost the race is run against, or that it is hidden (M5.3b).
+    const row = ghostRow(ghost, ghostVisible);
+    const ghostLine = ref('raceGhost');
+    ghostLine.hidden = row === null;
+    if (row && ghostLine.textContent !== row.label) ghostLine.textContent = row.label;
     const view = raceCard(race, tuned.sim.race, sps);
     if (ref('raceLap').textContent !== view.lap) ref('raceLap').textContent = view.lap;
     if (ref('raceTime').textContent !== view.time) ref('raceTime').textContent = view.time;
@@ -390,7 +425,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     view.setCar(state ? kartPose(state, tuned) : null);
     // The ghost, in a race in the driving view: at the moment the car is drawn, by step (M5.3).
     const moment = driving.moment();
-    ghostShown = state?.race && mode === 'chase' && ghost && moment !== null ? ghostPlace(ghost.record, moment) : null;
+    ghostShown = state?.race && mode === 'chase' && ghost && ghostVisible && moment !== null ? ghostPlace(ghost.record, moment) : null;
     view.setGhost(ghostShown && restingKart ? ghostPose(ghostShown, restingKart) : null, config.ghost.opacity);
     document.body.dataset.ghostShown = String(ghostShown !== null);
     // Speed lines while a boost runs, in the driving view only.
@@ -502,7 +537,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // In a race, on the title and on the cards the camera is chosen for the player (M4.4).
     ref('toggle').hidden = !cameraFree(screen);
     ref('new').hidden = move(screen, 'newTrack') === null;
-    ref('hint').textContent = menuFor(screen).length > 0 ? MENU_HINT : screen.name === 'race' ? `${DRIVING_HINT} Esc pauses.` : HINTS[mode];
+    ref('hint').textContent = menuFor(screen).length > 0 ? MENU_HINT : screen.name === 'race' ? `${DRIVING_HINT} G shows or hides the ghost. Esc pauses.` : HINTS[mode];
     ref('quality').textContent = `Quality: ${quality === 'high' ? 'High' : 'Low'}`;
     ref('dash').hidden = mode !== 'chase';
     // The chase camera sees a wider view than the others.
@@ -598,6 +633,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const pressed = devices.presses();
     if (pressed.camera && cameraFree(screen)) setMode(nextCamera(mode));
     if (pressed.pause) act(screen.name === 'paused' ? 'resume' : 'pause');
+    if (pressed.ghost && screen.name === 'race') toggleGhost();
     const menu = menuFor(screen);
     if (menu.length > 0 && (pressed.up || pressed.down)) setChoice(choiceAfter(choice, menu.length, pressed.up ? -1 : 1));
     if (menu.length > 0 && pressed.confirm) act(menu[choice]!.move);
@@ -709,25 +745,86 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     return { targetX: x, targetY: height + 8, targetZ: z, angle: -towardsSun, tilt: 0.08, distance: 60 };
   };
 
-  /** Reads the ghost of an island that has just come in from the store, unless another island has been asked for meanwhile. */
+  /** Picks the ghost a race is run against from those read and worked out (`chooseGhost`), and says which on the page. */
+  const pickGhost = (): void => {
+    ghost = chooseGhost(ownGhost, botWanted ? botGhost : null, hashHandling(config));
+    ghostStatus = ghost ? (ghost.older ? 'older' : 'current') : 'none';
+    document.body.dataset.ghost = ghostStatus;
+    document.body.dataset.ghostDriver = ghost?.driver ?? '';
+  };
+  /** A ghost's bytes read as a record of this island, or null for none, or for bytes that are not one. */
+  const recordOf = (bytes: Uint8Array | null, world: WorldResult): RunRecord | null => {
+    if (!bytes) return null;
+    try {
+      const record = unpackRun(bytes);
+      return record.seed === world.seed && record.generator === world.generatorVersion ? record : null;
+    } catch {
+      return null;
+    }
+  };
+  /**
+   * Reads the ghosts of an island that has just come in from the store, unless another island has been asked for
+   * meanwhile; then asks for the bot's race if the page is on the title or racing and it was not kept.
+   */
   const loadGhost = async (world: WorldResult): Promise<void> => {
     const store = await storeReady;
-    const bytes = await store.getGhost(ghostKey(world.seed, world.generatorVersion, 'player'));
+    const [own, bot] = await Promise.all([
+      store.getGhost(ghostKey(world.seed, world.generatorVersion, 'player')),
+      botWanted ? store.getGhost(ghostKey(world.seed, world.generatorVersion, 'bot')) : Promise.resolve(null),
+    ]);
     if (shown !== world) return;
-    let record: RunRecord | null = null;
-    try {
-      record = bytes && unpackRun(bytes);
-    } catch {
-      // Bytes that are not a record of this format are no ghost.
-      record = null;
-    }
-    ghost = record && record.seed === world.seed && record.generator === world.generatorVersion
-      ? { record, status: record.handling === hashHandling(config) ? 'current' : 'older' }
-      : null;
-    ghostStatus = ghost ? ghost.status : 'none';
-    document.body.dataset.ghost = ghostStatus;
+    ownGhost = recordOf(own, world);
+    const keptBot = recordOf(bot, world);
+    // A bot race of other handling is no use: it is worked out again.
+    botGhost = keptBot && keptBot.handling === hashHandling(config) ? keptBot : null;
+    if (botWanted) document.body.dataset.botGhost = botGhost ? 'ready' : 'idle';
+    ghostsReadFor = world;
+    pickGhost();
+    if (screen.name === 'title' || screen.name === 'race') askBot(world);
     // Drawn again only if there is a ghost to draw: a picture held still must not change for nothing (`frame times`).
     if (ghost) drawCar();
+  };
+  /**
+   * The bot race of the island shown, worked out in the bot worker (M5.3b) unless it is kept, left out or already
+   * asked for, and kept once it comes. Asked for on the title and in a race only, so free driving and the views for
+   * pictures never spend the computer's time on it.
+   */
+  const askBot = (world: WorldResult): void => {
+    if (!botWanted || botGhost || ghostsReadFor !== world || botAskedFor === world) return;
+    botAskedFor = world;
+    botPending = true;
+    botRaces++;
+    document.body.dataset.botRaces = String(botRaces);
+    document.body.dataset.botGhost = 'working';
+    botClient()
+      .race(world.seed, config)
+      .then(async ({ bytes }) => {
+        if (botAskedFor !== world) return;
+        botPending = false;
+        botGhost = recordOf(bytes, world);
+        if (bytes && botGhost) await (await storeReady).putGhost(ghostKey(world.seed, world.generatorVersion, 'bot'), bytes);
+        if (botAskedFor !== world) return;
+        document.body.dataset.botGhost = botGhost ? 'ready' : 'none';
+        pickGhost();
+        drawCar();
+      })
+      .catch(() => {
+        // Stopped for another island, or the worker failed: no bot ghost this time.
+        if (botAskedFor !== world) return;
+        botPending = false;
+        document.body.dataset.botGhost = 'failed';
+      });
+  };
+  /** Shows or hides the ghost (G, or X on a controller), and remembers it. */
+  const toggleGhost = (): void => {
+    ghostVisible = !ghostVisible;
+    document.body.dataset.ghostVisible = String(ghostVisible);
+    try {
+      window.localStorage.setItem(GHOST_SHOWN_KEY, ghostVisible ? 'shown' : 'hidden');
+    } catch {
+      // Without storage the choice lasts until the page is closed.
+    }
+    drawCar();
   };
 
   /** The seed last asked for. Its world may still be on its way from the worker. */
@@ -740,9 +837,15 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     worldBuilds++;
     document.body.dataset.worldBuilds = String(worldBuilds);
     dropSim();
-    ghost = null;
+    ownGhost = botGhost = ghost = null;
+    ghostsReadFor = null;
     ghostStatus = 'loading';
     document.body.dataset.ghost = ghostStatus;
+    // The bot race of the island before is no longer wanted.
+    if (botPending) botClient().cancel();
+    botPending = false;
+    botAskedFor = null;
+    if (botWanted) document.body.dataset.botGhost = 'idle';
     loading.hidden = false;
     ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
@@ -889,7 +992,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       }
       return;
     }
-    if (key === ' ' && mode === 'fly') setPlaying(!playing);
+    if (key === 'g' && screen.name === 'race') toggleGhost();
+    else if (key === ' ' && mode === 'fly') setPlaying(!playing);
     else if (key === 'c') {
       if (cameraFree(screen)) setMode(nextCamera(mode));
     } else if (key === 'n') act('newTrack');
@@ -989,6 +1093,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (m === 'start' || m === 'freeDrive' || m === 'restart') {
       // A new simulation of the same island, a race on the race's screen, and the camera behind the car.
       if (shown && rapier) startSim(shown, rapier);
+      if (screen.name === 'race' && shown) askBot(shown);
       setMode('chase');
       driving.snap();
     } else if (m === 'pause') {
@@ -1093,6 +1198,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     ghost: {
       status: () => ghostStatus,
       shown: () => ghostShown && { position: { ...ghostShown.position }, rotation: { ...ghostShown.rotation } },
+      driver: () => ghost?.driver ?? null,
+      visible: () => ghostVisible,
     },
   };
 }
