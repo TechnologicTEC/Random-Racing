@@ -8,7 +8,7 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** 4, Time trial ([issue #4](https://github.com/TechnologicTEC/Random-Racing/issues/4)), on branch `milestone-4-time-trial` from `main`. Planned in plan mode and approved by Tane on 2026-11-23. Milestones 1 to 3 are merged and signed off (PR #7, #9, #10)
 - **Branch:** `milestone-4-time-trial`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one pull request per milestone, merged after Tane signs off
-- **Last finished part:** M4.6's test and docs (2026-11-24): the whole race from the title in the browser tests, its results equal to Node's to the millisecond in Chromium and Firefox; README and CLAUDE.md brought up to Milestone 4; the pull request opened
+- **Last finished part:** M4.6's test and docs (2026-11-24): the whole race from the title in the browser tests, its results equal to Node's to the millisecond in Chromium and Firefox; README and CLAUDE.md brought up to Milestone 4; the pull request opened ([PR #11](https://github.com/TechnologicTEC/Random-Racing/pull/11))
 - **Next:** **Tane's sign-off** of Milestone 4 (play a few races from the title; Claude's calls of M4.2a to M4.5 for Tane to judge are listed under "Milestone 4"), then merge the pull request and delete the branch. Then Milestone 5 (`docs/PLAN.md`), planned in plan mode first
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
