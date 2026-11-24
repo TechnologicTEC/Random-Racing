@@ -8,8 +8,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 - **Current milestone:** **Milestone 5, Ghosts and favourites** ([issue #5](https://github.com/TechnologicTEC/Random-Racing/issues/5)), planned and approved 2026-11-24 (below). Milestones 1 to 4 are merged and signed off (PR #7, #9, #10, #11)
 - **Branch:** `milestone-5-ghosts`. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
-- **Last finished part:** M5.0, the plan approved (2026-11-24)
-- **Next:** **M5.1a**, the run record packed and unpacked (`src/sim/record.ts`; below, and `docs/plan/M5-ghosts.md`)
+- **Last finished part:** M5.1a, the run record packed and unpacked (2026-11-24)
+- **Next:** **M5.1b**, recording a run and replaying it (`recordRun`, `replayRun`; below, and `docs/plan/M5-ghosts.md`)
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 5: ghosts and favourites (2026-11-24)
@@ -26,7 +26,7 @@ Planned in plan mode and approved by Tane on 2026-11-24 (plan file: `C:\Users\ta
 | Part | What | Status |
 | --- | --- | --- |
 | M5.0 | Plan approved; this section; the build order split into parts | Done |
-| M5.1a | The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun` | |
+| M5.1a | The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun` | **Done** (below) |
 | M5.1b | Recording a run and replaying it (`recordRun`, `replayRun`); the same fingerprint in Node, Chromium and Firefox | |
 | M5.2 | Storage: IndexedDB for ghosts, `localStorage` for favourites, memory when refused | |
 | M5.3 | The ghost drawn, see-through, by step | |
@@ -37,6 +37,8 @@ Planned in plan mode and approved by Tane on 2026-11-24 (plan file: `C:\Users\ta
 | M5.5a | The favourites screen and the star, pure (`screens.ts`, `favourites.ts`) | |
 | M5.5b | Favourites on the page: the star, the Favourites card, the v0 note | |
 | M5.6 | The reload test in Chromium and Firefox; README, CLAUDE.md, this file; the pull request; **Tane's sign-off**; merge | |
+
+**M5.1a, done 2026-11-24.** `src/sim/record.ts`, pure: `RunRecord` (format, seed, generator version, driver (player or bot), `every`, the handling fingerprint, `inputs` as a `Uint32Array`, `places` as a `Float32Array` of seven numbers a place, laps, splits, total, the last fingerprint); `hashHandling(cfg)`: every number of `config.car` and `config.sim` with its dotted path, keys sorted, through `createHasher`; `packRun` / `unpackRun`: a 44-byte header ("SCGH", the format, driver, `every`, seed, generator, both fingerprints, the counts, the total), then laps and splits as float64, the inputs as uint32 and the places as float32, little-endian with a `DataView`; `unpackRun` refuses bytes too short, without the magic word, of another format or of the wrong length, saying why. 9 tests in `record.test.ts`: the same record and the same bytes back; the bot's driver and a record with no laps; the header at most 48 bytes; bad bytes refused; each of the car's and the simulation's numbers changed in turn changes the fingerprint, no drawing or camera number does, nor the order of the keys. 2,672 unit tests pass; type check clean; nothing on the page uses it yet, so the browser suite was not run.
 
 **Claude's calls in the plan, for Tane to judge (the check-in):** the ghost is drawn only during a race, from the first light, and goes when its record ends; it keeps the kart's colours at 40% opacity (`config.ghost`, outside `car` and `sim`, so not in the handling fingerprint); ghosts are kept by share code (`v0-7`), so one from another generator version is never found; a race that beats an older-version ghost replaces it whatever its time; the bot's ghost is M4.2c's grip-only bot (the sliding bot touches walls on some seeds), and a seed whose bot does not finish has none; an older-version ghost of your own is drawn only when there is no bot's (the plan file said "still drawn"); the toggle does not hide the split; G was free in a race, and X is the one controller face button not yet used; the bot's race is worked out in the worker, never on the page's thread; picking a favourite races at once.
 

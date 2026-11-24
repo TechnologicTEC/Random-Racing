@@ -80,7 +80,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 - [x] **M5.0** Plan approved (2026-11-24; Tane's answers and the parts in STATE.md, "Milestone 5")
 - **M5.1** The run record and its replay:
-  - [ ] **M5.1a** The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun`
+  - [x] **M5.1a** The run record, pure: `RunRecord`, `hashHandling`, `packRun` / `unpackRun` (2026-11-24)
   - [ ] **M5.1b** Recording a run and replaying it; one fingerprint in Node, Chromium and Firefox
 - [ ] **M5.2** Storage
 - **M5.3** The ghost drawn:
