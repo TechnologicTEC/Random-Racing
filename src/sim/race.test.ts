@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
-import { crossingShare, raceSteps, startRace, stepRace, type RaceAsk, type RaceState, type RaceTrack } from './race';
+import { crossingShare, launching, raceSteps, startRace, stepRace, type RaceAsk, type RaceState, type RaceTrack } from './race';
 
 const steps = raceSteps(config.sim.race, config.sim.stepsPerSecond);
 /** A made-up lap: 1000 m with 10 checkpoints, one every 100 m. */
@@ -43,9 +43,31 @@ function drive(state: RaceState, from: number, speed: number, count: number, mis
   return state;
 }
 
+describe('launching (Tane at the sign-off: the start boost did almost nothing)', () => {
+  const boosted = (state: RaceState): RaceState => ({ ...state, startBoost: true });
+
+  it('counts the launch in steps: 1 s is 60', () => {
+    expect(steps.launch).toBe(config.sim.race.launch.time * config.sim.stepsPerSecond);
+    expect(steps.launch).toBe(60);
+  });
+
+  it('pushes for the launch from "go" through its last step, only after a boosted start', () => {
+    const go = atGo();
+    expect(launching(boosted(go), steps)).toBe(true);
+    expect(launching(boosted({ ...go, clock: steps.launch - 1 }), steps)).toBe(true);
+    expect(launching(boosted({ ...go, clock: steps.launch }), steps)).toBe(false);
+    expect(launching(go, steps)).toBe(false);
+  });
+
+  it('never pushes in the countdown or once finished', () => {
+    expect(launching(boosted(startRace(steps)), steps)).toBe(false);
+    expect(launching(boosted({ ...atGo(), phase: 'finished' }), steps)).toBe(false);
+  });
+});
+
 describe('raceSteps', () => {
-  it('turns the race times into whole steps: a 3 s countdown, the last 0.25 s for the start boost, 2 s finished', () => {
-    expect(steps).toEqual({ countdown: 180, startBoostWindow: 15, finishedFor: 120 });
+  it('turns the race times into whole steps: a 3 s countdown, the last 0.25 s for the start boost, 2 s finished, a 1 s launch', () => {
+    expect(steps).toEqual({ countdown: 180, startBoostWindow: 15, finishedFor: 120, launch: 60 });
   });
 });
 

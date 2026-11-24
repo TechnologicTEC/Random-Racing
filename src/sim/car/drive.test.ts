@@ -186,5 +186,11 @@ describe('speedChange', () => {
       expect(speedChange(30, FLAT, throttle(), 0.5, boostTop, true, car, dt)).toBeCloseTo((boostAccel * dt) / 2, 12);
       expect(speedChange(30, FLAT, throttle(), 0, boostTop, true, car, dt)).toBe(0);
     });
+
+    it('pushes at another rate when given one (the race start launch), still held to the top speed and still braking', () => {
+      expect(speedChange(0, FLAT, throttle(), 1, TOP, true, car, dt, 20)).toBeCloseTo(20 * dt, 12);
+      expect(speedChange(TOP - 0.1, FLAT, throttle(), 1, TOP, true, car, dt, 20)).toBeCloseTo(0.1, 12);
+      expect(speedChange(10, FLAT, brake(), 1, TOP, true, car, dt, 20)).toBeCloseTo(-strength * dt, 12);
+    });
   });
 });

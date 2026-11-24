@@ -9,7 +9,7 @@ import { NEUTRAL_INPUT, packInput, unpackInput, type InputRecord } from './input
 import { createCarPhysics, type BodyMotion, type Touch } from './physics/carBody';
 import type { Rapier } from './physics/rapier';
 import { rotate } from './quat';
-import { raceSteps, startRace, stepRace, type RacePhase, type RaceState } from './race';
+import { launching, raceSteps, startRace, stepRace, type RacePhase, type RaceState } from './race';
 import { NO_RESPAWN, RESPAWN_REASONS, respawnSteps, watchCar, type RespawnState } from './respawn';
 import { checkpointPose, startPose, type Pose } from './start';
 import { checkpointAt, checkpointCount, startProgress, stepProgress, type ProgressState } from './track/progress';
@@ -167,7 +167,9 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       // While waiting, and on the step the car is put back, nothing the driver presses acts.
       const driven = waiting || placing || held ? NEUTRAL_INPUT : next;
       // The car's own pushes first, from where it is now; then the physics moves everything on.
-      car.step(driven, touch);
+      // A boosted start's launch, for its first second from "go" (Tane at the sign-off).
+      const launch = race && launching(race, raceTimes) ? cfg.sim.race.launch.accel : null;
+      car.step(driven, touch, launch);
       physics.step();
       // What the body is against now: the car's next step reads it (a hit cancels a drift; a wall turns and pushes the car).
       touch = physics.touching();

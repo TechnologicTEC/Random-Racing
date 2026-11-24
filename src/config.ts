@@ -1458,6 +1458,11 @@ export interface RaceConfig {
   finishedFor: number;
   /** The throttle counts as pressed at this much or more, from 0 to 1, so a trigger resting slightly down does not jump the start. */
   pressed: number;
+  /**
+   * A boosted start's launch: from "go" the engine pushes at `accel` m/s² for `time` seconds, with no easing, as a boost
+   * does (the tier 1 boost's flame shows with it). Decided by the race's steps, so a ghost replays it.
+   */
+  launch: { accel: number; time: number };
 }
 
 /**
@@ -2137,7 +2142,9 @@ export const config: GameConfig = {
     // The plan's values (docs/plan/M3-driving.md, step 8): the brief's "after about 1 second".
     respawn: { delay: 1, waterDepth: 0.5, edge: 20, deep: 30, flipped: { roofUp: 0.3, time: 1 }, stuck: { speed: 0.5, time: 3 } },
     // The plan's values (docs/plan/M4-time-trial.md, M4.2); the throttle at half or more is Claude's call (STATE.md).
-    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 3, finishedFor: 2, pressed: 0.5 },
+    // launch (Tane at the sign-off, from four measured options): the tier 1 boost alone gained 5 km/h and 0.13 s on lap 1,
+    // which nobody could feel; 20 m/s2 for 1 s gives 71 km/h one second after "go" against 33, lap 1 about 0.9 s quicker.
+    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 3, finishedFor: 2, pressed: 0.5, launch: { accel: 20, time: 1 } },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },

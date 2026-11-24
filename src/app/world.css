@@ -317,10 +317,26 @@ body,
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
   padding: 10px 14px;
   pointer-events: none;
+}
+
+.world-light-row {
+  display: flex;
+  gap: 10px;
+}
+
+/* How the start went, under the green lights (Tane at the sign-off): the accent for a boost, plain text for too early. */
+.world-start-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.world-start-note[hidden] {
+  display: none;
 }
 
 .world-lights[hidden] {

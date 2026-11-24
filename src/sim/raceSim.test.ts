@@ -107,6 +107,29 @@ describe('a simulation with a race', () => {
     late.free();
   });
 
+  it('launches a boosted start at its own push for its first second, then the engine takes over', () => {
+    // Tane at the sign-off: the tier 1 boost alone was worth about 5 km/h, which nobody could feel.
+    const early = createSim(rapier, world, config, { race: true });
+    const late = createSim(rapier, world, config, { race: true });
+    run(early, THROTTLE, steps.countdown);
+    run(late, NEUTRAL_INPUT, 170);
+    run(late, THROTTLE, steps.countdown - 170);
+    const { accel: launch } = config.sim.race.launch;
+    const { accel } = config.car.engine;
+    // One second on, the boosted start has gained about (launch - accel) m/s on the plain one.
+    run(early, THROTTLE, steps.launch);
+    run(late, THROTTLE, steps.launch);
+    const gained = late.state().speed - early.state().speed;
+    expect(gained).toBeGreaterThan((launch - accel) * config.sim.race.launch.time - 1);
+    expect(gained).toBeLessThan((launch - accel) * config.sim.race.launch.time + 1);
+    // Then both push at the engine's rate, so the gain stays as it was.
+    run(early, THROTTLE, 30);
+    run(late, THROTTLE, 30);
+    expect(late.state().speed - early.state().speed).toBeCloseTo(gained, 0);
+    early.free();
+    late.free();
+  });
+
   it('starts lap 1 at "go" and crosses the line a few metres later', () => {
     const sim = createSim(rapier, world, config, { race: true });
     run(sim, THROTTLE, steps.countdown + 120);

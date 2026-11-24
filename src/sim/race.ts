@@ -62,12 +62,23 @@ export interface RaceSteps {
   countdown: number;
   startBoostWindow: number;
   finishedFor: number;
+  /** A boosted start's launch, from "go". */
+  launch: number;
 }
 
 /** Turns the race's times into whole steps, once (`Math.round`), so nothing ever adds up fractions of a second. */
 export function raceSteps(cfg: RaceConfig, stepsPerSecond: number): RaceSteps {
   const steps = (seconds: number): number => Math.round(seconds * stepsPerSecond);
-  return { countdown: steps(cfg.countdown), startBoostWindow: steps(cfg.startBoostWindow), finishedFor: steps(cfg.finishedFor) };
+  return { countdown: steps(cfg.countdown), startBoostWindow: steps(cfg.startBoostWindow), finishedFor: steps(cfg.finishedFor), launch: steps(cfg.launch.time) };
+}
+
+/**
+ * Whether a boosted start's launch pushes the car on the step about to be taken: from "go" (the clock at 0) for
+ * `steps.launch` steps, only after a start that earned the boost. Worked out from the race alone, so it is in the
+ * fingerprint and a replay gives the same launch.
+ */
+export function launching(race: RaceState, steps: RaceSteps): boolean {
+  return race.phase === 'racing' && race.startBoost && race.clock < steps.launch;
 }
 
 /** A race at the start of its countdown. */

@@ -33,6 +33,30 @@ test('races at once for mode=race, and drives with no clock for mode=free', asyn
   expect((await page.evaluate(() => window.seedCircuit.drive!.state()))!.race).toBeNull();
 });
 
+test('says how the start went under the green lights, and a boosted start launches (Tane at the sign-off)', async ({ page, browserName }) => {
+  await openRace(page, 'seed=7&still=1&mode=race');
+  const note = page.getByTestId('race-start-note');
+  // The throttle first pressed in the last quarter second: a boost, and 20 m/s2 for the first second.
+  await page.evaluate((steps) => window.seedCircuit.drive!.run(steps), COUNTDOWN - 5);
+  await expect(note).toBeHidden();
+  await page.evaluate(() => window.seedCircuit.drive!.run(5, { throttle: 1 }));
+  await expect(note).toBeVisible();
+  await expect(note).toHaveText('Boost start!');
+  if (browserName === 'chromium') await page.screenshot({ path: 'test-results/screens/race-00007-boost-start.png' });
+  const launched = await page.evaluate((steps) => window.seedCircuit.drive!.run(steps, { throttle: 1 }), SPS * config.sim.race.launch.time);
+  expect(launched.speed).toBeGreaterThan(0.9 * config.sim.race.launch.accel * config.sim.race.launch.time);
+  // Gone with the lights.
+  await page.evaluate((steps) => window.seedCircuit.drive!.run(steps, { throttle: 1 }), SPS * 2);
+  await expect(page.getByTestId('race-lights')).toBeHidden();
+
+  // Pressed from the first light: too early, and no launch.
+  await page.evaluate(() => window.seedCircuit.drive!.reset());
+  await page.evaluate((steps) => window.seedCircuit.drive!.run(steps, { throttle: 1 }), COUNTDOWN);
+  await expect(note).toHaveText('Too early');
+  const plain = await page.evaluate((steps) => window.seedCircuit.drive!.run(steps, { throttle: 1 }), SPS * config.sim.race.launch.time);
+  expect(plain.speed).toBeLessThan(config.car.engine.accel * config.sim.race.launch.time + 1);
+});
+
 test("shows the countdown, the laps and the finish of the bot's race on seed 7, with the simulation's times", async ({ page, browserName }) => {
   test.setTimeout(300_000);
   const rapier = await loadRapier();

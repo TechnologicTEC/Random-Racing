@@ -57,6 +57,17 @@ export function countdownLights(race: RaceState | null, times: RaceSteps, stepsP
   return opacity > 0 ? { shown: true, lit: 3, green: true, opacity } : HIDDEN;
 }
 
+/**
+ * What the lights card says under the green lights about the start (Tane at the sign-off: nothing showed whether the
+ * boost was earned): "Boost start!", "Too early" for a throttle first pressed before the boost's last quarter second,
+ * and nothing in the countdown or when the throttle was never pressed. It fades with the lights.
+ */
+export function startNote(race: RaceState): string {
+  if (race.phase !== 'racing') return '';
+  if (race.startBoost) return 'Boost start!';
+  return race.pressedOn > 0 ? 'Too early' : '';
+}
+
 /** One sector's time on the card, and its gap to the best time of that sector on the laps before (none on lap 1). */
 export interface SectorRow {
   time: string;

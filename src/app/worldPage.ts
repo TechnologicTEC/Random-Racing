@@ -28,7 +28,7 @@ import { checkpointCount } from '../sim/track/progress';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen } from './drive';
 import { createDriving } from './driving';
-import { countdownLights, raceCard, type RaceCard } from './raceCard';
+import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
@@ -111,7 +111,8 @@ const TEMPLATE = `
       <p class="world-cancel" data-ref="cancel" data-testid="world-cancel" hidden></p>
     </div>
     <div class="world-card world-lights" data-ref="lights" data-testid="race-lights" aria-hidden="true" hidden>
-      <span class="world-light" data-ref="light1"></span><span class="world-light" data-ref="light2"></span><span class="world-light" data-ref="light3"></span>
+      <div class="world-light-row"><span class="world-light" data-ref="light1"></span><span class="world-light" data-ref="light2"></span><span class="world-light" data-ref="light3"></span></div>
+      <p class="world-start-note" data-ref="startNote" data-testid="race-start-note" hidden></p>
     </div>
     <div class="world-card world-race" data-ref="race" data-testid="race-card" hidden>
       <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
@@ -320,6 +321,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       const light = ref(`light${k}`);
       if (light.style.backgroundColor !== colour) light.style.backgroundColor = colour;
     }
+    // Under the green lights, how the start went (Tane at the sign-off); it fades with them.
+    const said = race && lights.green ? startNote(race) : '';
+    const note = ref('startNote');
+    if (note.textContent !== said) note.textContent = said;
+    note.hidden = said === '';
+    note.classList.toggle('world-race-accent', race?.startBoost === true);
     const card = ref('race');
     card.hidden = race === null;
     if (!race) return;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { raceSteps, startRace, type RaceState } from '../sim/race';
-import { countdownLights, formatGap, formatRaceTime, raceCard } from './raceCard';
+import { countdownLights, formatGap, formatRaceTime, raceCard, startNote } from './raceCard';
 
 const SPS = config.sim.stepsPerSecond;
 const times = raceSteps(config.sim.race, SPS);
@@ -71,6 +71,14 @@ describe('countdownLights', () => {
 
   it('shows nothing once finished', () => {
     expect(countdownLights({ ...racing(9000), phase: 'finished' }, times, SPS, look).shown).toBe(false);
+  });
+
+  it('says at "go" how the start went: a boost, too early, or nothing if the throttle was never pressed (Tane, the sign-off)', () => {
+    expect(startNote(startRace(times))).toBe('');
+    expect(startNote({ ...startRace(times), pressedOn: 20 })).toBe('');
+    expect(startNote({ ...racing(0), startBoost: true, pressedOn: 175 })).toBe('Boost start!');
+    expect(startNote({ ...racing(30), startBoost: false, pressedOn: 20 })).toBe('Too early');
+    expect(startNote({ ...racing(30), startBoost: false, pressedOn: 0 })).toBe('');
   });
 });
 

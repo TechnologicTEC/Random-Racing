@@ -82,8 +82,10 @@ export interface Car {
    * Works out one step's pushes and gives them to the body. Call it once, just before the physics moves on a step.
    *
    * @param touch what the body touched on the last physics step, and the contact's slope (`CarPhysics.touching`)
+   * @param launch a boosted race start's push for this step, in m/s², or null (`race.launch`): the race decides it, so
+   *   the car remembers nothing of it
    */
-  step(input: InputRecord, touch?: Touch | null): void;
+  step(input: InputRecord, touch?: Touch | null, launch?: number | null): void;
   /**
    * Straight after a physics step: if the body touched a wall, the gate, a tree or a rock in it, or did within
    * `bump.hold` before it, holds the body's turning to `bump.spin` (Tane, 7c and 10a-6), so a hit never spins the car
@@ -218,7 +220,7 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       sinceHit = memory.sinceHit;
     },
 
-    step(input, touch = null) {
+    step(input, touch = null, launch = null) {
       const hit = touch?.thing ?? null;
       // A wall or the gate (7b): it turns the nose along it while touching, and a new hit sends the car off it.
       const wall = touch !== null && bounces(touch.thing) ? touch : null;
@@ -272,13 +274,15 @@ export function createCar(physics: CarPhysics, cfg: PhysicsConfig, surfaceOf: (c
       const coming = { x: motion.velocity.x, y: motion.velocity.y - cfg.sim.gravity * dt, z: motion.velocity.z };
       const speed = dot(motion.velocity, travel);
       drift = stepDrift(old, ask(speed, grounded), car, steps);
-      const boosting = drift.boostLeft > 0;
+      // A boosted race start pushes as a boost does, at its own rate (the stronger, while the tier 1 boost runs too).
+      const boosting = drift.boostLeft > 0 || launch !== null;
+      const boostAccel = launch !== null ? Math.max(launch, car.boost.accel) : car.boost.accel;
       const top = topFor(wheels, drift);
 
       // Through the body's middle, so they neither roll it nor pitch it. In a slide the tyres hold harder sideways.
       physics.push(scale(side, car.mass * sideGrip(dot(coming, side), share, car, dt, old.slide > 0 ? car.drift.grip : car.grip.side)));
       const pull = dot(coming, travel) - speed;
-      physics.push(scale(travel, car.mass * speedChange(speed, pull, pedals, share, top, boosting, car, dt)));
+      physics.push(scale(travel, car.mass * speedChange(speed, pull, pedals, share, top, boosting, car, dt, boostAccel)));
       // Downforce (10a-3): towards the ground, through the body's middle, growing with the speed squared.
       physics.push(scale(normal, 0 - car.mass * car.downforce * dot(motion.velocity, motion.velocity) * dt));
 

@@ -41,8 +41,9 @@ export interface Pedals {
  * @param top the top speed for this step: `engine.topSpeed`, raised by a boost
  * @param boosting whether a boost is running
  * @param dt the length of a step, in seconds
+ * @param boostAccel the boost's push, in m/s²: `car.boost.accel`, or a boosted race start's launch
  */
-export function speedChange(speed: number, pull: number, pedals: Pedals, share: number, top: number, boosting: boolean, car: CarConfig, dt: number): number {
+export function speedChange(speed: number, pull: number, pedals: Pedals, share: number, top: number, boosting: boolean, car: CarConfig, dt: number, boostAccel = car.boost.accel): number {
   if (share === 0) return 0;
   const { engine, brake, reverse } = car;
   const coming = speed + pull;
@@ -55,7 +56,7 @@ export function speedChange(speed: number, pull: number, pedals: Pedals, share: 
   }
   if (boosting) {
     if (coming < 0 - brake.holdBelow) return within(0 - coming, brake.strength * dt * share);
-    return Math.min(top - coming, car.boost.accel * dt * share);
+    return Math.min(top - coming, boostAccel * dt * share);
   }
   if (pedals.throttle > 0) {
     if (coming < 0 - brake.holdBelow) return within(0 - coming, brake.strength * pedals.throttle * dt * share);
