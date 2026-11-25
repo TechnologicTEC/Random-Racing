@@ -2,7 +2,7 @@
 
 Part of the plan. `docs/PLAN.md` has the build order, the routine for one part, what to do when something does not go to plan, and the questions for Tane; this file has the steps of one milestone. Tick the build order in `docs/PLAN.md` as parts are finished.
 
-Issue #6. **Done when** (the brief): version 1 scope is complete and hits the performance targets. Branch `milestone-6-polish`; plan in plan mode first. **This is the biggest milestone and the first place to trim.** At M6.0 agree with Tane which steps are in, in what order, and what goes first if it runs long. The order below is a suggestion: the generator changes first (they move every seed's world and must be done before `v1`), the rest by how much a player notices them.
+Issue #6. **Done when** (the brief): version 1 scope is complete and hits the performance targets. Branch `milestone-6-polish`; plan in plan mode first. **This is the biggest milestone and the first place to trim.** At M6.0 agree with Tane which steps are in, in what order, and what goes first if it runs long. **Tane's answers at M6.0 (2026-11-25):** the steps are built in the order below (the generator changes first, since they move every seed's world and must be done before `v1`; then what is heard and seen; speed measured on the finished game). **If it runs long, only M6.5's new effects are cut**; tunnels, bridges and the look stay. Two check-ins: after M6.2 and after M6.5 (after M6.4 if M6.5 is cut).
 
 | Step | Build | Done when |
 | --- | --- | --- |
@@ -15,6 +15,30 @@ Issue #6. **Done when** (the brief): version 1 scope is complete and hits the pe
 | **M6.7 Speed and size** | The brief's targets: 60 frames a second at 1080p on a mid-range laptop, a world in under 3 s, racing within about 10 s of opening the page. Measure with `npm run perf` and, for the 10 s, Chromium's network throttling. Levers known today: the grass's 176,000 triangles; the most wooded islands (589,000 triangles from above); the water shader; Rapier's 1.68 MB (the build that does not carry its WebAssembly as text saves about a quarter, but needs Vite to serve a `.wasm` file: a new dependency or setting, so ask Tane) | The numbers in STATE.md, against the targets; anything missed is Tane's call |
 | **M6.8 Generator `v1`** | `GENERATOR_VERSION = 1` (`src/gen/version.ts`). A test pins the world fingerprints of 20 seeds (`src/gen/v1.test.ts`), so any later change to the generator fails it and must become `v2`. The brief: keep each released version available so saved favourites rebuild, or at least store each favourite's centre line; decide with Tane which | The pin test passes; a favourite saved now is listed as `v1`; the share code reads `v1-48213` |
 | **M6.9 Version 1** | The brief's "Version 1 scope" table, line by line, checked by hand in Chrome, Edge and Firefox on Windows, with a controller and a keyboard. README for players. Hosting and the game's name, as Tane decides. The pull request | Every line of the table works. **Tane's sign-off**, merge, release |
+
+## The parts (M6.0)
+
+Each part ends with passing tests and one commit (`docs/PLAN.md`, "The routine for one part"). Steps marked "split at its start" are split into lettered parts once their questions for Tane are answered, and the split recorded here and in the build order.
+
+| Part | Build |
+| --- | --- |
+| **M6.1a** | Bridge spans, pure (`gen/road/bridges.ts`): where the road stands more than `road.maxFill` above the natural ground or the sea, a span, padded to firm ground and merged when close; rules in `road.bridges` (shortest and longest span, pad, pillar spacing). The earthworks rule stops counting fill on a span and rejects a span longer than the longest. `Road.bridges` in the world fingerprint. Measured over seeds 1 to 200: seeds gaining a bridge, candidates kept. Pinned fingerprints and per-seed tests updated where winners change, as at M4.1 |
+| **M6.1b** | The bridge in the world: `gen/world/fit.ts` leaves the ground under a span natural; the deck's sides and underside, railings (walls in `Road.walls`), pillars (boxes in the colliders); drawn; a bridge row in `docs/VISUAL_BAR.md` |
+| **M6.1c** | A simulation test over a bridge at top speed (four wheels down, no bump at either end); a `look=bridge` close view; the 20-seed screenshots and three bridges looked at |
+| **M6.2a** | Tunnel spans, pure: as M6.1a for cuts deeper than `road.maxCut`; rules in `road.tunnels`; measured over seeds 1 to 200 |
+| **M6.2b** | The tunnel in the world: the heightfield stays cut to the road (the ground is one height at each point; the wheels and the body need it); the lid is its own mesh covering the cutting with the hillside's shape, with portals; walls, lid and portals collide; no grass or trees inside |
+| **M6.2c** | The chase camera's clearance takes the lid as a ceiling (a unit test along every tunnel of seeds 1 to 200); dimmer light inside, drawing only; a `look=tunnel` view; pictures |
+| | **Check-in 1 with Tane** |
+| **M6.3a…** | One part per look issue Tane picks at the start of M6.3, generator ones first |
+| **M6.4a** | Sound, pure (`src/audio/`): engine pitch and gain, screech by tier, boost whoosh, thud on a new wall hit, from the simulation's state |
+| **M6.4b** | The Web Audio graph on the page after the first key or click; M mutes; the browser test |
+| **M6.5a…** | Effects, split at its start (the one step that may be cut) |
+| | **Check-in 2 with Tane** |
+| **M6.6a** | The settings record, pure, kept in `localStorage` (quality, volume and mute, time of day, camera distance, the controls card) |
+| **M6.6b** | The settings card from the title and the pause card; the browser tests |
+| **M6.7a…** | Speed and size, split at its start once measured |
+| **M6.8** | Generator `v1`, after Tane's answer on keeping released versions |
+| **M6.9** | Version 1 checked, README, the pull request, sign-off, merge, release |
 
 ## Decisions, what to reuse, and traps
 

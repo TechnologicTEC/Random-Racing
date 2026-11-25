@@ -103,14 +103,26 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 
 **Milestone 6: polish** (branch `milestone-6-polish`, issue #6; plan first; the steps: [`docs/plan/M6-polish.md`](plan/M6-polish.md))
 
-- [ ] **M6.0** Plan approved, with the order and the cut list agreed with Tane
-- [ ] **M6.1** Bridges
-- [ ] **M6.2** Tunnels
-- [ ] **M6.3** The look issues Tane picks
-- [ ] **M6.4** Sound
-- [ ] **M6.5** Effects
-- [ ] **M6.6** Settings
-- [ ] **M6.7** Speed and size
+- [x] **M6.0** Plan approved, with the order and the cut list agreed with Tane (2026-11-25; Tane's answers and the parts in STATE.md, "Milestone 6")
+- **M6.1** Bridges:
+  - [ ] **M6.1a** Bridge spans, pure; the earthworks rule skips fill on a span; measured over seeds 1 to 200
+  - [ ] **M6.1b** The bridge in the world: ground left natural, deck sides, railings, pillars
+  - [ ] **M6.1c** Driven over at top speed; `look=bridge`; pictures
+- **M6.2** Tunnels:
+  - [ ] **M6.2a** Tunnel spans, pure; the earthworks rule skips cut in a span; measured over seeds 1 to 200
+  - [ ] **M6.2b** The tunnel in the world: the lid and portals, their colliders; no grass or trees inside
+  - [ ] **M6.2c** The chase camera under the lid; dimmer light inside; `look=tunnel`; pictures
+- [ ] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels
+- [ ] **M6.3** The look issues Tane picks (split into lettered parts at its start, generator ones first)
+- **M6.4** Sound:
+  - [ ] **M6.4a** Sound, pure (`src/audio/`)
+  - [ ] **M6.4b** Sound on the page; M mutes
+- [ ] **M6.5** Effects (split at its start; **the one step that may be cut**, Tane at M6.0)
+- [ ] **Check-in 2 with Tane** after M6.5 (after M6.4 if M6.5 is cut): listen and look
+- **M6.6** Settings:
+  - [ ] **M6.6a** Settings, pure, kept in `localStorage`
+  - [ ] **M6.6b** The settings card on the page
+- [ ] **M6.7** Speed and size (split at its start)
 - [ ] **M6.8** Generator `v1`
 - [ ] **M6.9** The brief's version 1 table checked line by line; README; pull request; **sign-off**; merge; release
 
@@ -178,7 +190,7 @@ The check-ins are lines in the build order. Bring the page running, a short list
 | --- | --- |
 | How many laps does a ghost cover: the best single lap, or the whole 3-lap race? (Tane, M5.0: the whole race) | M5.0 |
 | May a favourite saved before the generator is `v1` stop rebuilding when the generator changes? (Tane, M5.0: yes, with a note on screen) | M5.0 |
-| What is cut from Milestone 6 if it runs long, and in what order are its steps wanted? | M6.0 |
+| What is cut from Milestone 6 if it runs long, and in what order are its steps wanted? (Tane, M6.0: the plan's order; only the new effects, M6.5, may be cut) | M6.0 |
 | When the generator changes after `v1`: keep every released version runnable, or store each favourite's centre line? (The brief allows either) | M6.8 |
 | Where is version 1 hosted, and under which name ("Seed Circuit" is a working title)? | M6.9 |
 

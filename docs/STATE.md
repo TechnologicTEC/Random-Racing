@@ -6,11 +6,41 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 
 ## Where we are
 
-- **Current milestone:** **Milestone 6, Polish** ([issue #6](https://github.com/TechnologicTEC/Random-Racing/issues/6)), not yet planned. Milestones 1 to 5 are merged and signed off (PR #7, #9, #10, #11, #12; Milestone 5 signed off by Tane 2026-11-25)
-- **Branch:** `milestone-6-polish`, to be made from `main` at M6.0. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
-- **Last finished part:** Milestone 5, signed off by Tane and merged (PR #12, 2026-11-25)
-- **Next:** **M6.0**, Milestone 6 planned in plan mode, with the order of its steps and the cut list agreed with Tane (`docs/PLAN.md`, `docs/plan/M6-polish.md`)
+- **Current milestone:** **Milestone 6, Polish** ([issue #6](https://github.com/TechnologicTEC/Random-Racing/issues/6)), planned and approved by Tane on 2026-11-25 (below). Milestones 1 to 5 are merged and signed off (PR #7, #9, #10, #11, #12; Milestone 5 signed off by Tane 2026-11-25)
+- **Branch:** `milestone-6-polish`, made from `main` at 009260e. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
+- **Last finished part:** M6.0, the plan approved, Tane's answers and the parts recorded (2026-11-25)
+- **Next:** **M6.1a**, bridge spans, pure (`docs/plan/M6-polish.md`, "The parts")
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
+
+## Milestone 6: polish (2026-11-25)
+
+Planned in plan mode and approved by Tane on 2026-11-25 (plan file: `C:\Users\tanee\.claude\plans\pasted-content-id-18f4-start-iterative-spring-of-1b9b559c-f9eb-4ae1-bbf4-bd27c5c9b867.md`). The steps, rules and "done when" tests are those of `docs/plan/M6-polish.md`, split into lettered parts there. **Done when** (the brief): version 1 scope is complete and hits the performance targets.
+
+**Tane's answers at M6.0:**
+- **Order:** the plan's: Bridges, Tunnels, Look, Sound, Effects, Settings, Speed and size, Generator `v1`, Version 1. The world is finished first (its changes must land before `v1`), then what is heard and seen, and speed is measured on the finished game.
+- **Cut if it runs long:** only **the new effects** (M6.5: dust off the road, reworked smoke and sparks; tyre smoke, sparks, the flame and speed lines already exist and stay). Tunnels, bridges and the look fixes stay in. Sound, settings and the speed targets are in the brief's version 1 table, so they were not offered.
+- **Pace:** a short report after each part, and **two check-ins**: after M6.2 (drive over the bridges and through the tunnels), and after M6.5 (listen and look; after M6.4 if M6.5 is cut). Then the sign-off.
+
+| Part | What | Status |
+| --- | --- | --- |
+| M6.0 | Plan approved; this section; the build order split into parts | Done |
+| M6.1a | Bridge spans, pure: `gen/road/bridges.ts`, `road.bridges`, the earthworks rule skips fill on a span, `Road.bridges` in the fingerprint; measured over seeds 1 to 200 | To do |
+| M6.1b | The bridge in the world: ground left natural under a span; deck sides, railings (walls), pillars (colliders); drawn | To do |
+| M6.1c | Driven over at top speed (four wheels down, no bump); `look=bridge`; pictures looked at | To do |
+| M6.2a | Tunnel spans, pure: `road.tunnels`, the earthworks rule skips cut in a span; measured over seeds 1 to 200 | To do |
+| M6.2b | The tunnel in the world: the heightfield cut to the road, the lid and portals as their own mesh and colliders; no grass or trees inside | To do |
+| M6.2c | The chase camera under the lid (tested along every tunnel of seeds 1 to 200); dimmer light inside; `look=tunnel`; pictures | To do |
+| | **Check-in 1 with Tane**: drive over bridges and through tunnels | To do |
+| M6.3a… | The look issues Tane picks at its start, each its own part, generator ones first | To do |
+| M6.4a | Sound, pure (`src/audio/`): engine, screech, boost, thud from the simulation's state | To do |
+| M6.4b | Sound on the page: Web Audio after the first key or click; M mutes | To do |
+| M6.5a… | Effects (the one step that may be cut): dust off the road, reworked smoke and sparks | To do |
+| | **Check-in 2 with Tane**: listen and look | To do |
+| M6.6a | Settings, pure: the record kept in `localStorage` | To do |
+| M6.6b | The settings card from the title and the pause card; survives a reload; the simulation's fingerprint unchanged | To do |
+| M6.7a… | Speed and size measured against the targets, then fixed where missed | To do |
+| M6.8 | Generator `v1` (Tane's answer on keeping old versions first); the pin test | To do |
+| M6.9 | The version 1 table checked by hand; README; the pull request; **Tane's sign-off**; merge; release | To do |
 
 ## Milestone 5: ghosts and favourites (2026-11-24)
 
@@ -200,6 +230,7 @@ Tests: 10 in `orbitFit.test.ts` (the picture's edges; a lower edge of its own; j
 - Milestone 2 pace: short report after each step; two check-ins (after step 6 and after step 11) and a sign-off at the end.
 - Milestone 3 pace: short report after each step; two check-ins (after step 5 and after step 9) and a playtest sign-off at the end.
 - Milestone 4 pace (Tane, 2026-11-23): short report after each part; one check-in, after M4.4, and a sign-off at the end.
+- Milestone 6 pace (Tane, 2026-11-25): short report after each part; two check-ins, after M6.2 (bridges and tunnels) and after M6.5 (sound and effects), and a sign-off at the end.
 - **Stop at clean boundaries** (Tane, 2026-11-15): big steps are split into lettered parts that each end with passing tests, a commit, a push and this file saying what is next, so a usage-limit cut-off never lands in the middle of one. Do not start the next part's edits while a long test run for the last one is still going.
 - No linter or formatter for now. The architecture rules are enforced by a DOM-free type check of `src/core` and `src/gen` and by `src/architecture.test.ts`.
 - **Generator quality comes before viewer features.** If Milestone 1 runs long, trim the viewer, not the generator.
@@ -221,6 +252,7 @@ The 170 decisions of Milestones 1 and 2 (2026-11-11 to 2026-11-15) are in `docs/
 
 | Date | Decision | Why |
 | --- | --- | --- |
+| 2026-11-25 | **Milestone 6, Tane's answers at M6.0:** the plan's order (bridges, tunnels, look, sound, effects, settings, speed, generator `v1`, version 1); only the new effects (M6.5) may be cut if it runs long; two check-ins, after M6.2 and after M6.5 | Tane, from options in plan mode. Sound, settings and the speed targets are in the brief's version 1 table; the world's changes must land before `v1` |
 | 2026-11-25 | **Laps are counted by 4 visible lap gates** (a straight's middle or a corner's apex, built like the start gate with a teal beam, each ending a sector: 5 a lap); the hidden checkpoints only say where a respawn puts the car | Tane, after driving 4 laps when a checkpoint crossed wide of the road was missed unseen and cost a whole lap (reproduced in Node) |
 | 2026-11-24 | **Check-in after M5.4 (Tane):** the ghost a see-through white; the bot drifts; the bot's time (until beaten) and the player's best 3-lap time (until bettered) shown on the title card and the race card | Tane at the check-in: the bot that drifts is "a better representation of the track's potential" (18 to 34 s quicker than on grip, seeds 1 to 20); white reads as a ghost, the kart's colours as a faded copy of the car |
 | 2026-11-24 | **Milestone 5, Tane's answers at M5.0:** one check-in after M5.4; a ghost is the whole 3-lap race; v0 favourites kept with a note; favourites on their own card; the bot's ghost until the player beats it, shown or hidden with G or X | Tane, from options in plan mode; the bot's ghost was Tane's idea there |
@@ -468,3 +500,4 @@ Entries up to the end of Milestone 2 are in `docs/archive/STATE-milestone-1-2.md
 - **2026-11-24 (Milestone 4, Opus 5.5):** M4.6: the whole race from the title in the browser tests (seed 7, the bot's race fed in; the results equal Node's to the millisecond in Chromium and Firefox, and back to the title); README and CLAUDE.md brought up to Milestone 4; no tuning changed; the pull request opened. 2,657 unit and 385 browser tests pass. Next: Tane's sign-off, then merge.
 - **2026-11-24 (Milestone 4, Opus 5.5):** at the sign-off Tane found the start boost made no difference that could be felt (measured: 0.13 s on lap 1). From four measured options Tane chose a launch of 20 m/s² for 1 s after a boosted start (`sim.race.launch`; about 0.9 s on lap 1) and a note under the green lights ("Boost start!", "Too early"). Fingerprints without a boosted start unchanged. 2,663 unit and 387 browser tests pass. Next: the rest of Tane's sign-off, then merge.
 - **2026-11-24 (Milestone 4, Opus 5.5):** Tane signed off Milestone 4; PR #11 merged and the branch deleted. Next: Milestone 5, planned in plan mode first.
+- **2026-11-25 (Milestone 6, Opus 5.5):** M6.0: Milestone 6 planned in plan mode and approved by Tane: the plan's order, only the new effects may be cut, two check-ins (after M6.2 and M6.5). Branch `milestone-6-polish` made from `main`; the parts recorded here, in `docs/PLAN.md` and in `docs/plan/M6-polish.md`. Docs only. Next: M6.1a.
