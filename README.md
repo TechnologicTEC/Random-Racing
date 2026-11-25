@@ -7,9 +7,13 @@ A procedural kart racer for desktop browsers. Every race happens on a world and 
 
 ## Where it is now
 
-Milestone 4, the **time trial**, is finished and waiting for Tane's sign-off. The page builds an island and its track from a seed and opens on a title card over the island, the camera circling the track. **Race** gives a 3-second countdown (three red lights, green on "go"; the throttle pressed in the last quarter second gives a boosted start) and 3 timed laps, with lap and sector times in the corner, then the results: the total, each lap, the best one marked, and the island's share code. **Free drive** drives with no clock. Esc pauses, with Restart and Quit to title. Every time is counted in the simulation's fixed steps, so the same inputs give the same times to the millisecond in every browser.
+Milestone 5, **ghosts and favourites**, is finished and waiting for Tane's sign-off. The page builds an island and its track from a seed and opens on a title card over the island, the camera circling the track. **Race** gives a 3-second countdown (three red lights, green on "go"; the throttle pressed in the last quarter second gives a boosted start) and 3 timed laps through the start gate and 4 teal lap gates, with lap and sector times in the corner, then the results: the total, each lap, the best one marked, and the island's share code. **Free drive** drives with no clock. Esc pauses, with Restart and Quit to title. Every time is counted in the simulation's fixed steps, so the same inputs give the same times to the millisecond in every browser.
 
-The kart is a physics car (Rapier) on four sprung wheels, top speed 190 km/h, with drifting that charges three boost tiers, slower grass and sand, walls and kerbs, trees and rocks, checkpoints round the lap and a respawn after a fall into the sea or a crash. Ghosts and favourites are Milestone 5. The flying and circling cameras of Milestone 2 are still there in free driving, and the **track lab** from Milestone 1, a 2D top-down view that shows how each track was chosen, is kept as a debug view.
+**Ghosts:** every race is recorded, one number a step from the first light. Your best race on an island is kept in the browser and raced as a see-through white ghost, with the gap to it at each gate on the race card; until you beat it, the ghost is the bot's own race of that island, worked out in the background. G (X on a controller) shows or hides the ghost. A ghost is the inputs, so it replays exactly: reload the page and it drives the same race to the same fingerprint. A race in which the tuning panel changed anything is never saved.
+
+**Favourites:** star an island on the pause or results card (☆ Favourite), or add the island shown from the **Favourites** card on the title. The card lists them newest first with their best times; Enter races one, ✕ (or X, or Delete) removes it.
+
+The kart is a physics car (Rapier) on four sprung wheels, top speed 190 km/h, with drifting that charges three boost tiers, slower grass and sand, walls and kerbs, trees and rocks, checkpoints round the lap and a respawn after a fall into the sea or a crash. The flying and circling cameras of Milestone 2 are still there in free driving, and the **track lab** from Milestone 1, a 2D top-down view that shows how each track was chosen, is kept as a debug view.
 
 ## Running it
 
@@ -25,7 +29,7 @@ Then open http://127.0.0.1:5173.
 | Address | What it shows |
 | --- | --- |
 | `/` | A random island in 3D, on the title card |
-| `/?seed=48213` | One seed in 3D, on the title card. `mode=race` races at once, `mode=free` drives at once; `cam=fly`, `cam=orbit`, `look=car` and the other views drive freely too. Also `time=17:45`, `quality=low`, `still=1` and more: see `src/app/worldPage.ts` |
+| `/?seed=48213` | One seed in 3D, on the title card. `mode=race` races at once, `mode=free` drives at once; `cam=fly`, `cam=orbit`, `look=car` and the other views drive freely too. `bot=off` leaves out the bot's ghost. Also `time=17:45`, `quality=low`, `still=1` and more: see `src/app/worldPage.ts` |
 | `/?lab=1&seed=48213` | One seed in the track lab. Leave the seed off for a random one |
 | `/?seed=48213&candidate=7` | The lab, showing one of the 30 candidates instead of the winner |
 | `/?seed=48213&minRadius=30` | The lab, what-if: which layouts a stricter rule would reject (also `gapWidths=4`) |
@@ -34,11 +38,11 @@ Then open http://127.0.0.1:5173.
 
 L switches between the 3D view and the lab, on the same seed.
 
-**Menus:** the up and down arrows choose, Enter picks, Esc goes back (on a controller: the D-pad or stick, A and B; Start pauses). On the title card, type a seed (`48213`) or a share code (`v0-48213`) in the box and press Enter; a code that cannot be opened says why. The time of day slider along the bottom changes the light, and the address keeps it (`time=07:30`).
+**Menus:** the up and down arrows choose, Enter picks, Esc goes back (on a controller: the D-pad or stick, A and B; Start pauses). The title offers Race, Free drive, Favourites and New island. On the title card, type a seed (`48213`) or a share code (`v0-48213`) in the box and press Enter; a code that cannot be opened says why. The time of day slider along the bottom changes the light, and the address keeps it (`time=07:30`).
 
-**Driving:** W or the up arrow drives, S or the down arrow brakes and then reverses, A and D (or the left and right arrows) steer. Hold Space or Shift while steering to drift; hold the slide for 0.6, 1.2 or 1.8 s to charge a blue, orange or purple boost, which fires when you let go. R puts the car back at the last checkpoint passed. The card in the corner shows the speed, the surface under the wheels and the place on the lap.
+**Driving:** W or the up arrow drives, S or the down arrow brakes and then reverses, A and D (or the left and right arrows) steer. Hold Space or Shift while steering to drift; hold the slide for 0.6, 1.2 or 1.8 s to charge a blue, orange or purple boost, which fires when you let go. R puts the car back at the last checkpoint passed (after a missed gate, before that gate). G shows or hides the ghost in a race. The card in the corner shows the speed, the surface under the wheels and the place on the lap.
 
-**A controller** works too, once a button on it is pressed: the right trigger drives, the left trigger brakes, the left stick steers, the right bumper drifts, Back puts the car back and Y changes the camera.
+**A controller** works too, once a button on it is pressed: the right trigger drives, the left trigger brakes, the left stick steers, the right bumper drifts, Back puts the car back, X shows or hides the ghost (on the Favourites card, removes one) and Y changes the camera.
 
 **Everywhere in 3D:** C changes the camera in free driving (driving, flying the lap, circling the island; in a race it does nothing), N makes a new island (it comes in on the title card), T opens the tuning panel (the car's handling, live), Q switches between High and Low quality, F shows frame times. Flying the lap: Space pauses, the up and down arrows change speed. Circling: drag to turn, scroll to zoom.
 
