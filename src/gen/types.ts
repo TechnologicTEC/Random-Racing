@@ -84,6 +84,7 @@ export type ViolationKind =
   | 'out-of-bounds'
   | 'cut-too-deep'
   | 'fill-too-high'
+  | 'bridge-too-long'
   | 'bank-too-steep';
 
 /** One reason a candidate layout was rejected, with where it happened. */
@@ -216,6 +217,8 @@ export interface Candidate {
   profile: RoadProfile;
   /** Why it was rejected; empty when valid. */
   violations: Violation[];
+  /** Where its road runs on bridges, in order from sample 0 (M6.1); empty when nowhere. */
+  bridges: BridgeSpan[];
   sections: Section[];
   /** Null when rejected. */
   score: ScoreBreakdown | null;
@@ -386,6 +389,12 @@ export interface MountainSummit {
 }
 
 /** A kerb: a run of samples along one edge of the road. */
+/** A stretch of the lap the road crosses on a bridge (M6.1): samples `startIndex` on, `sampleCount` of them; it may wrap past the end of the lap. */
+export interface BridgeSpan {
+  startIndex: number;
+  sampleCount: number;
+}
+
 export interface KerbSpan {
   /** First sample of the kerb; it may wrap past the end of the lap. */
   startIndex: number;
@@ -427,6 +436,8 @@ export interface Road {
   barriers: MeshData;
   /** The chequered start line and the gate over it, at sample 0 of the winner's centre line. */
   gate: MeshData;
+  /** Where the road runs on bridges (M6.1), the winner's spans numbered from the start line. */
+  bridges: BridgeSpan[];
   /** The gates a lap is counted by (M5.4d): their samples of the winner's centre line in order round the lap, and their triangles. */
   lapGates: { samples: number[]; mesh: MeshData };
 }

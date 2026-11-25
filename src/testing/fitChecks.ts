@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { generateWorld } from '../gen/generate';
+import { bridgedMask } from '../gen/road/bridges';
 import { sampleField } from '../gen/world/heightfield';
 import { GORGE_SEEDS } from './checkSeeds';
 
@@ -46,7 +47,7 @@ function describeSeed(seed: number): void {
       expect(world().report.roadFloating).toBe(0);
     });
 
-    it('needs no bridge or tunnel: cuttings and embankments stay within the limits, or the road runs through a gorge', () => {
+    it('needs no tunnel and no embankment over the limit off its bridges (M6.1), or the road runs through a gorge', () => {
       const { report, track, natural } = world();
       if (GORGE_SEEDS.includes(seed)) {
         // A range stands over the road here, and the road runs through it in a gorge (Tane's choice, step 17).
@@ -57,10 +58,11 @@ function describeSeed(seed: number): void {
         // Across a mountainside the road's edges are cut deeper and built up higher than its centre: rock cuttings,
         // allowed in C4. The limits hold on the centre line, as the earthworks rule checks them.
         const winner = track.candidates[track.winnerIndex]!;
+        const bridged = bridgedMask(winner.bridges, winner.line.count);
         for (let i = 0; i < winner.line.count; i++) {
           const below = sampleField(natural, winner.line.x[i]!, winner.line.z[i]!, 0) - winner.profile.height[i]!;
           expect(below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxCut);
-          expect(-below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxFill);
+          if (!bridged[i]) expect(-below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxFill);
         }
         return;
       }
@@ -68,7 +70,7 @@ function describeSeed(seed: number): void {
       expect(report.tallestFill.value).toBeLessThanOrEqual(config.road.maxFill);
     });
 
-    it('keeps every bank beside the road gentle enough to stand, or on a mountain seed no steeper than a rock cutting', () => {
+    it('keeps every bank beside the road gentle enough to stand, or on a mountain seed no steeper than a rock cutting (none beside a bridge)', () => {
       // The sides of a gorge are as steep as the range they are cut into.
       if (GORGE_SEEDS.includes(seed)) return;
       // A road across a mountainside 50 to 90% steep is cut into it; the blend beside it is at most 25 m wide,

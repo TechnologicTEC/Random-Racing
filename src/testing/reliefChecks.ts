@@ -5,10 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { config, type Range } from '../config';
+import { bridgedMask, spanLength } from '../gen/road/bridges';
 import { measureProfile } from '../gen/road/profile';
 import { generateTrack } from '../gen/track/pipeline';
 import { trackRulesFor } from '../gen/track/rules';
-import type { CenterLine, ProfileStats, ReliefKind, TrackResult } from '../gen/types';
+import type { Candidate, CenterLine, ProfileStats, ReliefKind, TrackResult } from '../gen/types';
 import { placeMassif } from '../gen/world/relief';
 import { withCharacter } from './characters';
 
@@ -19,15 +20,16 @@ export function describeReliefKind(kind: ReliefKind): void {
   const road = cfg.road;
   const limit = road.maxGradient[kind];
   const rules = trackRulesFor(cfg.track, kind);
-  const measure = (candidate: { line: Parameters<typeof measureProfile>[0]; profile: Parameters<typeof measureProfile>[1] }): ProfileStats =>
-    measureProfile(candidate.line, candidate.profile, road, cfg.track.roadWidth);
+  // The fill on a bridge is not counted (M6.1), as the pipeline measures it.
+  const measure = (candidate: Candidate): ProfileStats =>
+    measureProfile(candidate.line, candidate.profile, road, cfg.track.roadWidth, undefined, undefined, bridgedMask(candidate.bridges, candidate.line.count));
 
   describe(`tracks on ${kind} ground, seeds 1 to 200`, () => {
     const results = Array.from({ length: 200 }, (_, i) => generateTrack(i + 1, cfg));
     const winners = results.map((result) => ({ result, seed: result.seed, stats: measure(result.candidates[result.winnerIndex]!) }));
     // Every candidate of the first 40 seeds: 1200 layouts, most of which never win.
     const everyone = results.slice(0, 40).flatMap((result) =>
-      result.candidates.map((candidate) => ({ seed: result.seed, valid: candidate.violations.length === 0, stats: measure(candidate) })),
+      result.candidates.map((candidate) => ({ seed: result.seed, valid: candidate.violations.length === 0, stats: measure(candidate), candidate })),
     );
     const valid = everyone.filter((candidate) => candidate.valid);
 
@@ -59,10 +61,14 @@ export function describeReliefKind(kind: ReliefKind): void {
       for (const { stats } of [...winners, ...everyone]) expect(stats.min).toBeGreaterThanOrEqual(road.minHeight - TINY);
     });
 
-    it('never needs a bridge or a tunnel on a valid layout: cut and fill stay within 6 m and 8 m', () => {
+    it('never needs a tunnel on a valid layout, and runs on a bridge wherever it would stand over 6 m: cut within 8 m, fill off bridges within 6 m', () => {
       for (const { stats, seed } of [...winners, ...valid]) {
         expect(stats.maxFill, `seed ${seed}`).toBeLessThanOrEqual(road.maxFill);
         expect(stats.maxCut, `seed ${seed}`).toBeLessThanOrEqual(road.maxCut);
+      }
+      const layouts = [...winners.map(({ result }) => result.candidates[result.winnerIndex]!), ...valid.map(({ candidate }) => candidate)];
+      for (const candidate of layouts) {
+        for (const span of candidate.bridges) expect(spanLength(span, candidate.line.spacing)).toBeLessThanOrEqual(road.bridges.maxLength);
       }
     });
 

@@ -315,6 +315,21 @@ export interface StyleConfig {
 }
 
 /** How the road is laid over the ground: its heights, and how it ties in with the land beside it. */
+/**
+ * Bridges (M6.1): wherever the road would stand more than `road.maxFill` above the natural ground, it runs on a
+ * bridge instead of an embankment, and the earthworks rule stops counting the fill there.
+ */
+export interface BridgeConfig {
+  /** A bridge reaches each way until the fill under it is no more than this, in metres: where its ends meet firm ground. */
+  endFill: number;
+  /** A bridge is at least this long, in metres, centred on the deep part. */
+  minLength: number;
+  /** A layout that needs a longer bridge is rejected, in metres. */
+  maxLength: number;
+  /** Two bridges closer than this, in metres of road between them, become one. */
+  mergeGap: number;
+}
+
 export interface RoadConfig {
   /** Steepest climb or descent allowed, as a fraction, by the seed's relief (brief: about 8%, so 0.08; mountain seeds may climb harder). */
   maxGradient: Record<ReliefKind, number>;
@@ -395,8 +410,10 @@ export interface RoadConfig {
   bankFade: Range;
   /** The road tilts in and out of a bank over this length, in metres. */
   bankEase: number;
-  /** The road may sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). A layout that needs more is rejected. */
+  /** The road may sit no higher than this above the natural ground, in metres (brief: a bridge at about 6). Where it needs more, it becomes a bridge (M6.1). */
   maxFill: number;
+  /** Where the road becomes a bridge (M6.1). */
+  bridges: BridgeConfig;
   /** The road may sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). A layout that needs more is rejected. */
   maxCut: number;
 }
@@ -1978,6 +1995,8 @@ export const config: GameConfig = {
     bankFade: [180, 400],
     bankEase: 30,
     maxFill: 6,
+    // M6.1: starting values, measured over seeds 1 to 200 in STATE.md.
+    bridges: { endFill: 3, minLength: 40, maxLength: 250, mergeGap: 40 },
     maxCut: 8,
   },
   world: {

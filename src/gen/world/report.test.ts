@@ -74,6 +74,29 @@ describe('fitReport', () => {
     expect(report.nearestWater.value).toBeLessThan(16);
   });
 
+  it('counts no bank where the island’s own ground is steep beside the road and the earthworks left it as it was', () => {
+    // A plateau at 10 m whose edge drops 15 m over 7 m (214%) between 23 and 30 m outside the ring; the road on the plateau.
+    const drop = (x: number, z: number): number => {
+      const r = Math.hypot(x, z);
+      return r < 123 ? 10 : r > 130 ? -5 : 10 - ((r - 123) * 15) / 7;
+    };
+    const { input, report } = reportFor(circle, 400, drop, () => 10);
+    // The fit's blend reaches the drop and reshapes its lip, steeper than the plateau was there: the road's own bank, counted.
+    expect(report.steepestBank.value).toBeGreaterThan(0.3);
+    // Earthworks that left the ground as it was beside the road make no bank, however steep the island is there.
+    const untouched = fitReport({ ...input, earthworks: input.natural }, config);
+    expect(untouched.steepestBank.value).toBe(0);
+  });
+
+  it('measures no embankment and no bank along a bridge (M6.1)', () => {
+    // The road 8 m over level ground: a tall embankment, unless the whole lap is a bridge.
+    const { input, report } = reportFor(circle, 400, () => 10, () => 18);
+    expect(report.tallestFill.value).toBeGreaterThan(7);
+    const bridged = fitReport({ ...input, bridged: new Uint8Array(circle.count).fill(1) }, config);
+    expect(bridged.tallestFill.value).toBe(0);
+    expect(bridged.steepestBank.value).toBe(0);
+  });
+
   it('finds the water nearest the road', () => {
     // The sea starts at x = 150, so 50 m from the centre line at its nearest.
     const { report } = reportFor(circle, 400, (x) => (x > 150 ? -5 : 10), () => 10);

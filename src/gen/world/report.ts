@@ -20,6 +20,21 @@ export interface ReportInput {
   cross: Float64Array | null;
   /** Width of the road at each sample, in metres. */
   width: Float64Array;
+  /** 1 for each sample on a bridge (M6.1): no embankment is measured there, and no bank beside it. */
+  bridged?: Uint8Array;
+}
+
+/** The steepest slope of a field between neighbouring cells, along either axis, among the cells within one of (ix, iz). */
+function steepestNear(field: HeightField, ix: number, iz: number): number {
+  const { size, cell, height } = field;
+  let steepest = 0;
+  for (let z = Math.max(0, iz - 1); z <= Math.min(size - 2, iz + 1); z++) {
+    for (let x = Math.max(0, ix - 1); x <= Math.min(size - 2, ix + 1); x++) {
+      const c = z * size + x;
+      steepest = Math.max(steepest, Math.abs(height[c + 1]! - height[c]!), Math.abs(height[c + size]! - height[c]!));
+    }
+  }
+  return steepest / cell;
 }
 
 /** The ground must be at least this far below the road surface, in metres, or it counts as showing through. */
@@ -33,7 +48,7 @@ const MAX_GAP = 0.5;
  * the ground anywhere shows through the road or falls away beneath it.
  */
 export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
-  const { natural, earthworks, ground, corridor, near, line, height, cross, width } = input;
+  const { natural, earthworks, ground, corridor, near, line, height, cross, width, bridged } = input;
   const { size, cell } = ground;
   const n = line.count;
   let widest = 0;
@@ -60,7 +75,7 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
 
       const wild = sampleField(natural, x, z, surface);
       if (wild - surface > deepestCut.value) Object.assign(deepestCut, { x, z, value: wild - surface, sample: i });
-      if (surface - wild > tallestFill.value) Object.assign(tallestFill, { x, z, value: surface - wild, sample: i });
+      if (!bridged?.[i] && surface - wild > tallestFill.value) Object.assign(tallestFill, { x, z, value: surface - wild, sample: i });
 
       const gap = surface - sampleField(ground, x, z, surface - cfg.road.sink);
       if (gap < MIN_GAP) groundThroughRoad++;
@@ -79,11 +94,13 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
       if (here <= 0 && fromEdge < nearestWater.value) {
         Object.assign(nearestWater, { x: worldX(ground, ix), z: worldZ(ground, iz), value: fromEdge, sample: near.index[c]! });
       }
-      if (distance > reach || corridor[c] === 1) continue;
-      // Banks are the road's own earthworks. A cliff the coast carved later is not a bank.
+      if (distance > reach || corridor[c] === 1 || bridged?.[near.index[c]!]) continue;
+      // Banks are the road's own earthworks. A cliff the coast carved later is not a bank, and nor is the island's
+      // own steep ground beside the road, where the fit's blend runs into it and shifts it by a cell or so: a slope
+      // counts only where it is steeper than the natural ground anywhere within a cell of it (M6.1a).
       const built = earthworks.height[c]!;
       const slope = Math.max(Math.abs(earthworks.height[c + 1]! - built), Math.abs(earthworks.height[c + size]! - built)) / cell;
-      if (slope > steepestBank.value) {
+      if (slope > steepestBank.value && slope > steepestNear(natural, ix, iz)) {
         Object.assign(steepestBank, { x: worldX(ground, ix), z: worldZ(ground, iz), value: slope, sample: near.index[c]! });
       }
     }

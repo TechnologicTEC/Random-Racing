@@ -11,23 +11,28 @@ import { checkpointAt, checkpointCount } from './track/progress';
 /**
  * M5.4d, the race on the lap gates (Tane, 2026-11-25). A lap had been lost, with nothing on screen, when a hidden
  * checkpoint was crossed more than 6 m past the road's edge: the bot pushed 21 m wide at seed 7's checkpoint 2 took a
- * whole lap more. Laps are now counted by the 4 gates the player sees.
+ * whole lap more. Laps are now counted by the 4 gates the player sees. Since seed 7 got a bridge (M6.1a) its new lap
+ * is walled within 11 m at every checkpoint far from a gate, so the wide run is tried on seed 1, where it also lost laps.
  */
 let rapier: Rapier;
 let world: WorldResult;
+/** Seed 1: open grass beside the road at checkpoint 8. */
+let wideWorld: WorldResult;
 beforeAll(async () => {
   rapier = await loadRapier();
   world = generateWorld(7, config);
+  wideWorld = generateWorld(1, config);
 }, 120_000);
 
-const lap = () => world.track.candidates[world.track.winnerIndex]!.line;
+const lapOf = (w: WorldResult) => w.track.candidates[w.track.winnerIndex]!.line;
+const lap = () => lapOf(world);
 const forwards = (from: number, to: number, length: number): number => (((to - from) % length) + length) % length;
 
-/** The bot's race of seed 7, steering hard left on lap 2 from 120 m before `wideAt` metres until past it. */
+/** The bot's race of seed 1, steering hard left on lap 2 from 120 m before `wideAt` metres until past it. */
 function race(wideAt: number | null): { steps: number; laps: number; offThere: number } {
-  const line = lap();
-  const sim = createSim(rapier, world, config, { race: true });
-  const bot = createBot(world, config);
+  const line = lapOf(wideWorld);
+  const sim = createSim(rapier, wideWorld, config, { race: true });
+  const bot = createBot(wideWorld, config);
   let state = sim.state();
   let offThere = 0;
   let done = false;
@@ -50,17 +55,17 @@ function race(wideAt: number | null): { steps: number; laps: number; offThere: n
 
 describe('the race on the lap gates', () => {
   it('no longer loses a lap for a run wide of the road between the gates (the 4th lap Tane drove)', () => {
-    const line = lap();
-    // Seed 7's checkpoint 2, where the push lost a lap before the gates, stands over 100 m from the line and every gate.
-    const lines = [0, ...world.road.lapGates.samples.map((s) => s * line.spacing)];
+    const line = lapOf(wideWorld);
+    // Seed 1's checkpoint 8, where such a push would have lost a lap before the gates, stands over 100 m from the line and every gate.
+    const lines = [0, ...wideWorld.road.lapGates.samples.map((s) => s * line.spacing)];
     const apart = (a: number): number => Math.min(...lines.map((g) => Math.min(forwards(a, g, line.length), forwards(g, a, line.length))));
-    const at = checkpointAt(line, 2, config.sim.progress);
+    const at = checkpointAt(line, 8, config.sim.progress);
     expect(apart(at)).toBeGreaterThan(100);
     const usual = race(null);
     const pushed = race(at);
     // It went past where the checkpoint stands further off the centre line than half the road there and 6 m, which used to miss it...
     const sample = Math.round(at / line.spacing) % line.count;
-    expect(Math.abs(pushed.offThere)).toBeGreaterThan(world.road.width[sample]! / 2 + config.sim.progress.margin);
+    expect(Math.abs(pushed.offThere)).toBeGreaterThan(wideWorld.road.width[sample]! / 2 + config.sim.progress.margin);
     // ...and finished its 3 laps with no lap more: a run wide costs seconds, not a lap.
     expect(pushed.laps).toBe(3);
     expect(pushed.steps - usual.steps).toBeLessThan(600);

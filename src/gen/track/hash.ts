@@ -19,6 +19,7 @@ export function hashTrack(result: TrackResult): string {
     for (const violation of candidate.violations) {
       hasher.text(violation.kind).numbers([violation.x, violation.z, violation.value]);
     }
+    for (const span of candidate.bridges) hasher.numbers([span.startIndex, span.sampleCount]);
     for (const section of candidate.sections) {
       hasher.text(section.type === 'corner' ? section.kind : 'straight').numbers([section.startIndex, section.sampleCount]);
     }

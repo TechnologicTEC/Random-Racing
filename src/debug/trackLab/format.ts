@@ -26,6 +26,8 @@ export function describeViolation(violation: Violation): string {
       return `Cutting too deep: ${short(violation.value)} m (maximum ${limit} m)`;
     case 'fill-too-high':
       return `Embankment too high: ${short(violation.value)} m (maximum ${limit} m)`;
+    case 'bridge-too-long':
+      return `Bridge too long: ${short(violation.value)} m (maximum ${limit} m)`;
     case 'bank-too-steep':
       return `Bank between sections too steep: ${Math.round(violation.value * 100)}% (maximum ${Math.round(violation.limit * 100)}%)`;
   }

@@ -109,6 +109,7 @@ export function solveProfile(
  * Measures a road profile: how much it climbs, how steep it gets and how well it fits the ground.
  *
  * @param edges when given, the cut and fill are measured at the road's banked edges too, not only in its middle
+ * @param bridged when given, 1 for each sample on a bridge (`bridgedMask`), where the fill is not counted (M6.1)
  */
 export function measureProfile(
   line: CenterLine,
@@ -117,6 +118,7 @@ export function measureProfile(
   roadWidth: number,
   neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
   edges?: RoadEdges,
+  bridged?: Uint8Array,
 ): ProfileStats {
   const n = line.count;
   const { height } = profile;
@@ -137,7 +139,7 @@ export function measureProfile(
     steepest = Math.max(steepest, Math.abs(next - here) / line.spacing);
     sharpest = Math.max(sharpest, Math.abs(prev - 2 * here + next) / (line.spacing * line.spacing));
     const { cut, fill } = cutAndFill(i, profile, edges);
-    maxFill = Math.max(maxFill, fill);
+    if (!bridged?.[i]) maxFill = Math.max(maxFill, fill);
     maxCut = Math.max(maxCut, cut);
   }
 
