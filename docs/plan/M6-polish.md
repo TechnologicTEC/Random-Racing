@@ -24,7 +24,9 @@ Each part ends with passing tests and one commit (`docs/PLAN.md`, "The routine f
 | --- | --- |
 | **M6.1a** | Bridge spans, pure (`gen/road/bridges.ts`): where the road stands more than `road.maxFill` above the natural ground or the sea, a span, padded to firm ground and merged when close; rules in `road.bridges` (shortest and longest span, pad, pillar spacing). The earthworks rule stops counting fill on a span and rejects a span longer than the longest. `Road.bridges` in the world fingerprint. Measured over seeds 1 to 200: seeds gaining a bridge, candidates kept. Pinned fingerprints and per-seed tests updated where winners change, as at M4.1 |
 | **M6.1b** | The bridge in the world: `gen/world/fit.ts` leaves the ground under a span natural; the deck's sides and underside, railings (walls in `Road.walls`), pillars (boxes in the colliders); drawn; a bridge row in `docs/VISUAL_BAR.md` |
-| **M6.1c** | A simulation test over a bridge at top speed (four wheels down, no bump at either end); a `look=bridge` close view; the 20-seed screenshots and three bridges looked at |
+| **M6.1c** | The bridge's own look (Tane, after M6.1b), below: planned in plan mode first |
+| **M6.1d** | Bridges across water and ravines (Tane, after M6.1b), below: planned in plan mode first |
+| **M6.1e** | (Was M6.1c.) A simulation test over a bridge at top speed (four wheels down, no bump at either end); a `look=bridge` close view; the 20-seed screenshots and three bridges looked at; the visual bar's seed 7 pictures taken again |
 | **M6.2a** | Tunnel spans, pure: as M6.1a for cuts deeper than `road.maxCut`; rules in `road.tunnels`; measured over seeds 1 to 200 |
 | **M6.2b** | The tunnel in the world: the heightfield stays cut to the road (the ground is one height at each point; the wheels and the body need it); the lid is its own mesh covering the cutting with the hillside's shape, with portals; walls, lid and portals collide; no grass or trees inside |
 | **M6.2c** | The chase camera's clearance takes the lid as a ceiling (a unit test along every tunnel of seeds 1 to 200); dimmer light inside, drawing only; a `look=tunnel` view; pictures |
@@ -39,6 +41,32 @@ Each part ends with passing tests and one commit (`docs/PLAN.md`, "The routine f
 | **M6.7a…** | Speed and size, split at its start once measured |
 | **M6.8** | Generator `v1`, after Tane's answer on keeping released versions |
 | **M6.9** | Version 1 checked, README, the pull request, sign-off, merge, release |
+
+## Tane after M6.1b (2026-11-25): the bridge's look, and crossings
+
+Tane, on seeing M6.1b's bridges: "on top it looks the same and a player wouldn't really notice the difference. Instead could it maybe look like a wooden bridge or a different colour to the track. I also think we should look into using bridges to cross bits of water ... spanning across a ravine or a river and the bridge can connect the track on either side." Both are planned in plan mode, in a fresh session, before M6.1e. What follows is an outline to start from, not the plan.
+
+**What M6.1b left to build on.** A bridge is found from the road's fill (`findBridgeSpans`, over 6 m, at most 250 m); the road mesh is unchanged over it; its railings are walls (`findWalls`); the deck, its solid boxes and the pillars are `src/gen/road/bridges.ts`; under it the ground is left as it was (`fitRoad`, `FitInput.bridged`). 16 of seeds 1 to 200 have one; they cross dips in the ground (low viaducts, 5 to 8 m up in the middle), never water. The sea is one surface at height 0 (`render/water.ts`): any ground carved below sea level shows as water, with its shallows and foam drawn from the depth; ground inland above 0 can hold no water without a new water surface. A car below `sim.respawn.waterDepth` is put back (`respawn.ts`).
+
+### M6.1c: the bridge's own look (drawing, and generation's meshes)
+
+The road over a bridge should read as a bridge from the car. Options to show Tane with pictures (the visual bar still holds: flat-coloured facets, no textures, colours from `palette.ts`):
+- **Wooden:** the deck's surface as planks across the road (strips of two browns, each plank its own flat colour, small gaps), timber railings (posts and a rail) in place of the concrete wall on the bridge, timber trestles or stone piers for pillars. The railings' solid boxes stay as the walls' (so the car meets the same thing); only the drawing changes.
+- **Another colour:** the road surface on the bridge in a paler concrete or a red-brown, lines kept, steel or white railings.
+- **By the bridge:** wooden for short, low bridges; concrete or steel for long or high ones.
+
+Questions for Tane: which look; whether the white lines carry over the planks; whether the railings change too; whether a plank deck should sound or feel different (a rumble in M6.4's sound; grip unchanged unless Tane asks, since handling is Tane's call and changes ghosts). What changes: the road ribbon's material along a bridge's samples (new `ROAD_MATERIAL` numbers), the railing pieces' mesh on a bridge, the pillars' mesh, palette entries, `docs/VISUAL_BAR.md`; meshes are in the world fingerprint, so every bridged seed's fingerprint moves; no simulation change.
+
+### M6.1d: bridges across water and ravines (a generator change)
+
+Today bridges appear only where the island happens to dip under the lap. Tane wants the track to cross a river or a ravine on purpose, the bridge joining the road either side. A sketch:
+- **Where:** after the winning layout is chosen, a share of seeds (from its own seeded stream) get a crossing: a stretch of the lap that is straight or gently curved, away from the start area and the lap gates, long enough for a bridge of about 40 to 150 m.
+- **What is carved:** across the lap there, in the island's ground (before the road is fitted), a channel: a **river or inlet** cut below sea level and open to the coast, which the sea's surface then fills with water (shallows and foam come free); or a **dry ravine** 10 to 30 m deep on inland seeds. The road's height is kept, so the fill there passes 6 m and M6.1a's rule makes the bridge.
+- **What else it touches:** the coast rules (the surf is kept 10 m from the road, which a river under a bridge breaks on purpose, so the check must allow it under a bridge); the island's shape tests; walls; trees and rocks cleared from the channel; the respawn into water; the fit report; every seed's fingerprint and the 20-seed checks, as at M6.1a. All before `v1` (M6.8).
+
+Questions for Tane: which kinds (a river to the sea, an inlet of the sea, a dry ravine, or all three); how many seeds should have one (for example one in three, or every seed); one crossing a lap or more; a river higher in the hills too (it would need its own water surface: new drawing work, and more to test); how long a bridge may be; whether a river may cut the island in two.
+
+**Order to suggest:** M6.1c first (smaller, and every later bridge takes the new look), then M6.1d, then M6.1e's driving test and pictures; or M6.1d first if Tane wants the crossings seen before choosing the look.
 
 ## Decisions, what to reuse, and traps
 

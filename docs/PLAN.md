@@ -107,7 +107,9 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M6.1** Bridges:
   - [x] **M6.1a** Bridge spans, pure; the earthworks rule skips fill on a span; measured over seeds 1 to 200 (2026-11-25)
   - [x] **M6.1b** The bridge in the world: ground left natural, deck sides, railings, pillars (2026-11-25)
-  - [ ] **M6.1c** Driven over at top speed; `look=bridge`; pictures
+  - [ ] **M6.1c** The bridge's own look, different on top from the road (Tane, after M6.1b; plan in plan mode first)
+  - [ ] **M6.1d** Bridges across water and ravines (Tane, after M6.1b; plan in plan mode first)
+  - [ ] **M6.1e** Driven over at top speed; `look=bridge`; pictures (was M6.1c)
 - **M6.2** Tunnels:
   - [ ] **M6.2a** Tunnel spans, pure; the earthworks rule skips cut in a span; measured over seeds 1 to 200
   - [ ] **M6.2b** The tunnel in the world: the lid and portals, their colliders; no grass or trees inside
@@ -191,6 +193,7 @@ The check-ins are lines in the build order. Bring the page running, a short list
 | How many laps does a ghost cover: the best single lap, or the whole 3-lap race? (Tane, M5.0: the whole race) | M5.0 |
 | May a favourite saved before the generator is `v1` stop rebuilding when the generator changes? (Tane, M5.0: yes, with a note on screen) | M5.0 |
 | What is cut from Milestone 6 if it runs long, and in what order are its steps wanted? (Tane, M6.0: the plan's order; only the new effects, M6.5, may be cut) | M6.0 |
+| How should a bridge look on top (wooden planks and timber railings, another colour, or by its size)? Which crossings (a river to the sea, an inlet, a dry ravine), on how many seeds? (Tane, after M6.1b: the questions in `docs/plan/M6-polish.md`) | M6.1c, M6.1d |
 | When the generator changes after `v1`: keep every released version runnable, or store each favourite's centre line? (The brief allows either) | M6.8 |
 | Where is version 1 hosted, and under which name ("Seed Circuit" is a working title)? | M6.9 |
 
