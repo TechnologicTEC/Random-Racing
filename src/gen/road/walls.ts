@@ -1,6 +1,6 @@
 import type { GenConfig } from '../../config';
 import { Grid } from '../../core/grid';
-import type { CenterLine, HeightField, Section, WallSpan } from '../types';
+import type { BridgeSpan, CenterLine, HeightField, Section, WallSpan } from '../types';
 import { sampleField } from '../world/heightfield';
 
 export interface WallInput {
@@ -14,6 +14,8 @@ export interface WallInput {
   sections: readonly Section[];
   /** The island with the road fitted into it and the coast carved: the ground that is drawn and driven on. */
   ground: HeightField;
+  /** Where the road runs on bridges (M6.1b): both sides walled, the walls' railings. */
+  bridges?: readonly BridgeSpan[];
 }
 
 /**
@@ -25,7 +27,9 @@ export interface WallInput {
  * - on the outside of every real corner (not kinks), from a little before it to a little after;
  * - where another part of the lap runs close by on that side, so no one can cut across to it;
  * - where the ground beside the road rises or falls steeply: cuttings, embankments, cliffs, gorges;
- * - beside the start gate, whose posts stand outside the walls.
+ * - beside the start gate, whose posts stand outside the walls;
+ * - along both sides of a bridge, as its railings (M6.1b), running on past each end far enough that their sloping
+ *   ends are off the bridge.
  *
  * Everywhere else the roadside is open: grass to run wide onto, and gentle
  * sand down to the sea. Openings too short to be worth having are closed, and
@@ -56,6 +60,11 @@ export function findWalls(input: WallInput, cfg: GenConfig): WallSpan[] {
       for (let k = -lead; k < section.sampleCount + trail; k++) mark(section.startIndex + k);
     }
     for (let k = -gate; k < gate; k++) mark(k);
+    // The sloping end of a wall takes `taper` metres; one more piece, and the railing is at full height over the whole deck.
+    const runOn = Math.ceil(rules.taper / line.spacing) + 1;
+    for (const span of input.bridges ?? []) {
+      for (let k = -runOn; k < span.sampleCount - 1 + runOn; k++) mark(span.startIndex + k);
+    }
     const close = side > 0 ? beside.right : beside.left;
     for (let i = 0; i < n; i++) {
       if (close[i] === 1 || steepBeside(input, i, side, cfg)) need[i] = 1;

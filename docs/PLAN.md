@@ -106,7 +106,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **M6.0** Plan approved, with the order and the cut list agreed with Tane (2026-11-25; Tane's answers and the parts in STATE.md, "Milestone 6")
 - **M6.1** Bridges:
   - [x] **M6.1a** Bridge spans, pure; the earthworks rule skips fill on a span; measured over seeds 1 to 200 (2026-11-25)
-  - [ ] **M6.1b** The bridge in the world: ground left natural, deck sides, railings, pillars
+  - [x] **M6.1b** The bridge in the world: ground left natural, deck sides, railings, pillars (2026-11-25)
   - [ ] **M6.1c** Driven over at top speed; `look=bridge`; pictures
 - **M6.2** Tunnels:
   - [ ] **M6.2a** Tunnel spans, pure; the earthworks rule skips cut in a span; measured over seeds 1 to 200

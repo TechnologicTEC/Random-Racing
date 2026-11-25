@@ -3,11 +3,12 @@ import { config, type RoadConfig } from '../../config';
 import { circleLine } from '../../testing/trackFixtures';
 import { checkEarthworks } from '../track/earthworks';
 import type { RoadProfile } from '../types';
-import { bridgedMask, findBridgeSpans, rotateSpans, spanLength } from './bridges';
+import { bridgedMask, bridgePillars, buildBridges, deckBoxes, deckHalf, findBridgeSpans, rotateSpans, spanLength } from './bridges';
+import { ROAD_MATERIAL } from './ribbon';
 import { measureProfile, type RoadEdges } from './profile';
 
 // Fixed rules, so these tests do not move when the config is tuned.
-const road: RoadConfig = { ...config.road, maxFill: 6, bridges: { endFill: 3, minLength: 40, maxLength: 250, mergeGap: 40 } };
+const road: RoadConfig = { ...config.road, maxFill: 6, bridges: { ...config.road.bridges, endFill: 3, minLength: 40, maxLength: 250, mergeGap: 40 } };
 const SPACING = 2;
 const N = 500;
 const WIDTH = config.track.roadWidth;
@@ -119,5 +120,83 @@ describe('the earthworks rule on a bridge', () => {
     // Marked at the bridge's middle.
     const middle = (longSpans[0]!.startIndex + Math.floor(longSpans[0]!.sampleCount / 2)) % n;
     expect(violations[0]!.x).toBe(line.x[middle]);
+  });
+});
+
+describe('the bridge’s pillars and deck (M6.1b)', () => {
+  const line = circleLine(100);
+  const n = line.count;
+  const height = new Float64Array(n).fill(20);
+  const width = new Float64Array(n).fill(WIDTH);
+  const rules = config.road.bridges;
+  /** About 100 m of bridge, 10 m over level ground. */
+  const span = { startIndex: 10, sampleCount: 50 };
+  const groundAt = (): number => 10;
+  /** How far along the bridge a box stands, in metres from its first sample, and how far right of the centre line. */
+  const place = (box: { x: number; z: number }): { along: number; lateral: number } => {
+    let best = 0;
+    let bestD = Infinity;
+    for (let k = 0; k < span.sampleCount; k++) {
+      const i = span.startIndex + k;
+      const d = Math.hypot(box.x - line.x[i]!, box.z - line.z[i]!);
+      if (d < bestD) [best, bestD] = [k, d];
+    }
+    const i = span.startIndex + best;
+    return { along: best * line.spacing, lateral: (box.x - line.x[i]!) * -line.tz[i]! + (box.z - line.z[i]!) * line.tx[i]! };
+  };
+
+  it('stands two pillars a row, no more than the pillar spacing apart or from either end, from the deck’s underside into the ground', () => {
+    const pillars = bridgePillars(line, height, null, width, [span], groundAt, config);
+    // Just under 100 m (the circle's samples are a little over 2 m apart), at 25 m at most: 3 rows, about 25 m apart.
+    const length = spanLength(span, line.spacing);
+    expect(length).toBeGreaterThan(75);
+    expect(length).toBeLessThanOrEqual(100);
+    expect(pillars).toHaveLength(6);
+    // Each row at the sample nearest a quarter of the way along.
+    const rows = [...new Set(pillars.map((p) => place(p).along))].sort((a, b) => a - b);
+    expect(rows).toHaveLength(3);
+    rows.forEach((along, r) => expect(Math.abs(along - (length * (r + 1)) / 4)).toBeLessThanOrEqual(line.spacing / 2 + 1e-9));
+    for (const pillar of pillars) {
+      expect(pillar.y + pillar.halfUp).toBeCloseTo(20 - rules.deckDepth, 6);
+      expect(pillar.y - pillar.halfUp).toBeCloseTo(10 - 0.5, 6);
+      expect(Math.abs(place(pillar).lateral)).toBeCloseTo(WIDTH / 2 - rules.pillarInset, 1);
+      expect(pillar.halfAcross * 2).toBeCloseTo(rules.pillarWidth, 9);
+    }
+    // 54 m: 2 rows, 18 m apart.
+    expect(bridgePillars(line, height, null, width, [{ startIndex: 10, sampleCount: 28 }], groundAt, config)).toHaveLength(4);
+  });
+
+  it('stands no pillar where the ground comes within half a metre of the deck', () => {
+    expect(bridgePillars(line, height, null, width, [span], () => 20 - rules.deckDepth - 0.4, config)).toEqual([]);
+  });
+
+  it('gives each piece of the bridge a solid box from just under the road to the deck’s underside, out to the deck’s edges, tilted with the banking', () => {
+    const cross = new Float64Array(n).fill(0.1);
+    const boxes = deckBoxes(line, height, cross, width, [span], config);
+    expect(boxes).toHaveLength(span.sampleCount - 1);
+    for (const box of boxes) {
+      for (const side of [-1, 1]) {
+        // The top corner on each side, where the deck's edge meets the top of the box.
+        const corner = {
+          x: box.centre.x + box.up.x * box.half.y + box.across.x * box.half.x * side,
+          y: box.centre.y + box.up.y * box.half.y + box.across.y * box.half.x * side,
+          z: box.centre.z + box.up.z * box.half.y + box.across.z * box.half.x * side,
+        };
+        const lateral = place(corner).lateral;
+        expect(Math.abs(lateral)).toBeCloseTo(deckHalf(width, 30, config), 1);
+        expect(corner.y).toBeCloseTo(20 + 0.1 * lateral - rules.topGap, 1);
+      }
+      expect(box.half.y * 2).toBeCloseTo(rules.deckDepth - rules.topGap, 1);
+    }
+  });
+
+  it('draws the deck and the pillars in the bridge’s colour, never above the road', () => {
+    const mesh = buildBridges(line, height, null, width, [span], groundAt, config);
+    expect(mesh.indices.length).toBeGreaterThan(0);
+    expect(new Set(mesh.materials)).toEqual(new Set([ROAD_MATERIAL.bridge]));
+    for (let v = 1; v < mesh.positions.length; v += 3) {
+      expect(mesh.positions[v]!).toBeLessThanOrEqual(20 + 1e-4);
+      expect(mesh.positions[v]!).toBeGreaterThanOrEqual(10 - 0.5 - 1e-4);
+    }
   });
 });

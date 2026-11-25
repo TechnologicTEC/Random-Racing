@@ -328,6 +328,20 @@ export interface BridgeConfig {
   maxLength: number;
   /** Two bridges closer than this, in metres of road between them, become one. */
   mergeGap: number;
+  /** The deck's underside is this far below the road surface, in metres (M6.1b). */
+  deckDepth: number;
+  /** The top of the deck's solid box, and its strips beside the road, sit this far below the road surface, in metres, so the car's body never touches it. */
+  topGap: number;
+  /** The deck reaches this far past the outer face of the railings, in metres. */
+  deckLip: number;
+  /** Under a bridge the natural ground is kept, but cut down to at least this far below the deck's underside, in metres. */
+  underClearance: number;
+  /** Rows of pillars stand no further apart than this, nor from either end of the bridge, in metres. */
+  pillarSpacing: number;
+  /** A pillar is this wide each way, in metres. */
+  pillarWidth: number;
+  /** The two pillars of a row stand this far inside the road's edges, in metres. */
+  pillarInset: number;
 }
 
 export interface RoadConfig {
@@ -1996,7 +2010,20 @@ export const config: GameConfig = {
     bankEase: 30,
     maxFill: 6,
     // M6.1: starting values, measured over seeds 1 to 200 in STATE.md.
-    bridges: { endFill: 3, minLength: 40, maxLength: 250, mergeGap: 40 },
+    bridges: {
+      endFill: 3,
+      minLength: 40,
+      maxLength: 250,
+      mergeGap: 40,
+      // M6.1b: the deck, the ground kept under it, and its pillars.
+      deckDepth: 1.2,
+      topGap: 0.05,
+      deckLip: 0.2,
+      underClearance: 0.5,
+      pillarSpacing: 25,
+      pillarWidth: 1.6,
+      pillarInset: 3,
+    },
     maxCut: 8,
   },
   world: {

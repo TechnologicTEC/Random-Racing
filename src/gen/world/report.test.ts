@@ -97,6 +97,13 @@ describe('fitReport', () => {
     expect(bridged.steepestBank.value).toBe(0);
   });
 
+  it('counts no road hanging in the air along a bridge, where the ground is left as it was (M6.1b)', () => {
+    const { input } = reportFor(circle, 400, () => 10, () => 18);
+    const left = { ...input, earthworks: input.natural, ground: input.natural };
+    expect(fitReport(left, config).roadFloating).toBeGreaterThan(0);
+    expect(fitReport({ ...left, bridged: new Uint8Array(circle.count).fill(1) }, config).roadFloating).toBe(0);
+  });
+
   it('finds the water nearest the road', () => {
     // The sea starts at x = 150, so 50 m from the centre line at its nearest.
     const { report } = reportFor(circle, 400, (x) => (x > 150 ? -5 : 10), () => 10);

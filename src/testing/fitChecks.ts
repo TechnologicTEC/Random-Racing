@@ -85,10 +85,13 @@ function describeSeed(seed: number): void {
       expect(world().report.nearestWater.value).toBeGreaterThan(config.world.coast.minMargin - 1);
     });
 
-    it('carves the coast after the road is built, without disturbing the road', () => {
-      const { track, ground } = world();
+    it('carves the coast after the road is built, without disturbing the road (off its bridges)', () => {
+      const { track, ground, road } = world();
       const winner = track.candidates[track.winnerIndex]!;
+      // Under a bridge the ground is left as it was (M6.1b).
+      const bridged = bridgedMask(road.bridges.spans, winner.line.count);
       for (let i = 0; i < winner.line.count; i += 3) {
+        if (bridged[i]) continue;
         // On the centre line itself, where banking makes no difference to the height.
         const below = winner.profile.height[i]! - sampleField(ground, winner.line.x[i]!, winner.line.z[i]!, 0);
         expect(below, `sample ${i}`).toBeGreaterThan(0.2);
@@ -109,9 +112,10 @@ function describeSeed(seed: number): void {
     it('tilts the ground with the banking: under a banked corner the outside is higher than the inside', () => {
       const { track, road, ground } = world();
       const { line } = track.candidates[track.winnerIndex]!;
-      // The most steeply banked point of the lap.
-      let i = 0;
-      for (let k = 0; k < line.count; k++) if (Math.abs(road.cross[k]!) > Math.abs(road.cross[i]!)) i = k;
+      // The most steeply banked point of the lap off its bridges, where the ground is left as it was (M6.1b).
+      const bridged = bridgedMask(road.bridges.spans, line.count);
+      let i = bridged.indexOf(0);
+      for (let k = 0; k < line.count; k++) if (!bridged[k] && Math.abs(road.cross[k]!) > Math.abs(road.cross[i]!)) i = k;
       const tilt = road.cross[i]!;
       expect(Math.abs(tilt)).toBeGreaterThan(0.05);
       const at = (lateral: number): number => {
@@ -124,12 +128,25 @@ function describeSeed(seed: number): void {
       expect(at(4) - at(-4)).toBeCloseTo(8 * tilt, 1);
     });
 
-    it('stands every barrier on ground that follows the road: its foot is buried, its top well clear', () => {
-      const { road, ground } = world();
+    it('stands every barrier on ground that follows the road: its foot is buried, its top well clear (off its bridges, where it stands on the deck)', () => {
+      const { road, ground, track } = world();
+      const { line } = track.candidates[track.winnerIndex]!;
       const { positions } = road.barriers;
+      const bridged = bridgedMask(road.bridges.spans, line.count);
+      /** The sample of the centre line nearest a point. */
+      const nearest = (x: number, z: number): number => {
+        let best = 0;
+        let bestD = Infinity;
+        for (let i = 0; i < line.count; i++) {
+          const d = (line.x[i]! - x) ** 2 + (line.z[i]! - z) ** 2;
+          if (d < bestD) [best, bestD] = [i, d];
+        }
+        return best;
+      };
       let buried = 0;
       let clear = 0;
       for (let v = 0; v < positions.length; v += 3 * 7) {
+        if (bridged[nearest(positions[v]!, positions[v + 2]!)]) continue;
         const above = positions[v + 1]! - sampleField(ground, positions[v]!, positions[v + 2]!, 0);
         // Every vertex is either at the foot (a little under the ground) or at the top (most of a metre over it).
         if (above < 0) {

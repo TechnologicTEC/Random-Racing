@@ -262,3 +262,49 @@ describe('fitRoad under a road whose width changes along the lap', () => {
     }
   });
 });
+
+describe('fitRoad under a bridge (M6.1b)', () => {
+  const line = circleLine(100);
+  const n = line.count;
+  const deck = road.bridges.deckDepth + road.bridges.underClearance;
+  /** The first half of the lap on a bridge. */
+  const half = Uint8Array.from({ length: n }, (_, i) => (i < n / 2 ? 1 : 0));
+  const fitBridged = (natural: HeightField, roadHeight: number, bridged: Uint8Array) => {
+    const height = new Float64Array(n).fill(roadHeight);
+    return fitRoad({ natural, near: nearestRoad(line, natural), line, height, cross: null, width: uniformWidth(line, config.track.roadWidth), bridged }, config);
+  };
+  const under = (field: HeightField, i: number, lateral = 0): number =>
+    sampleField(field, line.x[i]! - line.tz[i]! * lateral, line.z[i]! + line.tx[i]! * lateral, 0);
+
+  it('leaves the natural ground under a bridge, and builds the embankment where the road is off it', () => {
+    const natural = ground(400, () => 10);
+    const { ground: fitted, corridor } = fitBridged(natural, 20, half);
+    const middle = Math.round(n / 4);
+    for (const lateral of [-HALF, 0, HALF, CORRIDOR + 5, CORRIDOR + road.blendMax]) expect(under(fitted, middle, lateral)).toBeCloseTo(10, 5);
+    expect(under(fitted, Math.round((3 * n) / 4))).toBeCloseTo(20 - road.sink, 5);
+    // Not the road's strip: the island's own cover shows under a bridge.
+    const c = (x: number, z: number) => Math.round((z + 200) / 2) * natural.size + Math.round((x + 200) / 2);
+    expect(corridor[c(line.x[middle]!, line.z[middle]!)]).toBe(0);
+  });
+
+  it('keeps natural ground that lies just clear of the deck, and leaves no bank round it', () => {
+    const natural = ground(400, () => 20 - deck - 0.1);
+    const all = new Uint8Array(n).fill(1);
+    const { ground: fitted } = fitBridged(natural, 20, all);
+    for (const lateral of [-HALF, 0, HALF, CORRIDOR + 3]) expect(under(fitted, 10, lateral)).toBeCloseTo(20 - deck - 0.1, 5);
+  });
+
+  it('cuts ground that would come within the clearance of the deck to the road, as anywhere else, and blends the cutting into the hillside', () => {
+    // A bridge takes the place of an embankment, never of a cutting: here the ground stands 5 m over the road.
+    const natural = ground(400, () => 25);
+    const all = new Uint8Array(n).fill(1);
+    const { ground: fitted, corridor } = fitBridged(natural, 20, all);
+    for (const lateral of [-HALF, 0, HALF]) expect(under(fitted, 10, lateral)).toBeCloseTo(20 - road.sink, 5);
+    const c = (x: number, z: number) => Math.round((z + 200) / 2) * natural.size + Math.round((x + 200) / 2);
+    expect(corridor[c(line.x[10]!, line.z[10]!)]).toBe(1);
+    // Beyond the verge the cutting's bank rises from the road towards the natural ground, as on any road.
+    const bank = under(fitted, 10, CORRIDOR + 3);
+    expect(bank).toBeGreaterThan(20);
+    expect(bank).toBeLessThan(25 - 0.5);
+  });
+});

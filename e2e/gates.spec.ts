@@ -38,13 +38,14 @@ test.describe('pictures of the lap gates', () => {
 });
 
 /**
- * A gate missed (M5.4d-2): the bot's race of seed 7 in Node, pushed off the road before gate 1 until it goes past the
+ * A gate missed (M5.4d-2): the bot's race of seed 1 in Node, pushed off the road before gate 1 until it goes past the
  * gate outside its posts; then R, and the bot on until it goes through it. Replayed on the page, the card at the top
- * middle says which gate was missed while it is, and is gone once the gate is gone through.
+ * middle says which gate was missed while it is, and is gone once the gate is gone through. (Seed 7 until M6.1b: its
+ * gate 1 now stands just past its bridge, whose railings keep a car pushed off the road on it.)
  */
 async function missedGate1(): Promise<{ toMiss: number[]; after: number[] }> {
   const rapier = await loadRapier();
-  const world = generateWorld(7, config);
+  const world = generateWorld(1, config);
   const { line } = world.track.candidates[world.track.winnerIndex]!;
   const gate1 = world.road.lapGates.samples[0]! * line.spacing;
   const forwards = (from: number, to: number): number => (((to - from) % line.length) + line.length) % line.length;
@@ -78,14 +79,14 @@ async function missedGate1(): Promise<{ toMiss: number[]; after: number[] }> {
       }
     }
   }
-  throw new Error('No push off the road missed gate 1 of seed 7');
+  throw new Error('No push off the road missed gate 1 of seed 1');
 }
 
 test('says which gate was missed until it is gone through, and R takes the car back before it', async ({ page, browserName }) => {
   test.setTimeout(240_000);
   const { toMiss, after } = await missedGate1();
   await page.setViewportSize({ width: 1280, height: 720 });
-  await open(page, 'seed=7&still=1&mode=race&bot=off');
+  await open(page, 'seed=1&still=1&mode=race&bot=off');
   await expect(page.locator('body')).toHaveAttribute('data-drive-step', /\d+/, { timeout: 30_000 });
   const card = page.getByTestId('race-missed');
   await expect(card).toBeHidden();
@@ -94,7 +95,7 @@ test('says which gate was missed until it is gone through, and R takes the car b
   }
   await expect(card).toBeVisible();
   await expect(card).toHaveText('Missed gate 1: drive back through it, or press R');
-  await page.screenshot({ path: `${shots}/race-00007-missed-gate-${browserName}.png` });
+  await page.screenshot({ path: `${shots}/race-00001-missed-gate-${browserName}.png` });
   await page.evaluate((list) => window.seedCircuit.drive!.replay(list), after);
   await expect(card).toBeHidden();
   const race = (await page.evaluate(() => window.seedCircuit.drive!.state()))!.race!;

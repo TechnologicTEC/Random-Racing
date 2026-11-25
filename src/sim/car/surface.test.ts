@@ -9,7 +9,7 @@ import { loadRapier } from '../physics/rapier';
 import { startPose } from '../start';
 import { surfaceFinder, surfaceShare, type Surface } from './surface';
 
-const colliders: WorldColliders = { ground: 0, road: 1, kerbs: 2, walls: [3, 4], gate: [5, 6, 7], trees: [8], rocks: [9] };
+const colliders: WorldColliders = { ground: 0, road: 1, kerbs: 2, walls: [3, 4], gate: [5, 6, 7], bridges: [], trees: [8], rocks: [9] };
 
 /** A 3 by 3 grid of 10 m cells centred on the origin, with one kind of cover at each of five of its points. */
 const field: HeightField = { size: 3, cell: 10, origin: -10, height: new Float32Array(9) };
@@ -83,14 +83,14 @@ describe('surfaceShare: the share of top speed the wheels allow', () => {
 
 describe('surfaceFinder on a plain test ground', () => {
   it('calls the road road, the kerbs kerb and the other mesh grass', () => {
-    const surfaceOf = surfaceFinder({ ...colliders, walls: [], gate: [], trees: [], rocks: [] }, null);
+    const surfaceOf = surfaceFinder({ ...colliders, walls: [], gate: [], bridges: [], trees: [], rocks: [] }, null);
     expect(surfaceOf(colliders.road, 0, 0)).toBe('road');
     expect(surfaceOf(colliders.kerbs, 0, 0)).toBe('kerb');
     expect(surfaceOf(colliders.ground, 0, 0)).toBe('grass');
   });
 
   it('never mistakes a missing collider for one that was met', () => {
-    const surfaceOf = surfaceFinder({ ground: NO_COLLIDER, road: 0, kerbs: NO_COLLIDER, walls: [], gate: [], trees: [], rocks: [] }, null);
+    const surfaceOf = surfaceFinder({ ground: NO_COLLIDER, road: 0, kerbs: NO_COLLIDER, walls: [], gate: [], bridges: [], trees: [], rocks: [] }, null);
     expect(surfaceOf(0, 0, 0)).toBe('road');
   });
 });

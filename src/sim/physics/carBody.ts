@@ -134,6 +134,8 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
   const things = new Map<number, Touch['thing']>();
   for (const handle of colliders.walls) things.set(handle, 'wall');
   for (const handle of colliders.gate) things.set(handle, 'gate');
+  // A bridge's deck or pillar is hit as a wall (M6.1b).
+  for (const handle of colliders.bridges) things.set(handle, 'wall');
   for (const handle of colliders.trees) things.set(handle, 'tree');
   for (const handle of colliders.rocks) if (handle !== NO_COLLIDER) things.set(handle, 'rock');
   const wheel = new rapier.Ball(cfg.car.wheels.radius);

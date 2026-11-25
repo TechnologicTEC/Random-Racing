@@ -17,6 +17,7 @@ const BY_MATERIAL = new Map<number, Rgb>([
   [ROAD_MATERIAL.gate, ROAD.gate],
   [ROAD_MATERIAL.gateBeam, ROAD.gateBeam],
   [ROAD_MATERIAL.lapGateBeam, ROAD.lapGateBeam],
+  [ROAD_MATERIAL.bridge, ROAD.bridge],
 ]);
 
 /**

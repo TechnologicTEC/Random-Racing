@@ -436,8 +436,8 @@ export interface Road {
   barriers: MeshData;
   /** The chequered start line and the gate over it, at sample 0 of the winner's centre line. */
   gate: MeshData;
-  /** Where the road runs on bridges (M6.1), the winner's spans numbered from the start line. */
-  bridges: BridgeSpan[];
+  /** Where the road runs on bridges (M6.1): the winner's spans numbered from the start line, and the decks and pillars as triangles (M6.1b). */
+  bridges: { spans: BridgeSpan[]; mesh: MeshData };
   /** The gates a lap is counted by (M5.4d): their samples of the winner's centre line in order round the lap, and their triangles. */
   lapGates: { samples: number[]; mesh: MeshData };
 }

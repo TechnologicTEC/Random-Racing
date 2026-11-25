@@ -1,7 +1,7 @@
 import type { GenConfig } from '../config';
 import { createHasher } from '../core/hash';
 import { solveBanking } from './road/banking';
-import { bridgedMask } from './road/bridges';
+import { bridgedMask, buildBridges } from './road/bridges';
 import { buildBarriers } from './road/barriers';
 import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
@@ -38,7 +38,8 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   // afterwards, so an embankment can never spill out into the sea.
   const cross = solveBanking(line, config.road);
   const road = { near: island.near, line, height: profile.height, cross, width };
-  const fitted = fitRoad({ ...road, natural: island.inland }, config);
+  const bridged = bridgedMask(winner.bridges, line.count);
+  const fitted = fitRoad({ ...road, natural: island.inland, bridged }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
   const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
   const decor = buildDecor(track.seed, ground, cover, island.edge, config);
@@ -48,9 +49,9 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   // The gates a lap is counted by (M5.4d).
   const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates);
   // Looked for on the finished ground, so a wall stands wherever a cutting, an embankment or a cliff ended up beside the road.
-  const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground }, config);
+  const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground, bridges: winner.bridges }, config);
   const report = fitReport(
-    { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged: bridgedMask(winner.bridges, line.count) },
+    { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged },
     config,
   );
 
@@ -67,7 +68,10 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
       mesh: buildRoadRibbon(line, profile.height, cross, width, config),
       kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, width, kerbSpans, config) },
       walls,
-      bridges: winner.bridges,
+      bridges: {
+        spans: winner.bridges,
+        mesh: buildBridges(line, profile.height, cross, width, winner.bridges, (x, z) => sampleField(ground, x, z, 0), config),
+      },
       barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config),
       gate: buildStartGate(line, profile.height, cross, width, config),
       lapGates: { samples: lapGateSamples, mesh: buildLapGates(line, profile.height, cross, width, lapGateSamples, (x, z) => sampleField(ground, x, z, 0), config) },
@@ -94,12 +98,12 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.snow).numbers(world.cover.variation);
   hasher.numbers(world.road.cross).numbers(world.road.width);
   hasher.numbers(world.road.lapGates.samples);
-  for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate, world.road.lapGates.mesh]) {
+  for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate, world.road.lapGates.mesh, world.road.bridges.mesh]) {
     hasher.numbers(mesh.positions).numbers(mesh.indices).numbers(mesh.materials);
   }
   for (const kerb of world.road.kerbs.spans) hasher.numbers([kerb.startIndex, kerb.sampleCount, kerb.side]);
   for (const wall of world.road.walls) hasher.numbers([wall.startIndex, wall.pieceCount, wall.side]);
-  for (const span of world.road.bridges) hasher.numbers([span.startIndex, span.sampleCount]);
+  for (const span of world.road.bridges.spans) hasher.numbers([span.startIndex, span.sampleCount]);
   const { report } = world;
   for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {
     if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);

@@ -5,7 +5,9 @@ import { wallPieces } from '../../gen/road/barriers';
 import { gateBoxes } from '../../gen/road/startGate';
 import { walledPieces } from '../../gen/road/walls';
 import { TREE_KINDS } from '../../gen/world/decor';
-import { addWorldColliders, gateColliders, NO_COLLIDER, rockColliders, treeColliders, wallColliders } from './colliders';
+import { bridgePillars, deckBoxes } from '../../gen/road/bridges';
+import { sampleField } from '../../gen/world/heightfield';
+import { addWorldColliders, bridgeColliders, gateColliders, NO_COLLIDER, rockColliders, treeColliders, wallColliders } from './colliders';
 import { loadRapier, type Rapier } from './rapier';
 
 type PhysicsWorld = InstanceType<Rapier['World']>;
@@ -236,16 +238,17 @@ describe('rockColliders', () => {
 });
 
 describe('addWorldColliders', () => {
-  it('adds the ground, the road, the kerbs, every wall piece, the gate, every tree and every rock, in that order', () => {
+  it('adds the ground, the road, the kerbs, every wall piece, the gate, the bridges, every tree and every rock, in that order', () => {
     const physics = new rapier.World({ x: 0, y: -9.81, z: 0 });
     const added = addWorldColliders(rapier, physics, world, config);
     const pieces = world.road.walls.reduce((sum, wall) => sum + Math.min(wall.pieceCount, winner().line.count), 0);
     expect(added.walls).toHaveLength(pieces);
     expect(added.gate).toHaveLength(3 + 3 * config.road.lapGates.count);
+    expect(added.bridges.length).toBeGreaterThan(0);
     expect(added.trees).toHaveLength(world.decor.trees.count);
     expect(added.rocks).toHaveLength(world.decor.rocks.count);
     // A rock too low for the body to reach has no collider (7c).
-    const all = [added.ground, added.road, added.kerbs, ...added.walls, ...added.gate, ...added.trees, ...added.rocks.filter((handle) => handle !== NO_COLLIDER)];
+    const all = [added.ground, added.road, added.kerbs, ...added.walls, ...added.gate, ...added.bridges, ...added.trees, ...added.rocks.filter((handle) => handle !== NO_COLLIDER)];
     expect(physics.colliders.len()).toBe(all.length);
     // Handles are given out in the order colliders are made.
     for (let k = 1; k < all.length; k++) expect(all[k]!).toBeGreaterThan(all[k - 1]!);
@@ -313,6 +316,46 @@ describe('the lap gates as colliders (M5.4d)', () => {
       const up = cast(physics, { x: line.x[s]!, y: profile.height[s]!, z: line.z[s]! }, { x: 0, y: 1, z: 0 }, 50);
       expect(up!, `gate at sample ${s}`).toBeGreaterThanOrEqual(road.gateClearance - 0.01);
     }
+    physics.free();
+  });
+});
+
+describe('bridgeColliders (M6.1b)', () => {
+  const groundAt = (x: number, z: number): number => sampleField(world.ground, x, z, 0);
+
+  it('gives each pillar a box, then each piece of each bridge its deck', () => {
+    const { line, profile } = winner();
+    const spans = world.road.bridges.spans;
+    const pillars = bridgePillars(line, profile.height, world.road.cross, world.road.width, spans, groundAt, config);
+    const decks = deckBoxes(line, profile.height, world.road.cross, world.road.width, spans, config);
+    expect(pillars.length).toBeGreaterThan(0);
+    expect(bridgeColliders(rapier, world, config)).toHaveLength(pillars.length + decks.length);
+  });
+
+  it('meets a ray cast up from under the bridge at the deck’s underside, and one along the road under it at a pillar', () => {
+    const physics = worldOf(bridgeColliders(rapier, world, config));
+    const { line, profile } = winner();
+    const n = line.count;
+    const span = world.road.bridges.spans[0]!;
+    const i = (span.startIndex + Math.floor(span.sampleCount / 2)) % n;
+    const below = groundAt(line.x[i]!, line.z[i]!) + 0.3;
+    const up = cast(physics, { x: line.x[i]!, y: below, z: line.z[i]! }, { x: 0, y: 1, z: 0 }, 50);
+    expect(up).not.toBeNull();
+    expect(below + up!).toBeCloseTo(profile.height[i]! - config.road.bridges.deckDepth, 1);
+
+    // From the bridge's start, along the line of the right-hand pillars.
+    const lateral = world.road.width[span.startIndex]! / 2 - config.road.bridges.pillarInset;
+    const s = span.startIndex;
+    const from = { x: line.x[s]! - line.tz[s]! * lateral, y: 0, z: line.z[s]! + line.tx[s]! * lateral };
+    // The tallest pillar, aimed at half way up, well under the deck.
+    const pillar = bridgePillars(line, profile.height, world.road.cross, world.road.width, [span], groundAt, config).reduce((a, b) => (b.halfUp > a.halfUp ? b : a));
+    from.y = pillar.y;
+    const dx = pillar.x - from.x;
+    const dz = pillar.z - from.z;
+    const flat = Math.hypot(dx, dz);
+    const hit = cast(physics, from, { x: dx / flat, y: 0, z: dz / flat }, flat + 5);
+    expect(hit).not.toBeNull();
+    expect(hit!).toBeLessThan(flat);
     physics.free();
   });
 });

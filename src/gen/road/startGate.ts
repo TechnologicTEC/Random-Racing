@@ -178,8 +178,8 @@ export function buildLapGates(
   return builder.build();
 }
 
-/** A gate's box as six closed faces, square to the road where it stands. */
-function drawBox(builder: MeshBuilder, shape: GateBox, material: number): void {
+/** A gate's box as six closed faces, square to the road where it stands (a bridge's pillars too, M6.1b). */
+export function drawBox(builder: MeshBuilder, shape: GateBox, material: number): void {
   const { tx, tz } = shape;
   /** A corner of the box: `across` and `along` are -1 or 1 for its left or right and its near or far side. */
   const corner = (across: number, along: number, y: number): Point => ({

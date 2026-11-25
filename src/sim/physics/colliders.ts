@@ -1,6 +1,7 @@
 import type { PhysicsConfig } from '../../config';
 import { dcos, dsin } from '../../core/dmath';
 import { BARRIER_FOOTING, wallPieces, type WallPiece } from '../../gen/road/barriers';
+import { bridgePillars, deckBoxes } from '../../gen/road/bridges';
 import { gateBoxes } from '../../gen/road/startGate';
 import { sampleField } from '../../gen/world/heightfield';
 import type { HeightField, MeshData, WorldResult } from '../../gen/types';
@@ -134,6 +135,31 @@ export function gateColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
 }
 
 /**
+ * The bridges as solid boxes (M6.1b), as they are drawn: every pillar (`bridgePillars`), then every piece of every
+ * deck (`deckBoxes`). The car drives on the road above a deck and never touches it; from below or beside, a deck or a
+ * pillar is hit as a wall.
+ */
+export function bridgeColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): ColliderDesc[] {
+  const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
+  const { cross, width } = world.road;
+  const spans = world.road.bridges.spans;
+  const groundAt = (x: number, z: number): number => sampleField(world.ground, x, z, 0);
+  const pillars = bridgePillars(line, profile.height, cross, width, spans, groundAt, cfg).map((box) =>
+    rapier.ColliderDesc.cuboid(box.halfAcross, box.halfUp, box.halfAlong)
+      .setTranslation(box.x, box.y, box.z)
+      .setRotation(quatFromAxes({ x: box.tz, y: 0, z: -box.tx }, { x: 0, y: 1, z: 0 }, { x: box.tx, y: 0, z: box.tz }))
+      .setCollisionGroups(STANDING),
+  );
+  const decks = deckBoxes(line, profile.height, cross, width, spans, cfg).map(({ centre, half, across, up, along }) =>
+    rapier.ColliderDesc.cuboid(half.x, half.y, half.z)
+      .setTranslation(centre.x, centre.y, centre.z)
+      .setRotation(quatFromAxes(across, up, along))
+      .setCollisionGroups(STANDING),
+  );
+  return [...pillars, ...decks];
+}
+
+/**
  * Every tree as an upright post where its trunk is, in the order of the world's
  * list of trees. Leaves and branches are not hit: the car passes under them.
  */
@@ -223,6 +249,8 @@ export interface WorldColliders {
   walls: number[];
   /** The left post, the right post, the beam. */
   gate: number[];
+  /** Every bridge's pillars, then its decks' boxes, in the order of `bridgeColliders` (M6.1b). */
+  bridges: number[];
   /** One for each tree, in the order of the world's list. */
   trees: number[];
   /** One for each rock, in the order of the world's list; `NO_COLLIDER` for a rock too low to be hit. */
@@ -232,7 +260,7 @@ export interface WorldColliders {
 /**
  * Adds everything in a world that the car can touch to a physics world, always
  * in the same order: the ground, the road, the kerbs, the walls, the gate, the
- * trees, the rocks. The same world therefore gets the same handles every time,
+ * bridges, the trees, the rocks. The same world therefore gets the same handles every time,
  * on every computer, and what a wheel or the car's body met can be looked up
  * from its handle.
  */
@@ -244,6 +272,7 @@ export function addWorldColliders(rapier: Rapier, physics: PhysicsWorld, world: 
     kerbs: add(meshCollider(rapier, world.road.kerbs.mesh)),
     walls: wallColliders(rapier, world, cfg).map(add),
     gate: gateColliders(rapier, world, cfg).map(add),
+    bridges: bridgeColliders(rapier, world, cfg).map(add),
     trees: treeColliders(rapier, world, cfg).map(add),
     rocks: rockColliders(rapier, world, cfg).map((collider) => (collider ? add(collider) : NO_COLLIDER)),
   };
@@ -266,6 +295,7 @@ export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course
       solid(rapier.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation(centre.x, centre.y, centre.z).setRotation(rotation ?? { x: 0, y: 0, z: 0, w: 1 })),
     ),
     gate: [],
+    bridges: [],
     trees: (course.posts ?? []).map(({ x, z, radius, bottom, top }) =>
       solid(rapier.ColliderDesc.cylinder((top - bottom) / 2, radius).setTranslation(x, (top + bottom) / 2, z)),
     ),

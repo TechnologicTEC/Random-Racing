@@ -79,7 +79,8 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
 
       const gap = surface - sampleField(ground, x, z, surface - cfg.road.sink);
       if (gap < MIN_GAP) groundThroughRoad++;
-      if (gap > MAX_GAP) roadFloating++;
+      // On a bridge the road stands over the ground on purpose (M6.1b).
+      if (gap > MAX_GAP && !bridged?.[i]) roadFloating++;
     }
   }
 

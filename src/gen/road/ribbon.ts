@@ -23,6 +23,8 @@ export const ROAD_MATERIAL = {
   gateBeam: 10,
   /** The beam of a lap gate (M5.4d): its posts are `gate`. */
   lapGateBeam: 11,
+  /** A bridge's deck and pillars (M6.1b). */
+  bridge: 12,
 } as const;
 
 /**

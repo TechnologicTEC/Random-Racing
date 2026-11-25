@@ -275,13 +275,15 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       const gate = createRoadMesh(world.road.gate, roadMaterial);
       // The gates a lap is counted by (M5.4d).
       const lapGates = createRoadMesh(world.road.lapGates.mesh, roadMaterial);
-      for (const mesh of [asphalt, kerbs, barriers, gate, lapGates]) mesh.receiveShadow = true;
-      // Kerbs lie flat on the road; the barriers and the gates stand up and cast.
-      for (const mesh of [barriers, gate, lapGates]) {
+      // The bridges' decks and pillars (M6.1b).
+      const bridges = createRoadMesh(world.road.bridges.mesh, roadMaterial);
+      for (const mesh of [asphalt, kerbs, barriers, gate, lapGates, bridges]) mesh.receiveShadow = true;
+      // Kerbs lie flat on the road; the barriers, the gates and the bridges stand up and cast.
+      for (const mesh of [barriers, gate, lapGates, bridges]) {
         mesh.castShadow = true;
         mesh.layers.enable(CASTER_LAYER);
       }
-      road.add(asphalt, kerbs, barriers, gate, lapGates);
+      road.add(asphalt, kerbs, barriers, gate, lapGates, bridges);
       decor.load(world.decor);
       shade.setGround(world.ground);
       shade.setClouds(world.clouds);

@@ -41,6 +41,8 @@ export const ROAD = {
   gateBeam: [0.9, 0.9, 0.88] as Rgb,
   /** A lap gate's beam (M5.4d): the cards' teal accent, #1a7d77 (Tane, 2026-11-25). */
   lapGateBeam: [0.102, 0.49, 0.467] as Rgb,
+  /** A bridge's deck and pillars (M6.1b): concrete a shade darker than the walls, so the railings stand out on it. */
+  bridge: [0.64, 0.64, 0.61] as Rgb,
 };
 
 /** The sea: deep and shallow water, and foam. From the island demo. */

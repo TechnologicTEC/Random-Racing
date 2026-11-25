@@ -19,6 +19,13 @@ export interface FitInput {
   cross: Float64Array | null;
   /** Width of the road at each sample, in metres. */
   width: Float64Array;
+  /**
+   * 1 for each sample on a bridge (M6.1b). A bridge takes the place of an embankment, never of a cutting: under it
+   * the ground is left as it was where it lies at least `road.bridges.underClearance` below the deck's underside, and
+   * cut to the road as anywhere else where it stands higher (inside the deck, out of sight); it pulls no embankment
+   * round it, but a cutting beside it is blended into the hillside as anywhere else.
+   */
+  bridged?: Uint8Array;
 }
 
 export interface FitResult {
@@ -26,6 +33,18 @@ export interface FitResult {
   ground: HeightField;
   /** 1 for cells under the road or its verges, 0 elsewhere. */
   corridor: Uint8Array;
+}
+
+/**
+ * The embankment runs this many samples in under each end of a bridge, inside the deck, as its abutment: the ground
+ * read between grid cells just before the deck then never dips to the natural ground under it (M6.1b).
+ */
+const ABUTMENT = 2;
+
+/** True when the piece of the lap from sample i to the next is on a bridge, and not within `ABUTMENT` samples of its ends. */
+function onBridge(bridged: Uint8Array, i: number, n: number): boolean {
+  for (let k = -ABUTMENT; k <= ABUTMENT + 1; k++) if (!bridged[(((i + k) % n) + n) % n]) return false;
+  return true;
 }
 
 /** A cell can be within reach of this many separate sections of the lap at once. */
@@ -43,8 +62,10 @@ const MAX_SECTIONS = 3;
  * other, never two blends laid over each other.
  */
 export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
-  const { natural, near, line, height, cross, width } = input;
+  const { natural, near, line, height, cross, width, bridged } = input;
   const road = cfg.road;
+  /** How far below the road surface the ground under a bridge must stay. */
+  const underDeck = road.bridges.deckDepth + road.bridges.underClearance;
   const { size } = natural;
   const n = line.count;
   let widest = 0;
@@ -68,6 +89,8 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
   const sectionHeight = new Float64Array(MAX_SECTIONS);
   /** Half the width of the strip that follows the road there: half the road plus a verge. */
   const sectionCorridor = new Float64Array(MAX_SECTIONS);
+  /** 1 where the section's nearest piece is on a bridge. */
+  const sectionBridged = new Uint8Array(MAX_SECTIONS);
 
   for (let iz = 0; iz < size; iz++) {
     const z = worldZ(natural, iz);
@@ -126,6 +149,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
             sectionDistance[slot] = distance;
             sectionCorridor[slot] = corridorHalf;
             sectionHeight[slot] = centre + lateral * tilt - road.sink;
+            sectionBridged[slot] = bridged && onBridge(bridged, i, n) ? 1 : 0;
           }
         }
       }
@@ -137,6 +161,11 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
         if (sectionDistance[s]! <= sectionCorridor[s]! && (onRoad < 0 || sectionDistance[s]! < sectionDistance[onRoad]!)) onRoad = s;
       }
       if (onRoad >= 0) {
+        if (sectionBridged[onRoad] && natural.height[c]! <= sectionHeight[onRoad]! + road.sink - underDeck) {
+          // Under a bridge, clear of the deck: the island as it was. Not the road's strip, so its cover shows.
+          ground.height[c] = natural.height[c]!;
+          continue;
+        }
         ground.height[c] = sectionHeight[onRoad]!;
         corridor[c] = 1;
         continue;
@@ -149,6 +178,8 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       // would be infinite. It is on the verge's edge, so it simply takes that section's height.
       let atEdge = -1;
       for (let s = 0; s < sections; s++) {
+        // A bridge pulls no embankment round it; a cutting beside it is blended as anywhere else.
+        if (sectionBridged[s] && wild < sectionHeight[s]!) continue;
         const blend = clamp(Math.abs(wild - sectionHeight[s]!) / road.blendSlope, road.blendMin, road.blendMax);
         const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - sectionCorridor[s]!);
         if (pull >= 1 && (atEdge < 0 || sectionDistance[s]! < sectionDistance[atEdge]!)) atEdge = s;
@@ -161,6 +192,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       let weighted = 0;
       let weights = 0;
       for (let s = 0; s < sections; s++) {
+        if (sectionBridged[s] && wild < sectionHeight[s]!) continue;
         const target = sectionHeight[s]!;
         const blend = clamp(Math.abs(wild - target) / road.blendSlope, road.blendMin, road.blendMax);
         const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - sectionCorridor[s]!);
