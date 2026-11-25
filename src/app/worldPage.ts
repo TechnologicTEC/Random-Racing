@@ -150,6 +150,7 @@ const TEMPLATE = `
       <div class="world-light-row"><span class="world-light" data-ref="light1"></span><span class="world-light" data-ref="light2"></span><span class="world-light" data-ref="light3"></span></div>
       <p class="world-start-note" data-ref="startNote" data-testid="race-start-note" hidden></p>
     </div>
+    <div class="world-card world-missed" data-ref="missed" data-testid="race-missed" role="status" hidden></div>
     <div class="world-card world-race" data-ref="race" data-testid="race-card" hidden>
       <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
       <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
@@ -414,6 +415,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (note.textContent !== said) note.textContent = said;
     note.hidden = said === '';
     note.classList.toggle('world-race-accent', race?.startBoost === true);
+    // A lap gate gone past outside its posts (M5.4d): which one, until it is gone through.
+    const missed = race !== null && race.phase === 'racing' && race.missed ? missedText(race.next) : '';
+    const missedCard = ref('missed');
+    missedCard.hidden = missed === '';
+    if (missedCard.textContent !== missed) missedCard.textContent = missed;
     const card = ref('race');
     card.hidden = race === null;
     if (!race) return;
@@ -1276,6 +1282,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       visible: () => ghostVisible,
     },
   };
+}
+
+/** The card for a missed line (M5.4d): a lap gate by its number, or the start line. */
+function missedText(next: number): string {
+  const what = next === 0 ? 'the line' : `gate ${next}`;
+  return `Missed ${what}: drive back through it, or press R`;
 }
 
 /** A palette colour (0 to 1) as a CSS colour. */

@@ -3,9 +3,12 @@ import { config } from '../config';
 import { crossingShare, launching, raceSteps, startRace, stepRace, type RaceAsk, type RaceState, type RaceTrack } from './race';
 
 const steps = raceSteps(config.sim.race, config.sim.stepsPerSecond);
-/** A made-up lap: 1000 m with 10 checkpoints, one every 100 m. */
-const TRACK: RaceTrack = { length: 1000, count: 10 };
-const NOTHING: RaceAsk = { throttle: 0, before: 996, after: 996, checkpoint: -1 };
+/**
+ * A made-up lap (M5.4d): 1000 m, the start line at 0 m and lap gates at 200, 400, 600 and 800 m, each open 12 m either
+ * side of the centre line; a step may move the car at most 40 m.
+ */
+const TRACK: RaceTrack = { length: 1000, lines: [0, 200, 400, 600, 800], openings: [12, 12, 12, 12, 12], stride: 40 };
+const NOTHING: RaceAsk = { throttle: 0, before: 996, after: 996, off: 0 };
 
 /** Steps the race `count` times with the same ask. */
 function hold(state: RaceState, ask: RaceAsk, count: number): RaceState {
@@ -17,27 +20,23 @@ function hold(state: RaceState, ask: RaceAsk, count: number): RaceState {
 const atGo = (): RaceState => hold(startRace(steps), NOTHING, steps.countdown);
 
 /**
- * Drives a made-up car round the lap at `speed` metres a step from `from` metres along it, telling the race which
- * checkpoint it passes as step 8a's progress would: only the next one, and only when the car goes forwards past it.
- * `missed` checkpoints (by lap) are never reported, as if the car cut past them.
+ * Drives a made-up car round the lap at `speed` metres a step from `from` metres along it, on the centre line, except
+ * that on lap `wide.lap` (counted by the lines it has gone over) it crosses the line at `wide.at` metres `wide.off`
+ * metres off the centre line.
  */
-function drive(state: RaceState, from: number, speed: number, count: number, missed: { lap: number; checkpoint: number } | null = null): RaceState {
+function drive(state: RaceState, from: number, speed: number, count: number, wide: { lap: number; at: number; off: number } | null = null): RaceState {
   let along = from;
-  let next = 0;
   let lap = 0;
   for (let i = 0; i < count; i++) {
     const before = along;
     let after = along + speed;
-    if (after >= TRACK.length) after -= TRACK.length;
-    const at = (next * TRACK.length) / TRACK.count;
-    const ahead = (((at - before) % TRACK.length) + TRACK.length) % TRACK.length;
-    let checkpoint = -1;
-    if (ahead <= speed && !(missed && missed.lap === lap && missed.checkpoint === next)) {
-      checkpoint = next;
-      if (next === 0) lap++;
-      next = (next + 1) % TRACK.count;
+    if (after >= TRACK.length) {
+      after -= TRACK.length;
+      lap++;
     }
-    state = stepRace(state, { throttle: 1, before, after, checkpoint }, TRACK, config.sim.race, steps);
+    const crosses = (at: number): boolean => (before < at && after >= at) || (at === 0 && after < before);
+    const off = wide && lap === wide.lap && crosses(wide.at) ? wide.off : 0;
+    state = stepRace(state, { throttle: 1, before, after, off }, TRACK, config.sim.race, steps);
     along = after;
   }
   return state;
@@ -91,6 +90,7 @@ describe('the countdown', () => {
     expect(state.lap).toBe(1);
     expect(state.clock).toBe(0);
     expect(state.laps).toEqual([]);
+    expect(state.missed).toBe(false);
   });
 
   it('lasts exactly 180 steps', () => {
@@ -103,8 +103,8 @@ describe('the countdown', () => {
     expect(go.clock).toBe(0);
   });
 
-  it('ignores checkpoints passed before "go"', () => {
-    const state = hold(startRace(steps), { throttle: 1, before: 999, after: 1, checkpoint: 0 }, 10);
+  it('ignores the line crossed before "go"', () => {
+    const state = hold(startRace(steps), { throttle: 1, before: 999, after: 1, off: 0 }, 10);
     expect(state.next).toBe(0);
     expect(state.started).toBe(false);
   });
@@ -186,39 +186,68 @@ describe('laps and times', () => {
     expect(state.lapStart).toBeCloseTo(401.6, 9);
   });
 
-  it('does not count a lap that skipped a checkpoint, nor any lap after it', () => {
-    // Checkpoint 5 is missed on lap 2: the line is crossed again, but lap 2 never ends.
-    const state = drive(atGo(), 996, 2.5, 1300, { lap: 2, checkpoint: 5 });
-    expect(state.laps).toHaveLength(1);
-    expect(state.lap).toBe(2);
-    expect(state.next).toBe(5);
-    expect(state.phase).toBe('racing');
-  });
-
-  it('splits each lap into three sectors, ending at checkpoints round(n/3) and round(2n/3) and the line', () => {
-    expect(config.sim.race.sectors).toBe(3);
+  it('ends a sector at every gate and at the line: 5 a lap, adding up to it', () => {
+    expect(config.sim.race.sectors).toBe(TRACK.lines.length);
     const state = drive(atGo(), 996, 2.5, 1300);
-    // 10 checkpoints: the sectors end at checkpoints 3 (300 m) and 7 (700 m).
-    expect(state.splits).toHaveLength(9);
-    const [a, b, c, d, e, f] = state.splits;
-    expect(a).toBeCloseTo(121.6, 9);
-    expect(b).toBeCloseTo(160, 9);
-    expect(c).toBeCloseTo(120, 9);
-    expect(d).toBeCloseTo(120, 9);
-    expect(e).toBeCloseTo(160, 9);
-    expect(f).toBeCloseTo(120, 9);
+    expect(state.splits).toHaveLength(15);
+    // Lap 1's first sector is timed from "go" with the run-up; every other is 200 m, 80 steps.
+    expect(state.splits[0]).toBeCloseTo(81.6, 9);
+    for (const split of state.splits.slice(1)) expect(split).toBeCloseTo(80, 9);
     for (let lap = 0; lap < 3; lap++) {
-      const sum = state.splits[3 * lap]! + state.splits[3 * lap + 1]! + state.splits[3 * lap + 2]!;
+      const sum = state.splits.slice(5 * lap, 5 * lap + 5).reduce((a, b) => a + b, 0);
       expect(sum).toBeCloseTo(state.laps[lap]!, 9);
     }
   });
 
   it('keeps the clock running whatever the car does, a respawn included', () => {
     let state = atGo();
-    state = hold(state, { throttle: 0, before: 996, after: 996, checkpoint: -1 }, 30);
-    // A respawn puts the car somewhere else: nothing is passed, the clock goes on.
-    state = hold(state, { throttle: 0, before: 996, after: 420, checkpoint: -1 }, 1);
+    state = hold(state, { throttle: 0, before: 996, after: 996, off: 0 }, 30);
+    // A respawn puts the car back behind where it was: nothing is passed or missed, the clock goes on.
+    state = hold(state, { throttle: 0, before: 996, after: 900, off: 0 }, 1);
     expect(state.clock).toBe(31);
+    expect(state.missed).toBe(false);
+  });
+});
+
+describe('a gate missed (M5.4d)', () => {
+  it('counts a gate crossed inside its posts however far from the centre line, up to the posts', () => {
+    // Gate 2 (400 m) crossed 11.9 m off the centre line on lap 2: inside its 12 m opening, the race goes on.
+    const state = drive(atGo(), 996, 2.5, 1300, { lap: 1, at: 400, off: 11.9 });
+    expect(state.phase).toBe('finished');
+    expect(state.laps).toHaveLength(3);
+  });
+
+  it('misses a gate crossed outside its posts, says so, and counts nothing after it until it is driven through', () => {
+    // Gate 2 (400 m) crossed 20 m off on lap 1: missed. After 200 steps the car is at 496 m.
+    const after = drive(atGo(), 996, 2.5, 200, { lap: 1, at: 400, off: 20 });
+    expect(after.missed).toBe(true);
+    expect(after.next).toBe(2);
+    expect(after.splits).toHaveLength(1);
+    // Gates 3 and 4, the line and gate 1 on the way round count nothing; through gate 2 a lap later, the race goes on.
+    const later = drive(after, 496, 2.5, 400);
+    expect(later.missed).toBe(false);
+    expect(later.next).toBe(3);
+    expect(later.laps).toHaveLength(0);
+    expect(later.splits).toHaveLength(2);
+  });
+
+  it('misses a gate the car jumped past (more than a step can go), as across to another stretch of road', () => {
+    // 70 steps from 996 m: at 171 m, short of gate 1.
+    let state = drive(atGo(), 996, 2.5, 70);
+    expect(state.next).toBe(1);
+    state = stepRace(state, { throttle: 1, before: 180, after: 260, off: 0 }, TRACK, config.sim.race, steps);
+    expect(state.missed).toBe(true);
+    expect(state.next).toBe(1);
+  });
+
+  it('misses nothing driving backwards past a gate, and counts it when driven forwards again', () => {
+    // 70 steps from 996 m: at 171 m, short of gate 1.
+    let state = drive(atGo(), 996, 2.5, 70);
+    state = stepRace(state, { throttle: 0, before: 201, after: 199, off: 0 }, TRACK, config.sim.race, steps);
+    expect(state.missed).toBe(false);
+    expect(state.next).toBe(1);
+    state = stepRace(state, { throttle: 1, before: 199, after: 201, off: 0 }, TRACK, config.sim.race, steps);
+    expect(state.next).toBe(2);
   });
 });
 

@@ -94,7 +94,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M5.4c** The check-in's changes (2026-11-24)
 - **M5.4d** Lap gates in place of the hidden checkpoints (Tane, 2026-11-25; planned and approved in plan mode):
   - [x] **M5.4d-1** The gates in the world: placed, drawn, solid (2026-11-25)
-  - [ ] **M5.4d-2** The race counted by the gates
+  - [x] **M5.4d-2** The race counted by the gates (2026-11-25)
 - **M5.5** Favourites:
   - [ ] **M5.5a** The favourites screen and the star, pure
   - [ ] **M5.5b** Favourites on the page

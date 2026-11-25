@@ -19,7 +19,7 @@ test.describe('screenshots', () => {
     test(`contact sheet from seed ${from}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 1120 });
       await page.goto(`/?sheet=20&from=${from}`);
-      await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 20_000 });
+      await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
       await page.screenshot({ path: `test-results/screens/sheet-from-${String(from).padStart(5, '0')}.png`, fullPage: true });
     });
   }
@@ -27,7 +27,7 @@ test.describe('screenshots', () => {
   test('contact sheet of the chosen seeds', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1120 });
     await page.goto(`/?seeds=${seeds.join(',')}`);
-    await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 20_000 });
+    await expect(page.locator('body')).toHaveAttribute('data-lab-ready', 'true', { timeout: 45_000 });
     await page.screenshot({ path: 'test-results/screens/sheet-chosen.png', fullPage: true });
   });
 

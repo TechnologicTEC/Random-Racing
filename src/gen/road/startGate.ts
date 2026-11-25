@@ -26,6 +26,14 @@ export interface GateBox {
 }
 
 /**
+ * How far from the centre line a car can go through the gate at a sample: to the inside of its posts, outside the
+ * barriers (M5.4d: a lap is counted through the gates).
+ */
+export function gateOpening(width: Float64Array, sample: number, cfg: Pick<GenConfig, 'road'>): number {
+  return width[sample]! / 2 + cfg.road.barrierOffset + cfg.road.barrierWidth + POST_GAP;
+}
+
+/**
  * A gate as numbers, for collisions: its left post, its right post and the
  * beam between them. These are the boxes `buildStartGate` and `buildLapGates`
  * draw. The posts stand outside the barriers; the beam clears the road by the
@@ -50,7 +58,7 @@ export function gateBoxes(
   const tilt = cross ? cross[sample]! : 0;
   const tx = line.tx[sample]!;
   const tz = line.tz[sample]!;
-  const postInner = half + road.barrierOffset + road.barrierWidth + POST_GAP;
+  const postInner = gateOpening(width, sample, cfg);
   const postOuter = postInner + road.gatePost;
   const beamBottom = height[sample]! + Math.abs(tilt) * half + road.gateClearance;
   const beamTop = beamBottom + road.gateBeam;

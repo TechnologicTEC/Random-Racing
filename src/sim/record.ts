@@ -38,8 +38,11 @@ export interface RunRecord {
 
 export type Driver = 'player' | 'bot';
 
-/** The packed layout's version: bumped whenever the bytes change meaning. */
-export const RECORD_FORMAT = 1;
+/**
+ * The packed layout's version: bumped whenever the bytes change meaning. 2 (M5.4d): laps counted by the lap gates, 5
+ * sectors a lap, and the race's fingerprint with the missed gate; a record of format 1 is refused, its ghost not drawn.
+ */
+export const RECORD_FORMAT = 2;
 /** Numbers kept a place: position (3) and turn (4). */
 export const PLACE_SIZE = 7;
 

@@ -2,7 +2,7 @@ import type { RaceConfig } from '../config';
 
 /**
  * The race's rules (M4.2), as a pure state machine like the drift's: the countdown, the start boost, laps that need
- * every checkpoint, sector times and the finish. Every time is counted in steps, with the moment the car crosses a
+ * every lap gate (M5.4d: the gates the player sees, in place of the hidden checkpoints), sector times and the finish. Every time is counted in steps, with the moment the car crosses a
  * line placed inside its step by exact sums, so a time is the same on every computer and a replay gives it again.
  * The simulation feeds it each step (M4.2b); the page only draws it.
  */
@@ -25,8 +25,10 @@ export interface RaceState {
   lap: number;
   /** Whether the car has crossed the start line since "go". Lap 1 is timed from "go", so its run-up counts. */
   started: boolean;
-  /** The checkpoint to pass next; only that one counts, so a lap is all of them in order. */
+  /** The line to go through next: 0 the start line, then the lap gates in order. Only that one counts, so a lap is all of them in order. */
   next: number;
+  /** Whether the car has gone past the next line without going through it (outside its posts, or jumping past it): it must go back through it (M5.4d). */
+  missed: boolean;
   /** When this lap and this sector began, in steps since "go" (with fractions). */
   lapStart: number;
   sectorStart: number;
@@ -47,14 +49,20 @@ export interface RaceAsk {
   /** Metres along the lap before and after the step (step 8a's `along`). */
   before: number;
   after: number;
-  /** The checkpoint passed on this step (step 8a), or -1. */
-  checkpoint: number;
+  /** Metres to the right of the centre line after the step (step 8a's `off`). */
+  off: number;
 }
 
-/** What the race needs to know of the lap: its length in metres and how many checkpoints it has (step 8a). */
+/** What the race needs to know of the lap (M5.4d). */
 export interface RaceTrack {
+  /** The lap's length, in metres. */
   length: number;
-  count: number;
+  /** Where the lines a lap goes through stand, in metres along the lap: the start line (0), then the lap gates in order. */
+  lines: readonly number[];
+  /** How far from the centre line each line can be gone through, in metres: to the inside of its posts. */
+  openings: readonly number[];
+  /** The most a car can move along the lap in one step, in metres: going further, it jumped (`progress.stride`). */
+  stride: number;
 }
 
 /** The race's times in whole steps. */
@@ -92,6 +100,7 @@ export function startRace(steps: RaceSteps): RaceState {
     lap: 1,
     started: false,
     next: 0,
+    missed: false,
     lapStart: 0,
     sectorStart: 0,
     laps: [],
@@ -124,33 +133,32 @@ export function stepRace(state: RaceState, ask: RaceAsk, track: RaceTrack, cfg: 
   if (state.phase === 'finished') return { ...state, finishedSteps: state.finishedSteps + 1 };
 
   const clock = state.clock + 1;
-  if (ask.checkpoint < 0 || ask.checkpoint !== state.next) return { ...state, clock };
+  // Has the car gone past the next line on this step? Going backwards, never.
+  const at = track.lines[state.next]!;
+  let moved = ask.after - ask.before;
+  if (moved > track.length / 2) moved -= track.length;
+  else if (moved < -track.length / 2) moved += track.length;
+  const past = moved > 0 && forwards(ask.before, at, track.length) <= moved;
+  if (!past) return { ...state, clock };
+  // Past it, but jumped (across to another stretch of road) or outside its posts: missed, until it is gone through.
+  if (moved >= track.stride || Math.abs(ask.off) > track.openings[state.next]!) return { ...state, clock, missed: true };
 
-  // The moment the car crossed the checkpoint, in steps since "go".
-  const at = (ask.checkpoint * track.length) / track.count;
+  // The moment the car went through the line, in steps since "go".
   const crossed = state.clock + crossingShare(ask.before, ask.after, at, track.length);
-  const next = (ask.checkpoint + 1) % track.count;
+  const next = (state.next + 1) % track.lines.length;
 
-  if (ask.checkpoint === 0 && !state.started) return { ...state, clock, next, started: true };
+  if (state.next === 0 && !state.started) return { ...state, clock, next, missed: false, started: true };
 
-  if (ask.checkpoint !== 0) {
-    if (!endsSector(ask.checkpoint, track.count, cfg.sectors)) return { ...state, clock, next };
-    return { ...state, clock, next, splits: [...state.splits, crossed - state.sectorStart], sectorStart: crossed };
-  }
+  // Every lap gate ends a sector (M5.4d: Tane, 2026-11-25).
+  if (state.next !== 0) return { ...state, clock, next, missed: false, splits: [...state.splits, crossed - state.sectorStart], sectorStart: crossed };
 
-  // Back at the line with every checkpoint passed in order: the lap is done.
+  // Back at the line through every gate in order: the lap is done.
   const splits = [...state.splits, crossed - state.sectorStart];
   const laps = [...state.laps, crossed - state.lapStart];
   if (laps.length >= cfg.laps) {
-    return { ...state, phase: 'finished', clock, next, laps, splits, lapStart: crossed, sectorStart: crossed, total: crossed };
+    return { ...state, phase: 'finished', clock, next, missed: false, laps, splits, lapStart: crossed, sectorStart: crossed, total: crossed };
   }
-  return { ...state, clock, next, laps, splits, lap: state.lap + 1, lapStart: crossed, sectorStart: crossed };
-}
-
-/** Whether checkpoint `k` of `count` ends a sector other than the last: checkpoints round(i * count / sectors). */
-function endsSector(k: number, count: number, sectors: number): boolean {
-  for (let i = 1; i < sectors; i++) if (Math.round((i * count) / sectors) === k) return true;
-  return false;
+  return { ...state, clock, next, missed: false, laps, splits, lap: state.lap + 1, lapStart: crossed, sectorStart: crossed };
 }
 
 /** Metres forwards from `from` to `to` round a lap of `length`: from 0 up to the length. */

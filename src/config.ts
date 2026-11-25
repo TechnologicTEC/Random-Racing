@@ -1454,7 +1454,7 @@ export interface RaceConfig {
   countdown: number;
   /** A throttle first pressed within this long before "go" gives a tier 1 boost at "go"; one pressed earlier gives none. */
   startBoostWindow: number;
-  /** Each lap is timed in this many sectors, each a whole number of checkpoints. */
+  /** Each lap is timed in this many sectors, one ending at each lap gate and one at the line: `road.lapGates.count` + 1 (M5.4d). */
   sectors: number;
   /** How long "Finished" shows before the results. */
   finishedFor: number;
@@ -2168,7 +2168,8 @@ export const config: GameConfig = {
     // The plan's values (docs/plan/M4-time-trial.md, M4.2); the throttle at half or more is Claude's call (STATE.md).
     // launch (Tane at the sign-off, from four measured options): the tier 1 boost alone gained 5 km/h and 0.13 s on lap 1,
     // which nobody could feel; 20 m/s2 for 1 s gives 71 km/h one second after "go" against 33, lap 1 about 0.9 s quicker.
-    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 3, finishedFor: 2, pressed: 0.5, launch: { accel: 20, time: 1 } },
+    // sectors: 5, one ending at each of the 4 lap gates and one at the line (Tane, 2026-11-25; road.lapGates.count + 1).
+    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 5, finishedFor: 2, pressed: 0.5, launch: { accel: 20, time: 1 } },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },

@@ -343,6 +343,23 @@ body,
   display: none;
 }
 
+/* A lap gate missed (M5.4d): a card at the top middle, under the lights' place, in the dark text with the kerbs' red edge. */
+.world-missed {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  border-left: 4px solid #cc221c;
+  pointer-events: none;
+}
+
+.world-missed[hidden] {
+  display: none;
+}
+
 .world-light {
   width: 26px;
   height: 26px;
