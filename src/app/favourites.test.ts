@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunRecord } from '../sim/record';
-import { bestWrite, dayOf, isStarred, newestFirst, ownBest, starWrite, writeStar, type Island } from './favourites';
+import { bestWrite, dayOf, favouriteRow, isStarred, newestFirst, ownBest, rowWindow, starWrite, versionNote, writeStar, type Island } from './favourites';
 import { memoryStore, type Favourite } from './store';
 
 const SEVEN: Island = { seed: 7, generator: 0, name: 'Halmore Speedway' };
@@ -86,5 +86,44 @@ describe('the best time of a favourite', () => {
     expect(bestWrite(list, 42, 0, 9000)).toBeNull();
     expect(bestWrite(list, 7, 1, 9000)).toBeNull();
     expect(bestWrite(list, 7, 0, 9500)).toBeNull();
+  });
+});
+
+describe('the favourites card (M5.5b)', () => {
+  const SPS = 60;
+  it('gives each row the name, share code, best time and day', () => {
+    expect(favouriteRow({ seed: 7, generator: 0, name: 'Halmore Speedway', best: 8374.5, date: '2026-11-25' }, SPS)).toEqual({
+      name: 'Halmore Speedway',
+      code: 'v0-7',
+      best: '2:19.575',
+      date: '25 Nov 2026',
+    });
+    expect(favouriteRow({ seed: 42, generator: 0, name: 'Brenmoor Ring', best: null, date: '2027-01-03' }, SPS)).toEqual({
+      name: 'Brenmoor Ring',
+      code: 'v0-42',
+      best: 'No time yet',
+      date: '3 Jan 2027',
+    });
+  });
+
+  it('notes under the list that islands saved before version 1 may change', () => {
+    const v0: Favourite = { seed: 7, generator: 0, name: 'Halmore Speedway', best: null, date: '2026-11-25' };
+    expect(versionNote([v0])).toBe('Saved before version 1: these islands may change when the game is updated');
+    expect(versionNote([{ ...v0, generator: 1 }])).toBeNull();
+    expect(versionNote([])).toBeNull();
+  });
+
+  it('shows the rows up to 8 at a time, moving with the choice', () => {
+    expect(rowWindow(5, 0, 8)).toEqual({ from: 0, to: 5 });
+    expect(rowWindow(12, 0, 8)).toEqual({ from: 0, to: 8 });
+    expect(rowWindow(12, 7, 8)).toEqual({ from: 0, to: 8 });
+    expect(rowWindow(12, 8, 8)).toEqual({ from: 1, to: 9 });
+    expect(rowWindow(12, 11, 8)).toEqual({ from: 4, to: 12 });
+    // Coming back up, the window keeps where it was until the choice reaches its top.
+    expect(rowWindow(12, 6, 8, 4)).toEqual({ from: 4, to: 12 });
+    expect(rowWindow(12, 3, 8, 4)).toEqual({ from: 3, to: 11 });
+    // A choice off the rows (the Back button) keeps the window too.
+    expect(rowWindow(12, 12, 8, 4)).toEqual({ from: 4, to: 12 });
+    expect(rowWindow(0, 0, 8)).toEqual({ from: 0, to: 0 });
   });
 });

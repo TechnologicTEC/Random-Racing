@@ -97,7 +97,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M5.4d-2** The race counted by the gates (2026-11-25)
 - **M5.5** Favourites:
   - [x] **M5.5a** The favourites screen and the star, pure (2026-11-25)
-  - [ ] **M5.5b** Favourites on the page
+  - [x] **M5.5b** Favourites on the page (2026-11-25)
 - [ ] **M5.6** The reload test; pull request; **sign-off**; merge
 
 **Milestone 6: polish** (branch `milestone-6-polish`, issue #6; plan first; the steps: [`docs/plan/M6-polish.md`](plan/M6-polish.md))

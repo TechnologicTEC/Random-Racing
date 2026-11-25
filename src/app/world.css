@@ -537,6 +537,58 @@ body,
   color: #ffffff;
 }
 
+/* The Favourites card (M5.5b): wider, a row a favourite with its name, share code, best time and day. */
+.world-menu-wide {
+  min-width: 31rem;
+}
+
+.world-favourites {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.world-menu-choices button.world-favourite {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) 4rem 5rem 6.5rem;
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 14px;
+  text-align: left;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-favourite-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-favourite-best {
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Quieter than the name and time, and still clear on the filled row. */
+.world-favourite-code,
+.world-favourite-date {
+  opacity: 0.75;
+}
+
+.world-favourite-date {
+  text-align: right;
+}
+
+.world-favourites-more,
+.world-favourites-note,
+.world-favourites-keys {
+  margin: 0;
+  font-size: 12.5px;
+}
+
 /* A seed or share code typed on the title card (M4.5): a box and its button under the choices. */
 .world-menu-seed {
   display: flex;

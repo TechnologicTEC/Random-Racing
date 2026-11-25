@@ -1,4 +1,6 @@
+import { formatSeedCode } from '../core/seedCode';
 import type { RunRecord } from '../sim/record';
+import { formatRaceTime } from './raceCard';
 import type { Favourite, Store } from './store';
 
 /**
@@ -71,4 +73,49 @@ export function bestWrite(list: readonly Favourite[], seed: number, generator: n
 export function dayOf(date: Date): string {
   const two = (n: number): string => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+}
+
+/** A favourite as a row of the Favourites card says it (M5.5b). */
+export interface FavouriteRow {
+  name: string;
+  /** Its share code, as `v0-7`. */
+  code: string;
+  /** Its best time, or "No time yet". */
+  best: string;
+  /** The day it was saved, as `25 Nov 2026`. */
+  date: string;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function favouriteRow(favourite: Favourite, stepsPerSecond: number): FavouriteRow {
+  const [year, month, day] = favourite.date.split('-').map(Number);
+  return {
+    name: favourite.name,
+    code: formatSeedCode(favourite.seed, favourite.generator),
+    best: favourite.best === null ? 'No time yet' : formatRaceTime(favourite.best, stepsPerSecond),
+    date: `${day} ${MONTHS[(month ?? 1) - 1] ?? ''} ${year}`,
+  };
+}
+
+/**
+ * The line under the list while any favourite was saved before generator version 1 (Tane, M5.0: such an island may
+ * not be rebuilt the same once the generator changes), or null.
+ */
+export function versionNote(list: readonly Favourite[]): string | null {
+  return list.some((f) => f.generator < 1) ? 'Saved before version 1: these islands may change when the game is updated' : null;
+}
+
+/**
+ * The rows the card shows, at most `size` (8) of `count`: the window keeps where it was (`from`) while the choice is
+ * inside it, and moves just enough to hold it when it is not. A choice past the rows (the Back button) moves nothing.
+ */
+export function rowWindow(count: number, chosen: number, size: number, from = 0): { from: number; to: number } {
+  let start = from;
+  if (chosen < count) {
+    if (chosen < start) start = chosen;
+    if (chosen >= start + size) start = chosen - size + 1;
+  }
+  start = Math.max(0, Math.min(start, count - size));
+  return { from: start, to: Math.min(count, start + size) };
 }

@@ -46,11 +46,11 @@ async function finishRace(page: Page): Promise<RaceRun> {
   return run;
 }
 
-test('opens on the title card over the circling island, with Race, Free drive and New island', async ({ page }) => {
+test('opens on the title card over the circling island, with Race, Free drive, Favourites and New island', async ({ page }) => {
   await openTitle(page);
   await expect(page.getByTestId('menu')).toBeVisible();
   await expect(page.getByTestId('menu-heading')).toHaveText('Halmore Speedway');
-  await expect(choices(page)).toHaveText(['Race', 'Free drive', 'New island']);
+  await expect(choices(page)).toHaveText(['Race', 'Free drive', 'Favourites', 'New island']);
   await expect(choices(page).first()).toBeFocused();
   await expect(screen(page)).toHaveAttribute('data-world-camera', 'orbit');
   await expect(page.getByTestId('race-card')).toBeHidden();
@@ -81,7 +81,7 @@ test('takes the whole round with the keyboard: Race, pause, the results and back
   // Esc pauses: the card in the middle, and no steps taken.
   await page.keyboard.press('Escape');
   await expect(screen(page)).toHaveAttribute('data-screen', 'paused');
-  await expect(choices(page)).toHaveText(['Resume', 'Restart', 'Quit to title']);
+  await expect(choices(page)).toHaveText(['Resume', 'Restart', '☆ Favourite', 'Quit to title']);
   await expect(choices(page).first()).toBeFocused();
   if (shots) await page.screenshot({ path: 'test-results/screens/menu-00007-paused.png' });
   const stepWas = await screen(page).getAttribute('data-drive-step');
@@ -95,11 +95,11 @@ test('takes the whole round with the keyboard: Race, pause, the results and back
   await expect(page.getByTestId('menu-heading')).toHaveText('Finished');
   await expect(page.getByTestId('menu-total')).toHaveText(formatRaceTime(run.race.total, SPS));
   await expect(page.getByTestId('menu-lap')).toHaveText(run.race.laps.map((steps, i) => `Lap ${i + 1}${formatRaceTime(steps, SPS)}`));
-  await expect(choices(page)).toHaveText(['Race again', 'New island', 'Title']);
+  await expect(choices(page)).toHaveText(['Race again', '☆ Favourite', 'New island', 'Title']);
   if (shots) await page.screenshot({ path: 'test-results/screens/menu-00007-results.png' });
   // Up from the first choice goes round to the last.
   await page.keyboard.press('ArrowUp');
-  await expect(choices(page).nth(2)).toBeFocused();
+  await expect(choices(page).nth(3)).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(screen(page)).toHaveAttribute('data-screen', 'title');
   await expect(screen(page)).toHaveAttribute('data-world-camera', 'orbit');
@@ -140,7 +140,8 @@ test('takes the same round with a controller', async ({ page }) => {
   await expect(screen(page)).toHaveAttribute('data-screen', 'results');
   await press(DOWN);
   await press(DOWN);
-  await expect(choices(page).nth(2)).toBeFocused();
+  await press(DOWN);
+  await expect(choices(page).nth(3)).toBeFocused();
   await press(A);
   await expect(screen(page)).toHaveAttribute('data-screen', 'title');
 });

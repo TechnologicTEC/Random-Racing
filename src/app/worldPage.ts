@@ -30,6 +30,7 @@ import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
+import { bestWrite, dayOf, favouriteRow, isStarred, newestFirst, ownBest, rowWindow, starWrite, versionNote, writeStar, type Island } from './favourites';
 import { chooseGhost, ghostGap, ghostPlace, ghostRows, saveVerdict, titleTimes, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
@@ -187,6 +188,10 @@ const DRIVING_HINT = 'W or up drives, S or down brakes and reverses, A and D ste
 const GHOST_SHOWN_KEY = 'seedCircuit.ghostShown';
 /** On a menu card: the keys and the controller's buttons for it. */
 const MENU_HINT = 'Up and down choose, Enter picks, Esc goes back; on a controller the D-pad or stick, A and B. L opens the lab.';
+/** On the Favourites card (M5.5b). */
+const FAVOURITES_HINT = 'Up and down choose, Enter races, X or Delete removes, Esc goes back; on a controller the D-pad or stick, A, X and B.';
+/** How many favourites the card shows at once; the rest come into view with the choice. */
+const FAVOURITE_ROWS = 8;
 
 const HINTS: Record<CameraMode, string> = {
   chase: `${DRIVING_HINT} Esc pauses. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.`,
@@ -355,6 +360,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let ghost: ChosenGhost | null = null;
   let ghostStatus: GhostStatus = 'loading';
   let ghostShown: Place | null = null;
+  /**
+   * The favourites (M5.5b), as the store last gave them; writes go one after another, so two quick presses of the star
+   * never read the same list; the first row the Favourites card shows.
+   */
+  let favouriteList: Favourite[] = [];
+  let favouriteWrites: Promise<void> = Promise.resolve();
+  let rowsFrom = 0;
   const botWanted = params.get('bot') !== 'off';
   /** The island whose ghosts have been read from the store, and the one the bot's race has been asked for. */
   let ghostsReadFor: WorldResult | null = null;
@@ -578,7 +590,14 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // In a race, on the title and on the cards the camera is chosen for the player (M4.4).
     ref('toggle').hidden = !cameraFree(screen);
     ref('new').hidden = move(screen, 'newTrack') === null;
-    ref('hint').textContent = menuFor(screen).length > 0 ? MENU_HINT : screen.name === 'race' ? `${DRIVING_HINT} G shows or hides the ghost. Esc pauses.` : HINTS[mode];
+    ref('hint').textContent =
+      screen.name === 'favourites'
+        ? FAVOURITES_HINT
+        : menuFor(screen).length > 0
+          ? MENU_HINT
+          : screen.name === 'race'
+            ? `${DRIVING_HINT} G shows or hides the ghost. Esc pauses.`
+            : HINTS[mode];
     ref('quality').textContent = `Quality: ${quality === 'high' ? 'High' : 'Low'}`;
     ref('dash').hidden = mode !== 'chase';
     // The chase camera sees a wider view than the others.
@@ -675,9 +694,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (pressed.camera && cameraFree(screen)) setMode(nextCamera(mode));
     if (pressed.pause) act(screen.name === 'paused' ? 'resume' : 'pause');
     if (pressed.ghost && screen.name === 'race') toggleGhost();
-    const menu = menuFor(screen);
-    if (menu.length > 0 && (pressed.up || pressed.down)) setChoice(choiceAfter(choice, menu.length, pressed.up ? -1 : 1));
-    if (menu.length > 0 && pressed.confirm) act(menu[choice]!.move);
+    // On the Favourites card X removes the favourite chosen (M5.5b).
+    if (pressed.ghost && screen.name === 'favourites') removeFavouriteAt(choice);
+    const count = choiceCount();
+    if (count > 0 && (pressed.up || pressed.down)) setChoice(choiceAfter(choice, count, pressed.up ? -1 : 1));
+    if (count > 0 && pressed.confirm) pickChoice();
     if (pressed.back) {
       const back = backMove(screen);
       if (back) act(back);
@@ -688,7 +709,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (steps(screen) && mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
     checkFinished();
     // Behind the title and results cards the camera circles the island by itself.
-    if (!still && mode === 'orbit' && (screen.name === 'title' || screen.name === 'results') && !dragging) {
+    if (!still && mode === 'orbit' && (screen.name === 'title' || screen.name === 'results' || screen.name === 'favourites') && !dragging) {
       orbit = { ...orbit, angle: orbit.angle + config.camera.orbit.turn * seconds };
       dirty = true;
     }
@@ -890,6 +911,54 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     pickGhost();
     const bytes = packRun(record);
     void storeReady.then((store) => store.putGhost(ghostKey(world.seed, world.generatorVersion, 'player'), bytes));
+    // A favourite of this island takes the new best as its time (M5.5).
+    const total = record.total;
+    writeFavourites(async (store) => {
+      const raised = bestWrite(await store.listFavourites(), world.seed, world.generatorVersion, total);
+      if (raised) await store.putFavourite(raised);
+    });
+  };
+  /** The island shown, as a favourite names it. */
+  const islandOf = (world: WorldResult): Island => ({ seed: world.seed, generator: world.generatorVersion, name: world.track.name });
+  /** Whether the island shown is a favourite: the star on the pause and results cards is filled. */
+  const starredNow = (): boolean => shown !== null && isStarred(favouriteList, islandOf(shown));
+  /** The favourites as the card lists them, the newest first. */
+  const favouritesShown = (): Favourite[] => newestFirst(favouriteList);
+  /**
+   * Makes a change to the favourites after any before it, then reads them back and writes the card again if it shows
+   * them (the star's label or the list), keeping the choice where it was.
+   */
+  const writeFavourites = (change: (store: Store) => Promise<void>): void => {
+    favouriteWrites = favouriteWrites
+      .then(async () => {
+        const store = await storeReady;
+        await change(store);
+        favouriteList = await store.listFavourites();
+        document.body.dataset.favourites = String(favouriteList.length);
+        if (screen.name === 'paused' || screen.name === 'results' || screen.name === 'favourites') renderScreen(true);
+      })
+      .catch(() => {
+        // A store never throws (`guardedStore`); a change that does is dropped.
+      });
+  };
+  writeFavourites(async () => {});
+  /** The star pressed (M5.5): the island shown saved as a favourite with the player's best, or taken off. */
+  const starIsland = (): void => {
+    const world = shown;
+    if (!world) return;
+    const best = ownBest(ownGhost, hashHandling(config));
+    writeFavourites(async (store) => writeStar(store, starWrite(await store.listFavourites(), islandOf(world), best, dayOf(new Date()))));
+  };
+  /** X or Delete on the Favourites card: the favourite chosen taken off the list (nothing for the Back choice). */
+  const removeFavouriteAt = (index: number): void => {
+    const favourite = favouritesShown()[index];
+    if (!favourite) return;
+    writeFavourites((store) => store.removeFavourite(favourite.seed));
+  };
+  /** A favourite picked: raced at once if it is the island shown, otherwise its island is built first, then raced. */
+  const raceFavourite = (favourite: Favourite): void => {
+    if (shown && shown.seed === favourite.seed && shown.generatorVersion === favourite.generator) act('start');
+    else act('raceSeed', favourite.seed);
   };
   /** Shows or hides the ghost (G, or X on a controller), and remembers it. */
   const toggleGhost = (): void => {
@@ -1047,23 +1116,29 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // The time slider takes its own arrow keys.
     if (event.target instanceof HTMLInputElement) return;
     const key = event.key.toLowerCase();
-    // The menu cards and the pause (M4.4): Esc goes back, up and down choose, Enter picks.
-    const menu = menuFor(screen);
+    // The menu cards and the pause (M4.4): Esc goes back, up and down choose, Enter picks; on the Favourites card X or
+    // Delete removes the favourite chosen (M5.5b).
+    const count = choiceCount();
     if (key === 'escape') {
       const back = backMove(screen);
       if (back) act(back);
       event.preventDefault();
       return;
     }
-    if (menu.length > 0 && (key === 'arrowup' || key === 'arrowdown')) {
-      setChoice(choiceAfter(choice, menu.length, key === 'arrowup' ? -1 : 1));
+    if (screen.name === 'favourites' && (key === 'x' || key === 'delete')) {
+      removeFavouriteAt(choice);
       event.preventDefault();
       return;
     }
-    if (menu.length > 0 && key === 'enter') {
+    if (count > 0 && (key === 'arrowup' || key === 'arrowdown')) {
+      setChoice(choiceAfter(choice, count, key === 'arrowup' ? -1 : 1));
+      event.preventDefault();
+      return;
+    }
+    if (count > 0 && key === 'enter') {
       // A choice with the focus is pressed by Enter itself; otherwise Enter picks the choice shown as chosen.
       if (!choiceButtons().includes(document.activeElement as HTMLButtonElement)) {
-        act(menu[choice]!.move);
+        pickChoice();
         event.preventDefault();
       }
       return;
@@ -1088,11 +1163,31 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
   });
 
-  /** The choice on the menu card shown as chosen, which Enter and the controller's A pick. */
+  /**
+   * The choice on the menu card shown as chosen, which Enter and the controller's A pick. On the Favourites card it
+   * counts every favourite, then Back, though only 8 rows are drawn at once.
+   */
   let choice = 0;
   const choiceButtons = (): HTMLButtonElement[] => [...ref('menuChoices').querySelectorAll<HTMLButtonElement>('button')];
+  /** How many choices the card in the middle has: none while it is hidden. */
+  const choiceCount = (): number => (screen.name === 'favourites' ? favouritesShown().length + 1 : menuFor(screen, starredNow()).length);
+  /** Picks the choice shown as chosen. */
+  const pickChoice = (): void => {
+    if (screen.name !== 'favourites') {
+      const picked = menuFor(screen, starredNow())[choice];
+      if (picked) act(picked.move);
+      return;
+    }
+    const favourite = favouritesShown()[choice];
+    if (favourite) raceFavourite(favourite);
+    else act('quit');
+  };
   const setChoice = (index: number): void => {
     choice = index;
+    if (screen.name === 'favourites') {
+      renderFavouriteChoices();
+      return;
+    }
     const buttons = choiceButtons();
     buttons.forEach((button, k) => button.classList.toggle('chosen', k === index));
     buttons[index]?.focus();
@@ -1105,17 +1200,85 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (testId) p.dataset.testid = testId;
     return p;
   };
-  /** Writes the card in the middle for the screen the page is on, or hides it while the car is driven (Tane, M4.0). */
-  const renderScreen = (): void => {
+  /** A button on the card in the middle that picks the choice at `index` (`choice`) when clicked. */
+  const choiceButton = (index: number, pick: () => void, testId = 'menu-choice'): HTMLButtonElement => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.testid = testId;
+    button.addEventListener('click', pick);
+    button.addEventListener('focus', () => {
+      choice = index;
+      choiceButtons().forEach((other) => other.classList.toggle('chosen', other === button));
+    });
+    return button;
+  };
+  /**
+   * The Favourites card's choices (M5.5b): up to 8 favourites, the newest first, the window of rows moving with the
+   * choice; how many there are when they do not all fit; the note on islands of generator v0; then Back.
+   */
+  const renderFavouriteChoices = (): void => {
+    const list = favouritesShown();
+    const { from, to } = rowWindow(list.length, choice, FAVOURITE_ROWS, rowsFrom);
+    rowsFrom = from;
+    const parts: HTMLElement[] = [];
+    const rows = document.createElement('div');
+    rows.className = 'world-favourites';
+    for (let i = from; i < to; i++) {
+      const favourite = list[i]!;
+      const row = favouriteRow(favourite, config.sim.stepsPerSecond);
+      const button = choiceButton(i, () => raceFavourite(favourite), 'favourite-row');
+      button.className = 'world-favourite';
+      for (const [text, part] of [[row.name, 'name'], [row.code, 'code'], [row.best, 'best'], [row.date, 'date']] as const) {
+        const span = document.createElement('span');
+        span.className = `world-favourite-${part}`;
+        span.textContent = text;
+        button.append(span);
+      }
+      rows.append(button);
+    }
+    if (list.length > 0) parts.push(rows);
+    if (list.length > FAVOURITE_ROWS) parts.push(line(`${from + 1} to ${to} of ${list.length}`, 'world-menu-quiet world-favourites-more', 'favourites-more'));
+    const note = versionNote(list);
+    if (note) parts.push(line(note, 'world-menu-quiet world-favourites-note', 'favourites-note'));
+    const back = choiceButton(list.length, () => act('quit'));
+    back.textContent = 'Back';
+    parts.push(back);
+    // The corner card, with the page's hints, stands aside for this card, so its keys are said here.
+    parts.push(line(list.length > 0 ? 'Enter races · X or Delete removes · Esc goes back' : 'Esc goes back', 'world-menu-quiet world-favourites-keys', 'favourites-keys'));
+    ref('menuChoices').replaceChildren(...parts);
+    const chosen = choice < list.length ? (choice - from) : choiceButtons().length - 1;
+    const buttons = choiceButtons();
+    buttons.forEach((button, k) => button.classList.toggle('chosen', k === chosen));
+    buttons[chosen]?.focus();
+  };
+  /**
+   * Writes the card in the middle for the screen the page is on, or hides it while the car is driven (Tane, M4.0).
+   *
+   * @param keepChoice keep the choice where it is (the star pressed, a favourite removed) rather than on the first
+   */
+  const renderScreen = (keepChoice = false): void => {
     document.body.dataset.screen = screen.name;
-    const menu = menuFor(screen);
-    ref('menu').hidden = menu.length === 0;
-    // On the title the card in the middle has the island's name, so the corner card stands aside.
-    ref('titleCard').hidden = screen.name === 'title';
+    const menu = menuFor(screen, starredNow());
+    const favourites = screen.name === 'favourites';
+    ref('menu').hidden = menu.length === 0 && !favourites;
+    ref('menu').classList.toggle('world-menu-wide', favourites);
+    // On the title and the Favourites card the card in the middle names the islands, so the corner card stands aside.
+    ref('titleCard').hidden = screen.name === 'title' || favourites;
     // A seed or share code is typed on the title only; what was wrong with the last one goes with it.
     ref('seedForm').hidden = screen.name !== 'title';
     renderGhostNote();
     seedProblem.hidden = true;
+    if (favourites) {
+      ref('menuHeading').textContent = 'Favourites';
+      ref('menuBody').replaceChildren(
+        ...(favouriteList.length === 0 ? [line('No favourites yet. Star an island on the pause or results card to keep it here.', 'world-menu-quiet', 'favourites-empty')] : []),
+      );
+      const count = choiceCount();
+      if (!keepChoice) rowsFrom = 0;
+      // Kept on the list when a favourite is taken out: on the one that took its place, or the last.
+      setChoice(keepChoice ? Math.min(choice, Math.max(0, count - 2)) : 0);
+      return;
+    }
     if (menu.length === 0) return;
     const name = shown?.track.name ?? 'Seed Circuit';
     const code = ref('code').textContent ?? '';
@@ -1150,31 +1313,37 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     ref('menuBody').replaceChildren(...body);
     ref('menuChoices').replaceChildren(
       ...menu.map((option, i) => {
-        const button = document.createElement('button');
-        button.type = 'button';
+        const button = choiceButton(i, () => act(option.move));
         button.textContent = option.label;
-        button.dataset.testid = 'menu-choice';
-        button.addEventListener('click', () => act(option.move));
-        button.addEventListener('focus', () => {
-          choice = i;
-          choiceButtons().forEach((other, k) => other.classList.toggle('chosen', k === i));
-        });
         return button;
       }),
     );
-    setChoice(0);
+    setChoice(keepChoice ? Math.min(choice, menu.length - 1) : 0);
   };
   /** Makes a move between the screens (`screens.ts`), if the screen allows it, and shows where it leads. */
   function act(m: Move, seed?: number): void {
     const next = move(screen, m);
     if (!next) return;
+    const before = screen;
     screen = next;
-    if (m === 'start' || m === 'freeDrive' || m === 'restart') {
-      // A new simulation of the same island, a race on the race's screen, and the camera behind the car.
-      if (shown && rapier) startSim(shown, rapier);
+    if (m === 'start' || m === 'freeDrive' || m === 'restart' || (m === 'loaded' && screen.name === 'race')) {
+      // A new simulation of the same island, a race on the race's screen, and the camera behind the car. A favourite's
+      // island just in (M5.5) gets its simulation from `buildSim`, straight after.
+      if (m !== 'loaded' && shown && rapier) startSim(shown, rapier);
       if (screen.name === 'race' && shown) askBot(shown);
       setMode('chase');
       driving.snap();
+    } else if (m === 'star') {
+      starIsland();
+      renderScreen(true);
+      renderControls();
+      return;
+    } else if (m === 'favourites' || (m === 'quit' && (before.name === 'favourites' || screen.name === 'loading'))) {
+      // To and from the Favourites card the camera circles on as it was; Esc while a favourite's island is built lets
+      // it come in on the title.
+    } else if (m === 'raceSeed') {
+      // A favourite of another island: built, then raced (`loaded` above).
+      if (seed !== undefined) void show(seed, false);
     } else if (m === 'pause') {
       devices.release();
     } else if (m === 'quit' || m === 'finished' || m === 'loaded') {
