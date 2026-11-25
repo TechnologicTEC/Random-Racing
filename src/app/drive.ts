@@ -53,12 +53,28 @@ export function blendState(before: CarState, after: CarState, blend: number): Ca
   const t = Math.max(0, blend);
   return {
     ...after,
-    position: mix(before.position, after.position, t),
-    rotation: t === 0 ? before.rotation : turnBetween(before.rotation, after.rotation, t),
+    ...blendPlace(before, after, t),
     velocity: mix(before.velocity, after.velocity, t),
     spin: mix(before.spin, after.spin, t),
     speed: before.speed * (1 - t) + after.speed * t,
     wheels: after.wheels.map((wheel, i) => ({ ...wheel, at: mix(before.wheels[i]?.at ?? wheel.at, wheel.at, t) })),
+  };
+}
+
+/** Where a car is and which way it is turned: all a ghost keeps (M5). */
+export interface Place {
+  position: Vec3;
+  rotation: Quat;
+}
+
+/**
+ * A place `t` of the way from `a` to `b` (0 to 1): the position in a straight line and the turn the short way round,
+ * as the car is drawn between two steps. 0 gives `a` exactly. Used for the car (`blendState`) and its ghost (`ghostPlace`).
+ */
+export function blendPlace(a: Place, b: Place, t: number): Place {
+  return {
+    position: mix(a.position, b.position, t),
+    rotation: t === 0 ? a.rotation : turnBetween(a.rotation, b.rotation, t),
   };
 }
 

@@ -95,7 +95,7 @@ test("shows the countdown, the laps and the finish of the bot's race on seed 7, 
   await expect(page.getByTestId('race-best')).toHaveText(lap1);
   await expect(page.getByTestId('race-time')).toHaveText(formatRaceTime(state.race!.clock - state.race!.lapStart, SPS));
   // Lap 1's sectors are still shown, with no gap: there was no lap before it.
-  await expect(page.getByTestId('race-sector')).toHaveCount(3);
+  await expect(page.getByTestId('race-sector')).toHaveCount(config.sim.race.sectors);
   if (shots) await page.screenshot({ path: 'test-results/screens/race-00007-lap2.png' });
 
   // The finish: "Finished", the total and the three laps.

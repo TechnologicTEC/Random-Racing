@@ -28,7 +28,8 @@ describe('the bot races 3 laps of seeds 1 to 5 (M4.2c)', () => {
     for (const [i, run] of runs.entries()) {
       expect(run.race.phase, `seed ${SEEDS[i]}`).toBe('finished');
       expect(run.race.laps, `seed ${SEEDS[i]}`).toHaveLength(3);
-      expect(run.race.splits, `seed ${SEEDS[i]}`).toHaveLength(9);
+      // Five sectors a lap: one ending at each lap gate and one at the line (M5.4d).
+      expect(run.race.splits, `seed ${SEEDS[i]}`).toHaveLength(15);
     }
   });
 
@@ -36,7 +37,7 @@ describe('the bot races 3 laps of seeds 1 to 5 (M4.2c)', () => {
     for (const { race } of runs) {
       expect(race.laps[0]! + race.laps[1]! + race.laps[2]!).toBeCloseTo(race.total, 6);
       for (let lap = 0; lap < 3; lap++) {
-        expect(race.splits[3 * lap]! + race.splits[3 * lap + 1]! + race.splits[3 * lap + 2]!).toBeCloseTo(race.laps[lap]!, 6);
+        expect(race.splits.slice(5 * lap, 5 * lap + 5).reduce((a, b) => a + b, 0)).toBeCloseTo(race.laps[lap]!, 6);
       }
     }
   });

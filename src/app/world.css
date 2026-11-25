@@ -343,6 +343,23 @@ body,
   display: none;
 }
 
+/* A lap gate missed (M5.4d): a card at the top middle, under the lights' place, in the dark text with the kerbs' red edge. */
+.world-missed {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  border-left: 4px solid #cc221c;
+  pointer-events: none;
+}
+
+.world-missed[hidden] {
+  display: none;
+}
+
 .world-light {
   width: 26px;
   height: 26px;
@@ -404,6 +421,25 @@ body,
   color: #4c665f;
 }
 
+/* Whose ghost the race is run against (M5.3b) and the split against it (M5.4b): one line under the rows, in the muted grey. */
+.world-race-ghosts {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(22, 52, 47, 0.15);
+}
+
+.world-race-ghosts[hidden],
+.world-race-ghost[hidden] {
+  display: none;
+}
+
+.world-race-row.world-race-ghost {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #4c665f;
+}
+
 .world-race-gap {
   color: #4c665f;
   font-size: 12px;
@@ -462,6 +498,21 @@ body,
   font-weight: 600;
 }
 
+/* On the title: the player's ghost of this island is from an older version (M5.4b). */
+.world-menu-ghost-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.world-menu-ghost-note[hidden] {
+  display: none;
+}
+
+/* Whether the race was saved as the player's best (M5.4a), a little apart from the laps. */
+.world-menu-saved {
+  margin-top: 10px !important;
+}
+
 .world-menu-choices {
   display: flex;
   flex-direction: column;
@@ -484,6 +535,82 @@ body,
 .world-menu-choices button.chosen {
   background: #1a7d77;
   color: #ffffff;
+}
+
+/* The Favourites card (M5.5b): wider, a row a favourite with its name, share code, best time and day. */
+.world-menu-wide {
+  min-width: 31rem;
+}
+
+.world-favourites {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A favourite's row: the row to race it, and its âœ• beside it (M5.5c). */
+.world-favourite-row {
+  display: flex;
+  gap: 6px;
+}
+
+.world-menu-choices button.world-favourite {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) 4rem 5rem 6.5rem;
+  gap: 12px;
+  align-items: baseline;
+  padding: 5px 14px;
+  text-align: left;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-favourite-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-favourite-best {
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Quieter than the name and time, and still clear on the filled row. */
+.world-favourite-code,
+.world-favourite-date {
+  opacity: 0.75;
+}
+
+.world-favourite-date {
+  text-align: right;
+}
+
+/* Quiet until pointed at, then the kerbs' red: it takes the favourite off. */
+.world-menu-choices button.world-favourite-remove {
+  flex: none;
+  width: 2.4rem;
+  padding: 0;
+  font-size: 14px;
+  color: #4c665f;
+  border-color: rgba(22, 52, 47, 0.25);
+}
+
+.world-menu-choices button.world-favourite-remove:hover {
+  color: #ffffff;
+  background: #cc221c;
+  border-color: #cc221c;
+}
+
+.world-favourites-more,
+.world-favourites-note,
+.world-favourites-keys {
+  margin: 0;
+  font-size: 12.5px;
 }
 
 /* A seed or share code typed on the title card (M4.5): a box and its button under the choices. */

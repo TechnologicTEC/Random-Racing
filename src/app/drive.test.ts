@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../config';
 import { NEUTRAL_INPUT } from '../sim/input';
 import type { CarState } from '../sim/sim';
-import { advance, blendState, cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
+import { advance, blendPlace, blendState, cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade } from './drive';
 import { NO_RESPAWN } from '../sim/respawn';
 
 const cfg = config.sim;
@@ -253,5 +253,19 @@ describe('placeReadout', () => {
 
   it('gives nothing without a lap', () => {
     expect(placeReadout(null, 2610, 26)).toBe('');
+  });
+});
+
+describe('blendPlace (M5.3)', () => {
+  it('gives the first place at 0, the second at 1, and a turn one long in between, the short way round', () => {
+    const a = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } };
+    const b = { position: { x: 2, y: 4, z: -6 }, rotation: { x: 0, y: -1, z: 0, w: 0 } };
+    expect(blendPlace(a, b, 0)).toEqual(a);
+    expect(blendPlace(a, b, 1).position).toEqual(b.position);
+    const half = blendPlace(a, b, 0.5);
+    expect(half.position).toEqual({ x: 1, y: 2, z: -3 });
+    expect(Math.hypot(half.rotation.x, half.rotation.y, half.rotation.z, half.rotation.w)).toBeCloseTo(1, 12);
+    // b's turn and its negative are the same turn: half way is an eighth of a turn either way, never a flip.
+    expect(Math.abs(half.rotation.w)).toBeCloseTo(Math.SQRT1_2, 9);
   });
 });

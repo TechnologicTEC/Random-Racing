@@ -157,6 +157,23 @@ export interface KartPose {
 }
 
 /**
+ * Where to draw a ghost (M5.3): the kart at a place its run kept, which has
+ * only the body's position and turn. Its wheels are drawn as the resting kart's
+ * (`resting`, from `kartPose` of a car at rest), unturned, and nothing of a
+ * drift is drawn: no lean, no hop, no sparks or smoke.
+ */
+export function ghostPose(place: { position: Vec3; rotation: Quat }, resting: KartPose): KartPose {
+  return {
+    position: place.position,
+    rotation: place.rotation,
+    wheels: resting.wheels.map((wheel) => ({ at: wheel.at, turn: 0 })),
+    sprites: [],
+    lean: 0,
+    squash: 1,
+  };
+}
+
+/**
  * Where to draw the kart from the simulation's state. Each wheel is drawn
  * where the simulation's wheel is (the middle of the small ball it casts, so
  * the springs show), lifted so the bottom of the drawn tyre is where the

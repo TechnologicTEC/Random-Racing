@@ -39,6 +39,8 @@ export const ROAD = {
   /** The start gate: dark posts and a pale beam. */
   gate: [0.16, 0.17, 0.2] as Rgb,
   gateBeam: [0.9, 0.9, 0.88] as Rgb,
+  /** A lap gate's beam (M5.4d): the cards' teal accent, #1a7d77 (Tane, 2026-11-25). */
+  lapGateBeam: [0.102, 0.49, 0.467] as Rgb,
 };
 
 /** The sea: deep and shallow water, and foam. From the island demo. */
@@ -188,3 +190,6 @@ export const RACE_LIGHTS = {
 
 /** The fade over a respawn (step 8c): the cards' pale off-white, so the picture whites out into the page's own light. */
 export const RESPAWN_FADE: Rgb = [0.965, 0.98, 0.969];
+
+/** The ghost (M5.3): a see-through white kart (Tane at the check-in after M5.4: it was the kart's own colours). */
+export const GHOST: Rgb = [1, 1, 1];

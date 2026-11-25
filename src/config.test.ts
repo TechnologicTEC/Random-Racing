@@ -186,3 +186,9 @@ describe('config', () => {
     });
   });
 });
+
+describe('the lap gates and the sectors (M5.4d)', () => {
+  it('times a lap in one sector more than it has lap gates: one ending at each gate and one at the line', () => {
+    expect(config.sim.race.sectors).toBe(config.road.lapGates.count + 1);
+  });
+});

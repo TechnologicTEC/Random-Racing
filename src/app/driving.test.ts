@@ -28,6 +28,20 @@ function newSim(): Sim {
 }
 
 describe('the driving session', () => {
+  it('says the moment drawn in steps: between the last two steps by the blend, or the step itself (M5.3)', () => {
+    const driving = createDriving(config);
+    expect(driving.moment()).toBeNull();
+    driving.setSim(newSim());
+    expect(driving.moment()).toBe(0);
+    // Two and a half steps' time: two steps taken, and the car drawn half way between the states after steps 1 and 2.
+    driving.frame(2.5 * STEP, THROTTLE, true, flat);
+    expect(driving.moment()).toBeCloseTo(1.5, 6);
+    driving.run(10, THROTTLE);
+    expect(driving.moment()).toBe(12);
+    driving.frame(STEP, THROTTLE, false, flat);
+    expect(driving.moment()).toBe(12);
+  });
+
   it('shows nothing until it has a simulation', () => {
     const driving = createDriving(config);
     expect(driving.frame(STEP, THROTTLE, true, flat)).toBe(false);

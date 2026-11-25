@@ -33,6 +33,12 @@ export interface Driving {
   snap(): void;
   /** The car as it is drawn now: between the last two steps' states. Null before the first frame. */
   shown(): CarState | null;
+  /**
+   * The moment drawn, in steps: the step count of the state shown, or part way between the last two when the car is
+   * drawn between them. A ghost is read at this moment (M5.3), so it moves with the car by step, never by the clock.
+   * Null without a simulation.
+   */
+  moment(): number | null;
   /** The chase camera now. Null before the first frame. */
   view(): ChaseView | null;
 }
@@ -43,6 +49,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
   let after: CarState | null = null;
   let shown: CarState | null = null;
   let view: ChaseView | null = null;
+  let moment: number | null = null;
   let carried = 0;
   let snapNext = true;
   let holdNext = false;
@@ -51,6 +58,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
     setSim(next) {
       sim = next;
       before = after = next ? next.state() : null;
+      moment = after ? after.step : null;
       shown = null;
       view = null;
       carried = 0;
@@ -60,6 +68,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
     replaceSim(next) {
       sim = next;
       before = after = next.state();
+      moment = after.step;
       carried = 0;
     },
     sim: () => sim,
@@ -88,6 +97,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
       const wasHeld = holdNext;
       holdNext = false;
       const drawn = blend > 0 && before ? blendState(before, after, blend) : after;
+      moment = blend > 0 && before ? before.step + (after.step - before.step) * blend : after.step;
       const changed = steps > 0 || shown === null || snapNext || wasHeld || drawn !== shown;
       shown = drawn;
       view = snapNext || !view ? chaseStart(drawn, groundAt, cfg.camera.chase) : chaseNext(view, drawn, seconds, groundAt, cfg.camera.chase);
@@ -99,6 +109,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
       if (!sim) throw new Error('There is no simulation to run yet');
       for (let k = 0; k < steps; k++) sim.step(input);
       before = after = shown = sim.state();
+      moment = after.step;
       carried = 0;
       snapNext = true;
       holdNext = true;
@@ -109,6 +120,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
       snapNext = true;
     },
     shown: () => shown,
+    moment: () => moment,
     view: () => view,
   };
 }

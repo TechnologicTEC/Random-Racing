@@ -179,6 +179,7 @@ describe('the race in fingerprints and snapshots', () => {
       { startBoost: !saved.race!.startBoost },
       { clock: saved.race!.clock + 1 },
       { next: saved.race!.next + 1 },
+      { missed: true },
       { lapStart: 0.5 },
       { splits: [1] },
       { laps: [1] },

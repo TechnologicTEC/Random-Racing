@@ -13,6 +13,8 @@ export const DRIVING_KEYS: ReadonlySet<string> = new Set([
 export interface PadPresses {
   camera: boolean;
   pause: boolean;
+  /** X: shows or hides the ghost in a race (M5.3b). */
+  ghost: boolean;
   reset: boolean;
   up: boolean;
   down: boolean;
@@ -20,15 +22,15 @@ export interface PadPresses {
   back: boolean;
 }
 
-const NO_PRESSES: PadPresses = { camera: false, pause: false, reset: false, up: false, down: false, confirm: false, back: false };
+const NO_PRESSES: PadPresses = { camera: false, pause: false, ghost: false, reset: false, up: false, down: false, confirm: false, back: false };
 
 /** The keyboard and any controller, read together. */
 export interface Devices {
   /** What the driver asks for now: the keys held and the first controller with the standard layout, merged. */
   read(): Required<RawInput>;
   /**
-   * Buttons for the page that went down since the last call: the controller's Y (camera), Start (pause) and Back
-   * (reset), and on a menu the D-pad or stick up and down, A and B (M4.4).
+   * Buttons for the page that went down since the last call: the controller's Y (camera), Start (pause), X (the ghost)
+   * and Back (reset), and on a menu the D-pad or stick up and down, A and B (M4.4).
    */
   presses(): PadPresses;
   /** Counts every key as let go. */

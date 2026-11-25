@@ -4,6 +4,6 @@
     "lib": ["ES2023", "WebWorker"],
     "types": []
   },
-  "include": ["src/worker/gen.worker.ts"],
+  "include": ["src/worker/gen.worker.ts", "src/worker/bot.worker.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

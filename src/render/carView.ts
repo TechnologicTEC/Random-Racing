@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { KartViewConfig } from '../config';
 import { kartBody, kartWheel, type KartPose } from './carShape';
 import type { Sprite, SpriteKind } from './driftEffects';
+import { GHOST } from './palette';
 import type { Shape } from './treeShapes';
 
 /** The layer the bloom draws (`worldView.ts`): the glowing effects, and the kart so that it hides what is behind it. */
@@ -267,6 +268,70 @@ export function createCarView(look: KartViewConfig, prepare?: (material: THREE.M
       wheelGeometry.dispose();
       for (const kind of KINDS) sprites[kind].dispose();
       dot.dispose();
+      material.dispose();
+    },
+  };
+}
+
+/** A ghost in the 3D picture (M5.3): the kart's own shapes in see-through white, with none of the drift's effects. */
+export interface GhostView {
+  object: THREE.Group;
+  /** Puts the ghost where the pose says (`ghostPose`), drawn `opacity` solid (0 to 1), or hides it for null. */
+  set(pose: KartPose | null, opacity: number): void;
+  dispose(): void;
+}
+
+/**
+ * The ghost: the same kart as `createCarView`, in see-through white (`GHOST`; Tane at the check-in after M5.4: it was the
+ * kart's own colours, which read as a faded copy of the car). It casts no shadow and takes none
+ * (a shadow on a see-through body reads as a dirty patch), is left out of the bloom's picture, and is never hit: it is
+ * only drawn. Its depth is written, so its own far side does not show through its near side.
+ *
+ * @param prepare called with its material, so it is lit by the clouds' shade as the kart is
+ */
+export function createGhostView(look: KartViewConfig, prepare?: (material: THREE.Material) => void): GhostView {
+  // Half lit by itself, so it reads white in any light of day, its facets still shaded by the sun.
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(...GHOST),
+    emissive: new THREE.Color(...GHOST),
+    emissiveIntensity: 0.5,
+    flatShading: true,
+    roughness: 0.85,
+    metalness: 0,
+    transparent: true,
+    depthWrite: true,
+  });
+  prepare?.(material);
+  const bodyGeometry = toGeometry(kartBody());
+  const wheelGeometry = toGeometry(kartWheel(look));
+  const object = new THREE.Group();
+  object.visible = false;
+  const part = (geometry: THREE.BufferGeometry): THREE.Mesh => {
+    const made = new THREE.Mesh(geometry, material);
+    made.castShadow = false;
+    made.receiveShadow = false;
+    object.add(made);
+    return made;
+  };
+  part(bodyGeometry);
+  const wheels = [0, 1, 2, 3].map(() => part(wheelGeometry));
+  return {
+    object,
+    set(pose, opacity) {
+      object.visible = pose !== null && opacity > 0;
+      if (!pose) return;
+      material.opacity = opacity;
+      object.position.set(pose.position.x, pose.position.y, pose.position.z);
+      object.quaternion.set(pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w);
+      pose.wheels.forEach((place, i) => {
+        const wheel = wheels[i]!;
+        wheel.position.set(place.at.x, place.at.y, place.at.z);
+        wheel.quaternion.setFromAxisAngle(UP, place.turn + (i % 2 === 0 ? Math.PI : 0));
+      });
+    },
+    dispose() {
+      bodyGeometry.dispose();
+      wheelGeometry.dispose();
       material.dispose();
     },
   };

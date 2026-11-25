@@ -4,7 +4,9 @@ import { solveBanking } from './road/banking';
 import { buildBarriers } from './road/barriers';
 import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
-import { buildStartGate } from './road/startGate';
+import { placeLapGates } from './road/lapGates';
+import { sampleField } from './world/heightfield';
+import { buildLapGates, buildStartGate } from './road/startGate';
 import { findWalls } from './road/walls';
 import { solveWidth } from './road/width';
 import { hashTrack } from './track/hash';
@@ -42,6 +44,8 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   let highest = 0;
   for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
+  // The gates a lap is counted by (M5.4d).
+  const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates);
   // Looked for on the finished ground, so a wall stands wherever a cutting, an embankment or a cliff ended up beside the road.
   const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground }, config);
   const report = fitReport(
@@ -64,6 +68,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
       walls,
       barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config),
       gate: buildStartGate(line, profile.height, cross, width, config),
+      lapGates: { samples: lapGateSamples, mesh: buildLapGates(line, profile.height, cross, width, lapGateSamples, (x, z) => sampleField(ground, x, z, 0), config) },
     },
     report,
     mountains: island.mountains.map(({ x, z, summit }) => ({ x, z, summit })),
@@ -86,7 +91,8 @@ export function hashWorld(world: WorldResult): string {
   hasher.numbers(world.ground.height);
   hasher.numbers(world.cover.grass).numbers(world.cover.sand).numbers(world.cover.rock).numbers(world.cover.snow).numbers(world.cover.variation);
   hasher.numbers(world.road.cross).numbers(world.road.width);
-  for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate]) {
+  hasher.numbers(world.road.lapGates.samples);
+  for (const mesh of [world.road.mesh, world.road.kerbs.mesh, world.road.barriers, world.road.gate, world.road.lapGates.mesh]) {
     hasher.numbers(mesh.positions).numbers(mesh.indices).numbers(mesh.materials);
   }
   for (const kerb of world.road.kerbs.spans) hasher.numbers([kerb.startIndex, kerb.sampleCount, kerb.side]);

@@ -83,7 +83,8 @@ describe('countdownLights', () => {
 });
 
 describe('raceCard', () => {
-  const race = config.sim.race;
+  // The card's sums on laps of 3 sectors; the game has 5 since the lap gates (M5.4d), and the card follows `sectors`.
+  const race = { ...config.sim.race, sectors: 3 };
 
   it('reads lap 1 of 3 and no time in the countdown', () => {
     const card = raceCard(startRace(times), race, SPS);

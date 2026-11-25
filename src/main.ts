@@ -1,6 +1,6 @@
 import { config } from './config';
 import { choosePage } from './app/route';
-import type { DriveHandle, ViewHandle } from './app/worldPage';
+import type { DriveHandle, GhostHandle, StoreHandle, ViewHandle } from './app/worldPage';
 import { mountTrackLab } from './debug/trackLab/lab';
 import { mountContactSheet } from './debug/trackLab/sheet';
 import { hashTrack, hashWorld } from './gen';
@@ -17,6 +17,8 @@ if (page.kind === 'world') {
     const view = mountWorldPage(app);
     window.seedCircuit.view = view;
     window.seedCircuit.drive = view.drive;
+    window.seedCircuit.store = view.store;
+    window.seedCircuit.ghost = view.ghost;
   });
 } else if (page.kind === 'sheet') {
   mountContactSheet(app, page.seeds, page.run);
@@ -35,10 +37,18 @@ declare global {
       physicsHashFor(seed: number): Promise<string>;
       /** The fingerprint of the scripted run on a seed (`sim/script.ts`), to confirm every browser's simulation agrees. */
       simHashFor(seed: number): Promise<string>;
+      /** The fingerprint a packed run record (`sim/record.ts`, given as its bytes) replays to on its own island, to confirm every browser replays a ghost alike (M5.1b). */
+      replayHashFor(bytes: number[]): Promise<string>;
+      /** The bot's race of a seed from the bot's worker (M5.3b), packed, or null if it did not finish; and how long it took. */
+      botRaceFor(seed: number): Promise<{ bytes: number[] | null; ms: number }>;
       /** The 3D view, when that is the page being shown. */
       view?: ViewHandle;
       /** The simulation of the island on the 3D page, when that is the page being shown. */
       drive?: DriveHandle;
+      /** Where the 3D page keeps ghosts and favourites, when that is the page being shown. */
+      store?: StoreHandle;
+      /** The ghost of the island on the 3D page, when that is the page being shown. */
+      ghost?: GhostHandle;
     };
   }
 }
@@ -61,5 +71,16 @@ window.seedCircuit = {
       genClient().world(seed, config),
     ]);
     return scriptedFingerprint(await loadRapier(), result, config);
+  },
+  replayHashFor: async (bytes) => {
+    const [{ loadRapier }, { replayRun, unpackRun }] = await Promise.all([import('./sim/physics/rapier'), import('./sim/record')]);
+    const record = unpackRun(Uint8Array.from(bytes));
+    const { result } = await genClient().world(record.seed, config);
+    return replayRun(await loadRapier(), result, config, record);
+  },
+  botRaceFor: async (seed) => {
+    const { botClient } = await import('./worker/botClient');
+    const { bytes, ms } = await botClient().race(seed, config);
+    return { bytes: bytes && Array.from(bytes), ms };
   },
 };

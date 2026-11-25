@@ -7,20 +7,29 @@ const FREE: Screen = { name: 'free' };
 const RESULTS: Screen = { name: 'results' };
 const pausedFrom = (from: 'race' | 'free'): Screen => ({ name: 'paused', from });
 const LOADING: Screen = { name: 'loading' };
+/** A favourite's island being built, to race once it is in (M5.5). */
+const LOADING_TO_RACE: Screen = { name: 'loading', then: 'race' };
+const FAVOURITES: Screen = { name: 'favourites' };
 
 /**
  * Every move from every screen (M4.4): what it leads to, null where it is not allowed. A move left out of a screen's
  * row is not allowed there.
  */
 const TABLE: Array<[string, Screen, Partial<Record<Move, Screen>>]> = [
-  ['the title', TITLE, { start: RACE, freeDrive: FREE, newTrack: LOADING, enterSeed: LOADING }],
+  ['the title', TITLE, { start: RACE, freeDrive: FREE, favourites: FAVOURITES, newTrack: LOADING, enterSeed: LOADING }],
   // Tane, M4.0: the plain address and N open the title card, so a new island always comes in on it.
   ['loading', LOADING, { loaded: TITLE, newTrack: LOADING, enterSeed: LOADING }],
+  // A favourite of another island (M5.5): built, then raced at once. Esc while it builds lands on the title instead,
+  // and another island asked for is shown on the title as usual.
+  ['loading to race', LOADING_TO_RACE, { loaded: RACE, quit: LOADING, newTrack: LOADING, enterSeed: LOADING }],
+  // Tane, M5.0: Favourites is its own card. Racing the island shown starts at once; another island is built first.
+  ['the favourites', FAVOURITES, { start: RACE, raceSeed: LOADING_TO_RACE, quit: TITLE }],
   ['the race', RACE, { pause: pausedFrom('race'), restart: RACE, finished: RESULTS }],
   ['free driving', FREE, { pause: pausedFrom('free'), restart: FREE, newTrack: LOADING }],
-  ['paused in a race', pausedFrom('race'), { resume: RACE, restart: RACE, quit: TITLE }],
-  ['paused in free driving', pausedFrom('free'), { resume: FREE, restart: FREE, quit: TITLE }],
-  ['the results', RESULTS, { restart: RACE, newTrack: LOADING, quit: TITLE }],
+  // The star stays on the card it was pressed on.
+  ['paused in a race', pausedFrom('race'), { resume: RACE, restart: RACE, star: pausedFrom('race'), quit: TITLE }],
+  ['paused in free driving', pausedFrom('free'), { resume: FREE, restart: FREE, star: pausedFrom('free'), quit: TITLE }],
+  ['the results', RESULTS, { restart: RACE, star: RESULTS, newTrack: LOADING, quit: TITLE }],
 ];
 
 describe('move: the screens and the moves between them', () => {
@@ -34,7 +43,9 @@ describe('move: the screens and the moves between them', () => {
   }
 
   it('names every move', () => {
-    expect([...MOVES].sort()).toEqual(['enterSeed', 'finished', 'freeDrive', 'loaded', 'newTrack', 'pause', 'quit', 'restart', 'resume', 'start'].sort());
+    expect([...MOVES].sort()).toEqual(
+      ['enterSeed', 'favourites', 'finished', 'freeDrive', 'loaded', 'newTrack', 'pause', 'quit', 'raceSeed', 'restart', 'resume', 'star', 'start'].sort(),
+    );
   });
 
   it('never pauses the results, nor finishes anything but a race', () => {
@@ -47,12 +58,12 @@ describe('what each screen does', () => {
   it('takes steps only while racing or driving freely', () => {
     expect(steps(RACE)).toBe(true);
     expect(steps(FREE)).toBe(true);
-    for (const screen of [TITLE, LOADING, pausedFrom('race'), pausedFrom('free'), RESULTS]) expect(steps(screen)).toBe(false);
+    for (const screen of [TITLE, LOADING, LOADING_TO_RACE, FAVOURITES, pausedFrom('race'), pausedFrom('free'), RESULTS]) expect(steps(screen)).toBe(false);
   });
 
   it('lets C change the camera only while driving freely: in a race it does nothing', () => {
     expect(cameraFree(FREE)).toBe(true);
-    for (const screen of [TITLE, RACE, pausedFrom('race'), RESULTS]) expect(cameraFree(screen)).toBe(false);
+    for (const screen of [TITLE, RACE, FAVOURITES, pausedFrom('race'), RESULTS]) expect(cameraFree(screen)).toBe(false);
   });
 
   it('gives Esc (and the controller’s B) a move on each screen', () => {
@@ -63,35 +74,51 @@ describe('what each screen does', () => {
     expect(backMove(TITLE)).toBeNull();
     expect(backMove(LOADING)).toBeNull();
   });
+
+  it('takes Esc back to the title from the favourites, and from a favourite being built to race', () => {
+    expect(backMove(FAVOURITES)).toBe('quit');
+    expect(backMove(LOADING_TO_RACE)).toBe('quit');
+  });
 });
 
 describe('the menus', () => {
-  it('offers Race, Free drive and a new island on the title', () => {
+  it('offers Race, Free drive, Favourites and a new island on the title', () => {
     expect(menuFor(TITLE)).toEqual([
       { label: 'Race', move: 'start' },
       { label: 'Free drive', move: 'freeDrive' },
+      { label: 'Favourites', move: 'favourites' },
       { label: 'New island', move: 'newTrack' },
     ]);
   });
 
-  it('offers to resume, restart or go back to the title when paused', () => {
-    expect(menuFor(pausedFrom('race'))).toEqual([
-      { label: 'Resume', move: 'resume' },
-      { label: 'Restart', move: 'restart' },
-      { label: 'Quit to title', move: 'quit' },
-    ]);
+  it('offers to resume, restart, star the island or go back to the title when paused', () => {
+    for (const from of ['race', 'free'] as const) {
+      expect(menuFor(pausedFrom(from))).toEqual([
+        { label: 'Resume', move: 'resume' },
+        { label: 'Restart', move: 'restart' },
+        { label: '☆ Favourite', move: 'star' },
+        { label: 'Quit to title', move: 'quit' },
+      ]);
+    }
   });
 
-  it('offers to race again, a new island or the title on the results', () => {
+  it('offers to race again, star the island, a new island or the title on the results', () => {
     expect(menuFor(RESULTS)).toEqual([
       { label: 'Race again', move: 'restart' },
+      { label: '☆ Favourite', move: 'star' },
       { label: 'New island', move: 'newTrack' },
       { label: 'Title', move: 'quit' },
     ]);
   });
 
-  it('has no menu while driving or loading', () => {
-    for (const screen of [RACE, FREE, LOADING]) expect(menuFor(screen)).toEqual([]);
+  it('fills the star once the island is a favourite', () => {
+    expect(menuFor(RESULTS, true)[1]).toEqual({ label: '★ Favourite', move: 'star' });
+    expect(menuFor(pausedFrom('race'), true)[2]).toEqual({ label: '★ Favourite', move: 'star' });
+    expect(menuFor(TITLE, true)).toEqual(menuFor(TITLE));
+  });
+
+  it('has no menu of choices while driving or loading, nor on the favourites (that card lists the favourites)', () => {
+    for (const screen of [RACE, FREE, LOADING, LOADING_TO_RACE, FAVOURITES]) expect(menuFor(screen)).toEqual([]);
   });
 
   it('offers only moves the screen allows', () => {

@@ -11,7 +11,7 @@ import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
 import { parseQuality, qualitySettings, type QualityLevel } from '../render/quality';
-import { kartPose } from '../render/carShape';
+import { ghostPose, kartPose, type KartPose } from '../render/carShape';
 import type { EffectTextures } from '../render/carView';
 import { speedLines } from '../render/driftEffects';
 import { loadEffectTextures } from '../render/effectTextures';
@@ -21,15 +21,20 @@ import { createDevices } from '../input/devices';
 import { RACE_LIGHTS, RESPAWN_FADE, type Rgb } from '../render/palette';
 import { makeInput, unpackInput, type RawInput } from '../sim/input';
 import type { Rapier } from '../sim/physics/rapier';
+import { hashHandling, packRun, recordRun, unpackRun, type RecordingSim, type RunRecord } from '../sim/record';
 import { raceSteps } from '../sim/race';
 import { createSim, type CarState, type Sim } from '../sim/sim';
 import { startPose } from '../sim/start';
 import { checkpointCount } from '../sim/track/progress';
+import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
-import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen } from './drive';
+import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
+import { bestWrite, cardChoices, dayOf, favouriteRow, isStarred, ownBest, rowWindow, starWrite, versionNote, writeStar, type CardChoice, type Island } from './favourites';
+import { chooseGhost, ghostGap, ghostPlace, ghostRows, saveVerdict, titleTimes, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
+import { ghostKey, openStore, type Favourite, type Store } from './store';
 import { needsRebuild, rebuildSim, tunedCopy } from './tuning';
 import { createTuningPanel } from './tuningPanel';
 import { nextCamera, openingCamera, openingScreen, switchAddress, type CameraMode } from './route';
@@ -56,6 +61,34 @@ export interface DriveHandle {
   reset(): void;
 }
 
+/**
+ * The page's store of ghosts and favourites (M5.2), for browser tests and the console. Bytes go in and out as plain
+ * lists of numbers, which `page.evaluate` can carry.
+ */
+export interface StoreHandle {
+  /** Whether what is written survives a reload (false when the browser refused storage). */
+  kept(): Promise<boolean>;
+  getGhost(key: string): Promise<number[] | null>;
+  putGhost(key: string, bytes: number[]): Promise<void>;
+  listFavourites(): Promise<Favourite[]>;
+  putFavourite(favourite: Favourite): Promise<void>;
+  removeFavourite(seed: number): Promise<void>;
+}
+
+/** What the ghost of the island shown is, and where it is drawn (M5.3), for browser tests. */
+export interface GhostHandle {
+  /** `loading` while it is read from the store, then `none`, `current` (today's handling) or `older` (other handling). */
+  status(): GhostStatus;
+  /** Where the ghost was last drawn, or null when it is not drawn. */
+  shown(): Place | null;
+  /** Whose ghost is drawn in a race (M5.3b): the player's, the bot's, or none. */
+  driver(): 'player' | 'bot' | null;
+  /** Whether the ghost is shown (G and X hide it and show it again). */
+  visible(): boolean;
+}
+
+export type GhostStatus = 'loading' | 'none' | 'current' | 'older';
+
 /** What the page offers to automated checks. */
 export interface ViewHandle {
   stats(): ViewStats;
@@ -77,6 +110,10 @@ export interface ViewHandle {
   decor(): { woods: WoodsKind; trees: number; rocks: number; sky: CloudCover; clouds: number; puffs: number } | null;
   /** The simulation of the island shown. */
   drive: DriveHandle;
+  /** Where ghosts and favourites are kept. */
+  store: StoreHandle;
+  /** The ghost of the island shown. */
+  ghost: GhostHandle;
 }
 
 const TEMPLATE = `
@@ -114,14 +151,21 @@ const TEMPLATE = `
       <div class="world-light-row"><span class="world-light" data-ref="light1"></span><span class="world-light" data-ref="light2"></span><span class="world-light" data-ref="light3"></span></div>
       <p class="world-start-note" data-ref="startNote" data-testid="race-start-note" hidden></p>
     </div>
+    <div class="world-card world-missed" data-ref="missed" data-testid="race-missed" role="status" hidden></div>
     <div class="world-card world-race" data-ref="race" data-testid="race-card" hidden>
       <p class="world-race-lap" data-ref="raceLap" data-testid="race-lap"></p>
       <p class="world-race-time" data-ref="raceTime" data-testid="race-time"></p>
       <div class="world-race-rows" data-ref="raceRows"></div>
+      <div class="world-race-ghosts" data-ref="raceGhosts" hidden>
+        <p class="world-race-row world-race-ghost" data-testid="race-ghost-row"><span data-ref="raceGhostName" data-testid="race-ghost"></span><span class="world-race-gap" data-ref="raceGhostGap" data-testid="race-ghost-gap"></span></p>
+        <p class="world-race-row world-race-ghost world-race-best" data-ref="raceBest" data-testid="race-your-best" hidden></p>
+      </div>
     </div>
     <div class="world-card world-menu" data-ref="menu" data-testid="menu" hidden>
       <h2 data-ref="menuHeading" data-testid="menu-heading"></h2>
       <div class="world-menu-body" data-ref="menuBody"></div>
+      <p class="world-menu-quiet world-menu-ghost-note" data-ref="titleTimes" data-testid="menu-times" hidden></p>
+      <p class="world-menu-quiet world-menu-ghost-note" data-ref="ghostNote" data-testid="menu-ghost-note" hidden>Your ghost is from an older version</p>
       <div class="world-menu-choices" data-ref="menuChoices"></div>
       <form class="world-menu-seed" data-ref="seedForm" data-testid="seed-form" hidden>
         <input type="text" data-ref="seedInput" data-testid="seed-input" placeholder="Seed or share code" aria-label="Seed or share code" autocomplete="off" spellcheck="false" />
@@ -140,8 +184,14 @@ const QUALITY_KEY = 'seedCircuit.quality';
 
 /** The keys for driving, said on the corner card in a race and in free driving. */
 const DRIVING_HINT = 'W or up drives, S or down brakes and reverses, A and D steer, Space or Shift held while steering drifts, R goes back to the last checkpoint.';
+/** Whether the ghost is shown or hidden, remembered between visits (M5.3b). */
+const GHOST_SHOWN_KEY = 'seedCircuit.ghostShown';
 /** On a menu card: the keys and the controller's buttons for it. */
 const MENU_HINT = 'Up and down choose, Enter picks, Esc goes back; on a controller the D-pad or stick, A and B. L opens the lab.';
+/** On the Favourites card (M5.5b). */
+const FAVOURITES_HINT = 'Up and down choose, Enter races, X or Delete removes, Esc goes back; on a controller the D-pad or stick, A, X and B.';
+/** How many favourites the card shows at once; the rest come into view with the choice. */
+const FAVOURITE_ROWS = 8;
 
 const HINTS: Record<CameraMode, string> = {
   chase: `${DRIVING_HINT} Esc pauses. C changes the camera, N makes a new island, T tunes the car. L opens the lab. A controller works too, once a button on it is pressed.`,
@@ -245,6 +295,17 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       // The effects are still drawn, as soft dots.
       document.body.dataset.effects = 'failed';
     });
+  // Ghosts and favourites (M5.2): kept by the browser, or in memory if it refuses; `data-storage` says which.
+  document.body.dataset.storage = 'opening';
+  /** The store once it is open, for what the results say about a save. */
+  let storeNow: Store | null = null;
+  const storeReady: Promise<Store> = openStore(window, () => {
+    document.body.dataset.storage = 'memory';
+  }).then((store) => {
+    document.body.dataset.storage = store.kept ? 'kept' : 'memory';
+    storeNow = store;
+    return store;
+  });
   const meter = createFrameMeter(config.render.frames.keep, config.render.frames.target);
   const readout = ref('frames');
   readout.hidden = params.get('fps') !== '1';
@@ -285,6 +346,45 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let sim: Sim | null = null;
   /** What the readout last saw of the slides' ends (step 10a). */
   let cancelSeen: CancelSeen | null = null;
+  /**
+   * The ghosts of the island shown (M5.3, M5.3b): the player's and the bot's, read from the store when it comes in, the
+   * bot's worked out in its worker if it is not kept; the one a race is run against (`chooseGhost`); where it was last
+   * drawn; and whether it is shown (G and X). `bot=off` leaves the bot's out (for tests).
+   */
+  /** The race being recorded, whether it was tuned, and what the results say about saving it (M5.4a). */
+  let recording: RecordingSim | null = null;
+  let tunedRace = false;
+  let savedLine = '';
+  let ownGhost: RunRecord | null = null;
+  let botGhost: RunRecord | null = null;
+  let ghost: ChosenGhost | null = null;
+  let ghostStatus: GhostStatus = 'loading';
+  let ghostShown: Place | null = null;
+  /**
+   * The favourites (M5.5b), as the store last gave them; writes go one after another, so two quick presses of the star
+   * never read the same list; the first row the Favourites card shows.
+   */
+  let favouriteList: Favourite[] = [];
+  let favouriteWrites: Promise<void> = Promise.resolve();
+  let rowsFrom = 0;
+  const botWanted = params.get('bot') !== 'off';
+  /** The island whose ghosts have been read from the store, and the one the bot's race has been asked for. */
+  let ghostsReadFor: WorldResult | null = null;
+  let botAskedFor: WorldResult | null = null;
+  let botPending = false;
+  let botRaces = 0;
+  document.body.dataset.botRaces = '0';
+  document.body.dataset.botGhost = botWanted ? 'idle' : 'off';
+  let ghostVisible = ((): boolean => {
+    try {
+      return window.localStorage.getItem(GHOST_SHOWN_KEY) !== 'hidden';
+    } catch {
+      return true;
+    }
+  })();
+  document.body.dataset.ghostVisible = String(ghostVisible);
+  /** The kart at rest on the start line, whose wheels the ghost is drawn with. */
+  let restingKart: KartPose | null = null;
   /**
    * The page's own copy of the config, which the tuning panel (T) changes: the simulation, the chase camera and the
    * car's drawing use it. The shared config, and every fingerprint made from it, never change.
@@ -327,9 +427,29 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (note.textContent !== said) note.textContent = said;
     note.hidden = said === '';
     note.classList.toggle('world-race-accent', race?.startBoost === true);
+    // A lap gate gone past outside its posts (M5.4d): which one, until it is gone through.
+    const missed = race !== null && race.phase === 'racing' && race.missed ? missedText(race.next) : '';
+    const missedCard = ref('missed');
+    missedCard.hidden = missed === '';
+    if (missedCard.textContent !== missed) missedCard.textContent = missed;
     const card = ref('race');
     card.hidden = race === null;
     if (!race) return;
+    // Whose ghost the race is run against, or that it is hidden (M5.3b).
+    // and the split against it at the last sector done (M5.4b), by its total, with the player's best under it while the
+    // bot is still the ghost (the check-in after M5.4).
+    const [row, best] = ghostRows(ghost, ownGhost, ghostVisible, ghost && ghostGap(race, ghost.record), hashHandling(config), sps);
+    ref('raceGhosts').hidden = row === undefined;
+    if (row) {
+      const name = ref('raceGhostName');
+      if (name.textContent !== row.label) name.textContent = row.label;
+      const gap = ref('raceGhostGap');
+      if (gap.textContent !== (row.gap ?? '')) gap.textContent = row.gap ?? '';
+      gap.classList.toggle('world-race-accent', row.ahead);
+    }
+    const bestLine = ref('raceBest');
+    bestLine.hidden = best === undefined;
+    if (best && bestLine.textContent !== best.label) bestLine.textContent = best.label;
     const view = raceCard(race, tuned.sim.race, sps);
     if (ref('raceLap').textContent !== view.lap) ref('raceLap').textContent = view.lap;
     if (ref('raceTime').textContent !== view.time) ref('raceTime').textContent = view.time;
@@ -343,6 +463,11 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const drawCar = (): void => {
     const state = sim && (mode === 'chase' || lookingAtCar || driven) ? carState() : null;
     view.setCar(state ? kartPose(state, tuned) : null);
+    // The ghost, in a race in the driving view: at the moment the car is drawn, by step (M5.3).
+    const moment = driving.moment();
+    ghostShown = state?.race && mode === 'chase' && ghost && ghostVisible && moment !== null ? ghostPlace(ghost.record, moment) : null;
+    view.setGhost(ghostShown && restingKart ? ghostPose(ghostShown, restingKart) : null, config.ghost.opacity);
+    document.body.dataset.ghostShown = String(ghostShown !== null);
     // Speed lines while a boost runs, in the driving view only.
     view.setSpeedLines(state && mode === 'chase' ? speedLines(state.drift, state.step, tuned.render.car, tuned.sim.stepsPerSecond) : []);
     document.body.dataset.driveCar = state ? 'shown' : 'hidden';
@@ -391,7 +516,17 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const started = performance.now();
     dropSim();
     // A race only on the race's screen: the title, free driving and the rest drive with no clock.
-    sim = createSim(engine, world, tuned, { race: screen.name === 'race' });
+    const made = createSim(engine, world, tuned, { race: screen.name === 'race' });
+    // A race is recorded from its first step (M5.4a): it may become the player's ghost. A race started with tuned
+    // handling is never saved, nor one in which the tuning panel changes anything.
+    recording =
+      screen.name === 'race'
+        ? recordRun(made, { seed: world.seed, generator: world.generatorVersion, driver: 'player', every: config.ghost.every, handling: hashHandling(tuned) })
+        : null;
+    sim = recording ?? made;
+    tunedRace = hashHandling(tuned) !== hashHandling(config);
+    savedLine = '';
+    restingKart = kartPose(sim.state(), tuned);
     driving.setSim(sim);
     document.body.dataset.driveMs = (performance.now() - started).toFixed(0);
     document.body.dataset.driveStep = String(sim.state().step);
@@ -412,6 +547,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const panel = createTuningPanel(ref('dash').parentElement!, tuned, (path) => {
     // The camera reads its settings afresh each frame; the car's are built into its simulation.
     if (needsRebuild(path)) rebuildWanted = true;
+    // A race in which the panel changed anything is never saved (M5.4a).
+    if (sim?.state().race) tunedRace = true;
     dirty = true;
   });
   /** Builds the simulation again with the tuned settings, carrying on from where the car is: at most once a frame. */
@@ -423,6 +560,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const race = sim.state().race !== null;
     sim = rebuildSim(sim, (cfg) => createSim(engine, world, cfg, { race }), tuned);
     driving.replaceSim(sim);
+    // The rebuilt simulation carries on from a snapshot, so the run is no longer one recording from the start.
+    recording = null;
     rebuilds++;
     document.body.dataset.tuningBuilds = String(rebuilds);
     document.body.dataset.tuningMs = (performance.now() - started).toFixed(0);
@@ -451,7 +590,14 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // In a race, on the title and on the cards the camera is chosen for the player (M4.4).
     ref('toggle').hidden = !cameraFree(screen);
     ref('new').hidden = move(screen, 'newTrack') === null;
-    ref('hint').textContent = menuFor(screen).length > 0 ? MENU_HINT : screen.name === 'race' ? `${DRIVING_HINT} Esc pauses.` : HINTS[mode];
+    ref('hint').textContent =
+      screen.name === 'favourites'
+        ? FAVOURITES_HINT
+        : menuFor(screen).length > 0
+          ? MENU_HINT
+          : screen.name === 'race'
+            ? `${DRIVING_HINT} G shows or hides the ghost. Esc pauses.`
+            : HINTS[mode];
     ref('quality').textContent = `Quality: ${quality === 'high' ? 'High' : 'Low'}`;
     ref('dash').hidden = mode !== 'chase';
     // The chase camera sees a wider view than the others.
@@ -547,9 +693,12 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const pressed = devices.presses();
     if (pressed.camera && cameraFree(screen)) setMode(nextCamera(mode));
     if (pressed.pause) act(screen.name === 'paused' ? 'resume' : 'pause');
-    const menu = menuFor(screen);
-    if (menu.length > 0 && (pressed.up || pressed.down)) setChoice(choiceAfter(choice, menu.length, pressed.up ? -1 : 1));
-    if (menu.length > 0 && pressed.confirm) act(menu[choice]!.move);
+    if (pressed.ghost && screen.name === 'race') toggleGhost();
+    // On the Favourites card X removes the favourite chosen (M5.5b).
+    if (pressed.ghost && screen.name === 'favourites') removeFavouriteAt(choice);
+    const count = choiceCount();
+    if (count > 0 && (pressed.up || pressed.down)) setChoice(choiceAfter(choice, count, pressed.up ? -1 : 1));
+    if (count > 0 && pressed.confirm) pickChoice();
     if (pressed.back) {
       const back = backMove(screen);
       if (back) act(back);
@@ -560,7 +709,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (steps(screen) && mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
     checkFinished();
     // Behind the title and results cards the camera circles the island by itself.
-    if (!still && mode === 'orbit' && (screen.name === 'title' || screen.name === 'results') && !dragging) {
+    if (!still && mode === 'orbit' && (screen.name === 'title' || screen.name === 'results' || screen.name === 'favourites') && !dragging) {
       orbit = { ...orbit, angle: orbit.angle + config.camera.orbit.turn * seconds };
       dirty = true;
     }
@@ -658,6 +807,178 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     return { targetX: x, targetY: height + 8, targetZ: z, angle: -towardsSun, tilt: 0.08, distance: 60 };
   };
 
+  /** Picks the ghost a race is run against from those read and worked out (`chooseGhost`), and says which on the page. */
+  /** On the title, a line when the player's ghost of this island was driven with other handling (M5.4b). */
+  const renderGhostNote = (): void => {
+    const title = screen.name === 'title';
+    ref('ghostNote').hidden = !(title && ownGhost !== null && ownGhost.handling !== hashHandling(config));
+    // The bot's time until it is beaten and the player's best until it is bettered (the check-in after M5.4).
+    const times = title ? titleTimes(ownGhost, botWanted ? botGhost : null, hashHandling(config), config.sim.stepsPerSecond) : null;
+    ref('titleTimes').hidden = times === null;
+    if (times !== null && ref('titleTimes').textContent !== times) ref('titleTimes').textContent = times;
+  };
+  const pickGhost = (): void => {
+    ghost = chooseGhost(ownGhost, botWanted ? botGhost : null, hashHandling(config));
+    ghostStatus = ghost ? (ghost.older ? 'older' : 'current') : 'none';
+    document.body.dataset.ghost = ghostStatus;
+    document.body.dataset.ghostDriver = ghost?.driver ?? '';
+    renderGhostNote();
+  };
+  /** A ghost's bytes read as a record of this island, or null for none, or for bytes that are not one. */
+  const recordOf = (bytes: Uint8Array | null, world: WorldResult): RunRecord | null => {
+    if (!bytes) return null;
+    try {
+      const record = unpackRun(bytes);
+      return record.seed === world.seed && record.generator === world.generatorVersion ? record : null;
+    } catch {
+      return null;
+    }
+  };
+  /**
+   * Reads the ghosts of an island that has just come in from the store, unless another island has been asked for
+   * meanwhile; then asks for the bot's race if the page is on the title or racing and it was not kept.
+   */
+  const loadGhost = async (world: WorldResult): Promise<void> => {
+    const store = await storeReady;
+    const [own, bot] = await Promise.all([
+      store.getGhost(ghostKey(world.seed, world.generatorVersion, 'player')),
+      botWanted ? store.getGhost(ghostKey(world.seed, world.generatorVersion, 'bot')) : Promise.resolve(null),
+    ]);
+    if (shown !== world) return;
+    ownGhost = recordOf(own, world);
+    const keptBot = recordOf(bot, world);
+    // A bot race of other handling is no use: it is worked out again.
+    botGhost = keptBot && keptBot.handling === hashHandling(config) ? keptBot : null;
+    if (botWanted) document.body.dataset.botGhost = botGhost ? 'ready' : 'idle';
+    ghostsReadFor = world;
+    pickGhost();
+    if (screen.name === 'title' || screen.name === 'race') askBot(world);
+    // Drawn again only if there is a ghost to draw: a picture held still must not change for nothing (`frame times`).
+    if (ghost) drawCar();
+  };
+  /**
+   * The bot race of the island shown, worked out in the bot worker (M5.3b) unless it is kept, left out or already
+   * asked for, and kept once it comes. Asked for on the title and in a race only, so free driving and the views for
+   * pictures never spend the computer's time on it.
+   */
+  const askBot = (world: WorldResult): void => {
+    if (!botWanted || botGhost || ghostsReadFor !== world || botAskedFor === world) return;
+    botAskedFor = world;
+    botPending = true;
+    botRaces++;
+    document.body.dataset.botRaces = String(botRaces);
+    document.body.dataset.botGhost = 'working';
+    botClient()
+      .race(world.seed, config)
+      .then(async ({ bytes }) => {
+        if (botAskedFor !== world) return;
+        botPending = false;
+        botGhost = recordOf(bytes, world);
+        if (bytes && botGhost) await (await storeReady).putGhost(ghostKey(world.seed, world.generatorVersion, 'bot'), bytes);
+        if (botAskedFor !== world) return;
+        document.body.dataset.botGhost = botGhost ? 'ready' : 'none';
+        pickGhost();
+        drawCar();
+      })
+      .catch(() => {
+        // Stopped for another island, or the worker failed: no bot ghost this time.
+        if (botAskedFor !== world) return;
+        botPending = false;
+        document.body.dataset.botGhost = 'failed';
+      });
+  };
+  /**
+   * At the finish (M5.4a): saves the race as the player's ghost if it is their best and the car was not tuned
+   * (`saveVerdict`), and words the results' line about it. The ghost a next race is run against is chosen again.
+   */
+  const saveRace = (): void => {
+    const world = shown;
+    const race = sim?.state().race;
+    savedLine = '';
+    if (!world || !race || race.phase !== 'finished') return;
+    let record: RunRecord | null = null;
+    try {
+      record = recording?.record() ?? null;
+    } catch {
+      record = null;
+    }
+    const today = hashHandling(config);
+    const verdict = saveVerdict(race.total, { tuned: tunedRace || !record, kept: storeNow?.kept ?? false, own: ownGhost, bot: botWanted ? botGhost : null, today }, config.sim.stepsPerSecond);
+    savedLine = verdict.line;
+    document.body.dataset.saved = String(verdict.save);
+    if (!verdict.save || !record) return;
+    ownGhost = record;
+    pickGhost();
+    const bytes = packRun(record);
+    void storeReady.then((store) => store.putGhost(ghostKey(world.seed, world.generatorVersion, 'player'), bytes));
+    // A favourite of this island takes the new best as its time (M5.5).
+    const total = record.total;
+    writeFavourites(async (store) => {
+      const raised = bestWrite(await store.listFavourites(), world.seed, world.generatorVersion, total);
+      if (raised) await store.putFavourite(raised);
+    });
+  };
+  /** The island shown, as a favourite names it. */
+  const islandOf = (world: WorldResult): Island => ({ seed: world.seed, generator: world.generatorVersion, name: world.track.name });
+  /** Whether the island shown is a favourite: the star on the pause and results cards is filled. */
+  const starredNow = (): boolean => shown !== null && isStarred(favouriteList, islandOf(shown));
+  /** The Favourites card's choices: adding the island shown while it is no favourite (M5.5c), the favourites, Back. */
+  const favouriteChoices = (): CardChoice[] => cardChoices(favouriteList, shown ? islandOf(shown) : null);
+  /**
+   * Makes a change to the favourites after any before it, then reads them back and writes the card again if it shows
+   * them (the star's label or the list), keeping the choice where it was.
+   */
+  const writeFavourites = (change: (store: Store) => Promise<void>): void => {
+    favouriteWrites = favouriteWrites
+      .then(async () => {
+        const store = await storeReady;
+        await change(store);
+        favouriteList = await store.listFavourites();
+        document.body.dataset.favourites = String(favouriteList.length);
+        if (screen.name === 'paused' || screen.name === 'results' || screen.name === 'favourites') renderScreen(true);
+      })
+      .catch(() => {
+        // A store never throws (`guardedStore`); a change that does is dropped.
+      });
+  };
+  writeFavourites(async () => {});
+  /** The star pressed (M5.5): the island shown saved as a favourite with the player's best, or taken off. */
+  const starIsland = (): void => {
+    const world = shown;
+    if (!world) return;
+    const best = ownBest(ownGhost, hashHandling(config));
+    writeFavourites(async (store) => writeStar(store, starWrite(await store.listFavourites(), islandOf(world), best, dayOf(new Date()))));
+  };
+  /** The row a favourite was taken out of, for the choice to stay on when the card is written again. */
+  let rowAfterRemove: number | null = null;
+  /** A favourite taken off the list: its ✕ clicked (M5.5c), or X or Delete with it chosen. */
+  const removeFavourite = (favourite: Favourite): void => {
+    const at = favouriteChoices().find((c) => c.kind === 'row' && c.favourite.seed === favourite.seed);
+    if (at?.kind === 'row') rowAfterRemove = at.row;
+    writeFavourites((store) => store.removeFavourite(favourite.seed));
+  };
+  /** X or Delete on the Favourites card: the favourite chosen taken off (nothing for the add or Back). */
+  const removeFavouriteAt = (index: number): void => {
+    const chosen = favouriteChoices()[index];
+    if (chosen?.kind === 'row') removeFavourite(chosen.favourite);
+  };
+  /** A favourite picked: raced at once if it is the island shown, otherwise its island is built first, then raced. */
+  const raceFavourite = (favourite: Favourite): void => {
+    if (shown && shown.seed === favourite.seed && shown.generatorVersion === favourite.generator) act('start');
+    else act('raceSeed', favourite.seed);
+  };
+  /** Shows or hides the ghost (G, or X on a controller), and remembers it. */
+  const toggleGhost = (): void => {
+    ghostVisible = !ghostVisible;
+    document.body.dataset.ghostVisible = String(ghostVisible);
+    try {
+      window.localStorage.setItem(GHOST_SHOWN_KEY, ghostVisible ? 'shown' : 'hidden');
+    } catch {
+      // Without storage the choice lasts until the page is closed.
+    }
+    drawCar();
+  };
+
   /** The seed last asked for. Its world may still be on its way from the worker. */
   let wantedSeed = -1;
   /** How many islands have been asked of the worker: a restart builds none (M4.5). */
@@ -668,6 +989,15 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     worldBuilds++;
     document.body.dataset.worldBuilds = String(worldBuilds);
     dropSim();
+    ownGhost = botGhost = ghost = null;
+    ghostsReadFor = null;
+    ghostStatus = 'loading';
+    document.body.dataset.ghost = ghostStatus;
+    // The bot race of the island before is no longer wanted.
+    if (botPending) botClient().cancel();
+    botPending = false;
+    botAskedFor = null;
+    if (botWanted) document.body.dataset.botGhost = 'idle';
     loading.hidden = false;
     ref('loadingText').textContent = 'Raising a new island…';
     document.body.dataset.worldReady = 'false';
@@ -684,6 +1014,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       view.load(result);
       report = result.report;
       shown = result;
+      void loadGhost(result);
       // Only the page's first island honours the address's time; a new island has its own.
       bearing = result.sky.bearing;
       seedHour = result.sky.hour;
@@ -792,28 +1123,35 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // The time slider takes its own arrow keys.
     if (event.target instanceof HTMLInputElement) return;
     const key = event.key.toLowerCase();
-    // The menu cards and the pause (M4.4): Esc goes back, up and down choose, Enter picks.
-    const menu = menuFor(screen);
+    // The menu cards and the pause (M4.4): Esc goes back, up and down choose, Enter picks; on the Favourites card X or
+    // Delete removes the favourite chosen (M5.5b).
+    const count = choiceCount();
     if (key === 'escape') {
       const back = backMove(screen);
       if (back) act(back);
       event.preventDefault();
       return;
     }
-    if (menu.length > 0 && (key === 'arrowup' || key === 'arrowdown')) {
-      setChoice(choiceAfter(choice, menu.length, key === 'arrowup' ? -1 : 1));
+    if (screen.name === 'favourites' && (key === 'x' || key === 'delete')) {
+      removeFavouriteAt(choice);
       event.preventDefault();
       return;
     }
-    if (menu.length > 0 && key === 'enter') {
+    if (count > 0 && (key === 'arrowup' || key === 'arrowdown')) {
+      setChoice(choiceAfter(choice, count, key === 'arrowup' ? -1 : 1));
+      event.preventDefault();
+      return;
+    }
+    if (count > 0 && key === 'enter') {
       // A choice with the focus is pressed by Enter itself; otherwise Enter picks the choice shown as chosen.
       if (!choiceButtons().includes(document.activeElement as HTMLButtonElement)) {
-        act(menu[choice]!.move);
+        pickChoice();
         event.preventDefault();
       }
       return;
     }
-    if (key === ' ' && mode === 'fly') setPlaying(!playing);
+    if (key === 'g' && screen.name === 'race') toggleGhost();
+    else if (key === ' ' && mode === 'fly') setPlaying(!playing);
     else if (key === 'c') {
       if (cameraFree(screen)) setMode(nextCamera(mode));
     } else if (key === 'n') act('newTrack');
@@ -832,11 +1170,36 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
   });
 
-  /** The choice on the menu card shown as chosen, which Enter and the controller's A pick. */
+  /**
+   * The choice on the menu card shown as chosen, which Enter and the controller's A pick. On the Favourites card it
+   * counts every favourite, then Back, though only 8 rows are drawn at once.
+   */
   let choice = 0;
-  const choiceButtons = (): HTMLButtonElement[] => [...ref('menuChoices').querySelectorAll<HTMLButtonElement>('button')];
+  /** The choices' buttons on the card in the middle, in order: a favourite's ✕ is clicked, never chosen. */
+  const choiceButtons = (): HTMLButtonElement[] => [...ref('menuChoices').querySelectorAll<HTMLButtonElement>('button:not(.world-favourite-remove)')];
+  /** How many choices the card in the middle has: none while it is hidden. */
+  const choiceCount = (): number => (screen.name === 'favourites' ? favouriteChoices().length : menuFor(screen, starredNow()).length);
+  /** Picks the choice shown as chosen. */
+  const pickChoice = (): void => {
+    if (screen.name !== 'favourites') {
+      const picked = menuFor(screen, starredNow())[choice];
+      if (picked) act(picked.move);
+      return;
+    }
+    pickFavouriteChoice(favouriteChoices()[choice]);
+  };
+  /** A choice of the Favourites card picked: the island shown added, a favourite raced, or back to the title. */
+  const pickFavouriteChoice = (picked: CardChoice | undefined): void => {
+    if (picked?.kind === 'add') starIsland();
+    else if (picked?.kind === 'row') raceFavourite(picked.favourite);
+    else if (picked?.kind === 'back') act('quit');
+  };
   const setChoice = (index: number): void => {
     choice = index;
+    if (screen.name === 'favourites') {
+      renderFavouriteChoices();
+      return;
+    }
     const buttons = choiceButtons();
     buttons.forEach((button, k) => button.classList.toggle('chosen', k === index));
     buttons[index]?.focus();
@@ -849,16 +1212,121 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (testId) p.dataset.testid = testId;
     return p;
   };
-  /** Writes the card in the middle for the screen the page is on, or hides it while the car is driven (Tane, M4.0). */
-  const renderScreen = (): void => {
+  /** A button on the card in the middle that picks the choice at `index` (`choice`) when clicked. */
+  const choiceButton = (index: number, pick: () => void, testId = 'menu-choice'): HTMLButtonElement => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.testid = testId;
+    button.addEventListener('click', pick);
+    button.addEventListener('focus', () => {
+      choice = index;
+      choiceButtons().forEach((other) => other.classList.toggle('chosen', other === button));
+    });
+    return button;
+  };
+  /**
+   * The Favourites card's choices (M5.5b, M5.5c): adding the island shown while it is no favourite; up to 8 favourites,
+   * the newest first, the window of rows moving with the choice, each with a ✕ to click that removes it; how many there
+   * are when they do not all fit; the note on islands of generator v0; then Back, and the card's keys.
+   */
+  const renderFavouriteChoices = (): void => {
+    const all = favouriteChoices();
+    const rowCount = all.filter((c) => c.kind === 'row').length;
+    const chosen = all[choice];
+    const { from, to } = rowWindow(rowCount, chosen?.kind === 'row' ? chosen.row : rowCount, FAVOURITE_ROWS, rowsFrom);
+    rowsFrom = from;
+    /** The button of each choice drawn, by its place among the choices. */
+    const drawn = new Map<number, HTMLButtonElement>();
+    const parts: HTMLElement[] = [];
+    const rows = document.createElement('div');
+    rows.className = 'world-favourites';
+    all.forEach((option, index) => {
+      if (option.kind === 'add') {
+        const add = choiceButton(index, () => pickFavouriteChoice(option), 'favourite-add');
+        add.textContent = `☆ Add ${option.island.name}`;
+        parts.push(add);
+        drawn.set(index, add);
+      } else if (option.kind === 'row' && option.row >= from && option.row < to) {
+        const favourite = option.favourite;
+        const row = favouriteRow(favourite, config.sim.stepsPerSecond);
+        const button = choiceButton(index, () => pickFavouriteChoice(option), 'favourite-row');
+        button.className = 'world-favourite';
+        for (const [text, part] of [[row.name, 'name'], [row.code, 'code'], [row.best, 'best'], [row.date, 'date']] as const) {
+          const span = document.createElement('span');
+          span.className = `world-favourite-${part}`;
+          span.textContent = text;
+          button.append(span);
+        }
+        // Clicked, never chosen with the keys (X and Delete do that): out of the Tab order.
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'world-favourite-remove';
+        remove.dataset.testid = 'favourite-remove';
+        remove.textContent = '✕';
+        remove.title = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${favourite.name}`);
+        remove.tabIndex = -1;
+        remove.addEventListener('click', () => removeFavourite(favourite));
+        const holder = document.createElement('div');
+        holder.className = 'world-favourite-row';
+        holder.append(button, remove);
+        rows.append(holder);
+        drawn.set(index, button);
+      }
+    });
+    if (rowCount > 0) parts.push(rows);
+    if (rowCount > FAVOURITE_ROWS) parts.push(line(`${from + 1} to ${to} of ${rowCount}`, 'world-menu-quiet world-favourites-more', 'favourites-more'));
+    const note = versionNote(favouriteList);
+    if (note) parts.push(line(note, 'world-menu-quiet world-favourites-note', 'favourites-note'));
+    const backIndex = all.length - 1;
+    const back = choiceButton(backIndex, () => act('quit'));
+    back.textContent = 'Back';
+    parts.push(back);
+    drawn.set(backIndex, back);
+    // The corner card, with the page's hints, stands aside for this card, so its keys are said here.
+    const keys = rowCount > 0 ? 'Enter races · ✕, X or Delete removes · Esc goes back' : all[0]?.kind === 'add' ? 'Enter adds · Esc goes back' : 'Esc goes back';
+    parts.push(line(keys, 'world-menu-quiet world-favourites-keys', 'favourites-keys'));
+    ref('menuChoices').replaceChildren(...parts);
+    const focused = drawn.get(choice) ?? back;
+    choiceButtons().forEach((button) => button.classList.toggle('chosen', button === focused));
+    focused.focus();
+  };
+  /**
+   * Writes the card in the middle for the screen the page is on, or hides it while the car is driven (Tane, M4.0).
+   *
+   * @param keepChoice keep the choice where it is (the star pressed, a favourite removed) rather than on the first
+   */
+  const renderScreen = (keepChoice = false): void => {
     document.body.dataset.screen = screen.name;
-    const menu = menuFor(screen);
-    ref('menu').hidden = menu.length === 0;
-    // On the title the card in the middle has the island's name, so the corner card stands aside.
-    ref('titleCard').hidden = screen.name === 'title';
+    const menu = menuFor(screen, starredNow());
+    const favourites = screen.name === 'favourites';
+    ref('menu').hidden = menu.length === 0 && !favourites;
+    ref('menu').classList.toggle('world-menu-wide', favourites);
+    // On the title and the Favourites card the card in the middle names the islands, so the corner card stands aside.
+    ref('titleCard').hidden = screen.name === 'title' || favourites;
     // A seed or share code is typed on the title only; what was wrong with the last one goes with it.
     ref('seedForm').hidden = screen.name !== 'title';
+    renderGhostNote();
     seedProblem.hidden = true;
+    if (favourites) {
+      ref('menuHeading').textContent = 'Favourites';
+      ref('menuBody').replaceChildren(
+        ...(favouriteList.length === 0 ? [line('No favourites yet. Add this island, or star one on the pause or results card.', 'world-menu-quiet', 'favourites-empty')] : []),
+      );
+      if (!keepChoice) rowsFrom = 0;
+      const all = favouriteChoices();
+      let index = keepChoice ? Math.min(choice, Math.max(0, all.length - 2)) : 0;
+      // A favourite taken out: the choice stays on the list, on the row that took its place or the last, even when the
+      // island shown's add comes back above it.
+      if (keepChoice && rowAfterRemove !== null) {
+        const rows = all.filter((c) => c.kind === 'row');
+        const target = rows[Math.min(rowAfterRemove, rows.length - 1)];
+        index = target ? all.indexOf(target) : 0;
+      }
+      rowAfterRemove = null;
+      setChoice(index);
+      return;
+    }
     if (menu.length === 0) return;
     const name = shown?.track.name ?? 'Seed Circuit';
     const code = ref('code').textContent ?? '';
@@ -887,37 +1355,47 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
           body.push(row);
         });
       }
+      // Whether the race was saved as the player's best, and why not (M5.4a).
+      if (savedLine) body.push(line(savedLine, 'world-menu-quiet world-menu-saved', 'menu-saved'));
     }
     ref('menuBody').replaceChildren(...body);
     ref('menuChoices').replaceChildren(
       ...menu.map((option, i) => {
-        const button = document.createElement('button');
-        button.type = 'button';
+        const button = choiceButton(i, () => act(option.move));
         button.textContent = option.label;
-        button.dataset.testid = 'menu-choice';
-        button.addEventListener('click', () => act(option.move));
-        button.addEventListener('focus', () => {
-          choice = i;
-          choiceButtons().forEach((other, k) => other.classList.toggle('chosen', k === i));
-        });
         return button;
       }),
     );
-    setChoice(0);
+    setChoice(keepChoice ? Math.min(choice, menu.length - 1) : 0);
   };
   /** Makes a move between the screens (`screens.ts`), if the screen allows it, and shows where it leads. */
   function act(m: Move, seed?: number): void {
     const next = move(screen, m);
     if (!next) return;
+    const before = screen;
     screen = next;
-    if (m === 'start' || m === 'freeDrive' || m === 'restart') {
-      // A new simulation of the same island, a race on the race's screen, and the camera behind the car.
-      if (shown && rapier) startSim(shown, rapier);
+    if (m === 'start' || m === 'freeDrive' || m === 'restart' || (m === 'loaded' && screen.name === 'race')) {
+      // A new simulation of the same island, a race on the race's screen, and the camera behind the car. A favourite's
+      // island just in (M5.5) gets its simulation from `buildSim`, straight after.
+      if (m !== 'loaded' && shown && rapier) startSim(shown, rapier);
+      if (screen.name === 'race' && shown) askBot(shown);
       setMode('chase');
       driving.snap();
+    } else if (m === 'star') {
+      starIsland();
+      renderScreen(true);
+      renderControls();
+      return;
+    } else if (m === 'favourites' || (m === 'quit' && (before.name === 'favourites' || screen.name === 'loading'))) {
+      // To and from the Favourites card the camera circles on as it was; Esc while a favourite's island is built lets
+      // it come in on the title.
+    } else if (m === 'raceSeed') {
+      // A favourite of another island: built, then raced (`loaded` above).
+      if (seed !== undefined) void show(seed, false);
     } else if (m === 'pause') {
       devices.release();
     } else if (m === 'quit' || m === 'finished' || m === 'loaded') {
+      if (m === 'finished') saveRace();
       // Off the road: the camera circles close in round the track behind the card. Back on the title the car is put back on the line.
       if (shown) frameTrack(shown);
       if (m === 'quit' && shown && rapier) startSim(shown, rapier);
@@ -1003,7 +1481,30 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       },
       reset: resetCar,
     },
+    store: {
+      kept: async () => (await storeReady).kept,
+      getGhost: async (key) => {
+        const bytes = await (await storeReady).getGhost(key);
+        return bytes ? Array.from(bytes) : null;
+      },
+      putGhost: async (key, bytes) => (await storeReady).putGhost(key, Uint8Array.from(bytes)),
+      listFavourites: async () => (await storeReady).listFavourites(),
+      putFavourite: async (favourite) => (await storeReady).putFavourite(favourite),
+      removeFavourite: async (seed) => (await storeReady).removeFavourite(seed),
+    },
+    ghost: {
+      status: () => ghostStatus,
+      shown: () => ghostShown && { position: { ...ghostShown.position }, rotation: { ...ghostShown.rotation } },
+      driver: () => ghost?.driver ?? null,
+      visible: () => ghostVisible,
+    },
   };
+}
+
+/** The card for a missed line (M5.4d): a lap gate by its number, or the start line. */
+function missedText(next: number): string {
+  const what = next === 0 ? 'the line' : `gate ${next}`;
+  return `Missed ${what}: drive back through it, or press R`;
 }
 
 /** A palette colour (0 to 1) as a CSS colour. */

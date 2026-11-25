@@ -1,5 +1,6 @@
 import type { PhysicsConfig } from '../config';
 import { createHasher } from '../core/hash';
+import { gateOpening } from '../gen/road/startGate';
 import type { WorldResult } from '../gen/types';
 import { createCar, type CarMemory, type CarReading } from './car/car';
 import { DRIFT_ENDS, type Hit } from './car/drift';
@@ -122,19 +123,40 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
   const rules = cfg.sim.respawn;
   const waits = respawnSteps(rules, cfg.sim.stepsPerSecond);
   let respawn: RespawnState = NO_RESPAWN;
-  // The race, if one was asked for: it needs the lap, so a plain test ground has none.
+  // The race, if one was asked for: it needs the lap, so a plain test ground has none. A lap goes through the start
+  // line and then each lap gate, between its posts (M5.4d).
   const raceTimes = raceSteps(cfg.sim.race, cfg.sim.stepsPerSecond);
-  const raceTrack = lap && { length: lap.line.length, count: checkpointCount(lap.line, cfg.sim.progress) };
+  const gateSamples = course.kind === 'island' ? [0, ...course.world.road.lapGates.samples] : [];
+  const raceTrack =
+    lap && course.kind === 'island'
+      ? {
+          length: lap.line.length,
+          lines: gateSamples.map((sample) => sample * lap.line.spacing),
+          openings: gateSamples.map((sample) => gateOpening(course.world.road.width, sample, cfg)),
+          stride: cfg.sim.progress.stride,
+        }
+      : null;
   let race: RaceState | null = options.race && raceTrack ? startRace(raceTimes) : null;
   let step = 0;
   let input: InputRecord = NEUTRAL_INPUT;
   let touch: Touch | null = null;
 
-  /** Puts the car at the last checkpoint passed, or home before any: still, remembering nothing, its place on the lap there. */
+  /**
+   * Puts the car at the last checkpoint passed, or home before any: still, remembering nothing, its place on the lap
+   * there. In a race with a lap gate missed (M5.4d), at the last checkpoint before that gate instead, so it goes back
+   * through it.
+   */
   function putBack(): void {
     if (course.kind === 'island' && lap && progress && progress.passed > 0) {
       const n = checkpointCount(lap.line, cfg.sim.progress);
-      const last = (progress.next - 1 + n) % n;
+      let last = (progress.next - 1 + n) % n;
+      if (race?.missed && raceTrack) {
+        const gate = raceTrack.lines[race.next]!;
+        last = Math.floor((gate * n) / lap.line.length) % n;
+        // A checkpoint standing exactly at the gate is not before it.
+        if (checkpointAt(lap.line, last, cfg.sim.progress) >= gate && gate > 0) last = (last - 1 + n) % n;
+        progress = { ...progress, next: (last + 1) % n };
+      }
       const metres = checkpointAt(lap.line, last, cfg.sim.progress);
       physics.place(checkpointPose(course.world, cfg, last));
       progress = { ...progress, near: Math.ceil(metres / lap.line.spacing) % lap.line.count, along: metres, off: 0 };
@@ -157,8 +179,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       let waiting = respawn.waitLeft > 0;
       if (waiting) respawn = { ...respawn, waitLeft: respawn.waitLeft - 1 };
       const placing = reset || (waiting && respawn.waitLeft === 0);
-      // The checkpoint passed on this step, if any, and where the car was on the lap before its move.
-      let passed = -1;
+      // Where the car was on the lap before its move.
       let wasAlong = progress?.along ?? 0;
       if (placing) {
         putBack();
@@ -182,7 +203,6 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
           const was = progress;
           wasAlong = was.along;
           progress = stepProgress(was, lap.line, lap.width, position.x, position.z, cfg.sim.progress);
-          if (progress.passed > was.passed) passed = was.next;
         }
         const seen = {
           position,
@@ -196,7 +216,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       }
       if (race && raceTrack) {
         const counting = race.phase === 'countdown';
-        const ask = { throttle: next.throttle, before: wasAlong, after: progress?.along ?? wasAlong, checkpoint: passed };
+        const ask = { throttle: next.throttle, before: wasAlong, after: progress?.along ?? wasAlong, off: progress?.off ?? 0 };
         race = stepRace(race, ask, raceTrack, cfg.sim.race, raceTimes);
         // "Go": a start that earned it gets a tier 1 boost, running from the next step.
         if (counting && race.phase === 'racing' && race.startBoost) car.boost(1);
@@ -231,7 +251,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
       // Only a race adds to the fingerprint, so a simulation without one has exactly the fingerprints it had before M4.
       if (race) {
         hasher
-          .numbers([RACE_PHASES.indexOf(race.phase), race.countdownLeft, race.pressedOn, race.startBoost ? 1 : 0, race.clock, race.lap, race.started ? 1 : 0])
+          .numbers([RACE_PHASES.indexOf(race.phase), race.countdownLeft, race.pressedOn, race.startBoost ? 1 : 0, race.clock, race.lap, race.started ? 1 : 0, race.missed ? 1 : 0])
           .numbers([race.next, race.lapStart, race.sectorStart, race.total, race.finishedSteps, race.laps.length, race.splits.length])
           .numbers([...race.laps, ...race.splits]);
       }

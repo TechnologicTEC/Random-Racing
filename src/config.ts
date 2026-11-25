@@ -383,6 +383,8 @@ export interface RoadConfig {
   gateClearance: number;
   gateBeam: number;
   gatePost: number;
+  /** The gates a lap is counted by (M5.4d), built like the start gate with a teal beam and no paint. */
+  lapGates: LapGatesConfig;
   /** Steepest banking, in degrees (brief: up to about 8 in fast corners). */
   bankMax: number;
   /** Corners of this radius or tighter get only `bankSlowShare` of the full bank; corners of `bankFastRadius` or wider get all of it. In metres. */
@@ -1452,7 +1454,7 @@ export interface RaceConfig {
   countdown: number;
   /** A throttle first pressed within this long before "go" gives a tier 1 boost at "go"; one pressed earlier gives none. */
   startBoostWindow: number;
-  /** Each lap is timed in this many sectors, each a whole number of checkpoints. */
+  /** Each lap is timed in this many sectors, one ending at each lap gate and one at the line: `road.lapGates.count` + 1 (M5.4d). */
   sectors: number;
   /** How long "Finished" shows before the results. */
   finishedFor: number;
@@ -1742,6 +1744,16 @@ export interface ColliderConfig {
   rockPostHeight: number;
 }
 
+/** Where the lap gates stand (M5.4d, `gen/road/lapGates.ts`). */
+export interface LapGatesConfig {
+  /** How many gates a lap has besides the start line. Each ends a sector of the race. */
+  count: number;
+  /** No gate stands nearer than this to the start line or another gate, in metres. */
+  minGap: number;
+  /** A corner's apex counts as this many metres further from a gate's aim than it is, so a straight's middle is taken first. */
+  cornerPenalty: number;
+}
+
 /** How the keyboard and a controller are read. Nothing is smoothed (brief: input must feel instant). */
 export interface InputConfig {
   /**
@@ -1751,6 +1763,14 @@ export interface InputConfig {
   deadZone: number;
 }
 
+/** Ghosts (M5): what a run on record keeps, and how its ghost is drawn. Outside `car` and `sim`, so not in the handling fingerprint. */
+export interface GhostConfig {
+  /** A place (position and turn) is kept every this many steps, from step 0: ten a second at 60 steps a second. */
+  every: number;
+  /** How solid the ghost is drawn, from 0 (unseen) to 1 (solid). */
+  opacity: number;
+}
+
 export interface GameConfig {
   track: TrackConfig;
   road: RoadConfig;
@@ -1758,6 +1778,7 @@ export interface GameConfig {
   sim: SimConfig;
   car: CarConfig;
   input: InputConfig;
+  ghost: GhostConfig;
   render: RenderConfig;
   camera: CameraConfig;
 }
@@ -1947,6 +1968,9 @@ export const config: GameConfig = {
     gateClearance: 6,
     gateBeam: 1.2,
     gatePost: 0.6,
+    // Tane, 2026-11-25: 4 gates a lap the player can see, at a straight's middle or a corner's apex (Claude: straights
+    // first, since an apex can be cut), in place of the hidden checkpoints that a run wide of the road missed unseen.
+    lapGates: { count: 4, minGap: 150, cornerPenalty: 100 },
     bankMax: 8,
     bankSlowRadius: 20,
     bankFastRadius: 70,
@@ -2144,7 +2168,8 @@ export const config: GameConfig = {
     // The plan's values (docs/plan/M4-time-trial.md, M4.2); the throttle at half or more is Claude's call (STATE.md).
     // launch (Tane at the sign-off, from four measured options): the tier 1 boost alone gained 5 km/h and 0.13 s on lap 1,
     // which nobody could feel; 20 m/s2 for 1 s gives 71 km/h one second after "go" against 33, lap 1 about 0.9 s quicker.
-    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 3, finishedFor: 2, pressed: 0.5, launch: { accel: 20, time: 1 } },
+    // sectors: 5, one ending at each of the 4 lap gates and one at the line (Tane, 2026-11-25; road.lapGates.count + 1).
+    race: { laps: 3, countdown: 3, startBoostWindow: 0.25, sectors: 5, finishedFor: 2, pressed: 0.5, launch: { accel: 20, time: 1 } },
   },
   car: {
     body: { halfWidth: 0.7, halfHeight: 0.3, halfLength: 1.1, grip: 0.2, bounce: 0, raise: 0.15, round: 0.1 },
@@ -2207,6 +2232,8 @@ export const config: GameConfig = {
     reverse: { topSpeed: 8, accel: 6 },
   },
   input: { deadZone: 0.15 },
+  // The plan's values (docs/plan/M5-ghosts.md): a place ten times a second, and see-through at about 40%.
+  ghost: { every: 6, opacity: 0.4 },
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,
