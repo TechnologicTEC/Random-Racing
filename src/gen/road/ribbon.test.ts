@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { circleLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import type { CenterLine, MeshData } from '../types';
-import { buildRoadRibbon, ROAD_MATERIAL } from './ribbon';
+import { buildRoadRibbon, DECK, ROAD_MATERIAL } from './ribbon';
 
 const road = config.road;
 const HALF = config.track.roadWidth / 2;
@@ -176,5 +176,39 @@ describe('buildRoadRibbon on a road whose width changes', () => {
       if (vertex.material === ROAD_MATERIAL.shoulder) continue;
       expect(vertex.y).toBeCloseTo(height[vertex.sample]! + vertex.lateral * cross[vertex.sample]!, 2);
     }
+  });
+});
+
+describe('buildRoadRibbon on a bridge (M6.1c)', () => {
+  const plain = buildRoadRibbon(line, height, cross, uniformWidth(line, config.track.roadWidth), config);
+  const decks = new Uint8Array(line.count);
+  for (let i = 10; i < 20; i++) decks[i] = DECK.concrete;
+  for (let i = 30; i < 40; i++) decks[i] = DECK.wood;
+  const decked = buildRoadRibbon(line, height, cross, uniformWidth(line, config.track.roadWidth), config, decks);
+  /** The materials of one piece's quads: each piece is seven strips of four vertices, in order round the lap. */
+  const pieceMaterials = (data: MeshData, piece: number): Set<number> => new Set(data.materials.slice(piece * 28, piece * 28 + 28));
+
+  it('keeps every position and every triangle of the road, so the car drives on the same road', () => {
+    expect(decked.positions).toEqual(plain.positions);
+    expect(decked.indices).toEqual(plain.indices);
+  });
+
+  it('turns the asphalt pale on a concrete deck and keeps its lines, with the aprons in the deck’s concrete', () => {
+    for (let i = 10; i < 20; i++) {
+      const materials = pieceMaterials(decked, i);
+      expect(materials.has(ROAD_MATERIAL.asphalt)).toBe(false);
+      expect(materials.has(ROAD_MATERIAL.deckConcrete)).toBe(true);
+      expect(materials.has(ROAD_MATERIAL.line)).toBe(true);
+      expect(materials.has(ROAD_MATERIAL.shoulder)).toBe(false);
+      expect(materials.has(ROAD_MATERIAL.bridge)).toBe(true);
+    }
+  });
+
+  it('leaves a wooden deck’s road unpainted and out of the drawing, the planks being drawn there instead, with timber aprons', () => {
+    for (let i = 30; i < 40; i++) expect(pieceMaterials(decked, i)).toEqual(new Set([ROAD_MATERIAL.deckUnder, ROAD_MATERIAL.timber]));
+  });
+
+  it('leaves the road off the bridges as it was', () => {
+    for (const i of [0, 9, 20, 29, 40, line.count - 1]) expect(pieceMaterials(decked, i)).toEqual(pieceMaterials(plain, i));
   });
 });

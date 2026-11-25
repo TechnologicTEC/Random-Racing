@@ -4,7 +4,7 @@ import { roundedSquareLine, swellingWidth, uniformWidth } from '../../testing/tr
 import { analyseSections } from '../track/analysis';
 import type { CenterLine, MeshData, WallSpan } from '../types';
 import { BARRIER_FOOTING, buildBarriers, wallPieces } from './barriers';
-import { ROAD_MATERIAL } from './ribbon';
+import { DECK, ROAD_MATERIAL } from './ribbon';
 import { buildStartGate, gateBoxes } from './startGate';
 
 const road = config.road;
@@ -456,5 +456,69 @@ describe('gateBoxes: the gate as numbers, for collisions', () => {
       checked++;
     }
     expect(checked).toBe(3 * 6 * 4);
+  });
+});
+
+describe('buildBarriers on a bridge (M6.1c)', () => {
+  const width = uniformWidth(line, config.track.roadWidth);
+  const railings = new Uint8Array(line.count);
+  for (let i = 20; i <= 40; i++) railings[i] = DECK.wood;
+  for (let i = 100; i <= 115; i++) railings[i] = DECK.concrete;
+  const mesh = buildBarriers(line, height, cross, width, sections, wholeLap(line), config, railings);
+  const look = config.road.bridges.look;
+  /** Every vertex of a material, placed beside the road and measured above the road's tilted plane. */
+  const placed = (material: number) => {
+    const out = [];
+    for (let v = 0; v < mesh.materials.length; v++) {
+      if (mesh.materials[v] !== material) continue;
+      const x = mesh.positions[v * 3]!;
+      const y = mesh.positions[v * 3 + 1]!;
+      const z = mesh.positions[v * 3 + 2]!;
+      const { sample, lateral } = locate(line, x, z);
+      out.push({ x, z, sample, lateral, above: y - (height[sample]! + cross[sample]! * lateral) });
+    }
+    return out;
+  };
+
+  it('draws a railing over a bridge, timber or steel by its kind, and the wall everywhere else', () => {
+    const timber = placed(ROAD_MATERIAL.timber);
+    const steel = placed(ROAD_MATERIAL.steel);
+    expect(timber.length).toBeGreaterThan(0);
+    expect(steel.length).toBeGreaterThan(0);
+    for (const vertex of timber) expect(vertex.sample).toBeGreaterThanOrEqual(19), expect(vertex.sample).toBeLessThanOrEqual(42);
+    for (const vertex of steel) expect(vertex.sample).toBeGreaterThanOrEqual(99), expect(vertex.sample).toBeLessThanOrEqual(117);
+    for (const vertex of placed(ROAD_MATERIAL.barrier)) {
+      expect(vertex.sample >= 22 && vertex.sample <= 39, `wall at sample ${vertex.sample}`).toBe(false);
+      expect(vertex.sample >= 102 && vertex.sample <= 114, `wall at sample ${vertex.sample}`).toBe(false);
+    }
+  });
+
+  it('stands a post at every sample of the railing, from the wall’s foot to its top, with rails no higher, all inside the wall the car meets', () => {
+    const timber = placed(ROAD_MATERIAL.timber);
+    const lowest = Math.min(...timber.map((v) => v.above));
+    const highest = Math.max(...timber.map((v) => v.above));
+    // Within a centimetre: the posts stand upright, so on banked road their corners sit a little off its tilted plane.
+    expect(Math.abs(lowest - (-road.sink - BARRIER_FOOTING))).toBeLessThan(0.01);
+    expect(Math.abs(highest - road.barrierHeight)).toBeLessThan(0.01);
+    // Only the posts reach down to the foot: four corners each, at 22 samples (20 to 41) on each side of the road.
+    const feet = new Set(timber.filter((v) => v.above < lowest + 0.02).map((v) => `${v.x.toFixed(3)},${v.z.toFixed(3)}`));
+    expect(feet.size).toBe(2 * 22 * 4);
+    for (const vertex of [...timber, ...placed(ROAD_MATERIAL.steel)]) {
+      expect(Math.abs(vertex.lateral)).toBeGreaterThanOrEqual(INNER - 1e-6);
+      expect(Math.abs(vertex.lateral)).toBeLessThanOrEqual(OUTER + 1e-6);
+    }
+    const thickness = (vertices: { lateral: number }[]): number => Math.max(...vertices.map((v) => Math.abs(v.lateral))) - Math.min(...vertices.map((v) => Math.abs(v.lateral)));
+    expect(thickness(timber)).toBeCloseTo(look.timber.post, 3);
+    expect(thickness(placed(ROAD_MATERIAL.steel))).toBeCloseTo(look.steel.post, 3);
+  });
+
+  it('closes the wall with an end face where it meets a railing', () => {
+    const ends = triangles(mesh).filter((t) => {
+      if (t.material !== ROAD_MATERIAL.barrier) return false;
+      const { sample } = locate(line, t.x, t.z);
+      return (sample === 20 || sample === 41) && Math.abs(t.nx * line.tx[sample]! + t.nz * line.tz[sample]!) > 0.9;
+    });
+    // Both sides of the road, at both ends of the railing, two triangles a face.
+    expect(ends).toHaveLength(8);
   });
 });

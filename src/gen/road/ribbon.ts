@@ -25,7 +25,22 @@ export const ROAD_MATERIAL = {
   lapGateBeam: 11,
   /** A bridge's deck and pillars (M6.1b). */
   bridge: 12,
+  /** The road's surface on a concrete bridge (M6.1c): pale, its lines kept. */
+  deckConcrete: 13,
+  /** The road's surface on a wooden bridge (M6.1c): still the road the car drives on, but not drawn; the planks are drawn there. */
+  deckUnder: 14,
+  /** A wooden bridge's planks, in two browns, and the dark gap after each (M6.1c). */
+  plankLight: 15,
+  plankDark: 16,
+  plankGap: 17,
+  /** Timber: a wooden bridge's railings and its aprons (M6.1c). */
+  timber: 18,
+  /** A concrete bridge's white steel railings (M6.1c). */
+  steel: 19,
 } as const;
+
+/** What stands under each piece of the road (M6.1c, `deckPieces`): no bridge, a wooden one or a concrete one. */
+export const DECK = { none: 0, wood: 1, concrete: 2 } as const;
 
 /**
  * One side of a strip: `edge` picks the left road edge (-1), the centre line
@@ -57,6 +72,9 @@ interface Strip {
  * @param height height of the road centre at each sample, in metres
  * @param cross tilt at each sample: metres of height gained per metre to the right. Null for a level road
  * @param width road width at each sample, in metres
+ * @param decks for each piece of the road (from a sample to the next), what bridge it is on, if any (`deckPieces`, M6.1c):
+ *   on a concrete deck the asphalt is pale and the lines stay; on a wooden one the surface is left out of the drawing
+ *   (`deckUnder`) for the planks. Only the colours change: every position and triangle stays, as the car drives on them
  */
 export function buildRoadRibbon(
   line: CenterLine,
@@ -64,6 +82,7 @@ export function buildRoadRibbon(
   cross: Float64Array | null,
   width: Float64Array,
   cfg: GenConfig,
+  decks?: Uint8Array,
 ): MeshData {
   const road = cfg.road;
   const centre = road.centreLine / 2;
@@ -99,8 +118,9 @@ export function buildRoadRibbon(
   for (let i = 0; i < n; i++) {
     const next = (i + 1) % n;
     const painted = Math.floor(i / dashSamples) % 2 === 0;
+    const deck = decks ? decks[i]! : DECK.none;
     for (const strip of strips) {
-      const material = strip.dashed && !painted ? ROAD_MATERIAL.asphalt : strip.material;
+      const material = onDeck(strip.dashed && !painted ? ROAD_MATERIAL.asphalt : strip.material, deck);
       builder.quad(
         point(i, strip.from, strip.dropFrom),
         point(i, strip.to, strip.dropTo),
@@ -111,4 +131,14 @@ export function buildRoadRibbon(
     }
   }
   return builder.build();
+}
+
+/** A strip's material on a bridge (M6.1c): the aprons take the deck's colour; on wood the surface is left for the planks. */
+function onDeck(material: number, deck: number): number {
+  if (deck === DECK.wood) return material === ROAD_MATERIAL.shoulder ? ROAD_MATERIAL.timber : ROAD_MATERIAL.deckUnder;
+  if (deck === DECK.concrete) {
+    if (material === ROAD_MATERIAL.asphalt) return ROAD_MATERIAL.deckConcrete;
+    if (material === ROAD_MATERIAL.shoulder) return ROAD_MATERIAL.bridge;
+  }
+  return material;
 }

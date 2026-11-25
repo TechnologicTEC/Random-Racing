@@ -3,7 +3,7 @@ import { config, type RoadConfig } from '../../config';
 import { circleLine } from '../../testing/trackFixtures';
 import { checkEarthworks } from '../track/earthworks';
 import type { RoadProfile } from '../types';
-import { bridgedMask, bridgePillars, buildBridges, deckBoxes, deckHalf, findBridgeSpans, rotateSpans, spanLength } from './bridges';
+import { bridgedMask, bridgeKinds, bridgePillars, buildBridges, DECK, deckBoxes, deckHalf, deckPieces, findBridgeSpans, rotateSpans, spanLength } from './bridges';
 import { ROAD_MATERIAL } from './ribbon';
 import { measureProfile, type RoadEdges } from './profile';
 
@@ -198,5 +198,120 @@ describe('the bridge’s pillars and deck (M6.1b)', () => {
       expect(mesh.positions[v]!).toBeLessThanOrEqual(20 + 1e-4);
       expect(mesh.positions[v]!).toBeGreaterThanOrEqual(10 - 0.5 - 1e-4);
     }
+  });
+});
+
+describe('the bridge’s look by its size (M6.1c)', () => {
+  const look = { ...config.road.bridges.look, woodMaxLength: 100, woodMaxHeight: 12 };
+
+  it('makes a short, low bridge wooden, and a long or a high one concrete', () => {
+    const height = new Float64Array(N).fill(20);
+    const ground = new Float64Array(N).fill(12);
+    // The third bridge crosses a dip 20 m down.
+    for (let i = 300; i < 331; i++) ground[i] = 0;
+    const spans = [
+      { startIndex: 10, sampleCount: 31 },
+      { startIndex: 100, sampleCount: 61 },
+      { startIndex: 300, sampleCount: 31 },
+      // Exactly 100 m, 8 m up, across sample 0.
+      { startIndex: 480, sampleCount: 51 },
+    ];
+    expect(bridgeKinds(spans, height, ground, SPACING, look)).toEqual(['wood', 'concrete', 'concrete', 'wood']);
+    expect(bridgeKinds([], height, ground, SPACING, look)).toEqual([]);
+  });
+
+  it('marks the pieces of each bridge by its kind, and as far past each end as asked', () => {
+    const spans = [
+      { startIndex: 498, sampleCount: 5 },
+      { startIndex: 100, sampleCount: 3 },
+    ];
+    const pieces = deckPieces(spans, ['wood', 'concrete'], N);
+    const marked = (mask: Uint8Array): [number, number][] => [...mask].flatMap((value, i) => (value ? [[i, value] as [number, number]] : []));
+    expect(marked(pieces)).toEqual([
+      [0, DECK.wood],
+      [1, DECK.wood],
+      [100, DECK.concrete],
+      [101, DECK.concrete],
+      [498, DECK.wood],
+      [499, DECK.wood],
+    ]);
+    expect(marked(deckPieces(spans, ['wood', 'concrete'], N, 2)).map(([i]) => i)).toEqual([0, 1, 2, 3, 98, 99, 100, 101, 102, 103, 496, 497, 498, 499]);
+  });
+
+  describe('a wooden deck', () => {
+    const line = circleLine(100);
+    const n = line.count;
+    const height = Float64Array.from({ length: n }, (_, i) => 20 + 0.05 * i * line.spacing);
+    const cross = new Float64Array(n).fill(0.1);
+    const width = new Float64Array(n).fill(WIDTH);
+    const span = { startIndex: 10, sampleCount: 26 };
+    const groundAt = (): number => 10;
+    const rules = config.road.bridges;
+
+    /** The road's surface under a point: its height between the two nearest samples, tilted by the banking. */
+    const surfaceAt = (x: number, z: number): { surface: number; lateral: number } => {
+      let best = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < n; i++) {
+        const d = Math.hypot(x - line.x[i]!, z - line.z[i]!);
+        if (d < bestD) [best, bestD] = [i, d];
+      }
+      let surface = NaN;
+      let lateralHere = NaN;
+      let nearest = Infinity;
+      for (const [i, j] of [[best - 1, best], [best, best + 1]] as [number, number][]) {
+        const a = (i + n) % n;
+        const b = (j + n) % n;
+        const dx = line.x[b]! - line.x[a]!;
+        const dz = line.z[b]! - line.z[a]!;
+        const t = Math.max(0, Math.min(1, ((x - line.x[a]!) * dx + (z - line.z[a]!) * dz) / (dx * dx + dz * dz)));
+        const cx = line.x[a]! + dx * t;
+        const cz = line.z[a]! + dz * t;
+        // Right of the direction of travel is (-tz, tx) on the map.
+        const tx = line.tx[a]! + (line.tx[b]! - line.tx[a]!) * t;
+        const tz = line.tz[a]! + (line.tz[b]! - line.tz[a]!) * t;
+        const along = Math.abs((x - cx) * tx + (z - cz) * tz);
+        if (along >= nearest) continue;
+        nearest = along;
+        const lateral = (x - cx) * -tz + (z - cz) * tx;
+        surface = height[a]! + (height[b]! - height[a]!) * t + cross[a]! * lateral;
+        lateralHere = lateral;
+      }
+      return { surface, lateral: lateralHere };
+    };
+
+    const quadsOf = (materials: Uint8Array, wanted: readonly number[]): number[] => {
+      const quads: number[] = [];
+      for (let v = 0; v < materials.length; v += 4) if (wanted.includes(materials[v]!)) quads.push(materials[v]!);
+      return quads;
+    };
+
+    it('lays planks across the whole road on a wooden bridge, two browns in turn, with a dark gap after each', () => {
+      const mesh = buildBridges(line, height, cross, width, [span], groundAt, config, ['wood']);
+      const planks = quadsOf(mesh.materials, [ROAD_MATERIAL.plankLight, ROAD_MATERIAL.plankDark]);
+      const perPiece = Math.round(line.spacing / rules.look.plank);
+      expect(perPiece).toBe(2);
+      expect(planks).toHaveLength((span.sampleCount - 1) * perPiece);
+      planks.forEach((material, k) => expect(material).toBe(k % 2 === 0 ? ROAD_MATERIAL.plankLight : ROAD_MATERIAL.plankDark));
+      expect(quadsOf(mesh.materials, [ROAD_MATERIAL.plankGap])).toHaveLength(planks.length);
+      let widest = 0;
+      for (let v = 0; v < mesh.materials.length; v++) {
+        const material = mesh.materials[v]!;
+        if (material !== ROAD_MATERIAL.plankLight && material !== ROAD_MATERIAL.plankDark && material !== ROAD_MATERIAL.plankGap) continue;
+        const x = mesh.positions[v * 3]!;
+        const y = mesh.positions[v * 3 + 1]!;
+        const z = mesh.positions[v * 3 + 2]!;
+        const under = surfaceAt(x, z);
+        expect(Math.abs(y - under.surface), `vertex ${v}`).toBeLessThan(0.01);
+        widest = Math.max(widest, Math.abs(under.lateral));
+      }
+      expect(widest).toBeCloseTo(WIDTH / 2, 0);
+    });
+
+    it('lays no planks on a concrete bridge, nor when no kinds are given', () => {
+      for (const mesh of [buildBridges(line, height, cross, width, [span], groundAt, config, ['concrete']), buildBridges(line, height, cross, width, [span], groundAt, config)]) {
+        expect(new Set(mesh.materials)).toEqual(new Set([ROAD_MATERIAL.bridge]));
+      }
+    });
   });
 });

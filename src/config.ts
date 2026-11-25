@@ -342,6 +342,34 @@ export interface BridgeConfig {
   pillarWidth: number;
   /** The two pillars of a row stand this far inside the road's edges, in metres. */
   pillarInset: number;
+  /** How a bridge looks, by its size (M6.1c). */
+  look: BridgeLookConfig;
+}
+
+/**
+ * A bridge's look (M6.1c, Tane 2026-11-26): short, low bridges are wooden (planks across the road, timber railings),
+ * the rest pale concrete with white steel railings. Drawing only: the car drives on the same road and meets the same railing.
+ */
+export interface BridgeLookConfig {
+  /** A bridge is wooden if it is no longer than this, in metres... */
+  woodMaxLength: number;
+  /** ...and its road stands no higher than this above the ground anywhere along it, in metres. */
+  woodMaxHeight: number;
+  /** A plank's width along the road, its gap included, in metres: as near this as fits a whole number in each piece. */
+  plank: number;
+  /** The dark gap after each plank, in metres. */
+  plankGap: number;
+  /** The railing on a wooden bridge, and on a concrete one. */
+  timber: RailingSize;
+  steel: RailingSize;
+}
+
+/** The parts of a railing (M6.1c): a post at every sample and two rails, the top one at the wall's height. */
+export interface RailingSize {
+  /** A post's width each way, in metres. */
+  post: number;
+  /** A rail's height and thickness, in metres. */
+  rail: number;
 }
 
 export interface RoadConfig {
@@ -2023,6 +2051,15 @@ export const config: GameConfig = {
       pillarSpacing: 25,
       pillarWidth: 1.6,
       pillarInset: 3,
+      // M6.1c: starting values (Tane chose the look by size, 2026-11-26, and planks of about 1 m on seeing 0.5 m ones).
+      look: {
+        woodMaxLength: 100,
+        woodMaxHeight: 12,
+        plank: 1,
+        plankGap: 0.06,
+        timber: { post: 0.2, rail: 0.14 },
+        steel: { post: 0.1, rail: 0.08 },
+      },
     },
     maxCut: 8,
   },

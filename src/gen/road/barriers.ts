@@ -2,7 +2,8 @@ import type { GenConfig } from '../../config';
 import { smoothstep } from '../../core/scalar';
 import type { CenterLine, MeshData, Section, WallSpan } from '../types';
 import { MeshBuilder, type Point } from './meshBuilder';
-import { ROAD_MATERIAL } from './ribbon';
+import { DECK, ROAD_MATERIAL } from './ribbon';
+import { drawBox } from './startGate';
 
 /**
  * The wall's foot reaches this far below the sunken ground, in metres, so no
@@ -84,8 +85,13 @@ export function wallPieces(
  * the corner stands out. A wall that does not go round the whole lap slopes
  * down to the level of the road at each end, and is closed there.
  *
+ * Over a bridge (M6.1c) a wall's pieces are drawn as a railing instead: a post at every sample and two rails, timber
+ * on a wooden bridge and white steel on a concrete one, inside the wall's own footprint and no higher, so the car
+ * meets what it sees (the walls' solid boxes, `wallPieces`, do not change). The wall is closed where it meets one.
+ *
  * @param width road width at each sample, in metres
  * @param walls where the walls stand
+ * @param railings for each piece of the road, the bridge whose railing is drawn there (`deckPieces` with the walls' run-on), if any
  */
 export function buildBarriers(
   line: CenterLine,
@@ -95,6 +101,7 @@ export function buildBarriers(
   sections: readonly Section[],
   walls: readonly WallSpan[],
   cfg: GenConfig,
+  railings?: Uint8Array,
 ): MeshData {
   const road = cfg.road;
   const n = line.count;
@@ -126,6 +133,60 @@ export function buildBarriers(
   const foot = -road.sink - BARRIER_FOOTING;
   const blockSamples = Math.max(1, Math.round(road.barrierBlock / line.spacing));
   const builder = new MeshBuilder();
+  const railingAt = (i: number): number => (railings ? railings[((i % n) + n) % n]! : DECK.none);
+  const middle = (inner + outer) / 2;
+
+  /**
+   * A long box beside the road from one sample to the next, between `near` and `far` metres outside the road edge and
+   * from `low` to `high` over the road's tilted plane at each end: its face to the road, its top, its far face and its underside.
+   */
+  const longBox = (i: number, next: number, side: number, near: number, far: number, low: [number, number], high: [number, number], material: number): void => {
+    const nearFootHere = point(i, side, near, low[0]);
+    const nearFootNext = point(next, side, near, low[1]);
+    const nearTopHere = point(i, side, near, high[0]);
+    const nearTopNext = point(next, side, near, high[1]);
+    const farTopHere = point(i, side, far, high[0]);
+    const farTopNext = point(next, side, far, high[1]);
+    const farFootHere = point(i, side, far, low[0]);
+    const farFootNext = point(next, side, far, low[1]);
+    // A face points towards whoever sees its first three corners turn clockwise, so
+    // the order of each pair decides which way it faces. It differs between the two sides of the road.
+    if (side > 0) {
+      builder.quad(nearFootHere, nearTopHere, nearFootNext, nearTopNext, material); // faces the road
+      builder.quad(nearTopHere, farTopHere, nearTopNext, farTopNext, material); // top
+      builder.quad(farTopHere, farFootHere, farTopNext, farFootNext, material); // faces away
+      builder.quad(farFootHere, nearFootHere, farFootNext, nearFootNext, material); // underside
+    } else {
+      builder.quad(nearTopHere, nearFootHere, nearTopNext, nearFootNext, material); // faces the road
+      builder.quad(farTopHere, nearTopHere, farTopNext, nearTopNext, material); // top
+      builder.quad(farFootHere, farTopHere, farFootNext, farTopNext, material); // faces away
+      builder.quad(nearFootHere, farFootHere, nearFootNext, farFootNext, material); // underside
+    }
+  };
+
+  /** A railing's post at a sample, upright, on the middle of the wall, from the wall's foot to `top` over the road's plane. */
+  const post = (i: number, side: number, top: number, size: number, material: number): void => {
+    const base = point(i, side, middle, foot);
+    const high = point(i, side, middle, top);
+    drawBox(
+      builder,
+      { x: base.x, y: (base.y + high.y) / 2, z: base.z, halfAcross: size / 2, halfUp: (high.y - base.y) / 2, halfAlong: size / 2, tx: line.tx[i]!, tz: line.tz[i]! },
+      material,
+    );
+  };
+
+  /** Closes a wall at a sample with a face looking along the lap: back down it if `first`, on up it otherwise. */
+  const closeEnd = (i: number, side: number, top: number, first: boolean): void => {
+    // The wall's two feet and two top corners here, the left-hand pair of the direction of travel first.
+    const [leftBeyond, rightBeyond] = side > 0 ? [inner, outer] : [outer, inner];
+    const leftFoot = point(i, side, leftBeyond, foot);
+    const rightFoot = point(i, side, rightBeyond, foot);
+    const leftTop = point(i, side, leftBeyond, top);
+    const rightTop = point(i, side, rightBeyond, top);
+    if (first) builder.quad(leftFoot, rightFoot, leftTop, rightTop, ROAD_MATERIAL.barrier);
+    else builder.quad(rightFoot, leftFoot, rightTop, leftTop, ROAD_MATERIAL.barrier);
+  };
+
   for (const wall of walls) {
     const { side } = wall;
     const pieces = Math.min(wall.pieceCount, n);
@@ -136,6 +197,26 @@ export function buildBarriers(
     for (let k = 0; k < pieces; k++) {
       const i = (wall.startIndex + k) % n;
       const next = (i + 1) % n;
+      const railing = railingAt(i);
+      if (railing !== DECK.none) {
+        const size = railing === DECK.wood ? road.bridges.look.timber : road.bridges.look.steel;
+        const material = railing === DECK.wood ? ROAD_MATERIAL.timber : ROAD_MATERIAL.steel;
+        const here = rise(k);
+        const there = rise(k + 1);
+        post(i, side, here, size.post, material);
+        // A post at the far end too, where the railing stops.
+        if (railingAt(next) !== railing || (k === pieces - 1 && !wholeLap)) post(next, side, there, size.post, material);
+        const near = middle - size.rail / 2;
+        const far = middle + size.rail / 2;
+        // The top rail, at the wall's height, and one half way down.
+        longBox(i, next, side, near, far, [Math.max(0, here - size.rail), Math.max(0, there - size.rail)], [here, there], material);
+        const half = (r: number): number => Math.max(r / 2, size.rail / 2);
+        longBox(i, next, side, near, far, [half(here) - size.rail / 2, half(there) - size.rail / 2], [half(here) + size.rail / 2, half(there) + size.rail / 2], material);
+        continue;
+      }
+      // A wall meeting a railing is closed there.
+      if ((k > 0 || wholeLap) && railingAt(i - 1) !== DECK.none) closeEnd(i, side, rise(k), true);
+      if ((k < pieces - 1 || wholeLap) && railingAt(next) !== DECK.none) closeEnd(next, side, rise(k + 1), false);
       // Painted only where both ends of this piece are on the outside of the same corner.
       const painted = outside[i] === side && outside[next] === side;
       const material = !painted
@@ -167,19 +248,10 @@ export function buildBarriers(
     }
 
     if (wholeLap) continue;
-    // Close both ends, where the wall has come down to the road's level but still stands a sink above the verge.
-    for (const end of [0, pieces]) {
-      const i = (wall.startIndex + end) % n;
-      // The wall's two feet and two top corners here, the left-hand pair of the direction of travel first.
-      const [leftBeyond, rightBeyond] = side > 0 ? [inner, outer] : [outer, inner];
-      const leftFoot = point(i, side, leftBeyond, foot);
-      const rightFoot = point(i, side, rightBeyond, foot);
-      const leftTop = point(i, side, leftBeyond, rise(end));
-      const rightTop = point(i, side, rightBeyond, rise(end));
-      // The first end looks back down the lap, the last one on up it.
-      if (end === 0) builder.quad(leftFoot, rightFoot, leftTop, rightTop, ROAD_MATERIAL.barrier);
-      else builder.quad(rightFoot, leftFoot, rightTop, leftTop, ROAD_MATERIAL.barrier);
-    }
+    // Close both ends, where the wall has come down to the road's level but still stands a sink above the verge
+    // (the first end looks back down the lap, the last one on up it); a railing's end has its post instead.
+    if (railingAt(wall.startIndex) === DECK.none) closeEnd(wall.startIndex % n, side, rise(0), true);
+    if (railingAt(wall.startIndex + pieces - 1) === DECK.none) closeEnd((wall.startIndex + pieces) % n, side, rise(pieces), false);
   }
   return builder.build();
 }

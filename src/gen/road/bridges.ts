@@ -1,8 +1,10 @@
-import type { GenConfig, RoadConfig } from '../../config';
-import type { BridgeSpan, CenterLine, MeshData, RoadProfile } from '../types';
+import type { BridgeLookConfig, GenConfig, RoadConfig } from '../../config';
+import type { BridgeKind, BridgeSpan, CenterLine, MeshData, RoadProfile } from '../types';
 import { MeshBuilder, type Point } from './meshBuilder';
 import { cutAndFill, type RoadEdges } from './profile';
-import { ROAD_MATERIAL } from './ribbon';
+import { DECK, ROAD_MATERIAL } from './ribbon';
+
+export { DECK } from './ribbon';
 import { drawBox, type GateBox } from './startGate';
 
 /**
@@ -50,6 +52,43 @@ export function findBridgeSpans(profile: RoadProfile, spacing: number, road: Roa
     if (gap * spacing < mergeGap) for (let k = 1; k < gap; k++) mask[(end + k) % n] = 1;
   }
   return runsOf(mask);
+}
+
+/**
+ * Each bridge's look, by its size (M6.1c, Tane 2026-11-26): wooden if it is no longer than `look.woodMaxLength` and its
+ * road stands no higher than `look.woodMaxHeight` above the ground anywhere along it; concrete otherwise.
+ *
+ * @param ground the ground under the centre line at each sample
+ */
+export function bridgeKinds(
+  spans: readonly BridgeSpan[],
+  height: Float64Array,
+  ground: Float64Array,
+  spacing: number,
+  look: Pick<BridgeLookConfig, 'woodMaxLength' | 'woodMaxHeight'>,
+): BridgeKind[] {
+  const n = height.length;
+  return spans.map((span) => {
+    let highest = -Infinity;
+    for (let k = 0; k < span.sampleCount; k++) {
+      const i = (span.startIndex + k) % n;
+      highest = Math.max(highest, height[i]! - ground[i]!);
+    }
+    return spanLength(span, spacing) <= look.woodMaxLength && highest <= look.woodMaxHeight ? 'wood' : 'concrete';
+  });
+}
+
+/**
+ * For each piece of the lap (from a sample to the next), what bridge it is on (M6.1c): `DECK.wood`, `DECK.concrete` or
+ * `DECK.none`. With `runOn`, that many pieces more past each end are marked too, as a bridge's railings run on.
+ */
+export function deckPieces(spans: readonly BridgeSpan[], kinds: readonly BridgeKind[], count: number, runOn = 0): Uint8Array {
+  const pieces = new Uint8Array(count);
+  spans.forEach((span, s) => {
+    const deck = kinds[s] === 'wood' ? DECK.wood : DECK.concrete;
+    for (let k = -runOn; k < span.sampleCount - 1 + runOn; k++) pieces[(((span.startIndex + k) % count) + count) % count] = deck;
+  });
+  return pieces;
 }
 
 /** A bridge's length in metres, from its first sample to its last. */
@@ -227,7 +266,10 @@ export function deckBoxes(
 /**
  * Builds the bridges as triangles (M6.1b): under the road along each bridge a deck `deckDepth` deep, its top
  * showing beside the road out to past the railings, its sides, underside and two ends, and its pillars
- * (`bridgePillars`), all in the bridge's concrete. The road and the railings are drawn as everywhere else.
+ * (`bridgePillars`), all in the bridge's concrete. On a wooden bridge (M6.1c) the planks across the road too, drawn
+ * where the road's own surface is left out of the drawing (`ROAD_MATERIAL.deckUnder`).
+ *
+ * @param kinds each bridge's look (`bridgeKinds`); without them, none is wooden
  */
 export function buildBridges(
   line: CenterLine,
@@ -237,6 +279,7 @@ export function buildBridges(
   spans: readonly BridgeSpan[],
   groundAt: (x: number, z: number) => number,
   cfg: Pick<GenConfig, 'road'>,
+  kinds?: readonly BridgeKind[],
 ): MeshData {
   const rules = cfg.road.bridges;
   const n = line.count;
@@ -245,7 +288,8 @@ export function buildBridges(
   const at = (i: number, lateral: number, below: number): Point => deckPoint(line, height, cross, i, lateral, below);
   const top = rules.topGap;
   const bottom = rules.deckDepth;
-  for (const span of spans) {
+  for (const [s, span] of spans.entries()) {
+    if (kinds?.[s] === 'wood') layPlanks(builder, at, line, width, span, rules.look);
     for (let k = 0; k < span.sampleCount - 1; k++) {
       const i = (span.startIndex + k) % n;
       const j = (i + 1) % n;
@@ -271,4 +315,40 @@ export function buildBridges(
   }
   for (const pillar of bridgePillars(line, height, cross, width, spans, groundAt, cfg)) drawBox(builder, pillar, material);
   return builder.build();
+}
+
+/**
+ * A wooden bridge's planks (M6.1c): across the whole road on its tilted surface, as near `look.plank` wide along the
+ * road as fits a whole number in each piece, the dark gap of `look.plankGap` after each, in two browns in turn.
+ */
+function layPlanks(
+  builder: MeshBuilder,
+  at: (i: number, lateral: number, below: number) => Point,
+  line: CenterLine,
+  width: Float64Array,
+  span: BridgeSpan,
+  look: Pick<BridgeLookConfig, 'plank' | 'plankGap'>,
+): void {
+  const n = line.count;
+  const lerp = (a: Point, b: Point, t: number): Point => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t });
+  let laid = 0;
+  for (let k = 0; k < span.sampleCount - 1; k++) {
+    const i = (span.startIndex + k) % n;
+    const j = (i + 1) % n;
+    const leftI = at(i, -width[i]! / 2, 0);
+    const rightI = at(i, width[i]! / 2, 0);
+    const leftJ = at(j, -width[j]! / 2, 0);
+    const rightJ = at(j, width[j]! / 2, 0);
+    const length = Math.hypot(line.x[j]! - line.x[i]!, line.z[j]! - line.z[i]!);
+    const count = Math.max(1, Math.round(length / look.plank));
+    const gap = Math.min(look.plankGap, length / count / 2) / length;
+    for (let p = 0; p < count; p++) {
+      const from = p / count;
+      const to = (p + 1) / count;
+      const edge = to - gap;
+      const material = laid++ % 2 === 0 ? ROAD_MATERIAL.plankLight : ROAD_MATERIAL.plankDark;
+      builder.quad(lerp(leftI, leftJ, from), lerp(rightI, rightJ, from), lerp(leftI, leftJ, edge), lerp(rightI, rightJ, edge), material);
+      builder.quad(lerp(leftI, leftJ, edge), lerp(rightI, rightJ, edge), lerp(leftI, leftJ, to), lerp(rightI, rightJ, to), ROAD_MATERIAL.plankGap);
+    }
+  }
 }

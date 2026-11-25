@@ -43,6 +43,15 @@ export const ROAD = {
   lapGateBeam: [0.102, 0.49, 0.467] as Rgb,
   /** A bridge's deck and pillars (M6.1b): concrete a shade darker than the walls, so the railings stand out on it. */
   bridge: [0.64, 0.64, 0.61] as Rgb,
+  /** The road's surface on a concrete bridge (M6.1c): pale concrete, a clear change of tone from the dark asphalt. */
+  deckConcrete: [0.68, 0.67, 0.63] as Rgb,
+  /** A wooden bridge's planks in two warm browns, the dark gap after each, and its timber railings and aprons (M6.1c). */
+  plankLight: [0.62, 0.45, 0.28] as Rgb,
+  plankDark: [0.53, 0.37, 0.22] as Rgb,
+  plankGap: [0.2, 0.14, 0.09] as Rgb,
+  timber: [0.42, 0.29, 0.18] as Rgb,
+  /** A concrete bridge's white steel railings (M6.1c). */
+  steel: [0.9, 0.91, 0.9] as Rgb,
 };
 
 /** The sea: deep and shallow water, and foam. From the island demo. */

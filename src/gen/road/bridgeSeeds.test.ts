@@ -5,7 +5,7 @@ import { generateTrack } from '../track/pipeline';
 import type { Candidate, TrackResult } from '../types';
 import { sampleField } from '../world/heightfield';
 import { wallPieces } from './barriers';
-import { bridgedMask, spanLength } from './bridges';
+import { bridgedMask, bridgeKinds, spanLength } from './bridges';
 import { cutAndFill } from './profile';
 import { walledPieces } from './walls';
 
@@ -44,6 +44,16 @@ describe('bridges on real seeds (M6.1a)', () => {
     const world = generateWorld(track.seed, config);
     expect(world.road.bridges.spans).toEqual(winnerOf(world.track).bridges);
     expect(world.road.bridges.spans).toEqual(winnerOf(track).bridges);
+  });
+
+  it('gives every bridge of seeds 1 to 40 its look by its size, wooden for the short and low (M6.1c)', { timeout: 60_000 }, () => {
+    const look = config.road.bridges.look;
+    for (const track of tracks.filter((t) => winnerOf(t).bridges.length > 0)) {
+      const winner = winnerOf(track);
+      const world = generateWorld(track.seed, config);
+      expect(world.road.bridges.kinds).toEqual(bridgeKinds(winner.bridges, winner.profile.height, winner.profile.ground, winner.line.spacing, look));
+      expect(world.road.bridges.kinds).toHaveLength(world.road.bridges.spans.length);
+    }
   });
 });
 

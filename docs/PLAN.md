@@ -108,7 +108,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M6.1a** Bridge spans, pure; the earthworks rule skips fill on a span; measured over seeds 1 to 200 (2026-11-25)
   - [x] **M6.1b** The bridge in the world: ground left natural, deck sides, railings, pillars (2026-11-25)
   - [x] M6.1c and M6.1d planned in plan mode and approved by Tane (2026-11-26; the answers in `docs/plan/M6-polish.md`)
-  - [ ] **M6.1c-1** The look by size: wooden or concrete; planks or a pale deck on top, railings to match; pictures of all three looks for Tane's yes
+  - [x] **M6.1c-1** The look by size: wooden or concrete; planks or a pale deck on top, railings to match; pictures of all three looks for Tane's yes (2026-11-26; planks 1 m, Tane)
   - [ ] **M6.1c-2** Under the deck by kind: timber trestles or concrete pillars; the visual bar's bridge row
   - [ ] **M6.1d-1** Choosing a crossing, pure: sites, kinds, paths; measured over seeds 1 to 200
   - [ ] **M6.1d-2** The crossing carved into the world: inlet, river and ravine, the bridge found on the carved ground

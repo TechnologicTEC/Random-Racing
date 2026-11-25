@@ -60,8 +60,7 @@ export function findWalls(input: WallInput, cfg: GenConfig): WallSpan[] {
       for (let k = -lead; k < section.sampleCount + trail; k++) mark(section.startIndex + k);
     }
     for (let k = -gate; k < gate; k++) mark(k);
-    // The sloping end of a wall takes `taper` metres; one more piece, and the railing is at full height over the whole deck.
-    const runOn = Math.ceil(rules.taper / line.spacing) + 1;
+    const runOn = railingRunOn(line.spacing, rules);
     for (const span of input.bridges ?? []) {
       for (let k = -runOn; k < span.sampleCount - 1 + runOn; k++) mark(span.startIndex + k);
     }
@@ -217,4 +216,12 @@ function besideOtherSections(line: CenterLine, minArc: number, distance: number)
     }
   }
   return { right, left };
+}
+
+/**
+ * How many pieces a bridge's railing runs on past each end of the deck (M6.1b): the sloping end of a wall takes
+ * `taper` metres; one more piece, and the railing is at full height over the whole deck.
+ */
+export function railingRunOn(spacing: number, rules: Pick<GenConfig['road']['walls'], 'taper'>): number {
+  return Math.ceil(rules.taper / spacing) + 1;
 }

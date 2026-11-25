@@ -1,14 +1,14 @@
 import type { GenConfig } from '../config';
 import { createHasher } from '../core/hash';
 import { solveBanking } from './road/banking';
-import { bridgedMask, buildBridges } from './road/bridges';
+import { bridgedMask, bridgeKinds, buildBridges, deckPieces } from './road/bridges';
 import { buildBarriers } from './road/barriers';
 import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
 import { placeLapGates } from './road/lapGates';
 import { sampleField } from './world/heightfield';
 import { buildLapGates, buildStartGate } from './road/startGate';
-import { findWalls } from './road/walls';
+import { findWalls, railingRunOn } from './road/walls';
 import { solveWidth } from './road/width';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
@@ -50,6 +50,10 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates);
   // Looked for on the finished ground, so a wall stands wherever a cutting, an embankment or a cliff ended up beside the road.
   const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground, bridges: winner.bridges }, config);
+  // Each bridge's look by its size (M6.1c): which pieces of the road are on which, and the railings' run past each end.
+  const kinds = bridgeKinds(winner.bridges, profile.height, profile.ground, line.spacing, config.road.bridges.look);
+  const decks = deckPieces(winner.bridges, kinds, line.count);
+  const railings = deckPieces(winner.bridges, kinds, line.count, railingRunOn(line.spacing, config.road.walls));
   const report = fitReport(
     { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged },
     config,
@@ -65,14 +69,15 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     road: {
       cross,
       width,
-      mesh: buildRoadRibbon(line, profile.height, cross, width, config),
+      mesh: buildRoadRibbon(line, profile.height, cross, width, config, decks),
       kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, width, kerbSpans, config) },
       walls,
       bridges: {
         spans: winner.bridges,
-        mesh: buildBridges(line, profile.height, cross, width, winner.bridges, (x, z) => sampleField(ground, x, z, 0), config),
+        kinds,
+        mesh: buildBridges(line, profile.height, cross, width, winner.bridges, (x, z) => sampleField(ground, x, z, 0), config, kinds),
       },
-      barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config),
+      barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config, railings),
       gate: buildStartGate(line, profile.height, cross, width, config),
       lapGates: { samples: lapGateSamples, mesh: buildLapGates(line, profile.height, cross, width, lapGateSamples, (x, z) => sampleField(ground, x, z, 0), config) },
     },
@@ -104,6 +109,7 @@ export function hashWorld(world: WorldResult): string {
   for (const kerb of world.road.kerbs.spans) hasher.numbers([kerb.startIndex, kerb.sampleCount, kerb.side]);
   for (const wall of world.road.walls) hasher.numbers([wall.startIndex, wall.pieceCount, wall.side]);
   for (const span of world.road.bridges.spans) hasher.numbers([span.startIndex, span.sampleCount]);
+  hasher.text(world.road.bridges.kinds.join(','));
   const { report } = world;
   for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {
     if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);
