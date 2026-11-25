@@ -96,7 +96,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M5.4d-1** The gates in the world: placed, drawn, solid (2026-11-25)
   - [x] **M5.4d-2** The race counted by the gates (2026-11-25)
 - **M5.5** Favourites:
-  - [ ] **M5.5a** The favourites screen and the star, pure
+  - [x] **M5.5a** The favourites screen and the star, pure (2026-11-25)
   - [ ] **M5.5b** Favourites on the page
 - [ ] **M5.6** The reload test; pull request; **sign-off**; merge
 

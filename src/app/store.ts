@@ -15,7 +15,7 @@ export interface Store {
   /** A ghost's packed record (`packRun`) by its key (`ghostKey`), or null for none. */
   getGhost(key: string): Promise<Uint8Array | null>;
   putGhost(key: string, bytes: Uint8Array): Promise<void>;
-  /** The favourites, in the order they were first saved. */
+  /** The favourites, in the order they were first saved (the star takes the old one out first, so a new star is last: `favourites.ts`). */
   listFavourites(): Promise<Favourite[]>;
   /** Saves a favourite, in place of any of the same seed. */
   putFavourite(favourite: Favourite): Promise<void>;
