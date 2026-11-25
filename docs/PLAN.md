@@ -107,8 +107,12 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M6.1** Bridges:
   - [x] **M6.1a** Bridge spans, pure; the earthworks rule skips fill on a span; measured over seeds 1 to 200 (2026-11-25)
   - [x] **M6.1b** The bridge in the world: ground left natural, deck sides, railings, pillars (2026-11-25)
-  - [ ] **M6.1c** The bridge's own look, different on top from the road (Tane, after M6.1b; plan in plan mode first)
-  - [ ] **M6.1d** Bridges across water and ravines (Tane, after M6.1b; plan in plan mode first)
+  - [x] M6.1c and M6.1d planned in plan mode and approved by Tane (2026-11-26; the answers in `docs/plan/M6-polish.md`)
+  - [ ] **M6.1c-1** The look by size: wooden or concrete; planks or a pale deck on top, railings to match; pictures of all three looks for Tane's yes
+  - [ ] **M6.1c-2** Under the deck by kind: timber trestles or concrete pillars; the visual bar's bridge row
+  - [ ] **M6.1d-1** Choosing a crossing, pure: sites, kinds, paths; measured over seeds 1 to 200
+  - [ ] **M6.1d-2** The crossing carved into the world: inlet, river and ravine, the bridge found on the carved ground
+  - [ ] **M6.1d-3** The river high in the hills: its own water surface; the respawn in it
   - [ ] **M6.1e** Driven over at top speed; `look=bridge`; pictures (was M6.1c)
 - **M6.2** Tunnels:
   - [ ] **M6.2a** Tunnel spans, pure; the earthworks rule skips cut in a span; measured over seeds 1 to 200
@@ -193,7 +197,7 @@ The check-ins are lines in the build order. Bring the page running, a short list
 | How many laps does a ghost cover: the best single lap, or the whole 3-lap race? (Tane, M5.0: the whole race) | M5.0 |
 | May a favourite saved before the generator is `v1` stop rebuilding when the generator changes? (Tane, M5.0: yes, with a note on screen) | M5.0 |
 | What is cut from Milestone 6 if it runs long, and in what order are its steps wanted? (Tane, M6.0: the plan's order; only the new effects, M6.5, may be cut) | M6.0 |
-| How should a bridge look on top (wooden planks and timber railings, another colour, or by its size)? Which crossings (a river to the sea, an inlet, a dry ravine), on how many seeds? (Tane, after M6.1b: the questions in `docs/plan/M6-polish.md`) | M6.1c, M6.1d |
+| How should a bridge look on top (wooden planks and timber railings, another colour, or by its size)? Which crossings (a river to the sea, an inlet, a dry ravine), on how many seeds? (Tane, 2026-11-26: by size, wooden for short and low, concrete otherwise; no paint on planks; railings to match; a rumble, grip unchanged. All four kinds (inlet, river to the sea, ravine, river in the hills), about half the seeds, one a lap, up to 250 m) | M6.1c, M6.1d |
 | When the generator changes after `v1`: keep every released version runnable, or store each favourite's centre line? (The brief allows either) | M6.8 |
 | Where is version 1 hosted, and under which name ("Seed Circuit" is a working title)? | M6.9 |
 
