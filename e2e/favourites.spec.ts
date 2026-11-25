@@ -146,23 +146,61 @@ test.describe('favourites', () => {
     }
     await open(page, 'seed=7&still=1&bot=off', 'title');
     await openFavourites(page);
-    // The newest first: Island 11 down to Island 4.
+    // Seed 7, shown, is no favourite: adding it is the first choice. Then the newest first: Island 11 down to Island 4.
+    await expect(page.getByTestId('favourite-add')).toBeFocused();
     await expect(rows(page)).toHaveCount(8);
     await expect(rows(page).first()).toContainText('Island 11');
     await expect(page.getByTestId('favourites-more')).toHaveText('1 to 8 of 11');
-    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown');
+    for (let i = 0; i < 9; i++) await page.keyboard.press('ArrowDown');
     await expect(rows(page).first()).toContainText('Island 10');
     await expect(rows(page).last()).toContainText('Island 3');
     await expect(rows(page).last()).toBeFocused();
     await expect(page.getByTestId('favourites-more')).toHaveText('2 to 9 of 11');
-    await expect(page.getByTestId('favourites-keys')).toHaveText('Enter races · X or Delete removes · Esc goes back');
+    await expect(page.getByTestId('favourites-keys')).toHaveText('Enter races · ✕, X or Delete removes · Esc goes back');
     if (browserName === 'chromium') await page.screenshot({ path: 'test-results/screens/favourites-00007-eleven.png' });
-    // Up from the first row goes round to Back.
+    // Up from the first row to the add, then round to Back.
     for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowUp');
     await expect(rows(page).first()).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByTestId('favourite-add')).toBeFocused();
     await page.keyboard.press('ArrowUp');
     await expect(choices(page).filter({ hasText: 'Back' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(body(page)).toHaveAttribute('data-screen', 'title');
+  });
+
+  test('adds the island shown from the Favourites card on the title, and removes one with its ✕ button (Tane, M5.5c)', async ({ page, browserName }) => {
+    await open(page, 'seed=7&still=1&bot=off', 'title');
+    await openFavourites(page);
+    await expect(page.getByTestId('favourites-empty')).toBeVisible();
+    await expect(page.getByTestId('favourite-add')).toHaveText('☆ Add Halmore Speedway');
+    await expect(page.getByTestId('favourite-add')).toBeFocused();
+    await page.keyboard.press('Enter');
+    // Added without a race: listed with no time yet, the add gone, the choice on its row.
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).first()).toContainText('v0-7');
+    await expect(rows(page).first()).toContainText('No time yet');
+    await expect(rows(page).first()).toBeFocused();
+    await expect(page.getByTestId('favourite-add')).toHaveCount(0);
+    await expect(page.getByTestId('favourites-empty')).toHaveCount(0);
+    await expect.poll(() => favourites(page)).toEqual([expect.objectContaining({ seed: 7, generator: 0, name: 'Halmore Speedway', best: null })]);
+
+    // Kept through a reload; another island's favourite beside it, removed by a click on its ✕.
+    await page.evaluate((fav) => window.seedCircuit.store!.putFavourite(fav), { seed: 42, generator: 0, name: 'Brenmoor Ring', best: null, date: '2026-11-25' });
+    await open(page, 'seed=7&still=1&bot=off', 'title');
+    await openFavourites(page);
+    await expect(rows(page)).toHaveCount(2);
+    await expect(page.getByTestId('favourite-remove')).toHaveCount(2);
+    await expect(page.getByTestId('favourite-remove').first()).toHaveAttribute('aria-label', 'Remove Brenmoor Ring');
+    if (browserName === 'chromium') await page.screenshot({ path: 'test-results/screens/favourites-00007-remove.png' });
+    await page.getByTestId('favourite-remove').first().click();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).first()).toContainText('v0-7');
+    await expect(body(page)).toHaveAttribute('data-screen', 'favourites');
+    // Removing the island shown brings its add back.
+    await page.getByTestId('favourite-remove').first().click();
+    await expect(rows(page)).toHaveCount(0);
+    await expect(page.getByTestId('favourite-add')).toBeVisible();
+    await expect.poll(() => favourites(page)).toEqual([]);
   });
 });

@@ -30,7 +30,7 @@ import { botClient } from '../worker/botClient';
 import { genClient } from '../worker/client';
 import { cancelReadout, driftReadout, mainSurface, placeReadout, respawnFade, type CancelSeen, type Place } from './drive';
 import { createDriving } from './driving';
-import { bestWrite, dayOf, favouriteRow, isStarred, newestFirst, ownBest, rowWindow, starWrite, versionNote, writeStar, type Island } from './favourites';
+import { bestWrite, cardChoices, dayOf, favouriteRow, isStarred, ownBest, rowWindow, starWrite, versionNote, writeStar, type CardChoice, type Island } from './favourites';
 import { chooseGhost, ghostGap, ghostPlace, ghostRows, saveVerdict, titleTimes, type ChosenGhost } from './ghost';
 import { countdownLights, raceCard, startNote, type RaceCard } from './raceCard';
 import { backMove, cameraFree, choiceAfter, menuFor, move, steps, type Move, type Screen } from './screens';
@@ -922,8 +922,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   const islandOf = (world: WorldResult): Island => ({ seed: world.seed, generator: world.generatorVersion, name: world.track.name });
   /** Whether the island shown is a favourite: the star on the pause and results cards is filled. */
   const starredNow = (): boolean => shown !== null && isStarred(favouriteList, islandOf(shown));
-  /** The favourites as the card lists them, the newest first. */
-  const favouritesShown = (): Favourite[] => newestFirst(favouriteList);
+  /** The Favourites card's choices: adding the island shown while it is no favourite (M5.5c), the favourites, Back. */
+  const favouriteChoices = (): CardChoice[] => cardChoices(favouriteList, shown ? islandOf(shown) : null);
   /**
    * Makes a change to the favourites after any before it, then reads them back and writes the card again if it shows
    * them (the star's label or the list), keeping the choice where it was.
@@ -949,11 +949,18 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     const best = ownBest(ownGhost, hashHandling(config));
     writeFavourites(async (store) => writeStar(store, starWrite(await store.listFavourites(), islandOf(world), best, dayOf(new Date()))));
   };
-  /** X or Delete on the Favourites card: the favourite chosen taken off the list (nothing for the Back choice). */
-  const removeFavouriteAt = (index: number): void => {
-    const favourite = favouritesShown()[index];
-    if (!favourite) return;
+  /** The row a favourite was taken out of, for the choice to stay on when the card is written again. */
+  let rowAfterRemove: number | null = null;
+  /** A favourite taken off the list: its ✕ clicked (M5.5c), or X or Delete with it chosen. */
+  const removeFavourite = (favourite: Favourite): void => {
+    const at = favouriteChoices().find((c) => c.kind === 'row' && c.favourite.seed === favourite.seed);
+    if (at?.kind === 'row') rowAfterRemove = at.row;
     writeFavourites((store) => store.removeFavourite(favourite.seed));
+  };
+  /** X or Delete on the Favourites card: the favourite chosen taken off (nothing for the add or Back). */
+  const removeFavouriteAt = (index: number): void => {
+    const chosen = favouriteChoices()[index];
+    if (chosen?.kind === 'row') removeFavourite(chosen.favourite);
   };
   /** A favourite picked: raced at once if it is the island shown, otherwise its island is built first, then raced. */
   const raceFavourite = (favourite: Favourite): void => {
@@ -1168,9 +1175,10 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
    * counts every favourite, then Back, though only 8 rows are drawn at once.
    */
   let choice = 0;
-  const choiceButtons = (): HTMLButtonElement[] => [...ref('menuChoices').querySelectorAll<HTMLButtonElement>('button')];
+  /** The choices' buttons on the card in the middle, in order: a favourite's ✕ is clicked, never chosen. */
+  const choiceButtons = (): HTMLButtonElement[] => [...ref('menuChoices').querySelectorAll<HTMLButtonElement>('button:not(.world-favourite-remove)')];
   /** How many choices the card in the middle has: none while it is hidden. */
-  const choiceCount = (): number => (screen.name === 'favourites' ? favouritesShown().length + 1 : menuFor(screen, starredNow()).length);
+  const choiceCount = (): number => (screen.name === 'favourites' ? favouriteChoices().length : menuFor(screen, starredNow()).length);
   /** Picks the choice shown as chosen. */
   const pickChoice = (): void => {
     if (screen.name !== 'favourites') {
@@ -1178,9 +1186,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       if (picked) act(picked.move);
       return;
     }
-    const favourite = favouritesShown()[choice];
-    if (favourite) raceFavourite(favourite);
-    else act('quit');
+    pickFavouriteChoice(favouriteChoices()[choice]);
+  };
+  /** A choice of the Favourites card picked: the island shown added, a favourite raced, or back to the title. */
+  const pickFavouriteChoice = (picked: CardChoice | undefined): void => {
+    if (picked?.kind === 'add') starIsland();
+    else if (picked?.kind === 'row') raceFavourite(picked.favourite);
+    else if (picked?.kind === 'back') act('quit');
   };
   const setChoice = (index: number): void => {
     choice = index;
@@ -1213,43 +1225,71 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     return button;
   };
   /**
-   * The Favourites card's choices (M5.5b): up to 8 favourites, the newest first, the window of rows moving with the
-   * choice; how many there are when they do not all fit; the note on islands of generator v0; then Back.
+   * The Favourites card's choices (M5.5b, M5.5c): adding the island shown while it is no favourite; up to 8 favourites,
+   * the newest first, the window of rows moving with the choice, each with a ✕ to click that removes it; how many there
+   * are when they do not all fit; the note on islands of generator v0; then Back, and the card's keys.
    */
   const renderFavouriteChoices = (): void => {
-    const list = favouritesShown();
-    const { from, to } = rowWindow(list.length, choice, FAVOURITE_ROWS, rowsFrom);
+    const all = favouriteChoices();
+    const rowCount = all.filter((c) => c.kind === 'row').length;
+    const chosen = all[choice];
+    const { from, to } = rowWindow(rowCount, chosen?.kind === 'row' ? chosen.row : rowCount, FAVOURITE_ROWS, rowsFrom);
     rowsFrom = from;
+    /** The button of each choice drawn, by its place among the choices. */
+    const drawn = new Map<number, HTMLButtonElement>();
     const parts: HTMLElement[] = [];
     const rows = document.createElement('div');
     rows.className = 'world-favourites';
-    for (let i = from; i < to; i++) {
-      const favourite = list[i]!;
-      const row = favouriteRow(favourite, config.sim.stepsPerSecond);
-      const button = choiceButton(i, () => raceFavourite(favourite), 'favourite-row');
-      button.className = 'world-favourite';
-      for (const [text, part] of [[row.name, 'name'], [row.code, 'code'], [row.best, 'best'], [row.date, 'date']] as const) {
-        const span = document.createElement('span');
-        span.className = `world-favourite-${part}`;
-        span.textContent = text;
-        button.append(span);
+    all.forEach((option, index) => {
+      if (option.kind === 'add') {
+        const add = choiceButton(index, () => pickFavouriteChoice(option), 'favourite-add');
+        add.textContent = `☆ Add ${option.island.name}`;
+        parts.push(add);
+        drawn.set(index, add);
+      } else if (option.kind === 'row' && option.row >= from && option.row < to) {
+        const favourite = option.favourite;
+        const row = favouriteRow(favourite, config.sim.stepsPerSecond);
+        const button = choiceButton(index, () => pickFavouriteChoice(option), 'favourite-row');
+        button.className = 'world-favourite';
+        for (const [text, part] of [[row.name, 'name'], [row.code, 'code'], [row.best, 'best'], [row.date, 'date']] as const) {
+          const span = document.createElement('span');
+          span.className = `world-favourite-${part}`;
+          span.textContent = text;
+          button.append(span);
+        }
+        // Clicked, never chosen with the keys (X and Delete do that): out of the Tab order.
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'world-favourite-remove';
+        remove.dataset.testid = 'favourite-remove';
+        remove.textContent = '✕';
+        remove.title = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${favourite.name}`);
+        remove.tabIndex = -1;
+        remove.addEventListener('click', () => removeFavourite(favourite));
+        const holder = document.createElement('div');
+        holder.className = 'world-favourite-row';
+        holder.append(button, remove);
+        rows.append(holder);
+        drawn.set(index, button);
       }
-      rows.append(button);
-    }
-    if (list.length > 0) parts.push(rows);
-    if (list.length > FAVOURITE_ROWS) parts.push(line(`${from + 1} to ${to} of ${list.length}`, 'world-menu-quiet world-favourites-more', 'favourites-more'));
-    const note = versionNote(list);
+    });
+    if (rowCount > 0) parts.push(rows);
+    if (rowCount > FAVOURITE_ROWS) parts.push(line(`${from + 1} to ${to} of ${rowCount}`, 'world-menu-quiet world-favourites-more', 'favourites-more'));
+    const note = versionNote(favouriteList);
     if (note) parts.push(line(note, 'world-menu-quiet world-favourites-note', 'favourites-note'));
-    const back = choiceButton(list.length, () => act('quit'));
+    const backIndex = all.length - 1;
+    const back = choiceButton(backIndex, () => act('quit'));
     back.textContent = 'Back';
     parts.push(back);
+    drawn.set(backIndex, back);
     // The corner card, with the page's hints, stands aside for this card, so its keys are said here.
-    parts.push(line(list.length > 0 ? 'Enter races · X or Delete removes · Esc goes back' : 'Esc goes back', 'world-menu-quiet world-favourites-keys', 'favourites-keys'));
+    const keys = rowCount > 0 ? 'Enter races · ✕, X or Delete removes · Esc goes back' : all[0]?.kind === 'add' ? 'Enter adds · Esc goes back' : 'Esc goes back';
+    parts.push(line(keys, 'world-menu-quiet world-favourites-keys', 'favourites-keys'));
     ref('menuChoices').replaceChildren(...parts);
-    const chosen = choice < list.length ? (choice - from) : choiceButtons().length - 1;
-    const buttons = choiceButtons();
-    buttons.forEach((button, k) => button.classList.toggle('chosen', k === chosen));
-    buttons[chosen]?.focus();
+    const focused = drawn.get(choice) ?? back;
+    choiceButtons().forEach((button) => button.classList.toggle('chosen', button === focused));
+    focused.focus();
   };
   /**
    * Writes the card in the middle for the screen the page is on, or hides it while the car is driven (Tane, M4.0).
@@ -1271,12 +1311,20 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     if (favourites) {
       ref('menuHeading').textContent = 'Favourites';
       ref('menuBody').replaceChildren(
-        ...(favouriteList.length === 0 ? [line('No favourites yet. Star an island on the pause or results card to keep it here.', 'world-menu-quiet', 'favourites-empty')] : []),
+        ...(favouriteList.length === 0 ? [line('No favourites yet. Add this island, or star one on the pause or results card.', 'world-menu-quiet', 'favourites-empty')] : []),
       );
-      const count = choiceCount();
       if (!keepChoice) rowsFrom = 0;
-      // Kept on the list when a favourite is taken out: on the one that took its place, or the last.
-      setChoice(keepChoice ? Math.min(choice, Math.max(0, count - 2)) : 0);
+      const all = favouriteChoices();
+      let index = keepChoice ? Math.min(choice, Math.max(0, all.length - 2)) : 0;
+      // A favourite taken out: the choice stays on the list, on the row that took its place or the last, even when the
+      // island shown's add comes back above it.
+      if (keepChoice && rowAfterRemove !== null) {
+        const rows = all.filter((c) => c.kind === 'row');
+        const target = rows[Math.min(rowAfterRemove, rows.length - 1)];
+        index = target ? all.indexOf(target) : 0;
+      }
+      rowAfterRemove = null;
+      setChoice(index);
       return;
     }
     if (menu.length === 0) return;

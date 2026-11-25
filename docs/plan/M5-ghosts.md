@@ -19,6 +19,8 @@ Issue #5. **Done when** (the brief): a ghost replays a lap exactly on the same s
 
 **M5.4d, lap gates (Tane, 2026-11-25; approved plan, the plan file's addition):** a lap was lost unseen when a hidden checkpoint was crossed more than 6 m past the road's edge. Laps are now counted by **4 visible gates** (a straight's middle or a corner's apex, at least 150 m apart, built like the start gate with a teal beam), each ending a sector (5 a lap); the checkpoints only say where a respawn puts the car, and after a missed gate it is put before that gate. **M5.4d-1**: the gates in the world. **M5.4d-2**: the race on them, a card while a gate is missed ("Missed gate 2: drive back through it, or press R"), `RECORD_FORMAT` 2; its test includes the bot pushed 21 m wide at seed 7's checkpoint 2 finishing in the usual steps.
 
+**M5.5c (Tane, 2026-11-25, after M5.5b):** a favourite can be kept without racing: the Favourites card's first choice adds the island shown while it is no favourite ("☆ Add Halmore Speedway"); and each row has a ✕ button to click that removes it (X and Delete still do).
+
 **Traps:** saving the places as numbers from the drawing (they must come from the simulation's state); starting the record after the countdown (a start boost would not replay); a reset (R) not recorded; reading the ghost by wall-clock time instead of by step.
 
 ## Decisions, what to reuse, and traps

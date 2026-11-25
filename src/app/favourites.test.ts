@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunRecord } from '../sim/record';
-import { bestWrite, dayOf, favouriteRow, isStarred, newestFirst, ownBest, rowWindow, starWrite, versionNote, writeStar, type Island } from './favourites';
+import { bestWrite, cardChoices, dayOf, favouriteRow, isStarred, newestFirst, ownBest, rowWindow, starWrite, versionNote, writeStar, type Island } from './favourites';
 import { memoryStore, type Favourite } from './store';
 
 const SEVEN: Island = { seed: 7, generator: 0, name: 'Halmore Speedway' };
@@ -125,5 +125,25 @@ describe('the favourites card (M5.5b)', () => {
     // A choice off the rows (the Back button) keeps the window too.
     expect(rowWindow(12, 12, 8, 4)).toEqual({ from: 4, to: 12 });
     expect(rowWindow(0, 0, 8)).toEqual({ from: 0, to: 0 });
+  });
+});
+
+describe('the choices on the favourites card (M5.5c)', () => {
+  const seven: Favourite = { seed: 7, generator: 0, name: 'Halmore Speedway', best: null, date: '2026-11-24' };
+  const fortyTwo: Favourite = { seed: 42, generator: 0, name: 'Brenmoor Ring', best: null, date: '2026-11-25' };
+
+  it('offers to add the island shown first, then the favourites newest first, then Back', () => {
+    expect(cardChoices([seven, fortyTwo], ONE)).toEqual([
+      { kind: 'add', island: ONE },
+      { kind: 'row', favourite: fortyTwo, row: 0 },
+      { kind: 'row', favourite: seven, row: 1 },
+      { kind: 'back' },
+    ]);
+  });
+
+  it('offers no add when the island shown is already a favourite, or none is shown', () => {
+    expect(cardChoices([seven], SEVEN)).toEqual([{ kind: 'row', favourite: seven, row: 0 }, { kind: 'back' }]);
+    expect(cardChoices([], null)).toEqual([{ kind: 'back' }]);
+    expect(cardChoices([], SEVEN)).toEqual([{ kind: 'add', island: SEVEN }, { kind: 'back' }]);
   });
 });

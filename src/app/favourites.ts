@@ -119,3 +119,16 @@ export function rowWindow(count: number, chosen: number, size: number, from = 0)
   start = Math.max(0, Math.min(start, count - size));
   return { from: start, to: Math.min(count, start + size) };
 }
+
+/** One choice on the Favourites card: add the island shown, race (or remove) a favourite, or go back. */
+export type CardChoice = { kind: 'add'; island: Island } | { kind: 'row'; favourite: Favourite; row: number } | { kind: 'back' };
+
+/**
+ * The Favourites card's choices in order (Tane, M5.5c): adding the island shown while it is no favourite, so one can be
+ * kept from the title without a race; then the favourites, the newest first; then Back.
+ */
+export function cardChoices(list: readonly Favourite[], shown: Island | null): CardChoice[] {
+  const add: CardChoice[] = shown && !isStarred(list, shown) ? [{ kind: 'add', island: shown }] : [];
+  const rows: CardChoice[] = newestFirst(list).map((favourite, row) => ({ kind: 'row', favourite, row }));
+  return [...add, ...rows, { kind: 'back' }];
+}
