@@ -398,6 +398,35 @@ export interface BridgeSpan {
 /** How a bridge looks (M6.1c): wooden if short and low, concrete otherwise (`bridgeKinds`). */
 export type BridgeKind = 'wood' | 'concrete';
 
+/**
+ * What a crossing carves across the lap for its bridge (M6.1d, Tane 2026-11-26): an inlet of the sea, a river
+ * running to the sea, a dry ravine, or a river high in the hills holding its own water.
+ */
+export type CrossingKind = 'inlet' | 'river' | 'ravine' | 'hillRiver';
+
+/** One point along a crossing's path: where it is, half the width of its floor there, and the floor's height, in metres. */
+export interface CrossingPoint {
+  x: number;
+  z: number;
+  half: number;
+  floor: number;
+}
+
+/** A crossing over water or a ravine (M6.1d-1, `chooseCrossing`): the lap's one place carved out for a bridge. */
+export interface Crossing {
+  kind: CrossingKind;
+  /** The sample of the lap where its path passes under the road, square to it. */
+  sample: number;
+  /** Unit direction across the road at `sample`, pointing out of the loop. */
+  across: { x: number; z: number };
+  /** The road its bridge is expected to cover: the floor's width and its banks up to `road.bridges.endFill` under the road. */
+  reach: BridgeSpan;
+  /** From its outer end (out at sea, for water) to its inner end, a point every `world.crossings.step` metres. */
+  path: CrossingPoint[];
+  /** A hill river's still water: the height of its surface, in metres above the sea. */
+  water?: { level: number };
+}
+
 export interface KerbSpan {
   /** First sample of the kerb; it may wrap past the end of the lap. */
   startIndex: number;

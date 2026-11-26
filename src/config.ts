@@ -971,6 +971,61 @@ export interface WorldConfig {
   sky: SkyConfig;
   decor: DecorConfig;
   clouds: CloudConfig;
+  crossings: CrossingsConfig;
+}
+
+/**
+ * Crossings over water and ravines (M6.1d, Tane 2026-11-26): about half the seeds have one place on the lap where a
+ * channel is carved across the road, so the road there becomes a bridge (`gen/world/crossing.ts`).
+ */
+export interface CrossingsConfig {
+  /** The share of seeds that look for a crossing, tuned so that about half of seeds 1 to 200 end up with one. */
+  chance: number;
+  /** The road its bridge is expected to cover stays at least this far from the start line, in metres... */
+  startClear: number;
+  /** ...and at least this far from every lap gate. */
+  gateClear: number;
+  /** The road there curves no tighter than this radius, in metres. */
+  minRadius: number;
+  /** Sites are tried every this many metres round the lap. */
+  siteStep: number;
+  /** A path stops this far short of any other stretch of road, measured from where its bank reaches that road's height, in metres. */
+  clear: number;
+  /** Metres between a path's points. */
+  step: number;
+  /** The road at the site stands at least `road.maxFill` plus this above the floor, so it is sure to become a bridge, in metres. */
+  fillMargin: number;
+  /** How steep a crossing's banks are, rise over run: water's earth and sand, and a ravine's rock. */
+  bankSlope: { water: number; ravine: number };
+  /** An inlet's and a river's shared rules. */
+  water: {
+    /** The road at the site is at most this high above the sea, in metres, with the sea beside it outside the loop. */
+    maxRoad: number;
+    /** The open sea is looked for at most this far out from the road, in metres. */
+    seaSearch: number;
+    /** A path ends where the ground stands more than this above its floor, in metres. */
+    maxBank: number;
+    /** The floor's depth under the sea, in metres. */
+    bed: Range;
+  };
+  /** An inlet: in this far past the road's edge to a rounded cove, this wide, in metres. */
+  inlet: { length: Range; width: Range };
+  /**
+   * A river: in this far past the road's edge, this wide at the road, narrowing to `narrow` of that at its source;
+   * it winds by up to `wind` radians either way, a bend every `wavelength` metres.
+   */
+  river: { length: Range; width: Range; narrow: number; wind: number; wavelength: Range };
+  /**
+   * A ravine: this far each way past the road's edge, this wide, its floor `depth` under the road but at least
+   * `floorAbove` above the sea, rising to the ground over the last `endRise` of each arm. The road is at least
+   * `minRoad` above the sea. A path ends where the ground stands more than `maxBank` above its floor.
+   */
+  ravine: { minRoad: number; length: Range; width: Range; depth: Range; floorAbove: number; endRise: number; maxBank: number };
+  /**
+   * A river high in the hills: a ravine (its sizes) holding still water `depth` above its floor, at least `rimClear`
+   * under the ground all round. The road is at least `minRoad` above the sea and the floor `floorAbove` it.
+   */
+  hillRiver: { minRoad: number; floorAbove: number; depth: Range; rimClear: number };
 }
 
 /** The seed's time of day. */
@@ -2242,6 +2297,23 @@ export const config: GameConfig = {
       flatten: 0.6,
       reach: { along: 75, across: 34, up: 26 },
       scale: [0.7, 1.6],
+    },
+    // M6.1d (Tane, 2026-11-26): starting values. 121 of seeds 1 to 200 have a site that fits; at 0.83, 103 get a crossing (STATE.md).
+    crossings: {
+      chance: 0.83,
+      startClear: 150,
+      gateClear: 60,
+      minRadius: 200,
+      siteStep: 10,
+      clear: 25,
+      step: 3,
+      fillMargin: 1,
+      bankSlope: { water: 0.4, ravine: 1.5 },
+      water: { maxRoad: 14, seaSearch: 200, maxBank: 16, bed: [1.5, 2.5] },
+      inlet: { length: [40, 120], width: [30, 80] },
+      river: { length: [150, 350], width: [20, 40], narrow: 0.4, wind: 0.5, wavelength: [120, 220] },
+      ravine: { minRoad: 12, length: [60, 200], width: [16, 40], depth: [10, 30], floorAbove: 2, endRise: 0.4, maxBank: 45 },
+      hillRiver: { minRoad: 25, floorAbove: 10, depth: [1.5, 3], rimClear: 3 },
     },
   },
   sim: {

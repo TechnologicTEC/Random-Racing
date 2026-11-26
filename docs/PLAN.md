@@ -111,7 +111,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M6.1c-1** The look by size: wooden or concrete; planks or a pale deck on top, railings to match; pictures of all three looks for Tane's yes (2026-11-26; planks 1 m, Tane)
   - [x] **M6.1c-2** Under the deck by kind: timber trestles or concrete pillars; the visual bar's bridge row (2026-11-26)
   - [x] **M6.1c-3** Tane's changes: a concrete bridge keeps the track's own colours and its first white railing; no blend (2026-11-26)
-  - [ ] **M6.1d-1** Choosing a crossing, pure: sites, kinds, paths; measured over seeds 1 to 200
+  - [x] **M6.1d-1** Choosing a crossing, pure: sites, kinds, paths; measured over seeds 1 to 200 (2026-11-26)
   - [ ] **M6.1d-2** The crossing carved into the world: inlet, river and ravine, the bridge found on the carved ground
   - [ ] **M6.1d-3** The river high in the hills: its own water surface; the respawn in it
   - [ ] **M6.1e** Driven over at top speed; `look=bridge`; pictures (was M6.1c)
