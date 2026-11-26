@@ -1,4 +1,4 @@
-import type { BridgeLookConfig, GenConfig, RoadConfig } from '../../config';
+import type { BridgeLookConfig, GenConfig, RoadConfig, TrestleSize } from '../../config';
 import type { BridgeKind, BridgeSpan, CenterLine, MeshData, RoadProfile } from '../types';
 import { MeshBuilder, type Point } from './meshBuilder';
 import { cutAndFill, type RoadEdges } from './profile';
@@ -149,9 +149,11 @@ function deckPoint(line: CenterLine, height: Float64Array, cross: Float64Array |
  * The pillars of the bridges (M6.1b), as upright boxes square to the road: rows evenly along each bridge, as few as
  * keep them no more than `pillarSpacing` apart or from either end, each row at the sample nearest its place, with a
  * pillar `pillarInset` inside each edge of the road, from the deck's underside to half a metre into the ground. No
- * pillar stands where the ground comes within half a metre of the deck.
+ * pillar stands where the ground comes within half a metre of the deck. On a wooden bridge (M6.1c-2) they are its
+ * trestles' posts, `look.trestle.post` wide in the same places.
  *
  * @param groundAt the finished ground's height (under the sea, its bed)
+ * @param kinds each bridge's look (`bridgeKinds`); without them, every pillar is concrete
  */
 export function bridgePillars(
   line: CenterLine,
@@ -161,33 +163,56 @@ export function bridgePillars(
   spans: readonly BridgeSpan[],
   groundAt: (x: number, z: number) => number,
   cfg: Pick<GenConfig, 'road'>,
+  kinds?: readonly BridgeKind[],
 ): GateBox[] {
+  return pillarRows(line, height, cross, width, spans, groundAt, cfg, kinds).flatMap((row) => row.posts.filter((post) => post !== null));
+}
+
+/** One row of a bridge's pillars: the sample it stands at, the bridge it holds up, and its left and right pillars (null where the ground is too near the deck). */
+interface PillarRow {
+  sample: number;
+  span: number;
+  posts: [GateBox | null, GateBox | null];
+}
+
+function pillarRows(
+  line: CenterLine,
+  height: Float64Array,
+  cross: Float64Array | null,
+  width: Float64Array,
+  spans: readonly BridgeSpan[],
+  groundAt: (x: number, z: number) => number,
+  cfg: Pick<GenConfig, 'road'>,
+  kinds?: readonly BridgeKind[],
+): PillarRow[] {
   const rules = cfg.road.bridges;
   const n = line.count;
-  const pillars: GateBox[] = [];
-  for (const span of spans) {
+  const out: PillarRow[] = [];
+  for (const [s, span] of spans.entries()) {
+    const size = kinds?.[s] === 'wood' ? rules.look.trestle.post : rules.pillarWidth;
     const rows = Math.max(0, Math.ceil(spanLength(span, line.spacing) / rules.pillarSpacing) - 1);
     for (let r = 1; r <= rows; r++) {
       const i = (span.startIndex + Math.round((r * (span.sampleCount - 1)) / (rows + 1))) % n;
-      for (const side of [-1, 1]) {
+      const posts = ([-1, 1] as const).map((side): GateBox | null => {
         const lateral = side * (width[i]! / 2 - rules.pillarInset);
         const top = deckPoint(line, height, cross, i, lateral, rules.deckDepth);
         const foot = groundAt(top.x, top.z) - 0.5;
-        if (top.y - foot < 1) continue;
-        pillars.push({
+        if (top.y - foot < 1) return null;
+        return {
           x: top.x,
           y: (top.y + foot) / 2,
           z: top.z,
-          halfAcross: rules.pillarWidth / 2,
+          halfAcross: size / 2,
           halfUp: (top.y - foot) / 2,
-          halfAlong: rules.pillarWidth / 2,
+          halfAlong: size / 2,
           tx: line.tx[i]!,
           tz: line.tz[i]!,
-        });
-      }
+        };
+      });
+      out.push({ sample: i, span: s, posts: [posts[0]!, posts[1]!] });
     }
   }
-  return pillars;
+  return out;
 }
 
 /** A solid box of a bridge's deck: its middle, half its size along its own axes, and those axes (one long each). */
@@ -267,7 +292,8 @@ export function deckBoxes(
  * Builds the bridges as triangles (M6.1b): under the road along each bridge a deck `deckDepth` deep, its top
  * showing beside the road out to past the railings, its sides, underside and two ends, and its pillars
  * (`bridgePillars`), all in the bridge's concrete. On a wooden bridge (M6.1c) the planks across the road too, drawn
- * where the road's own surface is left out of the drawing (`ROAD_MATERIAL.deckUnder`).
+ * where the road's own surface is left out of the drawing (`ROAD_MATERIAL.deckUnder`), and the deck in timber on
+ * trestles (M6.1c-2): its posts, a cap beam under the deck and two braces crossing between them (`drawTrestle`).
  *
  * @param kinds each bridge's look (`bridgeKinds`); without them, none is wooden
  */
@@ -283,13 +309,14 @@ export function buildBridges(
 ): MeshData {
   const rules = cfg.road.bridges;
   const n = line.count;
-  const material = ROAD_MATERIAL.bridge;
   const builder = new MeshBuilder();
   const at = (i: number, lateral: number, below: number): Point => deckPoint(line, height, cross, i, lateral, below);
   const top = rules.topGap;
   const bottom = rules.deckDepth;
   for (const [s, span] of spans.entries()) {
-    if (kinds?.[s] === 'wood') layPlanks(builder, at, line, width, span, rules.look);
+    const wood = kinds?.[s] === 'wood';
+    const material = wood ? ROAD_MATERIAL.timber : ROAD_MATERIAL.bridge;
+    if (wood) layPlanks(builder, at, line, width, span, rules.look);
     for (let k = 0; k < span.sampleCount - 1; k++) {
       const i = (span.startIndex + k) % n;
       const j = (i + 1) % n;
@@ -313,8 +340,100 @@ export function buildBridges(
     builder.quad(at(first, -hf, bottom), at(first, hf, bottom), at(first, -hf, top), at(first, hf, top), material);
     builder.quad(at(last, hl, bottom), at(last, -hl, bottom), at(last, hl, top), at(last, -hl, top), material);
   }
-  for (const pillar of bridgePillars(line, height, cross, width, spans, groundAt, cfg)) drawBox(builder, pillar, material);
+  for (const row of pillarRows(line, height, cross, width, spans, groundAt, cfg, kinds)) {
+    const wood = kinds?.[row.span] === 'wood';
+    for (const post of row.posts) if (post) drawBox(builder, post, wood ? ROAD_MATERIAL.timber : ROAD_MATERIAL.bridge);
+    if (wood && row.posts[0] && row.posts[1]) drawTrestle(builder, row.posts[0], row.posts[1], rules.look.trestle);
+  }
   return builder.build();
+}
+
+const minus = (a: Point, b: Point): Point => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const crossOf = (a: Point, b: Point): Point => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+
+/**
+ * A trestle's beam and braces (M6.1c-2), drawn only: a cap beam `beam` deep under the deck from the outer face of one
+ * post to the other's, tilted with the deck, and two braces, each from a post's top just under the beam to the other
+ * post's foot at the ground, one a little ahead of the other so their faces never lie on each other.
+ */
+function drawTrestle(builder: MeshBuilder, left: GateBox, right: GateBox, size: TrestleSize): void {
+  const along = { x: left.tx, y: 0, z: left.tz };
+  const topOf = (post: GateBox): Point => ({ x: post.x, y: post.y + post.halfUp, z: post.z });
+  // The posts reach half a metre into the ground; the braces end where they leave it.
+  const groundOf = (post: GateBox): Point => ({ x: post.x, y: post.y - post.halfUp + 0.5, z: post.z });
+  const leftTop = topOf(left);
+  const rightTop = topOf(right);
+  const span = minus(leftTop, rightTop);
+  const length = Math.hypot(span.x, span.y, span.z);
+  const across = unit(span);
+  const up = crossOf(along, across);
+  const beamHalf = size.beam / 2;
+  drawOrientedBox(
+    builder,
+    {
+      centre: { x: (leftTop.x + rightTop.x) / 2 - up.x * beamHalf, y: (leftTop.y + rightTop.y) / 2 - up.y * beamHalf, z: (leftTop.z + rightTop.z) / 2 - up.z * beamHalf },
+      half: { x: length / 2 + left.halfAcross, y: beamHalf, z: beamHalf },
+      across,
+      up,
+      along,
+    },
+    ROAD_MATERIAL.timber,
+  );
+  const offset = size.brace / 2 + 0.01;
+  for (const [from, to, ahead] of [
+    [left, right, -1],
+    [right, left, 1],
+  ] as const) {
+    const start = topOf(from);
+    start.y -= size.beam;
+    const end = groundOf(to);
+    const run = minus(start, end);
+    const reach = Math.hypot(run.x, run.y, run.z);
+    const lengthwise = unit(run);
+    drawOrientedBox(
+      builder,
+      {
+        centre: { x: (start.x + end.x) / 2 + along.x * offset * ahead, y: (start.y + end.y) / 2, z: (start.z + end.z) / 2 + along.z * offset * ahead },
+        half: { x: reach / 2, y: size.brace / 2, z: size.brace / 2 },
+        across: lengthwise,
+        up: crossOf(along, lengthwise),
+        along,
+      },
+      ROAD_MATERIAL.timber,
+    );
+  }
+}
+
+/**
+ * Draws a box with its own axes (`DeckBox`: `along` times `across` points `up`), each face pointing out. A face's
+ * quad runs over two axes P and Q (the corners -P-Q, +P-Q, -P+Q, +P+Q), which faces P times Q (`MeshBuilder.quad`).
+ */
+function drawOrientedBox(builder: MeshBuilder, box: DeckBox, material: number): void {
+  // In the order along, across, up, each axis times the next is the one after it.
+  const axes: [Point, number][] = [
+    [box.along, box.half.z],
+    [box.across, box.half.x],
+    [box.up, box.half.y],
+  ];
+  const corner = (terms: [Point, number][]): Point => {
+    const p = { ...box.centre };
+    for (const [v, k] of terms) {
+      p.x += v.x * k;
+      p.y += v.y * k;
+      p.z += v.z * k;
+    }
+    return p;
+  };
+  for (let a = 0; a < 3; a++) {
+    // The face facing +N is spanned by the two axes before N in the cycle (P times Q is N); facing -N, by them swapped.
+    const [n, hn] = axes[(a + 2) % 3]!;
+    for (const sign of [1, -1]) {
+      const [p, hp] = sign > 0 ? axes[a]! : axes[(a + 1) % 3]!;
+      const [q, hq] = sign > 0 ? axes[(a + 1) % 3]! : axes[a]!;
+      const face = (s: number, t: number): Point => corner([[n, sign * hn], [p, s * hp], [q, t * hq]]);
+      builder.quad(face(-1, -1), face(1, -1), face(-1, 1), face(1, 1), material);
+    }
+  }
 }
 
 /**

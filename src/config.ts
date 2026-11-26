@@ -362,6 +362,22 @@ export interface BridgeLookConfig {
   /** The railing on a wooden bridge, and on a concrete one. */
   timber: RailingSize;
   steel: RailingSize;
+  /** A wooden bridge's trestles, in place of the pillars (M6.1c-2). */
+  trestle: TrestleSize;
+}
+
+/**
+ * A wooden bridge's trestle (M6.1c-2): at each row of pillars, two timber posts (the colliders, in the pillars'
+ * places), a cap beam under the deck from one to the other, and two braces crossing from each post's top to the
+ * other's foot (drawn only).
+ */
+export interface TrestleSize {
+  /** A post's width each way, in metres. */
+  post: number;
+  /** The cap beam's depth under the deck, and its thickness along the road, in metres. */
+  beam: number;
+  /** A brace's thickness each way, in metres. */
+  brace: number;
 }
 
 /** The parts of a railing (M6.1c): a post at every sample and two rails, the top one at the wall's height. */
@@ -2059,6 +2075,7 @@ export const config: GameConfig = {
         plankGap: 0.06,
         timber: { post: 0.2, rail: 0.14 },
         steel: { post: 0.1, rail: 0.08 },
+        trestle: { post: 0.5, beam: 0.4, brace: 0.25 },
       },
     },
     maxCut: 8,

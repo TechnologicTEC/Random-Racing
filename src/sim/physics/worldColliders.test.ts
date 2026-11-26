@@ -358,4 +358,24 @@ describe('bridgeColliders (M6.1b)', () => {
     expect(hit!).toBeLessThan(flat);
     physics.free();
   });
+
+  it('stands a wooden bridge on its trestles’ posts and a concrete one on its pillars, each as drawn (M6.1c-2)', () => {
+    // Seed 14 has a wooden bridge of 70 m and a concrete one of 108 m.
+    const both = generateWorld(14, config);
+    const { line, profile } = both.track.candidates[both.track.winnerIndex]!;
+    const at = (x: number, z: number): number => sampleField(both.ground, x, z, 0);
+    const { spans, kinds } = both.road.bridges;
+    expect(kinds).toEqual(['wood', 'concrete']);
+    const sizes = spans.map((span, s) => bridgePillars(line, profile.height, both.road.cross, both.road.width, [span], at, config, [kinds[s]!]).map((box) => box.halfAcross * 2));
+    expect(sizes[0]!.length).toBeGreaterThan(0);
+    expect(sizes[1]!.length).toBeGreaterThan(0);
+    for (const size of sizes[0]!) expect(size).toBeCloseTo(config.road.bridges.look.trestle.post, 9);
+    for (const size of sizes[1]!) expect(size).toBeCloseTo(config.road.bridges.pillarWidth, 9);
+    const decks = deckBoxes(line, profile.height, both.road.cross, both.road.width, spans, config);
+    const colliders = bridgeColliders(rapier, both, config);
+    expect(colliders).toHaveLength(sizes[0]!.length + sizes[1]!.length + decks.length);
+    // The first is a wooden bridge's post: a box half its width each way across.
+    const first = colliders[0]!.shape as unknown as { halfExtents: { x: number } };
+    expect(first.halfExtents.x * 2).toBeCloseTo(config.road.bridges.look.trestle.post, 5);
+  });
 });

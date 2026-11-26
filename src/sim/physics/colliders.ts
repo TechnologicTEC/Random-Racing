@@ -135,7 +135,8 @@ export function gateColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsCo
 }
 
 /**
- * The bridges as solid boxes (M6.1b), as they are drawn: every pillar (`bridgePillars`), then every piece of every
+ * The bridges as solid boxes (M6.1b), as they are drawn: every pillar (`bridgePillars`; on a wooden bridge its
+ * trestles' posts, M6.1c-2, their beams and braces not hit), then every piece of every
  * deck (`deckBoxes`). The car drives on the road above a deck and never touches it; from below or beside, a deck or a
  * pillar is hit as a wall.
  */
@@ -144,7 +145,7 @@ export function bridgeColliders(rapier: Rapier, world: WorldResult, cfg: Physics
   const { cross, width } = world.road;
   const spans = world.road.bridges.spans;
   const groundAt = (x: number, z: number): number => sampleField(world.ground, x, z, 0);
-  const pillars = bridgePillars(line, profile.height, cross, width, spans, groundAt, cfg).map((box) =>
+  const pillars = bridgePillars(line, profile.height, cross, width, spans, groundAt, cfg, world.road.bridges.kinds).map((box) =>
     rapier.ColliderDesc.cuboid(box.halfAcross, box.halfUp, box.halfAlong)
       .setTranslation(box.x, box.y, box.z)
       .setRotation(quatFromAxes({ x: box.tz, y: 0, z: -box.tx }, { x: 0, y: 1, z: 0 }, { x: box.tx, y: 0, z: box.tz }))

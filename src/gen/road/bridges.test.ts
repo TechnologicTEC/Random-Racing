@@ -313,5 +313,56 @@ describe('the bridge’s look by its size (M6.1c)', () => {
         expect(new Set(mesh.materials)).toEqual(new Set([ROAD_MATERIAL.bridge]));
       }
     });
+
+    it('builds a wooden bridge in timber under its planks: no concrete left (M6.1c-2)', () => {
+      const mesh = buildBridges(line, height, cross, width, [span], groundAt, config, ['wood']);
+      expect(new Set(mesh.materials)).toEqual(new Set([ROAD_MATERIAL.plankLight, ROAD_MATERIAL.plankDark, ROAD_MATERIAL.plankGap, ROAD_MATERIAL.timber]));
+    });
+
+    it('stands a wooden bridge on trestles: two timber posts a row, the pillars’ places, thinner than concrete pillars (M6.1c-2)', () => {
+      const concrete = bridgePillars(line, height, cross, width, [span], groundAt, config, ['concrete']);
+      const wood = bridgePillars(line, height, cross, width, [span], groundAt, config, ['wood']);
+      expect(wood).toHaveLength(concrete.length);
+      expect(wood.length).toBe(4);
+      wood.forEach((post, k) => {
+        expect(post.x).toBeCloseTo(concrete[k]!.x, 9);
+        expect(post.z).toBeCloseTo(concrete[k]!.z, 9);
+        expect(post.y + post.halfUp).toBeCloseTo(concrete[k]!.y + concrete[k]!.halfUp, 9);
+        expect(post.y - post.halfUp).toBeCloseTo(concrete[k]!.y - concrete[k]!.halfUp, 9);
+        expect(post.halfAcross * 2).toBeCloseTo(rules.look.trestle.post, 9);
+        expect(post.halfAlong * 2).toBeCloseTo(rules.look.trestle.post, 9);
+        expect(concrete[k]!.halfAcross * 2).toBeCloseTo(rules.pillarWidth, 9);
+      });
+      // With no kinds, every pillar is concrete's.
+      expect(bridgePillars(line, height, cross, width, [span], groundAt, config)).toEqual(concrete);
+    });
+
+    it('ties each trestle’s posts with a cap beam under the deck and two braces crossing down to the ground (M6.1c-2)', () => {
+      const mesh = buildBridges(line, height, cross, width, [span], groundAt, config, ['wood']);
+      const posts = bridgePillars(line, height, cross, width, [span], groundAt, config, ['wood']);
+      const { beam } = rules.look.trestle;
+      /** For each row, the timber corners along the beam's underside, and those near the ground (10 m) above the posts' feet. */
+      const rows = [0, 1].map(() => ({ beam: 0, feet: 0 }));
+      for (let v = 0; v < mesh.materials.length; v++) {
+        if (mesh.materials[v] !== ROAD_MATERIAL.timber) continue;
+        const x = mesh.positions[v * 3]!;
+        const y = mesh.positions[v * 3 + 1]!;
+        const z = mesh.positions[v * 3 + 2]!;
+        let row = 0;
+        let best = Infinity;
+        posts.forEach((post, k) => {
+          const d = Math.hypot(post.x - x, post.z - z);
+          if (d < best) [row, best] = [Math.floor(k / 2), d];
+        });
+        if (best > 10) continue;
+        // The posts' corners are at their feet (9.5 m) and at the deck's underside, so these are the beam's and the braces'.
+        if (Math.abs(y - (surfaceAt(x, z).surface - rules.deckDepth - beam)) < 0.03) rows[row]!.beam++;
+        if (y > 9.7 && y < 10.3) rows[row]!.feet++;
+      }
+      for (const row of rows) {
+        expect(row.beam).toBeGreaterThanOrEqual(4);
+        expect(row.feet).toBeGreaterThanOrEqual(8);
+      }
+    });
   });
 });
