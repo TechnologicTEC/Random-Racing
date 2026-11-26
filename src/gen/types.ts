@@ -85,6 +85,8 @@ export type ViolationKind =
   | 'cut-too-deep'
   | 'fill-too-high'
   | 'bridge-too-long'
+  | 'tunnel-too-long'
+  | 'tunnel-at-start'
   | 'bank-too-steep';
 
 /** One reason a candidate layout was rejected, with where it happened. */
@@ -219,6 +221,8 @@ export interface Candidate {
   violations: Violation[];
   /** Where its road runs on bridges, in order from sample 0 (M6.1); empty when nowhere. */
   bridges: BridgeSpan[];
+  /** Where its road runs in tunnels, in order from sample 0 (M6.2); empty when nowhere. */
+  tunnels: TunnelSpan[];
   sections: Section[];
   /** Null when rejected. */
   score: ScoreBreakdown | null;
@@ -412,6 +416,9 @@ export interface BridgeSpan {
   sampleCount: number;
 }
 
+/** A stretch of the lap the road runs through in a tunnel (M6.2), numbered as a bridge's span is; it may wrap past the end of the lap. */
+export type TunnelSpan = BridgeSpan;
+
 /** How a bridge looks (M6.1c): wooden if short and low, concrete otherwise (`bridgeKinds`). */
 export type BridgeKind = 'wood' | 'concrete';
 
@@ -490,6 +497,8 @@ export interface Road {
    * and the decks, planks and pillars as triangles (M6.1b).
    */
   bridges: { spans: BridgeSpan[]; kinds: BridgeKind[]; mesh: MeshData };
+  /** Where the road runs in tunnels (M6.2): the winner's spans numbered from the start line. */
+  tunnels: { spans: TunnelSpan[] };
   /** The gates a lap is counted by (M5.4d): their samples of the winner's centre line in order round the lap, and their triangles. */
   lapGates: { samples: number[]; mesh: MeshData };
 }

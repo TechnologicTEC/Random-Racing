@@ -97,6 +97,16 @@ describe('fitReport', () => {
     expect(bridged.steepestBank.value).toBe(0);
   });
 
+  it('measures no cutting and no bank along a tunnel (M6.2a)', () => {
+    // The road 12 m under level ground: a deep cutting, unless the whole lap is a tunnel.
+    const { input, report } = reportFor(circle, 400, () => 22, () => 10);
+    expect(report.deepestCut.value).toBeGreaterThan(11);
+    expect(report.steepestBank.value).toBeGreaterThan(0);
+    const tunnelled = fitReport({ ...input, tunnelled: new Uint8Array(circle.count).fill(1) }, config);
+    expect(tunnelled.deepestCut.value).toBe(0);
+    expect(tunnelled.steepestBank.value).toBe(0);
+  });
+
   it('counts no road hanging in the air along a bridge, where the ground is left as it was (M6.1b)', () => {
     const { input } = reportFor(circle, 400, () => 10, () => 18);
     const left = { ...input, earthworks: input.natural, ground: input.natural };

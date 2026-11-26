@@ -20,9 +20,18 @@ export function describeReliefKind(kind: ReliefKind): void {
   const road = cfg.road;
   const limit = road.maxGradient[kind];
   const rules = trackRulesFor(cfg.track, kind);
-  // The fill on a bridge is not counted (M6.1), as the pipeline measures it.
+  // The fill on a bridge (M6.1) and the cut in a tunnel (M6.2a) are not counted, as the pipeline measures them.
   const measure = (candidate: Candidate): ProfileStats =>
-    measureProfile(candidate.line, candidate.profile, road, cfg.track.roadWidth, undefined, undefined, bridgedMask(candidate.bridges, candidate.line.count));
+    measureProfile(
+      candidate.line,
+      candidate.profile,
+      road,
+      cfg.track.roadWidth,
+      undefined,
+      undefined,
+      bridgedMask(candidate.bridges, candidate.line.count),
+      bridgedMask(candidate.tunnels, candidate.line.count),
+    );
 
   describe(`tracks on ${kind} ground, seeds 1 to 200`, () => {
     const results = Array.from({ length: 200 }, (_, i) => generateTrack(i + 1, cfg));
@@ -61,7 +70,7 @@ export function describeReliefKind(kind: ReliefKind): void {
       for (const { stats } of [...winners, ...everyone]) expect(stats.min).toBeGreaterThanOrEqual(road.minHeight - TINY);
     });
 
-    it('never needs a tunnel on a valid layout, and runs on a bridge wherever it would stand over 6 m: cut within 8 m, fill off bridges within 6 m', () => {
+    it('runs on a bridge wherever it would stand over 6 m and in a tunnel wherever it would lie over 8 m deep on a valid layout: fill off bridges within 6 m, cut off tunnels within 8 m', () => {
       for (const { stats, seed } of [...winners, ...valid]) {
         expect(stats.maxFill, `seed ${seed}`).toBeLessThanOrEqual(road.maxFill);
         expect(stats.maxCut, `seed ${seed}`).toBeLessThanOrEqual(road.maxCut);
@@ -69,6 +78,7 @@ export function describeReliefKind(kind: ReliefKind): void {
       const layouts = [...winners.map(({ result }) => result.candidates[result.winnerIndex]!), ...valid.map(({ candidate }) => candidate)];
       for (const candidate of layouts) {
         for (const span of candidate.bridges) expect(spanLength(span, candidate.line.spacing)).toBeLessThanOrEqual(road.bridges.maxLength);
+        for (const span of candidate.tunnels) expect(spanLength(span, candidate.line.spacing)).toBeLessThanOrEqual(road.tunnels.maxLength);
       }
     });
 

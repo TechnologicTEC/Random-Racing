@@ -5,6 +5,7 @@ import { pickCharacter } from '../character';
 import { solveBanking } from '../road/banking';
 import { bridgedMask, findBridgeSpans, rotateSpans } from '../road/bridges';
 import { findNeighbours, measureProfile, roadEdges, solveProfile } from '../road/profile';
+import { checkTunnelStart, findTunnelSpans } from '../road/tunnels';
 import type { Candidate, CenterLine, Corner, ReliefKind, ScoreBreakdown, StraightSection, TrackResult, Violation } from '../types';
 import { createRelief, type Relief } from '../world/relief';
 import { GENERATOR_VERSION } from '../version';
@@ -120,13 +121,17 @@ function buildCandidate(
     const edges = cross ? roadEdges(turned, terrain.relief, cfg.roadWidth, cross) : undefined;
     // Where the road would stand too high above the ground it runs on a bridge, whose fill is not counted (M6.1).
     const bridges = findBridgeSpans(profile, turned.spacing, terrain.road, edges);
-    const elevation = measureProfile(turned, profile, terrain.road, cfg.roadWidth, neighbours, edges, bridgedMask(bridges, turned.count));
+    const bridged = bridgedMask(bridges, turned.count);
+    // And where it would lie too deep below the ground it runs in a tunnel, whose cut is not counted (M6.2a).
+    const tunnels = findTunnelSpans(profile, turned.spacing, terrain.road, edges, bridged);
+    const elevation = measureProfile(turned, profile, terrain.road, cfg.roadWidth, neighbours, edges, bridged, bridgedMask(tunnels, turned.count));
     const violations: Violation[] = [
       ...layoutViolations,
-      ...checkEarthworks(turned, profile, elevation, terrain.road, cfg.roadWidth, neighbours, edges, bridges),
+      ...checkEarthworks(turned, profile, elevation, terrain.road, cfg.roadWidth, neighbours, edges, bridges, tunnels),
+      ...checkTunnelStart(turned, tunnels, start, terrain.road),
     ];
     const score: ScoreBreakdown | null = violations.length === 0 || alwaysScore ? scoreLayout(sections, cfg, elevation, terrain.kind) : null;
-    const candidate: Candidate = { index, controlPoints: turnPoints(controlPoints, angle), buildAttempts, turn, line: turned, profile, violations, bridges, sections, score };
+    const candidate: Candidate = { index, controlPoints: turnPoints(controlPoints, angle), buildAttempts, turn, line: turned, profile, violations, bridges, tunnels, sections, score };
     if (k === 0) unturned = candidate;
     if (violations.length === 0 && score && (!best || score.total > best.score!.total)) best = candidate;
   }
@@ -198,7 +203,8 @@ function placeStartLine(candidate: Candidate, cfg: TrackRules): Candidate {
     ground: rotateSamples(candidate.profile.ground, startIndex),
   };
   const bridges = rotateSpans(candidate.bridges, startIndex, line.count);
-  return { ...candidate, line, profile, bridges, sections: analyseSections(line, cfg) };
+  const tunnels = rotateSpans(candidate.tunnels, startIndex, line.count);
+  return { ...candidate, line, profile, bridges, tunnels, sections: analyseSections(line, cfg) };
 }
 
 /** The sample the start line goes on: part way along the longest straight, or sample 0 on a lap with no straight. */

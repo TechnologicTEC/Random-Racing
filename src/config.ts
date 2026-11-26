@@ -347,6 +347,23 @@ export interface BridgeConfig {
 }
 
 /**
+ * Tunnels (M6.2): wherever the road would lie more than `road.maxCut` below the natural ground, it runs in a tunnel
+ * instead of an open cutting, and the earthworks rule stops counting the cut there.
+ */
+export interface TunnelConfig {
+  /** A tunnel reaches each way until the cut over the road is no more than this, in metres: where its portals stand. */
+  endCut: number;
+  /** A tunnel is at least this long, in metres, centred on the deep part. */
+  minLength: number;
+  /** A layout that needs a longer tunnel is rejected, in metres. */
+  maxLength: number;
+  /** Two tunnels closer than this, in metres of open road between them, become one (never across a bridge). */
+  mergeGap: number;
+  /** A layout with a tunnel nearer the start line than this, either way, is rejected, in metres: the start gate stands in the open. */
+  startClear: number;
+}
+
+/**
  * A bridge's look (M6.1c, Tane 2026-11-26): short, low bridges are wooden (planks across the road, timber railings),
  * the rest pale concrete with white steel railings. Drawing only: the car drives on the same road and meets the same railing.
  */
@@ -472,8 +489,10 @@ export interface RoadConfig {
   maxFill: number;
   /** Where the road becomes a bridge (M6.1). */
   bridges: BridgeConfig;
-  /** The road may sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). A layout that needs more is rejected. */
+  /** The road may sit no deeper than this below the natural ground, in metres (brief: a tunnel at about 8). Where it needs more, it runs in a tunnel (M6.2). */
   maxCut: number;
+  /** Where the road runs in a tunnel (M6.2). */
+  tunnels: TunnelConfig;
 }
 
 /**
@@ -2157,6 +2176,14 @@ export const config: GameConfig = {
       },
     },
     maxCut: 8,
+    // M6.2a: starting values, measured over seeds 1 to 200 in STATE.md.
+    tunnels: {
+      endCut: 6,
+      minLength: 40,
+      maxLength: 250,
+      mergeGap: 40,
+      startClear: 50,
+    },
   },
   world: {
     character: {

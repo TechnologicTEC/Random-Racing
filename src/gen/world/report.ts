@@ -22,6 +22,8 @@ export interface ReportInput {
   width: Float64Array;
   /** 1 for each sample on a bridge (M6.1): no embankment is measured there, and no bank beside it. */
   bridged?: Uint8Array;
+  /** 1 for each sample in a tunnel (M6.2a): no cutting is measured there, and no bank beside it. */
+  tunnelled?: Uint8Array;
 }
 
 /** The steepest slope of a field between neighbouring cells, along either axis, among the cells within one of (ix, iz). */
@@ -48,7 +50,7 @@ const MAX_GAP = 0.5;
  * the ground anywhere shows through the road or falls away beneath it.
  */
 export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
-  const { natural, earthworks, ground, corridor, near, line, height, cross, width, bridged } = input;
+  const { natural, earthworks, ground, corridor, near, line, height, cross, width, bridged, tunnelled } = input;
   const { size, cell } = ground;
   const n = line.count;
   let widest = 0;
@@ -74,7 +76,7 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
       const surface = height[i]! + (cross ? cross[i]! * lateral : 0);
 
       const wild = sampleField(natural, x, z, surface);
-      if (wild - surface > deepestCut.value) Object.assign(deepestCut, { x, z, value: wild - surface, sample: i });
+      if (!tunnelled?.[i] && wild - surface > deepestCut.value) Object.assign(deepestCut, { x, z, value: wild - surface, sample: i });
       if (!bridged?.[i] && surface - wild > tallestFill.value) Object.assign(tallestFill, { x, z, value: surface - wild, sample: i });
 
       const gap = surface - sampleField(ground, x, z, surface - cfg.road.sink);
@@ -96,7 +98,7 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
       if (here <= 0 && fromEdge < nearestWater.value && !bridged?.[near.index[c]!]) {
         Object.assign(nearestWater, { x: worldX(ground, ix), z: worldZ(ground, iz), value: fromEdge, sample: near.index[c]! });
       }
-      if (distance > reach || corridor[c] === 1 || bridged?.[near.index[c]!]) continue;
+      if (distance > reach || corridor[c] === 1 || bridged?.[near.index[c]!] || tunnelled?.[near.index[c]!]) continue;
       // Banks are the road's own earthworks. A cliff the coast carved later is not a bank, and nor is the island's
       // own steep ground beside the road, where the fit's blend runs into it and shifts it by a cell or so: a slope
       // counts only where it is steeper than the natural ground anywhere within a cell of it (M6.1a).

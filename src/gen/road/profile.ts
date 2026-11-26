@@ -110,6 +110,7 @@ export function solveProfile(
  *
  * @param edges when given, the cut and fill are measured at the road's banked edges too, not only in its middle
  * @param bridged when given, 1 for each sample on a bridge (`bridgedMask`), where the fill is not counted (M6.1)
+ * @param tunnelled when given, 1 for each sample in a tunnel (`bridgedMask` of the tunnels), where the cut is not counted (M6.2a)
  */
 export function measureProfile(
   line: CenterLine,
@@ -119,6 +120,7 @@ export function measureProfile(
   neighbours: Neighbours = findNeighbours(line, cfg, roadWidth),
   edges?: RoadEdges,
   bridged?: Uint8Array,
+  tunnelled?: Uint8Array,
 ): ProfileStats {
   const n = line.count;
   const { height } = profile;
@@ -140,7 +142,7 @@ export function measureProfile(
     sharpest = Math.max(sharpest, Math.abs(prev - 2 * here + next) / (line.spacing * line.spacing));
     const { cut, fill } = cutAndFill(i, profile, edges);
     if (!bridged?.[i]) maxFill = Math.max(maxFill, fill);
-    maxCut = Math.max(maxCut, cut);
+    if (!tunnelled?.[i]) maxCut = Math.max(maxCut, cut);
   }
 
   const steepestBank = findSteepestBank(line, height, cfg, roadWidth, neighbours).slope;

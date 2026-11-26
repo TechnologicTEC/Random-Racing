@@ -55,8 +55,11 @@ export function joinBridgeSpans(sets: readonly (readonly BridgeSpan[])[], count:
   return closeGaps(mask, spacing, road.bridges.mergeGap);
 }
 
-/** The runs of a mask of bridged samples, with the gaps shorter than `mergeGap` between one bridge's last sample and the next one's first closed. */
-function closeGaps(mask: Uint8Array, spacing: number, mergeGap: number): BridgeSpan[] {
+/**
+ * The runs of a mask of samples on bridges (or in tunnels, M6.2a), with the gaps shorter than `mergeGap` between one
+ * run's last sample and the next one's first closed; never a gap holding a sample marked in `blocked`.
+ */
+export function closeGaps(mask: Uint8Array, spacing: number, mergeGap: number, blocked?: Uint8Array): BridgeSpan[] {
   const n = mask.length;
   const spans = runsOf(mask);
   for (let s = 0; s < spans.length && spans.length > 1; s++) {
@@ -64,7 +67,10 @@ function closeGaps(mask: Uint8Array, spacing: number, mergeGap: number): BridgeS
     const next = spans[(s + 1) % spans.length]!;
     const end = here.startIndex + here.sampleCount - 1;
     const gap = (((next.startIndex - end) % n) + n) % n;
-    if (gap * spacing < mergeGap) for (let k = 1; k < gap; k++) mask[(end + k) % n] = 1;
+    if (gap * spacing >= mergeGap) continue;
+    let open = true;
+    for (let k = 1; k < gap && open && blocked; k++) open = !blocked[(end + k) % n];
+    if (open) for (let k = 1; k < gap; k++) mask[(end + k) % n] = 1;
   }
   return runsOf(mask);
 }
@@ -126,7 +132,7 @@ export function rotateSpans(spans: readonly BridgeSpan[], start: number, count: 
 }
 
 /** The runs of 1s round a loop, in order of their first sample; a run may wrap past the end. */
-function runsOf(mask: Uint8Array): BridgeSpan[] {
+export function runsOf(mask: Uint8Array): BridgeSpan[] {
   const n = mask.length;
   const gap = mask.indexOf(0);
   if (gap < 0) return n > 0 ? [{ startIndex: 0, sampleCount: n }] : [];

@@ -96,7 +96,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const decks = deckPieces(bridges, kinds, line.count);
   const railings = deckPieces(bridges, kinds, line.count, railingRunOn(line.spacing, config.road.walls));
   const report = fitReport(
-    { ...road, natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged },
+    { ...road, natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged, tunnelled: bridgedMask(winner.tunnels, line.count) },
     config,
   );
 
@@ -118,6 +118,8 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
         kinds,
         mesh: buildBridges(line, profile.height, cross, width, bridges, (x, z) => sampleField(ground, x, z, 0), config, kinds),
       },
+      // Where the road runs in tunnels (M6.2a). Until M6.2b the world still digs an open cutting there.
+      tunnels: { spans: winner.tunnels },
       barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config, railings),
       gate: buildStartGate(line, profile.height, cross, width, config),
       lapGates: { samples: lapGateSamples, mesh: buildLapGates(line, profile.height, cross, width, lapGateSamples, (x, z) => sampleField(ground, x, z, 0), config) },
@@ -153,6 +155,8 @@ export function hashWorld(world: WorldResult): string {
   for (const wall of world.road.walls) hasher.numbers([wall.startIndex, wall.pieceCount, wall.side]);
   for (const span of world.road.bridges.spans) hasher.numbers([span.startIndex, span.sampleCount]);
   hasher.text(world.road.bridges.kinds.join(','));
+  // Tunnels (M6.2a): nothing is added for a world without one.
+  for (const span of world.road.tunnels.spans) hasher.numbers([span.startIndex, span.sampleCount]);
   const { report } = world;
   for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {
     if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);

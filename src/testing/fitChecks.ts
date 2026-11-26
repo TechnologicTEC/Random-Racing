@@ -47,7 +47,7 @@ function describeSeed(seed: number): void {
       expect(world().report.roadFloating).toBe(0);
     });
 
-    it('needs no tunnel and no embankment over the limit off its bridges (M6.1), or the road runs through a gorge', () => {
+    it('needs no cutting over the limit off its tunnels (M6.2a) and no embankment over the limit off its bridges (M6.1), or the road runs through a gorge', () => {
       const { report, track, natural, road } = world();
       if (GORGE_SEEDS.includes(seed)) {
         // A range stands over the road here, and the road runs through it in a gorge (Tane's choice, step 17).
@@ -60,9 +60,10 @@ function describeSeed(seed: number): void {
         const winner = track.candidates[track.winnerIndex]!;
         // The world's bridges: the track's own, and a crossing's (M6.1d-2).
         const bridged = bridgedMask(road.bridges.spans, winner.line.count);
+        const tunnelled = bridgedMask(road.tunnels.spans, winner.line.count);
         for (let i = 0; i < winner.line.count; i++) {
           const below = sampleField(natural, winner.line.x[i]!, winner.line.z[i]!, 0) - winner.profile.height[i]!;
-          expect(below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxCut);
+          if (!tunnelled[i]) expect(below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxCut);
           if (!bridged[i]) expect(-below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxFill);
         }
         return;
