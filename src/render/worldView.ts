@@ -23,7 +23,7 @@ import { shadowReach } from './nearShadows';
 import { createShadeView } from './shadeView';
 import { createSkyDome } from './sky';
 import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
-import { createWater } from './water';
+import { createWater, type Water } from './water';
 import { waterDepthGrid } from './waterDepth';
 
 /** What the renderer is drawing, for checks and the performance pass. */
@@ -177,6 +177,17 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   const shade = createShadeView(cfg.shadows, cloudDrift(cfg.water.wind, cfg.clouds.speed, cfg.clouds.edgeFade));
   const water = createWater(cfg.seaSize, cfg.water, shade);
   scene.add(water.mesh);
+  // A hill river's still water (M6.1d-3), made with each world that has one; lit, timed and shown as the sea is.
+  let still: Water | null = null;
+  let stillLight: Daylight | null = null;
+  let stillTime = cfg.water.stillTime;
+  let waterShown = true;
+  const dropStill = (): void => {
+    if (!still) return;
+    scene.remove(still.mesh);
+    still.dispose();
+    still = null;
+  };
   const seaGeometry = new THREE.PlaneGeometry(cfg.seaSize, cfg.seaSize).rotateX(-Math.PI / 2);
 
   // The bed of the open sea, the same colour as the deepest ground, so the
@@ -251,6 +262,19 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       const options = detailOptions(cfg, winner.line);
       const depths = waterDepthGrid(world.ground, cfg.seaFloorDepth);
       water.setDepths(depths);
+      dropStill();
+      if (world.stillWater) {
+        const shape = new THREE.BufferGeometry();
+        shape.setAttribute('position', new THREE.BufferAttribute(world.stillWater.mesh.positions, 3));
+        shape.setIndex(new THREE.BufferAttribute(world.stillWater.mesh.indices, 1));
+        shape.computeBoundingSphere();
+        still = createWater(0, cfg.water, shade, { geometry: shape, level: world.stillWater.level });
+        still.setDepths(depths);
+        if (stillLight) still.setDaylight(stillLight);
+        still.setTime(stillTime);
+        still.mesh.visible = waterShown;
+        scene.add(still.mesh);
+      }
       // The grass stands on the same heights the water measures its depth from, and only where the ground is drawn in full.
       grass.load(water.depthTexture(), depths, grassGrid(world, cfg.grass, chunkStrides(world.ground, options)));
       land = world.ground;
@@ -307,12 +331,16 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       sky.update(light);
       shade.setSun(light.sun);
       water.setDaylight(light);
+      stillLight = light;
+      still?.setDaylight(light);
       clouds.setDaylight(light);
       grass.setDaylight(light);
     },
 
     setWaveTime(seconds) {
       water.setTime(seconds);
+      stillTime = seconds;
+      still?.setTime(seconds);
     },
 
     setCloudTime(seconds) {
@@ -343,6 +371,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
 
     setWaterShown(shown) {
       water.mesh.visible = shown;
+      waterShown = shown;
+      if (still) still.mesh.visible = shown;
     },
 
     setCamera(eye, look) {
@@ -504,6 +534,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       roadMaterial.dispose();
       seaGeometry.dispose();
       water.dispose();
+      dropStill();
       floorMaterial.dispose();
       sky.dispose();
       decor.dispose();

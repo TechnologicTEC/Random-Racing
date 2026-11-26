@@ -301,6 +301,21 @@ export interface WorldResult {
   clouds: Clouds;
   /** The lap's crossing over water or a ravine, carved into `natural` and `ground` and bridged (M6.1d); null for none. */
   crossing: Crossing | null;
+  /** A hill river's still water in its gorge (M6.1d-3); null for every other world. */
+  stillWater: StillWater | null;
+}
+
+/**
+ * A hill river's still water (M6.1d-3): a surface at one level filling its gorge, held in all round. Where it is
+ * goes with the crossing's path (`inStillWater`).
+ */
+export interface StillWater {
+  /** The height of its surface, in metres above the sea. */
+  level: number;
+  /** How far the water reaches either side of each point of the crossing's path, in metres; 0 where the floor is above the level. */
+  wet: Float32Array;
+  /** Its surface, flat at the level: the grid's cells over the water and a cell more, under the banks. */
+  mesh: MeshData;
 }
 
 /** The seed's time of day. Drawing turns it into light; generation only picks it. */

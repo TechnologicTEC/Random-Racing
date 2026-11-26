@@ -120,6 +120,8 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
   const homePose = home ?? (course.kind === 'island' ? startPose(course.world, cfg) : start);
   // Half the width of the island's tile, for the map's edge; null on a plain test ground, which has no sea.
   const tile = course.kind === 'island' ? -course.world.ground.origin : null;
+  // A hill river's still water, where a car is put back as in the sea (M6.1d-3).
+  const still = course.kind === 'island' && course.world.stillWater && course.world.crossing ? { water: course.world.stillWater, path: course.world.crossing.path } : null;
   const rules = cfg.sim.respawn;
   const waits = respawnSteps(rules, cfg.sim.stepsPerSecond);
   let respawn: RespawnState = NO_RESPAWN;
@@ -210,7 +212,7 @@ export function createSimOn(rapier: Rapier, course: Course, cfg: PhysicsConfig, 
           speed: Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z),
           pedal: driven.throttle > 0 || driven.brake > 0,
         };
-        respawn = watchCar(respawn, seen, tile, rules, waits);
+        respawn = watchCar(respawn, seen, tile, rules, waits, still);
         // A wait has begun: the drift ends with no boost (rule 7).
         if (respawn.waitLeft > 0) car.halt();
       }

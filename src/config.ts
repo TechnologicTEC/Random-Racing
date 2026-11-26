@@ -1393,6 +1393,8 @@ export interface WaterConfig {
   resolve: Range;
   /** The water turns from its shallow colour to its deep one over this depth. */
   shallowDepth: number;
+  /** A hill river's still water (M6.1d-3) moves with this share of the sea's waves. */
+  stillWaves: number;
   /** Bands of foam run along the shore in water shallower than this, and solid foam lies at the very edge. */
   foamDepth: number;
   edgeFoam: number;
@@ -2513,6 +2515,7 @@ export const config: GameConfig = {
       bend: 0.5,
       resolve: [0.07, 0.3],
       shallowDepth: 7,
+      stillWaves: 0.15,
       foamDepth: 1.6,
       edgeFoam: 0.35,
       foamBands: 5,

@@ -36,6 +36,16 @@ describe('depthAt', () => {
     }
   });
 
+  it('measures from a surface at a level: the sea’s 0 by default, a hill river’s higher (M6.1d-3)', () => {
+    for (let z = 0; z < 5; z++) {
+      for (let x = 0; x < 5; x++) {
+        expect(depthAt(grid, -20 + x * 10, -20 + z * 10, 25)).toBeCloseTo(25 - field.height[z * 5 + x]!, 5);
+        expect(depthAt(grid, -20 + x * 10, -20 + z * 10, 0)).toBe(depthAt(grid, -20 + x * 10, -20 + z * 10));
+      }
+    }
+    expect(depthAt(grid, 500, 0, 25)).toBe(25 + 23);
+  });
+
   it('blends between grid points as the ground does', () => {
     for (const [x, z] of [[3.3, -7.1], [-14.9, 12.2], [19.9, 19.9], [0, 0.5]] as const) {
       expect(depthAt(grid, x, z)).toBeCloseTo(-sampleField(field, x, z, -23), 5);

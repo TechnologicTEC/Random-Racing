@@ -1,4 +1,6 @@
 import type { RespawnConfig } from '../config';
+import type { CrossingPoint, StillWater } from '../gen/types';
+import { inStillWater } from '../gen/world/stillWater';
 import type { Vec3 } from './quat';
 
 /** What started a respawn's wait: the sea, the map's edge or a fall through it, landing upside down, or being stuck. */
@@ -52,13 +54,28 @@ export interface CarSeen {
   pedal: boolean;
 }
 
+/** A hill river's still water and the path it fills (M6.1d-3), as the respawn rules look for it. */
+export interface StillWaterSeen {
+  water: StillWater;
+  path: readonly CrossingPoint[];
+}
+
 /**
  * The respawn state after a step with no wait under way: the counts of steps flipped and stuck moved on, and a wait of
- * `delay` started if anything calls for one, its reason kept. The sea and the map's edge count only on an island.
+ * `delay` started if anything calls for one, its reason kept. The sea and the map's edge count only on an island; so
+ * does a hill river's still water, where the car is in it `waterDepth` under its surface, as in the sea (M6.1d-3).
  *
  * @param tile half the width of the island's tile (the map), or null on a plain test ground with no sea
+ * @param still the island's hill river, if it has one
  */
-export function watchCar(state: RespawnState, car: CarSeen, tile: number | null, rules: RespawnConfig, steps: RespawnSteps): RespawnState {
+export function watchCar(
+  state: RespawnState,
+  car: CarSeen,
+  tile: number | null,
+  rules: RespawnConfig,
+  steps: RespawnSteps,
+  still: StillWaterSeen | null = null,
+): RespawnState {
   const flippedFor = car.roofUp < rules.flipped.roofUp ? state.flippedFor + 1 : 0;
   const stuckFor = car.pedal && car.speed < rules.stuck.speed ? state.stuckFor + 1 : 0;
   let why: RespawnWhy = 'none';
@@ -66,6 +83,7 @@ export function watchCar(state: RespawnState, car: CarSeen, tile: number | null,
     const out = Math.max(Math.abs(car.position.x), Math.abs(car.position.z));
     if (out >= tile - rules.edge || car.position.y <= -rules.deep) why = 'lost';
     else if (car.position.y <= -rules.waterDepth) why = 'water';
+    else if (still && car.position.y <= still.water.level - rules.waterDepth && inStillWater(still.water, still.path, car.position.x, car.position.z)) why = 'water';
   }
   if (why === 'none' && flippedFor >= steps.flipped) why = 'flipped';
   if (why === 'none' && stuckFor >= steps.stuck) why = 'stuck';

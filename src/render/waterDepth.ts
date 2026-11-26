@@ -25,12 +25,14 @@ export function waterDepthGrid(ground: HeightField, openSea: number): WaterDepth
  * Depth of water at a point, in metres: positive at sea, negative where the
  * ground stands above the water. The same sums as the water shader, so tests
  * can check what it will draw.
+ *
+ * @param level the height of the water's surface: the sea's 0, or a hill river's own (M6.1d-3)
  */
-export function depthAt(grid: WaterDepthGrid, x: number, z: number): number {
+export function depthAt(grid: WaterDepthGrid, x: number, z: number, level = 0): number {
   const last = grid.size - 1;
   const gx = (x - grid.origin) / grid.cell;
   const gz = (z - grid.origin) / grid.cell;
-  if (gx < 0 || gz < 0 || gx > last || gz > last) return -grid.openSea;
+  if (gx < 0 || gz < 0 || gx > last || gz > last) return level - grid.openSea;
   const ix = Math.min(last - 1, Math.floor(gx));
   const iz = Math.min(last - 1, Math.floor(gz));
   const fx = gx - ix;
@@ -38,7 +40,7 @@ export function depthAt(grid: WaterDepthGrid, x: number, z: number): number {
   const at = (cx: number, cz: number): number => grid.data[cz * grid.size + cx]!;
   const top = at(ix, iz) + (at(ix + 1, iz) - at(ix, iz)) * fx;
   const bottom = at(ix, iz + 1) + (at(ix + 1, iz + 1) - at(ix, iz + 1)) * fx;
-  return -(top + (bottom - top) * fz);
+  return level - (top + (bottom - top) * fz);
 }
 
 /** The water shader's version of `depthAt`, reading the grid from a texture. */
@@ -48,14 +50,14 @@ export const DEPTH_GLSL = /* glsl */ `
   float groundAt(vec2 cell) {
     return texture2D(uGround, (cell + 0.5) / uGroundSize).r;
   }
-  float depthAt(vec2 world) {
+  float depthAt(vec2 world, float level) {
     float last = uGroundSize - 1.0;
     vec2 g = (world - uGroundOrigin) / uGroundCell;
-    if (g.x < 0.0 || g.y < 0.0 || g.x > last || g.y > last) return -uOpenSea;
+    if (g.x < 0.0 || g.y < 0.0 || g.x > last || g.y > last) return level - uOpenSea;
     vec2 i = min(vec2(last - 1.0), floor(g));
     vec2 f = g - i;
     float top = mix(groundAt(i), groundAt(i + vec2(1.0, 0.0)), f.x);
     float bottom = mix(groundAt(i + vec2(0.0, 1.0)), groundAt(i + vec2(1.0, 1.0)), f.x);
-    return -mix(top, bottom, f.y);
+    return level - mix(top, bottom, f.y);
   }
 `;

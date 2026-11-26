@@ -18,10 +18,14 @@ import { pickClouds } from './world/clouds';
 import { buildCover } from './world/cover';
 import { carveCrossing, chooseCrossing } from './world/crossing';
 import { buildDecor } from './world/decor';
+import { buildStillWater, outOfStillWater, withoutGrassUnder } from './world/stillWater';
 import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
 import { fitReport } from './world/report';
 import { pickSky } from './world/sky';
+
+/** Trees and rocks stand at least this far from a hill river's still water, in metres (M6.1d-3). */
+const STILL_WATER_CLEAR = 1;
 
 /**
  * Generates everything for a seed: the track, the island around it, the road
@@ -73,8 +77,15 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const bridged = bridgedMask(bridges, line.count);
   const fitted = fitRoad({ ...road, natural: inland, bridged }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
-  const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
-  const decor = buildDecor(track.seed, ground, cover, island.edge, config);
+  // A hill river's still water (M6.1d-3): nothing grows under it and nothing stands in it.
+  const stillWater = crossing ? buildStillWater(crossing, ground, config) : null;
+  const plainCover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
+  const cover = stillWater && crossing ? withoutGrassUnder(plainCover, ground, stillWater, crossing.path) : plainCover;
+  const plainDecor = buildDecor(track.seed, ground, cover, island.edge, config);
+  const decor =
+    stillWater && crossing
+      ? { ...plainDecor, trees: outOfStillWater(plainDecor.trees, stillWater, crossing.path, STILL_WATER_CLEAR), rocks: outOfStillWater(plainDecor.rocks, stillWater, crossing.path, STILL_WATER_CLEAR) }
+      : plainDecor;
   let highest = 0;
   for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
@@ -117,6 +128,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     decor,
     clouds: pickClouds(track.seed, config.world.clouds, highest),
     crossing,
+    stillWater,
   };
 }
 
@@ -164,6 +176,11 @@ export function hashWorld(world: WorldResult): string {
     hasher.text(crossing.kind).numbers([crossing.sample, crossing.across.x, crossing.across.z, crossing.reach.startIndex, crossing.reach.sampleCount]);
     for (const p of crossing.path) hasher.numbers([p.x, p.z, p.half, p.floor]);
     if (crossing.water) hasher.numbers([crossing.water.level]);
+  }
+  const { stillWater } = world;
+  if (stillWater) {
+    hasher.numbers([stillWater.level]).numbers(stillWater.wet);
+    hasher.numbers(stillWater.mesh.positions).numbers(stillWater.mesh.indices).numbers(stillWater.mesh.materials);
   }
   return hasher.digest();
 }

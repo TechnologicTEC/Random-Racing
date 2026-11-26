@@ -39,7 +39,16 @@ export interface WaterShade {
   uniforms: Record<string, THREE.IUniform>;
 }
 
-export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade): Water {
+/**
+ * Water in a shape of its own at a level of its own (M6.1d-3): a hill river's still water, its waves calmed to
+ * `stillWaves` of the sea's.
+ */
+export interface StillShape {
+  geometry: THREE.BufferGeometry;
+  level: number;
+}
+
+export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade, still?: StillShape): Water {
   /** The height of the sea when every train is at its usual height and all their crests meet. */
   const usualHeight = cfg.waves.reduce((sum, wave) => sum + wave.height, 0);
   const ground = new THREE.DataTexture(new Float32Array(1), 1, 1, THREE.RedFormat, THREE.FloatType);
@@ -51,6 +60,8 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade):
       uGroundOrigin: { value: 0 },
       uGroundCell: { value: 1 },
       uOpenSea: { value: -20 },
+      uLevel: { value: still ? still.level : 0 },
+      uWaves: { value: still ? cfg.stillWaves : 1 },
       uTime: { value: cfg.stillTime },
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunLight: { value: new THREE.Vector3(1, 1, 1) },
@@ -89,7 +100,7 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade):
       #include <fog_pars_fragment>
       ${DEPTH_GLSL}
       ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; } float skyShade(float sunLit) { return 1.0; }'}
-      uniform float uTime;
+      uniform float uTime, uLevel, uWaves;
       uniform vec3 uSunDir, uSunLight, uAmbient, uSky, uGlint, uDeep, uShallow, uFoam;
       varying vec3 vWorld;
       ${wavesGlsl(cfg)}
@@ -98,11 +109,12 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade):
         // Waves a pixel cannot show are left out; "lost" is how rough they would have made the sea.
         float lost;
         float rise;
-        vec2 g = seaSlope(p, uTime, dFdx(p), dFdy(p), lost, rise);
+        vec2 g = seaSlope(p, uTime, dFdx(p), dFdy(p), lost, rise) * uWaves;
+        rise *= uWaves;
         vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
         vec3 V = normalize(cameraPosition - vWorld);
 
-        float depth = depthAt(p);
+        float depth = depthAt(p, uLevel);
         vec3 water = mix(uDeep, uShallow, 1.0 - smoothstep(0.0, ${float(cfg.shallowDepth)}, depth));
         // The tops of the taller waves are thinner water with the light in them: a little towards the shallow colour.
         float top = smoothstep(${float(cfg.crestLight[0])}, ${float(cfg.crestLight[1])}, rise / ${float(usualHeight)});
@@ -142,7 +154,7 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade):
     `,
   });
 
-  const geometry = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2);
+  const geometry = still ? still.geometry : new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
 
