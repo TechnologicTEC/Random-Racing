@@ -193,11 +193,10 @@ describe('buildRoadRibbon on a bridge (M6.1c)', () => {
     expect(decked.indices).toEqual(plain.indices);
   });
 
-  it('turns the asphalt pale on a concrete deck and keeps its lines, with the aprons in the deck’s concrete', () => {
+  it('keeps the road’s own asphalt and lines on a concrete deck, with the aprons in the deck’s concrete (Tane, M6.1c-3)', () => {
     for (let i = 10; i < 20; i++) {
       const materials = pieceMaterials(decked, i);
-      expect(materials.has(ROAD_MATERIAL.asphalt)).toBe(false);
-      expect(materials.has(ROAD_MATERIAL.deckConcrete)).toBe(true);
+      expect(materials.has(ROAD_MATERIAL.asphalt)).toBe(true);
       expect(materials.has(ROAD_MATERIAL.line)).toBe(true);
       expect(materials.has(ROAD_MATERIAL.shoulder)).toBe(false);
       expect(materials.has(ROAD_MATERIAL.bridge)).toBe(true);

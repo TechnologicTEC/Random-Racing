@@ -25,8 +25,6 @@ export const ROAD_MATERIAL = {
   lapGateBeam: 11,
   /** A bridge's deck and pillars (M6.1b). */
   bridge: 12,
-  /** The road's surface on a concrete bridge (M6.1c): pale, its lines kept. */
-  deckConcrete: 13,
   /** The road's surface on a wooden bridge (M6.1c): still the road the car drives on, but not drawn; the planks are drawn there. */
   deckUnder: 14,
   /** A wooden bridge's planks, in two browns, and the dark gap after each (M6.1c). */
@@ -73,7 +71,7 @@ interface Strip {
  * @param cross tilt at each sample: metres of height gained per metre to the right. Null for a level road
  * @param width road width at each sample, in metres
  * @param decks for each piece of the road (from a sample to the next), what bridge it is on, if any (`deckPieces`, M6.1c):
- *   on a concrete deck the asphalt is pale and the lines stay; on a wooden one the surface is left out of the drawing
+ *   on a concrete deck the road keeps its own colours (Tane, M6.1c-3), its aprons the deck's; on a wooden one the surface is left out of the drawing
  *   (`deckUnder`) for the planks. Only the colours change: every position and triangle stays, as the car drives on them
  */
 export function buildRoadRibbon(
@@ -133,12 +131,9 @@ export function buildRoadRibbon(
   return builder.build();
 }
 
-/** A strip's material on a bridge (M6.1c): the aprons take the deck's colour; on wood the surface is left for the planks. */
+/** A strip's material on a bridge (M6.1c): the aprons take the deck's colour; on wood the surface is left for the planks; on concrete the road keeps its own colours (Tane, M6.1c-3). */
 function onDeck(material: number, deck: number): number {
   if (deck === DECK.wood) return material === ROAD_MATERIAL.shoulder ? ROAD_MATERIAL.timber : ROAD_MATERIAL.deckUnder;
-  if (deck === DECK.concrete) {
-    if (material === ROAD_MATERIAL.asphalt) return ROAD_MATERIAL.deckConcrete;
-    if (material === ROAD_MATERIAL.shoulder) return ROAD_MATERIAL.bridge;
-  }
+  if (deck === DECK.concrete && material === ROAD_MATERIAL.shoulder) return ROAD_MATERIAL.bridge;
   return material;
 }

@@ -18,7 +18,6 @@ const BY_MATERIAL = new Map<number, Rgb>([
   [ROAD_MATERIAL.gateBeam, ROAD.gateBeam],
   [ROAD_MATERIAL.lapGateBeam, ROAD.lapGateBeam],
   [ROAD_MATERIAL.bridge, ROAD.bridge],
-  [ROAD_MATERIAL.deckConcrete, ROAD.deckConcrete],
   // Left out of the drawing (`createRoadMesh`); if it is ever drawn, it is plain road.
   [ROAD_MATERIAL.deckUnder, ROAD.asphalt],
   [ROAD_MATERIAL.plankLight, ROAD.plankLight],
