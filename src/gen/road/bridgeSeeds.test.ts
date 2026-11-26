@@ -51,8 +51,18 @@ describe('bridges on real seeds (M6.1a)', () => {
     for (const track of tracks.filter((t) => winnerOf(t).bridges.length > 0)) {
       const winner = winnerOf(track);
       const world = generateWorld(track.seed, config);
-      expect(world.road.bridges.kinds).toEqual(bridgeKinds(winner.bridges, winner.profile.height, winner.profile.ground, winner.line.spacing, look));
       expect(world.road.bridges.kinds).toHaveLength(world.road.bridges.spans.length);
+      const kinds = bridgeKinds(winner.bridges, winner.profile.height, winner.profile.ground, winner.line.spacing, look);
+      if (!world.crossing) {
+        expect(world.road.bridges.kinds).toEqual(kinds);
+        continue;
+      }
+      // With a crossing (M6.1d-2) the track's own bridges that it did not join keep their look; its bridge is
+      // measured over the carved ground (crossingSeeds.test.ts).
+      winner.bridges.forEach((own, k) => {
+        const s = world.road.bridges.spans.findIndex((span) => span.startIndex === own.startIndex && span.sampleCount === own.sampleCount);
+        if (s >= 0) expect(world.road.bridges.kinds[s], `seed ${track.seed}`).toBe(kinds[k]);
+      });
     }
   });
 });

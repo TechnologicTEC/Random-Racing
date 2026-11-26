@@ -112,6 +112,19 @@ describe('fitReport', () => {
     expect(report.nearestWater.x).toBeGreaterThan(145);
   });
 
+  it('does not count water under a bridge, which a crossing puts there on purpose (M6.1d-2)', () => {
+    // Water across the road on the +X side, and the sea 50 m off on the -X side.
+    const { input, report } = reportFor(circle, 400, (x) => (x > 90 ? -5 : x < -150 ? -5 : 10), () => 10);
+    expect(report.nearestWater.value).toBeLessThan(25);
+    expect(report.nearestWater.x).toBeGreaterThan(85);
+    // The +X half of the lap on a bridge: the nearest water is the sea on the other side.
+    const bridged = Uint8Array.from({ length: circle.count }, (_, i) => (circle.x[i]! > 0 ? 1 : 0));
+    const off = fitReport({ ...input, bridged }, config).nearestWater;
+    expect(off.value).toBeGreaterThan(50 - HALF - 3);
+    expect(off.value).toBeLessThan(50 - HALF + 3);
+    expect(off.x).toBeLessThan(-145);
+  });
+
   it('measures the water from the true edge of a wider road', () => {
     const { report } = reportFor(circle, 400, (x) => (x > 150 ? -5 : 10), () => 10, 20);
     expect(report.nearestWater.value).toBeGreaterThan(50 - 10 - 3);

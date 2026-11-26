@@ -3,7 +3,7 @@ import { config, type RoadConfig } from '../../config';
 import { circleLine } from '../../testing/trackFixtures';
 import { checkEarthworks } from '../track/earthworks';
 import type { RoadProfile } from '../types';
-import { bridgedMask, bridgeKinds, bridgePillars, buildBridges, DECK, deckBoxes, deckHalf, deckPieces, findBridgeSpans, rotateSpans, spanLength } from './bridges';
+import { bridgedMask, bridgeKinds, bridgePillars, buildBridges, DECK, deckBoxes, deckHalf, deckPieces, findBridgeSpans, joinBridgeSpans, rotateSpans, spanLength } from './bridges';
 import { ROAD_MATERIAL } from './ribbon';
 import { measureProfile, type RoadEdges } from './profile';
 
@@ -88,6 +88,28 @@ describe('the spans’ helpers', () => {
     const spans = [{ startIndex: 20, sampleCount: 10 }, { startIndex: 90, sampleCount: 20 }];
     expect(rotateSpans(spans, 50, 100)).toEqual([{ startIndex: 40, sampleCount: 20 }, { startIndex: 70, sampleCount: 10 }]);
     expect(rotateSpans(spans, 0, 100)).toEqual(spans);
+  });
+});
+
+describe('joining two sets of bridges (joinBridgeSpans, M6.1d-2)', () => {
+  const gap = config.road.bridges.mergeGap;
+  it(`joins bridges less than ${gap} m apart into one, and keeps those further apart`, () => {
+    // 11 samples (22 m) of road between the first two; 31 samples (62 m) before the third.
+    expect(joinBridgeSpans([[{ startIndex: 10, sampleCount: 20 }], [{ startIndex: 41, sampleCount: 10 }, { startIndex: 82, sampleCount: 5 }]], 500, 2, config.road)).toEqual([
+      { startIndex: 10, sampleCount: 41 },
+      { startIndex: 82, sampleCount: 5 },
+    ]);
+  });
+
+  it('makes one of two that overlap, or one inside the other, and keeps a lone set as it is', () => {
+    expect(joinBridgeSpans([[{ startIndex: 10, sampleCount: 20 }], [{ startIndex: 25, sampleCount: 20 }]], 500, 2, config.road)).toEqual([{ startIndex: 10, sampleCount: 35 }]);
+    expect(joinBridgeSpans([[{ startIndex: 10, sampleCount: 40 }], [{ startIndex: 20, sampleCount: 5 }]], 500, 2, config.road)).toEqual([{ startIndex: 10, sampleCount: 40 }]);
+    const alone = [{ startIndex: 7, sampleCount: 30 }, { startIndex: 300, sampleCount: 40 }];
+    expect(joinBridgeSpans([alone, []], 500, 2, config.road)).toEqual(alone);
+  });
+
+  it('joins across the start of the lap', () => {
+    expect(joinBridgeSpans([[{ startIndex: 490, sampleCount: 8 }], [{ startIndex: 5, sampleCount: 10 }]], 500, 2, config.road)).toEqual([{ startIndex: 490, sampleCount: 25 }]);
   });
 });
 

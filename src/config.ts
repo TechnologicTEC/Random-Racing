@@ -1016,11 +1016,32 @@ export interface CrossingsConfig {
    */
   river: { length: Range; width: Range; narrow: number; wind: number; wavelength: Range };
   /**
-   * A ravine: this far each way past the road's edge, this wide, its floor `depth` under the road but at least
-   * `floorAbove` above the sea, rising to the ground over the last `endRise` of each arm. The road is at least
-   * `minRoad` above the sea. A path ends where the ground stands more than `maxBank` above its floor.
+   * A ravine: this far each way past the road's edge (at least `least` where other road or the ground stops it), this
+   * wide at the road, its floor `depth` under the road but at least `floorAbove` above the sea, rising to the ground
+   * over the last `endRise` of each arm while it narrows to `narrow` of its width over the last `narrowFrom` (Tane,
+   * 2026-11-26: no rectangle cut out of the ground). It winds by up to `wind` radians either way, a bend every
+   * `wavelength` metres (Tane: twists and turns like a snake). The road is at least `minRoad` above the sea. A path
+   * ends where the ground stands more than `maxBank` above its floor.
    */
-  ravine: { minRoad: number; length: Range; width: Range; depth: Range; floorAbove: number; endRise: number; maxBank: number };
+  ravine: {
+    minRoad: number;
+    length: Range;
+    least: number;
+    width: Range;
+    depth: Range;
+    floorAbove: number;
+    endRise: number;
+    narrow: number;
+    narrowFrom: number;
+    wind: number;
+    wavelength: Range;
+    maxBank: number;
+    /**
+     * Its walls stand out in ledges and outcrops up to `wall` metres, and its floor rises and falls by up to `floor`,
+     * from noise `scale` metres across (Tane: rocks and other things sticking out). A hill river's gorge too.
+     */
+    rough: { wall: number; floor: number; scale: number };
+  };
   /**
    * A river high in the hills: a ravine (its sizes) holding still water `depth` above its floor, at least `rimClear`
    * under the ground all round. The road is at least `minRoad` above the sea and the floor `floorAbove` it.
@@ -2312,7 +2333,22 @@ export const config: GameConfig = {
       water: { maxRoad: 14, seaSearch: 200, maxBank: 16, bed: [1.5, 2.5] },
       inlet: { length: [40, 120], width: [30, 80] },
       river: { length: [150, 350], width: [20, 40], narrow: 0.4, wind: 0.5, wavelength: [120, 220] },
-      ravine: { minRoad: 12, length: [60, 200], width: [16, 40], depth: [10, 30], floorAbove: 2, endRise: 0.4, maxBank: 45 },
+      // Tane on M6.1d-2's pictures: longer, narrowing at the ends, winding, rough (was 60 to 200 m each way, straight).
+      ravine: {
+        minRoad: 12,
+        length: [150, 320],
+        least: 60,
+        width: [16, 40],
+        depth: [10, 30],
+        floorAbove: 2,
+        endRise: 0.4,
+        narrow: 0.3,
+        narrowFrom: 0.5,
+        wind: 0.6,
+        wavelength: [70, 140],
+        maxBank: 45,
+        rough: { wall: 3, floor: 0.6, scale: 14 },
+      },
       hillRiver: { minRoad: 25, floorAbove: 10, depth: [1.5, 3], rimClear: 3 },
     },
   },

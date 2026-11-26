@@ -48,7 +48,7 @@ function describeSeed(seed: number): void {
     });
 
     it('needs no tunnel and no embankment over the limit off its bridges (M6.1), or the road runs through a gorge', () => {
-      const { report, track, natural } = world();
+      const { report, track, natural, road } = world();
       if (GORGE_SEEDS.includes(seed)) {
         // A range stands over the road here, and the road runs through it in a gorge (Tane's choice, step 17).
         expect(report.deepestCut.value).toBeGreaterThan(config.road.maxCut);
@@ -58,7 +58,8 @@ function describeSeed(seed: number): void {
         // Across a mountainside the road's edges are cut deeper and built up higher than its centre: rock cuttings,
         // allowed in C4. The limits hold on the centre line, as the earthworks rule checks them.
         const winner = track.candidates[track.winnerIndex]!;
-        const bridged = bridgedMask(winner.bridges, winner.line.count);
+        // The world's bridges: the track's own, and a crossing's (M6.1d-2).
+        const bridged = bridgedMask(road.bridges.spans, winner.line.count);
         for (let i = 0; i < winner.line.count; i++) {
           const below = sampleField(natural, winner.line.x[i]!, winner.line.z[i]!, 0) - winner.profile.height[i]!;
           expect(below, `sample ${i}`).toBeLessThanOrEqual(config.road.maxCut);

@@ -92,7 +92,8 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
       const here = ground.height[c]!;
       // Measured from the edge of the road as it is at the nearest sample.
       const fromEdge = distance - width[near.index[c]!]! / 2;
-      if (here <= 0 && fromEdge < nearestWater.value) {
+      // Water under a bridge is there on purpose: a crossing's inlet or river (M6.1d-2).
+      if (here <= 0 && fromEdge < nearestWater.value && !bridged?.[near.index[c]!]) {
         Object.assign(nearestWater, { x: worldX(ground, ix), z: worldZ(ground, iz), value: fromEdge, sample: near.index[c]! });
       }
       if (distance > reach || corridor[c] === 1 || bridged?.[near.index[c]!]) continue;

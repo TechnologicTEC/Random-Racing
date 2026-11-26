@@ -1,9 +1,10 @@
 import type { CrossingsConfig, GenConfig } from '../../config';
 import { dcos, dsin, length2, TAU } from '../../core/dmath';
+import { createNoise, fbm } from '../../core/noise';
 import { createRng, type Rng } from '../../core/rng';
 import { clamp01, lerp, smoothstep } from '../../core/scalar';
-import type { BridgeSpan, CenterLine, Crossing, CrossingKind, CrossingPoint } from '../types';
-import { sampleField, sampleGrid } from './heightfield';
+import type { BridgeSpan, CenterLine, Crossing, CrossingKind, CrossingPoint, HeightField } from '../types';
+import { cellX, cellZ, sampleField, sampleGrid, worldX, worldZ } from './heightfield';
 import type { Island } from './island';
 
 /** What choosing a crossing looks at: the winning lap, its road, its bridges and gates, and the island round it. */
@@ -47,8 +48,11 @@ interface Step {
  *   floor; a site that leaves a path shorter than its kind's shortest is refused.
  *
  * Its own stream (`world`/`crossing`), so choosing it reshuffles nothing else.
+ *
+ * @param accept the caller's last word on each crossing that keeps the rules (M6.1d-2: its bridge on the carved
+ *   ground); one it refuses is passed over like any other that does not fit
  */
-export function chooseCrossing(seed: number, input: CrossingInput, cfg: GenConfig): Crossing | null {
+export function chooseCrossing(seed: number, input: CrossingInput, cfg: GenConfig, accept?: (crossing: Crossing) => boolean): Crossing | null {
   const rules = cfg.world.crossings;
   const rng = createRng(seed, 'world').fork('crossing');
   if (!rng.chance(rules.chance)) return null;
@@ -70,7 +74,7 @@ export function chooseCrossing(seed: number, input: CrossingInput, cfg: GenConfi
     for (const { site, across, kinds: fit } of clear) {
       if (!fit.includes(kind)) continue;
       const crossing = shapeCrossing(kind, site, across, shapes, input, cfg);
-      if (crossing) return crossing;
+      if (crossing && (!accept || accept(crossing))) return crossing;
     }
   }
   return null;
@@ -134,7 +138,7 @@ function shapeCrossing(
   const rules = cfg.world.crossings;
   const { line } = input;
   const water = kind === 'inlet' || kind === 'river';
-  const slope = water ? rules.bankSlope.water : rules.bankSlope.ravine;
+  const slope = bankSlopeOf(kind, rules);
   const road = input.height[site]!;
   const roadHalf = input.width[site]! / 2;
 
@@ -145,6 +149,8 @@ function shapeCrossing(
   let wind = 0;
   let wavelength = 1;
   let waterDepth = 0;
+  /** A ravine's two arms' bends: how far each turns either way, and how often. */
+  const bends: { wind: number; wavelength: number }[] = [];
   if (kind === 'inlet') {
     half = rng.range(...rules.inlet.width) / 2;
     floor = -rng.range(...rules.water.bed);
@@ -160,6 +166,7 @@ function shapeCrossing(
     const lowest = kind === 'ravine' ? rules.ravine.floorAbove : rules.hillRiver.floorAbove;
     floor = Math.max(road - rng.range(...rules.ravine.depth), lowest);
     lengths.push(rng.range(...rules.ravine.length), rng.range(...rules.ravine.length));
+    for (let a = 0; a < 2; a++) bends.push({ wavelength: rng.range(...rules.ravine.wavelength), wind: rng.chance(0.5) ? rules.ravine.wind : -rules.ravine.wind });
     if (kind === 'hillRiver') waterDepth = rng.range(...rules.hillRiver.depth);
     if (road - floor < rules.ravine.depth[0]) return null;
   }
@@ -215,20 +222,32 @@ function shapeCrossing(
     return { kind, sample: site, across, reach, path: [...out.reverse(), point({ ...start, d: 0 }, half, floor), ...inner] };
   }
 
-  // A ravine (or a hill river's gorge): an arm each way, its floor flat, then rising to the ground at its end.
+  // A ravine (or a hill river's gorge): an arm each way, square to the road under the bridge and then winding, its
+  // floor flat, then rising to the ground at its end as it narrows (Tane, 2026-11-26).
+  const { ravine } = rules;
   const arms: CrossingPoint[][] = [];
   for (const [a, dir] of [across, inward].entries()) {
+    const { wind: w, wavelength: bend } = bends[a]!;
+    const turn = (d: number): number => w * dsin((TAU * (d - roadHalf)) / bend) * smoothstep(roadHalf + 10, roadHalf + 40, d);
     const steps: Step[] = [];
-    for (const s of walk(start, dir, roadHalf + lengths[a]!, rules.step)) {
+    for (const s of walk(start, dir, roadHalf + lengths[a]!, rules.step, turn)) {
       const here = ground(s.x, s.z);
       if (!clearOf(s.x, s.z, half, floor) || !(here - floor <= rules.ravine.maxBank) || !(here > floor) || !(cap(s.x, s.z) > floor)) break;
       steps.push(s);
     }
     if (steps.length === 0) return null;
     const last = steps.at(-1)!;
-    if (last.d - roadHalf < rules.ravine.length[0]) return null;
+    if (last.d - roadHalf < ravine.least) return null;
     const end = Math.max(floor, ground(last.x, last.z));
-    arms.push(steps.map((s) => point(s, half, floor + (end - floor) * smoothstep((1 - rules.ravine.endRise) * last.d, last.d, s.d))));
+    arms.push(
+      steps.map((s) =>
+        point(
+          s,
+          half * lerp(1, ravine.narrow, smoothstep((1 - ravine.narrowFrom) * last.d, last.d, s.d)),
+          floor + (end - floor) * smoothstep((1 - ravine.endRise) * last.d, last.d, s.d),
+        ),
+      ),
+    );
   }
   const path = [...arms[0]!.reverse(), point({ ...start, d: 0 }, half, floor), ...arms[1]!];
   if (kind === 'ravine') return { kind, sample: site, across, reach, path };
@@ -236,9 +255,15 @@ function shapeCrossing(
   // A hill river: still water held in all round, the ground beside it and at its ends standing well over it.
   const level = floor + waterDepth;
   const rim = level + rules.hillRiver.rimClear;
-  for (const p of path) {
+  for (const [k, p] of path.entries()) {
+    // Beside it, square to the path where it is.
+    const before = path[Math.max(0, k - 1)]!;
+    const after = path[Math.min(path.length - 1, k + 1)]!;
+    const run = length2(after.x - before.x, after.z - before.z);
+    const tx = (after.x - before.x) / run;
+    const tz = (after.z - before.z) / run;
     const edge = p.half + Math.max(0, level - p.floor) / slope;
-    for (const side of [-1, 1]) if (!(ground(p.x - side * edge * across.z, p.z + side * edge * across.x) >= rim)) return null;
+    for (const side of [-1, 1]) if (!(ground(p.x - side * edge * tz, p.z + side * edge * tx) >= rim)) return null;
   }
   for (const end of [path[0]!, path.at(-1)!]) if (!(ground(end.x, end.z) >= rim)) return null;
   return { kind, sample: site, across, reach, path, water: { level } };
@@ -360,4 +385,101 @@ function shuffle<T>(rng: Rng, items: T[]): void {
     const j = rng.int(0, i);
     [items[i], items[j]] = [items[j]!, items[i]!];
   }
+}
+
+/** Over this many metres from the floor's edge up its wall, a ravine's floor bumps give way to its wall's ledges. */
+const ROUGH_EDGE = 4;
+
+/** How steep a crossing's banks are: water's earth and sand, or a ravine's (and a hill river's gorge's) rock. */
+export function bankSlopeOf(kind: CrossingKind, rules: CrossingsConfig): number {
+  return kind === 'inlet' || kind === 'river' ? rules.bankSlope.water : rules.bankSlope.ravine;
+}
+
+/**
+ * The ground with a crossing carved into it (M6.1d-2), as a new field: along its path, between each point and the
+ * next (and round its two ends), the floor across its width, then banks at its kind's `bankSlope` up to the ground,
+ * the floor and the width those of the path's nearest point. A ravine's and a gorge's walls stand out in ledges and
+ * outcrops and their floors rise and fall a little, from the seed's own noise (`ravine.rough`). It only ever lowers
+ * the ground.
+ */
+export function carveCrossing(field: HeightField, crossing: Crossing, seed: number, cfg: GenConfig): HeightField {
+  const slope = bankSlopeOf(crossing.kind, cfg.world.crossings);
+  // A ravine's and a gorge's rock walls stand out in ledges, and their floors rise and fall (Tane, 2026-11-26).
+  const rough = crossing.kind === 'ravine' || crossing.kind === 'hillRiver' ? cfg.world.crossings.ravine.rough : null;
+  const roughRng = createRng(seed, 'world').fork('crossing').fork('rough');
+  const wallNoise = createNoise(roughRng.fork('wall'));
+  const floorNoise = createNoise(roughRng.fork('floor'));
+  const out: HeightField = { ...field, height: new Float32Array(field.height) };
+  const { path } = crossing;
+  let lowest = Infinity;
+  let widest = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const p of path) {
+    lowest = Math.min(lowest, p.floor);
+    widest = Math.max(widest, p.half);
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minZ = Math.min(minZ, p.z);
+    maxZ = Math.max(maxZ, p.z);
+  }
+  // The banks reach no further out than where they climb to the highest ground near the path.
+  const box = (margin: number) => ({
+    ix0: Math.max(0, Math.floor(cellX(field, minX - margin))),
+    ix1: Math.min(field.size - 1, Math.ceil(cellX(field, maxX + margin))),
+    iz0: Math.max(0, Math.floor(cellZ(field, minZ - margin))),
+    iz1: Math.min(field.size - 1, Math.ceil(cellZ(field, maxZ + margin))),
+  });
+  let highest = lowest;
+  const near = box(widest + field.cell);
+  for (let iz = near.iz0; iz <= near.iz1; iz++) for (let ix = near.ix0; ix <= near.ix1; ix++) highest = Math.max(highest, field.height[iz * field.size + ix]!);
+  let reach = widest + (highest - lowest) / slope;
+  for (let grown = true; grown; ) {
+    // Ground higher still further out can call for a wider bank: widen until the box holds all it reaches.
+    const wide = box(reach);
+    let top = highest;
+    for (let iz = wide.iz0; iz <= wide.iz1; iz++) for (let ix = wide.ix0; ix <= wide.ix1; ix++) top = Math.max(top, field.height[iz * field.size + ix]!);
+    grown = top > highest;
+    highest = top;
+    reach = widest + (highest - lowest) / slope;
+  }
+  const { ix0, ix1, iz0, iz1 } = box(reach);
+  for (let iz = iz0; iz <= iz1; iz++) {
+    const z = worldZ(field, iz);
+    for (let ix = ix0; ix <= ix1; ix++) {
+      const x = worldX(field, ix);
+      const c = iz * field.size + ix;
+      // The nearest point of the path says the floor and the width; the cell is on it, or on its bank.
+      let nearest = Infinity;
+      let carved = Infinity;
+      let wall = 0;
+      for (let k = 0; k < path.length; k++) {
+        const a = path[k]!;
+        const b = path[Math.min(k + 1, path.length - 1)]!;
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const along = dx * dx + dz * dz;
+        const t = along > 0 ? Math.min(1, Math.max(0, ((x - a.x) * dx + (z - a.z) * dz) / along)) : 0;
+        const away = length2(x - (a.x + dx * t), z - (a.z + dz * t));
+        const half = a.half + (b.half - a.half) * t;
+        const floor = a.floor + (b.floor - a.floor) * t;
+        if (away < nearest) {
+          nearest = away;
+          wall = Math.max(0, away - half);
+          carved = floor + wall * slope;
+        }
+      }
+      if (rough && (rough.wall > 0 || rough.floor > 0)) {
+        const u = x / rough.scale;
+        const v = z / rough.scale;
+        const onWall = smoothstep(0, ROUGH_EDGE, wall);
+        carved += rough.wall * onWall * clamp01(0.5 + 0.5 * fbm(wallNoise, u, v, 3));
+        carved += rough.floor * (1 - onWall) * Math.max(-1, Math.min(1, fbm(floorNoise, u, v, 2)));
+      }
+      if (carved < out.height[c]!) out.height[c] = carved;
+    }
+  }
+  return out;
 }

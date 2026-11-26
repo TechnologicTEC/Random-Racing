@@ -5,7 +5,7 @@ import { placeLapGates } from '../road/lapGates';
 import { solveWidth } from '../road/width';
 import { generateTrack } from '../track/pipeline';
 import type { BridgeSpan, CenterLine, Crossing, CrossingPoint } from '../types';
-import { chooseCrossing, type CrossingInput } from './crossing';
+import { carveCrossing, chooseCrossing, type CrossingInput } from './crossing';
 import { createField, sampleField, sampleGrid, worldZ } from './heightfield';
 import { buildIsland } from './island';
 import { insideLoop } from './nearest';
@@ -281,7 +281,7 @@ describe('choosing a crossing (chooseCrossing, M6.1d-1)', () => {
     expect(winds).toBe(rivers.length);
   });
 
-  it('cuts a ravine 10 to 30 m under the road, its floor above the sea, 60 to 200 m each way, rising to the ground at its ends', () => {
+  it('cuts a ravine 10 to 30 m under the road, its floor above the sea, rising to the ground at its ends', () => {
     const input = synth({ road: 18 });
     const ravines = crossingsOf(input);
     expect(ravines).toHaveLength(SEEDS.length);
@@ -292,16 +292,47 @@ describe('choosing a crossing (chooseCrossing, M6.1d-1)', () => {
       expect(18 - floor).toBeGreaterThanOrEqual(rules.ravine.depth[0]);
       expect(18 - floor).toBeLessThanOrEqual(rules.ravine.depth[1]);
       expect(floor).toBeGreaterThanOrEqual(rules.ravine.floorAbove);
-      for (const arm of [along(c.path, 0, k0), along(c.path, k0, c.path.length - 1)]) {
-        expect(arm - 6).toBeGreaterThanOrEqual(rules.ravine.length[0] - rules.step);
-        expect(arm - 6).toBeLessThanOrEqual(rules.ravine.length[1] + rules.step);
-      }
       for (const p of c.path) expect(p.floor).toBeGreaterThanOrEqual(floor);
       expect(c.path[0]!.floor).toBeCloseTo(18, 6);
       expect(c.path.at(-1)!.floor).toBeCloseTo(18, 6);
-      expect(2 * c.path[0]!.half).toBeGreaterThanOrEqual(rules.ravine.width[0]);
-      expect(2 * c.path[0]!.half).toBeLessThanOrEqual(rules.ravine.width[1]);
       expect(c.water).toBeUndefined();
+    }
+  });
+
+  // Tane, on M6.1d-2's pictures (2026-11-26): not a rectangle cut out of the ground, but longer, narrowing at its
+  // ends, and full of twists and turns like a snake.
+  it(`runs a ravine ${rules.ravine.length[0]} to ${rules.ravine.length[1]} m each way (or at least ${rules.ravine.least} m where something stops it), narrowing to its ends`, () => {
+    const input = synth({ road: 18 });
+    let long = 0;
+    for (const c of crossingsOf(input)) {
+      const k0 = siteIndex(c, input.line);
+      const site = c.path[k0]!;
+      expect(2 * site.half).toBeGreaterThanOrEqual(rules.ravine.width[0]);
+      expect(2 * site.half).toBeLessThanOrEqual(rules.ravine.width[1]);
+      for (const [from, to, way] of [[k0, 0, -1], [k0, c.path.length - 1, 1]] as const) {
+        const arm = along(c.path, from, to) - 6;
+        expect(arm).toBeGreaterThanOrEqual(rules.ravine.least - rules.step);
+        expect(arm).toBeLessThanOrEqual(rules.ravine.length[1] + rules.step);
+        if (arm >= rules.ravine.length[0] - rules.step) long++;
+        // Never wider further from the road, and at its end a share `narrow` of its width.
+        for (let k = from + way; k !== to + way; k += way) expect(c.path[k]!.half).toBeLessThanOrEqual(c.path[k - way]!.half + 1e-9);
+        expect(c.path[to]!.half).toBeCloseTo(site.half * rules.ravine.narrow, 6);
+      }
+    }
+    expect(long).toBeGreaterThan(SEEDS.length);
+  });
+
+  it('winds a ravine’s arms like a snake, straight only where it leaves the road', () => {
+    const input = synth({ road: 18 });
+    for (const c of crossingsOf(input)) {
+      const k0 = siteIndex(c, input.line);
+      const site = c.path[k0]!;
+      const off = (p: CrossingPoint): number => Math.abs((p.x - site.x) * c.across.z - (p.z - site.z) * c.across.x);
+      for (const arm of [c.path.slice(0, k0 + 1), c.path.slice(k0)]) {
+        // Square to the road under the bridge.
+        for (const p of arm) if (between(p, site) < 12) expect(off(p)).toBeLessThan(0.05);
+        if (along(arm, 0, arm.length - 1) > 100) expect(Math.max(...arm.map(off)), `${c.kind} at ${c.sample}`).toBeGreaterThan(5);
+      }
     }
   });
 
@@ -334,6 +365,22 @@ describe('choosing a crossing (chooseCrossing, M6.1d-1)', () => {
     for (const c of crossings) {
       expect(Math.abs(input.line.z[c.sample]! + 250), `${c.kind} at ${c.sample}`).toBeLessThan(0.5);
       keepsClearOfOtherRoad(c, input, `${c.kind} at ${c.sample}`);
+    }
+  });
+
+  it('asks the caller to accept each crossing, and tries the next site or kind when it is refused', () => {
+    const input = synth({ sea: true });
+    for (const seed of [1, 2, 3]) {
+      const first = chooseCrossing(seed, input, always)!;
+      const seen: Crossing[] = [];
+      const next = chooseCrossing(seed, input, always, (c) => {
+        seen.push(c);
+        return seen.length > 1;
+      })!;
+      expect(seen[0]).toEqual(first);
+      expect(next).toEqual(seen[1]);
+      expect(next.sample).not.toBe(first.sample);
+      expect(chooseCrossing(seed, input, always, () => false)).toBeNull();
     }
   });
 
@@ -390,16 +437,21 @@ describe('crossings on real seeds (M6.1d-1)', () => {
         expect(road, label).toBeGreaterThanOrEqual(c.kind === 'ravine' ? rules.ravine.minRoad : rules.hillRiver.minRoad);
       }
       if (c.water) {
-        // The ground round the still water, beside it (a hill river runs straight across the road) and at its ends,
+        // The ground round the still water, beside it (square to its winding path) and at its ends,
         // stands at least rimClear over it.
-        const rim = c.water.level + rules.hillRiver.rimClear;
-        for (const p of c.path) {
-          const edge = p.half + Math.max(0, c.water.level - p.floor) / rules.bankSlope.ravine;
+        const { level } = c.water;
+        const rim = level + rules.hillRiver.rimClear;
+        c.path.forEach((p, k) => {
+          const a = c.path[Math.max(0, k - 1)]!;
+          const b = c.path[Math.min(c.path.length - 1, k + 1)]!;
+          const tx = (b.x - a.x) / Math.hypot(b.x - a.x, b.z - a.z);
+          const tz = (b.z - a.z) / Math.hypot(b.x - a.x, b.z - a.z);
+          const edge = p.half + Math.max(0, level - p.floor) / rules.bankSlope.ravine;
           for (const side of [-1, 1]) {
-            const ground = sampleField(input.island.natural, p.x - side * edge * c.across.z, p.z + side * edge * c.across.x, 0);
+            const ground = sampleField(input.island.natural, p.x - side * edge * tz, p.z + side * edge * tx, 0);
             expect(ground, `${label}: beside (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`).toBeGreaterThanOrEqual(rim - 1e-3);
           }
-        }
+        });
         for (const end of [c.path[0]!, c.path.at(-1)!]) expect(sampleField(input.island.natural, end.x, end.z, 0), label).toBeGreaterThanOrEqual(rim - 1e-3);
       }
     }
@@ -409,5 +461,91 @@ describe('crossings on real seeds (M6.1d-1)', () => {
   it('is the same twice on a real seed', () => {
     const seed = REAL.find((s) => chooseCrossing(s, inputs.get(s)!, always) !== null)!;
     expect(chooseCrossing(seed, inputs.get(seed)!, always)).toEqual(chooseCrossing(seed, inputs.get(seed)!, always));
+  });
+});
+
+/** A hand-made crossing along the x axis from x = -100 to 100, its floor `floor` high and 20 m wide. */
+function straightCrossing(kind: Crossing['kind'], floors: [number, number] = [2, 2]): Crossing {
+  const path: CrossingPoint[] = [];
+  for (let x = -100; x <= 100; x += 2) path.push({ x, z: 0, half: 10, floor: floors[0] + ((floors[1] - floors[0]) * (x + 100)) / 200 });
+  return { kind, sample: 0, across: { x: 1, z: 0 }, reach: { startIndex: 0, sampleCount: 1 }, path };
+}
+
+/** The config with a ravine's rough walls and floor turned off, for exact shapes. */
+const smooth: GenConfig = {
+  ...config,
+  world: { ...config.world, crossings: { ...rules, ravine: { ...rules.ravine, rough: { ...rules.ravine.rough, wall: 0, floor: 0 } } } },
+};
+
+/** A flat field 10 m up, 400 m across with a cell every metre, so whole metres are its samples. */
+function flatField(height = 10) {
+  const field = createField(400, 1);
+  field.height.fill(height);
+  return field;
+}
+
+describe('carving a crossing (carveCrossing, M6.1d-2)', () => {
+  it('lowers the ground to the floor across its width and along its path, and its rounded ends', () => {
+    const carved = carveCrossing(flatField(), straightCrossing('ravine'), 1, smooth);
+    for (const [x, z] of [[0, 0], [0, 10], [0, -10], [-100, 0], [100, 0], [55, 7], [105, 0], [-100, 8]] as const) {
+      expect(sampleField(carved, x, z, NaN), `(${x}, ${z})`).toBeCloseTo(2, 6);
+    }
+  });
+
+  it('banks the sides at the kind’s slope up to the ground: a ravine’s rock steeper than water’s earth and sand', () => {
+    const ravine = carveCrossing(flatField(), straightCrossing('ravine'), 1, smooth);
+    const inlet = carveCrossing(flatField(), straightCrossing('inlet'), 1, config);
+    expect(sampleField(ravine, 0, 13, NaN)).toBeCloseTo(2 + 3 * rules.bankSlope.ravine, 6);
+    expect(sampleField(inlet, 0, 13, NaN)).toBeCloseTo(2 + 3 * rules.bankSlope.water, 6);
+    expect(sampleField(inlet, 0, -15, NaN)).toBeCloseTo(2 + 5 * rules.bankSlope.water, 6);
+    // Where the bank has reached the ground, the ground is as it was.
+    expect(sampleField(ravine, 0, 30, NaN)).toBe(10);
+    expect(sampleField(inlet, 0, 40, NaN)).toBe(10);
+    expect(sampleField(ravine, 130, 0, NaN)).toBe(10);
+  });
+
+  it('follows the floor from point to point', () => {
+    const carved = carveCrossing(flatField(), straightCrossing('ravine', [2, 6]), 1, smooth);
+    expect(sampleField(carved, 0, 0, NaN)).toBeCloseTo(4, 6);
+    expect(sampleField(carved, 50, 0, NaN)).toBeCloseTo(5, 6);
+  });
+
+  it('never raises the ground, and leaves the field it is given as it was', () => {
+    const field = flatField();
+    field.height[200 * field.size + 200] = -5;
+    const carved = carveCrossing(field, straightCrossing('river'), 1, config);
+    expect(sampleField(carved, 0, 0, NaN)).toBe(-5);
+    expect(sampleField(field, 10, 0, NaN)).toBe(10);
+    for (let c = 0; c < field.height.length; c++) expect(carved.height[c]!).toBeLessThanOrEqual(field.height[c]!);
+    expect(carved.size).toBe(field.size);
+    expect(carved.origin).toBe(field.origin);
+  });
+
+  it('roughens a ravine’s walls with ledges and outcrops and its floor with bumps, never above the ground, the same for a seed', () => {
+    const { wall, floor } = rules.ravine.rough;
+    const flat = carveCrossing(flatField(), straightCrossing('ravine'), 3, smooth);
+    const rough = carveCrossing(flatField(), straightCrossing('ravine'), 3, config);
+    let outcrops = 0;
+    for (let z = -30; z <= 30; z++) {
+      for (let x = -90; x <= 90; x++) {
+        const plain = sampleField(flat, x, z, NaN);
+        const here = sampleField(rough, x, z, NaN);
+        expect(here, `(${x}, ${z})`).toBeLessThanOrEqual(10);
+        if (Math.abs(z) <= 8) {
+          // On the floor, bumps either way.
+          expect(Math.abs(here - plain), `(${x}, ${z})`).toBeLessThanOrEqual(floor + 1e-6);
+        } else if (plain < 10) {
+          // On the walls, ledges standing out from them.
+          expect(here - plain, `(${x}, ${z})`).toBeGreaterThanOrEqual(-floor - 1e-6);
+          expect(here - plain, `(${x}, ${z})`).toBeLessThanOrEqual(wall + 1e-6);
+          if (here - plain > 1) outcrops++;
+        }
+      }
+    }
+    expect(outcrops).toBeGreaterThan(50);
+    expect(carveCrossing(flatField(), straightCrossing('ravine'), 3, config).height).toEqual(rough.height);
+    expect(carveCrossing(flatField(), straightCrossing('ravine'), 4, config).height).not.toEqual(rough.height);
+    // An inlet's banks are earth and sand, left smooth.
+    expect(carveCrossing(flatField(), straightCrossing('inlet'), 3, config).height).toEqual(carveCrossing(flatField(), straightCrossing('inlet'), 3, smooth).height);
   });
 });

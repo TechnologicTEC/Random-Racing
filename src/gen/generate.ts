@@ -1,7 +1,7 @@
 import type { GenConfig } from '../config';
 import { createHasher } from '../core/hash';
 import { solveBanking } from './road/banking';
-import { bridgedMask, bridgeKinds, buildBridges, deckPieces } from './road/bridges';
+import { bridgedMask, bridgeKinds, buildBridges, deckPieces, findBridgeSpans, joinBridgeSpans } from './road/bridges';
 import { buildBarriers } from './road/barriers';
 import { buildKerbs, findKerbs } from './road/kerbs';
 import { buildRoadRibbon } from './road/ribbon';
@@ -12,10 +12,11 @@ import { findWalls, railingRunOn } from './road/walls';
 import { solveWidth } from './road/width';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
-import type { WorldResult } from './types';
+import type { BridgeSpan, Crossing, HeightField, RoadProfile, WorldResult } from './types';
 import { GENERATOR_VERSION } from './version';
 import { pickClouds } from './world/clouds';
 import { buildCover } from './world/cover';
+import { carveCrossing, chooseCrossing } from './world/crossing';
 import { buildDecor } from './world/decor';
 import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
@@ -33,29 +34,58 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   // Chosen only now that the winner is known, so the width never changes which layout wins.
   const width = solveWidth(track.seed, line, winner.sections, track.character.width, config);
   const island = buildIsland(track.seed, line, profile, width, config, track.character);
+  // The gates a lap is counted by (M5.4d).
+  const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates);
+
+  // The lap's crossing over water or a ravine (M6.1d), carved into the island. It is taken only if, on the carved
+  // ground, the road over it becomes a bridge no longer than the longest; otherwise the next site is tried.
+  let carved: { inland: HeightField; natural: HeightField; ground: Float64Array; bridges: BridgeSpan[] } | null = null;
+  const crossing: Crossing | null = chooseCrossing(
+    track.seed,
+    { line, height: profile.height, width, bridges: winner.bridges, lapGates: lapGateSamples, island },
+    config,
+    (chosen) => {
+      const inland = carveCrossing(island.inland, chosen, track.seed, config);
+      // The ground under the road, lowered only where the channel lowered it.
+      const ground = Float64Array.from(profile.ground, (g, i) => {
+        const after = sampleField(inland, line.x[i]!, line.z[i]!, g);
+        return after < sampleField(island.inland, line.x[i]!, line.z[i]!, g) ? Math.min(g, after) : g;
+      });
+      const found = findBridgeSpans({ height: profile.height, ground }, line.spacing, config.road);
+      // The lap's own bridges stay as the track found them; the crossing's joins them.
+      const bridges = joinBridgeSpans([winner.bridges, found], line.count, line.spacing, config.road);
+      const over = bridges.find((s) => (chosen.sample - s.startIndex + line.count) % line.count < s.sampleCount);
+      if (!over || bridges.some((s) => (s.sampleCount - 1) * line.spacing > config.road.bridges.maxLength)) return false;
+      carved = { inland, natural: carveCrossing(island.natural, chosen, track.seed, config), ground, bridges };
+      return true;
+    },
+  );
+  const site = carved as { inland: HeightField; natural: HeightField; ground: Float64Array; bridges: BridgeSpan[] } | null;
+  const inland = site?.inland ?? island.inland;
+  const natural = site?.natural ?? island.natural;
+  const bridges = site?.bridges ?? winner.bridges;
+  const under: RoadProfile = { height: profile.height, ground: site?.ground ?? profile.ground };
 
   // The road is fitted into the inland ground first and the coast is carved
   // afterwards, so an embankment can never spill out into the sea.
   const cross = solveBanking(line, config.road);
   const road = { near: island.near, line, height: profile.height, cross, width };
-  const bridged = bridgedMask(winner.bridges, line.count);
-  const fitted = fitRoad({ ...road, natural: island.inland, bridged }, config);
+  const bridged = bridgedMask(bridges, line.count);
+  const fitted = fitRoad({ ...road, natural: inland, bridged }, config);
   const ground = { ...fitted.ground, height: carveCoast(fitted.ground.height, island, config) };
   const cover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
   const decor = buildDecor(track.seed, ground, cover, island.edge, config);
   let highest = 0;
   for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
-  // The gates a lap is counted by (M5.4d).
-  const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates);
   // Looked for on the finished ground, so a wall stands wherever a cutting, an embankment or a cliff ended up beside the road.
-  const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground, bridges: winner.bridges }, config);
+  const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground, bridges }, config);
   // Each bridge's look by its size (M6.1c): which pieces of the road are on which, and the railings' run past each end.
-  const kinds = bridgeKinds(winner.bridges, profile.height, profile.ground, line.spacing, config.road.bridges.look);
-  const decks = deckPieces(winner.bridges, kinds, line.count);
-  const railings = deckPieces(winner.bridges, kinds, line.count, railingRunOn(line.spacing, config.road.walls));
+  const kinds = bridgeKinds(bridges, under.height, under.ground, line.spacing, config.road.bridges.look);
+  const decks = deckPieces(bridges, kinds, line.count);
+  const railings = deckPieces(bridges, kinds, line.count, railingRunOn(line.spacing, config.road.walls));
   const report = fitReport(
-    { ...road, natural: island.natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged },
+    { ...road, natural, earthworks: fitted.ground, ground, corridor: fitted.corridor, bridged },
     config,
   );
 
@@ -63,7 +93,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     seed: track.seed,
     generatorVersion: GENERATOR_VERSION,
     track,
-    natural: island.natural,
+    natural,
     ground,
     cover,
     road: {
@@ -73,9 +103,9 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
       kerbs: { spans: kerbSpans, mesh: buildKerbs(line, profile.height, cross, width, kerbSpans, config) },
       walls,
       bridges: {
-        spans: winner.bridges,
+        spans: bridges,
         kinds,
-        mesh: buildBridges(line, profile.height, cross, width, winner.bridges, (x, z) => sampleField(ground, x, z, 0), config, kinds),
+        mesh: buildBridges(line, profile.height, cross, width, bridges, (x, z) => sampleField(ground, x, z, 0), config, kinds),
       },
       barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config, railings),
       gate: buildStartGate(line, profile.height, cross, width, config),
@@ -86,6 +116,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     sky: pickSky(track.seed, config.world.sky),
     decor,
     clouds: pickClouds(track.seed, config.world.clouds, highest),
+    crossing,
   };
 }
 
@@ -127,5 +158,12 @@ export function hashWorld(world: WorldResult): string {
   hasher.text(clouds.cover).numbers([clouds.span, clouds.count, clouds.puffCount]);
   hasher.numbers(clouds.x).numbers(clouds.z).numbers(clouds.puffCloud);
   hasher.numbers(clouds.puffX).numbers(clouds.puffY).numbers(clouds.puffZ).numbers(clouds.puffSize).numbers(clouds.puffThick);
+  // Only a world with a crossing hashes one, so the fingerprints of worlds without stay as they were (M6.1d).
+  const { crossing } = world;
+  if (crossing) {
+    hasher.text(crossing.kind).numbers([crossing.sample, crossing.across.x, crossing.across.z, crossing.reach.startIndex, crossing.reach.sampleCount]);
+    for (const p of crossing.path) hasher.numbers([p.x, p.z, p.half, p.floor]);
+    if (crossing.water) hasher.numbers([crossing.water.level]);
+  }
   return hasher.digest();
 }

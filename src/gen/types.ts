@@ -299,6 +299,8 @@ export interface WorldResult {
   decor: Decor;
   /** The clouds in the sky, all above the island's highest ground. */
   clouds: Clouds;
+  /** The lap's crossing over water or a ravine, carved into `natural` and `ground` and bridged (M6.1d); null for none. */
+  crossing: Crossing | null;
 }
 
 /** The seed's time of day. Drawing turns it into light; generation only picks it. */

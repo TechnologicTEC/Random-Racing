@@ -42,7 +42,22 @@ export function findBridgeSpans(profile: RoadProfile, spacing: number, road: Roa
     for (let k = 0; k < sampleCount; k++) mask[(startIndex + k) % n] = 1;
   }
 
-  // Close the gaps shorter than `mergeGap` between one bridge's last sample and the next one's first.
+  return closeGaps(mask, spacing, mergeGap);
+}
+
+/**
+ * Two or more sets of bridges on one lap made into one (M6.1d-2): every sample on a bridge of any of them, with the
+ * gaps shorter than `road.bridges.mergeGap` between bridges closed, as `findBridgeSpans` closes them.
+ */
+export function joinBridgeSpans(sets: readonly (readonly BridgeSpan[])[], count: number, spacing: number, road: RoadConfig): BridgeSpan[] {
+  const mask = new Uint8Array(count);
+  for (const spans of sets) mask.set(bridgedMask(spans, count).map((on, i) => on | mask[i]!));
+  return closeGaps(mask, spacing, road.bridges.mergeGap);
+}
+
+/** The runs of a mask of bridged samples, with the gaps shorter than `mergeGap` between one bridge's last sample and the next one's first closed. */
+function closeGaps(mask: Uint8Array, spacing: number, mergeGap: number): BridgeSpan[] {
+  const n = mask.length;
   const spans = runsOf(mask);
   for (let s = 0; s < spans.length && spans.length > 1; s++) {
     const here = spans[s]!;
