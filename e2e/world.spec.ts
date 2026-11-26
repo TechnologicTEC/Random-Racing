@@ -797,7 +797,7 @@ test.describe('3D screenshots', () => {
   const seeds = process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [1, 7, 42, 100, 2024, 48213];
 
   /** Which close views to take as well as the overview. Override with LOOKS, for example: $env:LOOKS = "cut,water" */
-  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start', 'summit', 'climb', 'car'];
+  const looks = process.env.LOOKS ? process.env.LOOKS.split(',') : ['cut', 'fill', 'bank', 'water', 'hairpin', 'start', 'summit', 'climb', 'bridge', 'car'];
 
   /** Points of the lap to photograph from the flying camera, as fractions. Override with LAPS, for example: $env:LAPS = "0.1,0.6" */
   const laps = process.env.LAPS ? process.env.LAPS.split(',') : ['0.02', '0.3', '0.55', '0.8'];

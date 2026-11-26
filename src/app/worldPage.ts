@@ -3,7 +3,7 @@ import { chaseStart, type ChaseView } from '../camera/chase';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
 import { clearOrbit, titleOrbit } from '../camera/orbitFit';
-import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
+import { lookAtBridge, lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
 import { config, GENERATOR_VERSION } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput, seedInputProblem } from '../core/seedCode';
 import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
@@ -212,7 +212,7 @@ const NEXT_VIEW: Record<CameraMode, string> = { chase: 'Drive', fly: 'Fly the la
  * Address options: `seed=42`; `cam=fly` to open flying the lap and `cam=orbit` to open circling (the car stays
  * where it is until the driving view is back); `lap=0.5` to open flying, half way round the lap; `still=1` to open
  * paused, with the car held at its start; `look=cut` (or fill, bank,
- * close, water, hairpin, start, summit, climb, sun, car) or `at=x,z` for a close view of one place;
+ * close, water, hairpin, start, summit, climb, sun, car, or bridge: the crossing's bridge or the lap's longest) or `at=x,z` for a close view of one place;
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
@@ -1034,6 +1034,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         (opening
           ? (lookAtSpot(look, result.report, groundAt) ??
             lookAtTrack(look, winner.line, winner.sections, groundAt) ??
+            lookAtBridge(look, winner.line, result.road.bridges.spans, result.crossing?.sample ?? null, groundAt) ??
             lookAtRoad(look, winner.line, winner.profile.height, result.mountains, groundAt) ??
             (look === 'sun' ? lookAtSun(winner.line.x[0]!, winner.line.z[0]!, winner.profile.height[0]!) : null) ??
             (look === 'car' ? lookAtCar(startPose(result, config)) : null))

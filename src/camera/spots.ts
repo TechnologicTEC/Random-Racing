@@ -1,5 +1,5 @@
 import { config } from '../config';
-import type { CenterLine, FitReport, FitSpot, MountainSummit, Section } from '../gen/types';
+import type { BridgeSpan, CenterLine, FitReport, FitSpot, MountainSummit, Section } from '../gen/types';
 import { orbitEye, type Orbit } from './orbit';
 import { rotate, type Quat, type Vec3 } from '../sim/quat';
 
@@ -56,6 +56,26 @@ export function lookAtTrack(
   }
   if (!tightest) return null;
   const middle = (tightest.startIndex + Math.floor(tightest.sampleCount / 2)) % line.count;
+  return closeView(line.x[middle]!, line.z[middle]!, heightAt, view);
+}
+
+/**
+ * A close camera at a bridge (`look=bridge`, M6.1e): the middle of the crossing's bridge, the one over the sample
+ * `crossing`, or with no crossing the lap's longest. Returns null for any other name, or a lap with no bridge.
+ */
+export function lookAtBridge(
+  name: string,
+  line: CenterLine,
+  spans: readonly BridgeSpan[],
+  crossing: number | null,
+  heightAt: (x: number, z: number) => number,
+  view = config.camera.spot,
+): Orbit | null {
+  if (name !== 'bridge' || spans.length === 0) return null;
+  const n = line.count;
+  const over = crossing === null ? undefined : spans.find((span) => (crossing - span.startIndex + n) % n < span.sampleCount);
+  const span = over ?? spans.reduce((a, b) => (b.sampleCount > a.sampleCount ? b : a));
+  const middle = (span.startIndex + Math.floor(span.sampleCount / 2)) % n;
   return closeView(line.x[middle]!, line.z[middle]!, heightAt, view);
 }
 

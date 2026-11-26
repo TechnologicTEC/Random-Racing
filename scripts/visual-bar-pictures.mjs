@@ -16,6 +16,11 @@ const REFS = [
   ['sunrise.jpg', 'seed=7&still=1&look=sun&time=07:00'],
   ['drive-start.jpg', 'seed=42&still=1&mode=free', true],
   ['car-close.jpg', 'seed=42&still=1&look=car', true],
+  // M6.1e: a crossing of each kind, at its bridge.
+  ['crossing-inlet.jpg', 'seed=19&still=1&look=bridge'],
+  ['crossing-river.jpg', 'seed=9&still=1&look=bridge'],
+  ['crossing-ravine.jpg', 'seed=17&still=1&look=bridge'],
+  ['crossing-hill-river.jpg', 'seed=42&still=1&look=bridge'],
 ];
 
 const only = process.argv[2] ? process.argv[2].split(',') : null;

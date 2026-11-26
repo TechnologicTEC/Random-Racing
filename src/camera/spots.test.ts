@@ -4,7 +4,7 @@ import { config } from '../config';
 import { analyseSections } from '../gen/track/analysis';
 import { stadiumLine } from '../testing/trackFixtures';
 import { orbitEye, type Orbit } from './orbit';
-import { lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, ROAD_SPOT_NAMES, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
+import { lookAtBridge, lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, ROAD_SPOT_NAMES, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
 
 const spot = (x: number, z: number, sample = 0) => ({ x, z, value: 1, sample });
 const report: FitReport = {
@@ -244,5 +244,39 @@ describe('lookAtCar', () => {
     expect(back).toBeGreaterThan(0);
     expect(Math.abs(side)).toBeGreaterThan(1);
     expect(Math.atan2(Math.abs(side), back)).toBeCloseTo(view.side, 6);
+  });
+});
+
+describe('lookAtBridge (look=bridge, M6.1e)', () => {
+  const line = stadiumLine(400, 20);
+  const n = line.count;
+  const spans = [
+    { startIndex: 10, sampleCount: 30 },
+    { startIndex: 200, sampleCount: 60 },
+  ];
+  const middleOf = (span: { startIndex: number; sampleCount: number }) => (span.startIndex + Math.floor(span.sampleCount / 2)) % n;
+
+  it('aims at the middle of the crossing’s bridge, at the ground there', () => {
+    const orbit = lookAtBridge('bridge', line, spans, 25, heightAt)!;
+    expect(orbit.targetX).toBeCloseTo(line.x[middleOf(spans[0]!)]!, 6);
+    expect(orbit.targetZ).toBeCloseTo(line.z[middleOf(spans[0]!)]!, 6);
+    expect(orbit.targetY).toBe(12);
+  });
+
+  it('aims at the lap’s longest bridge when there is no crossing', () => {
+    const orbit = lookAtBridge('bridge', line, spans, null, heightAt)!;
+    expect(orbit.targetX).toBeCloseTo(line.x[middleOf(spans[1]!)]!, 6);
+    expect(orbit.targetZ).toBeCloseTo(line.z[middleOf(spans[1]!)]!, 6);
+  });
+
+  it('finds a bridge across the start of the lap', () => {
+    const across = [{ startIndex: n - 10, sampleCount: 30 }];
+    const orbit = lookAtBridge('bridge', line, across, 5, heightAt)!;
+    expect(orbit.targetX).toBeCloseTo(line.x[middleOf(across[0]!)]!, 6);
+  });
+
+  it('has nothing to look at with no bridge, or for another name', () => {
+    expect(lookAtBridge('bridge', line, [], null, heightAt)).toBeNull();
+    expect(lookAtBridge('hairpin', line, spans, 25, heightAt)).toBeNull();
   });
 });
