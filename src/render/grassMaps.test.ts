@@ -260,6 +260,25 @@ describe('grassGrid: everything the grass needs to know about the ground, for a 
     expect(fine).toBeGreaterThan(1000);
   });
 
+  it('reads a tunnel lid’s grass and variation where the lid is the top of the land, unmown (M6.2b-3)', () => {
+    const tunnelled = generateWorld(11, config);
+    const { top } = tunnelled.road.tunnels;
+    expect(top.cells.length).toBeGreaterThan(100);
+    const lidGrid = grassGrid(tunnelled, cfg);
+    let grassy = 0;
+    for (const [i, c] of top.cells.entries()) {
+      expect(lidGrid.data[c * 4], `cell ${c}`).toBe(top.grass[i]);
+      expect(lidGrid.data[c * 4 + 1], `cell ${c}`).toBe(top.variation[i]);
+      expect(lidGrid.data[c * 4 + 2], `cell ${c}`).toBe(255);
+      if (top.grass[i]! > 0) grassy++;
+    }
+    expect(grassy).toBeGreaterThan(100);
+    // No blade at a rough point, on a lid or on the ground beside one; the ground's own cover is left as it was.
+    expect(top.rough.length).toBeGreaterThan(0);
+    for (const c of top.rough) expect(lidGrid.data[c * 4], `cell ${c}`).toBe(0);
+    expect(top.rough.some((c) => tunnelled.cover.grass[c]! > 0)).toBe(true);
+  });
+
   it('is quick to build: it is made on the page, not in the worker', () => {
     const times: number[] = [];
     for (let k = 0; k < 3; k++) {

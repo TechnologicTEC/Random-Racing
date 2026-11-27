@@ -4,6 +4,7 @@ import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { HeightField, WorldResult } from '../gen/types';
 import { sampleField } from '../gen/world/heightfield';
+import { surfaceOf } from '../gen/world/tunnelWorld';
 import { createBloom } from './bloom';
 import type { KartPose } from './carShape';
 import { createCarView, createGhostView, type EffectTextures } from './carView';
@@ -227,6 +228,12 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   const grass = createGrassView(cfg.grass, cfg.water.wind, shade);
   scene.add(grass.object);
   let grassShown = true;
+  /** The land's top for the grass where a tunnel's lid is over the ground (M6.2b-3); null where it reads the water's heights. */
+  let grassHeights: THREE.DataTexture | null = null;
+  const dropGrassHeights = (): void => {
+    grassHeights?.dispose();
+    grassHeights = null;
+  };
   /** How many pieces of ground are drawn at each level of detail. */
   let levels: [number, number, number] = [0, 0, 0];
   /** The ground of the world shown, to tell how high the camera is above it. */
@@ -275,8 +282,18 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
         still.mesh.visible = waterShown;
         scene.add(still.mesh);
       }
-      // The grass stands on the same heights the water measures its depth from, and only where the ground is drawn in full.
-      grass.load(water.depthTexture(), depths, grassGrid(world, cfg.grass, chunkStrides(world.ground, options)));
+      // The grass stands on the same heights the water measures its depth from, and only where the ground is drawn in full;
+      // where a tunnel's lid is the top of the land, on the lid (M6.2b-3).
+      const landTop = surfaceOf(world.ground, world.road.tunnels.top);
+      dropGrassHeights();
+      if (landTop !== world.ground) {
+        grassHeights = new THREE.DataTexture(landTop.height, landTop.size, landTop.size, THREE.RedFormat, THREE.FloatType);
+        grassHeights.magFilter = THREE.NearestFilter;
+        grassHeights.minFilter = THREE.NearestFilter;
+        grassHeights.generateMipmaps = false;
+        grassHeights.needsUpdate = true;
+      }
+      grass.load(grassHeights ?? water.depthTexture(), depths, grassGrid(world, cfg.grass, chunkStrides(world.ground, options)));
       land = world.ground;
       const chunks = buildTerrainChunks(world.ground, world.cover, options);
       levels = [0, 0, 0];
@@ -324,7 +341,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
         ground.add(lid);
       }
       decor.load(world.decor);
-      shade.setGround(world.ground);
+      // The land's shadows fall from the lids too (M6.2b-3).
+      shade.setGround(landTop);
       shade.setClouds(world.clouds);
       clouds.load(world.clouds);
     },
@@ -559,6 +577,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       speedLinesView.dispose();
       clouds.dispose();
       grass.dispose();
+      dropGrassHeights();
       renderer.dispose();
     },
   };

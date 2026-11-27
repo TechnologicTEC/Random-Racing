@@ -375,6 +375,12 @@ export interface TunnelConfig {
   portalHeight: number;
   /** No lap gate stands in a tunnel nor within this distance of either end of one, in metres. */
   gateClear: number;
+  /**
+   * Grass and trees on a lid (M6.2b-3). Grass blades stand on the ground's grid, blended between its points; a blade
+   * may stand on a lid only where that blend lies no more than `float` metres above the drawn lid nor `sink` metres
+   * below it. No tree or rock stands within `clear` metres of a point where it strays further.
+   */
+  top: { float: number; sink: number; clear: number };
 }
 
 /**
@@ -2205,6 +2211,8 @@ export const config: GameConfig = {
       lidSlope: 1,
       portalHeight: 3,
       gateClear: 30,
+      // M6.2b-3: starting values.
+      top: { float: 0.15, sink: 1, clear: 5 },
     },
   },
   world: {

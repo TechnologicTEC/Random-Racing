@@ -23,12 +23,10 @@ import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
 import { fitReport } from './world/report';
 import { pickSky } from './world/sky';
-import { buildTunnelWorld, outOfTunnels, tunnelGateBlock, withoutGrassUnderLids } from './world/tunnelWorld';
+import { buildTunnelWorld, clearOfRough, decorOnLids, lidTop, surfaceOf, tunnelGateBlock } from './world/tunnelWorld';
 
 /** Trees and rocks stand at least this far from a hill river's still water, in metres (M6.1d-3). */
 const STILL_WATER_CLEAR = 1;
-/** No tree or rock stands within this many metres of a tunnel's lid (M6.2b), so none pokes through its edge. */
-const TUNNEL_CLEAR = 1;
 
 /**
  * Generates everything for a seed: the track, the island around it, the road
@@ -85,18 +83,21 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   const plainCover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
   // The tunnels (M6.2b): over the cutting the fit made in the inland ground, their lids in the colours of the hillside.
   const tunnels = buildTunnelWorld(track.seed, line, profile.height, cross, width, winner.tunnels, inland, ground, plainCover, island.near, track.character.landform, config);
-  const wetCover = stillWater && crossing ? withoutGrassUnder(plainCover, ground, stillWater, crossing.path) : plainCover;
-  // No grass under a lid, nor a tree or a rock: nothing pokes through it.
-  const cover = withoutGrassUnderLids(wetCover, ground, tunnels.shape, line, winner.tunnels);
-  const plainDecor = buildDecor(track.seed, ground, cover, island.edge, config);
+  // Where the lids are the top of the land (M6.2b-3), for the grass, the trees and the land's shadows.
+  // The grass blades read the lids' own cover there (`grassGrid`); the ground's is left as it is, hidden under them.
+  const lids = lidTop(ground, tunnels.lid, config.road.tunnels.top);
+  const cover = stillWater && crossing ? withoutGrassUnder(plainCover, ground, stillWater, crossing.path) : plainCover;
+  // Trees and rocks stand on the land's top, a lid's among it, as they would on the hill (M6.2b-3).
+  const onLids = decorOnLids(cover, island.edge, lids);
+  const plainDecor = buildDecor(track.seed, surfaceOf(ground, lids), onLids.cover, onLids.edge, config);
   const wetDecor =
     stillWater && crossing
       ? { ...plainDecor, trees: outOfStillWater(plainDecor.trees, stillWater, crossing.path, STILL_WATER_CLEAR), rocks: outOfStillWater(plainDecor.rocks, stillWater, crossing.path, STILL_WATER_CLEAR) }
       : plainDecor;
   const decor = {
     ...wetDecor,
-    trees: outOfTunnels(wetDecor.trees, tunnels.shape, line, winner.tunnels, TUNNEL_CLEAR),
-    rocks: outOfTunnels(wetDecor.rocks, tunnels.shape, line, winner.tunnels, TUNNEL_CLEAR),
+    trees: clearOfRough(wetDecor.trees, ground, lids.rough, config.road.tunnels.top.clear),
+    rocks: clearOfRough(wetDecor.rocks, ground, lids.rough, config.road.tunnels.top.clear),
   };
   let highest = 0;
   for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);
@@ -131,7 +132,7 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
         mesh: buildBridges(line, profile.height, cross, width, bridges, (x, z) => sampleField(ground, x, z, 0), config, kinds),
       },
       // Where the road runs in tunnels (M6.2a), and their walls, ceilings, portals and lids (M6.2b).
-      tunnels: { spans: winner.tunnels, mesh: tunnels.shape.mesh, lid: tunnels.lid, left: tunnels.shape.left, right: tunnels.shape.right },
+      tunnels: { spans: winner.tunnels, mesh: tunnels.shape.mesh, lid: tunnels.lid, left: tunnels.shape.left, right: tunnels.shape.right, top: lids },
       barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config, railings),
       gate: buildStartGate(line, profile.height, cross, width, config),
       lapGates: { samples: lapGateSamples, mesh: buildLapGates(line, profile.height, cross, width, lapGateSamples, (x, z) => sampleField(ground, x, z, 0), config) },
@@ -176,6 +177,7 @@ export function hashWorld(world: WorldResult): string {
     const lid = tunnels.lid.cover;
     hasher.numbers(lid.grass).numbers(lid.sand).numbers(lid.rock).numbers(lid.snow).numbers(lid.variation);
     hasher.numbers(tunnels.left).numbers(tunnels.right);
+    hasher.numbers(tunnels.top.cells).numbers(tunnels.top.height).numbers(tunnels.top.grass).numbers(tunnels.top.rock).numbers(tunnels.top.variation).numbers(tunnels.top.rough);
   }
   const { report } = world;
   for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {

@@ -175,6 +175,15 @@ export function grassGrid(world: WorldResult, cfg: GrassConfig, detail?: GroundD
       data[c * 4 + 3] = Math.round(top + (bottom - top) * fz);
     }
   }
+  // Where a tunnel's lid is the top of the land (M6.2b-3), its own grass, unmown: the road under it is out of sight.
+  // No blade at a rough point, where heights blended between the grid's points stray from what is drawn.
+  const lids = world.road.tunnels.top;
+  lids.cells.forEach((c, i) => {
+    data[c * 4] = lids.grass[i]!;
+    data[c * 4 + 1] = lids.variation[i]!;
+    data[c * 4 + 2] = 255;
+  });
+  for (const c of lids.rough) data[c * 4] = 0;
   return { data, size, cell, origin, reach };
 }
 

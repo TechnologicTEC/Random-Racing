@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { generateWorld } from '../generate';
+import { sampleField } from '../world/heightfield';
+import { surfaceOf } from '../world/tunnelWorld';
 import { generateTrack } from '../track/pipeline';
 import type { Candidate, TrackResult } from '../types';
 import { bridgedMask, spanLength } from './bridges';
@@ -91,29 +93,43 @@ describe('the tunnel in the world (M6.2b), on seeds 11, 13 and 35', () => {
     }
   });
 
-  it('leaves no tree or rock standing under a lid, and no grass growing under one', () => {
+  it('grows grass on the lids, but at rough points (M6.2b-3)', () => {
     for (const world of worlds) {
+      const { top } = world.road.tunnels;
+      expect(top.cells.length, `seed ${world.seed}`).toBeGreaterThan(100);
+      const rough = new Set(top.rough);
+      let grassy = 0;
+      for (const [i, c] of top.cells.entries()) {
+        if (rough.has(c)) expect(top.grass[i], `seed ${world.seed} cell ${c}`).toBe(0);
+        if (top.grass[i]! > 0) grassy++;
+      }
+      expect(grassy / top.cells.length, `seed ${world.seed}`).toBeGreaterThan(0.5);
+    }
+  });
+
+  // The lids of seeds 11, 13 and 35 stand above the tree line (125 m), as the hill round them does; seed 82's comes down to 70 m.
+  it('stands trees and rocks on a lid at its height, none under it and none by a rough point (M6.2b-3)', { timeout: 30_000 }, () => {
+    let onLids = 0;
+    for (const world of [...worlds, generateWorld(82, config)]) {
       const { line } = winnerOf(world.track);
       const tunnels = world.road.tunnels;
+      const land = surfaceOf(world.ground, tunnels.top);
+      const { rough } = tunnels.top;
+      const { size, cell, origin } = world.ground;
       for (const scatter of [world.decor.trees, world.decor.rocks]) {
         for (let k = 0; k < scatter.count; k++) {
           const [x, z] = [scatter.x[k]!, scatter.z[k]!];
-          expect(underLid(tunnels, line, tunnels.spans, x, z), `seed ${world.seed}`).toBe(false);
+          if (!underLid(tunnels, line, tunnels.spans, x, z, config.road.tunnels.top.clear)) continue;
+          expect(scatter.y[k], `seed ${world.seed} at ${x}, ${z}`).toBeCloseTo(sampleField(land, x, z, 0), 4);
+          if (scatter === world.decor.trees && sampleField(land, x, z, 0) > sampleField(world.ground, x, z, 0) + 1) onLids++;
+          for (const c of rough) {
+            const d = Math.hypot(origin + (c % size) * cell - x, origin + Math.floor(c / size) * cell - z);
+            expect(d, `seed ${world.seed} at ${x}, ${z}`).toBeGreaterThan(config.road.tunnels.top.clear);
+          }
         }
       }
-      // Every cell of the grid within the lid's bounds.
-      const { size, cell, origin } = world.ground;
-      const p = tunnels.lid.positions;
-      let [minX, maxX, minZ, maxZ] = [Infinity, -Infinity, Infinity, -Infinity];
-      for (let v = 0; v < p.length; v += 3) [minX, maxX, minZ, maxZ] = [Math.min(minX, p[v]!), Math.max(maxX, p[v]!), Math.min(minZ, p[v + 2]!), Math.max(maxZ, p[v + 2]!)];
-      let checked = 0;
-      for (let c = 0; c < size * size; c++) {
-        const [x, z] = [origin + (c % size) * cell, origin + Math.floor(c / size) * cell];
-        if (x < minX || x > maxX || z < minZ || z > maxZ || !underLid(tunnels, line, tunnels.spans, x, z)) continue;
-        checked++;
-        expect(world.cover.grass[c], `seed ${world.seed} cell ${c}`).toBe(0);
-      }
-      expect(checked).toBeGreaterThan(100);
     }
+    expect(onLids).toBeGreaterThan(10);
   });
+
 });

@@ -424,6 +424,26 @@ export interface CoveredMesh {
   cover: Cover;
 }
 
+/**
+ * Where a tunnel's lid is the top of the land (M6.2b-3): the points of the ground's grid it stands over, with its
+ * height and cover there, for the grass, the trees and the land's shadows to read in place of the ground's.
+ */
+export interface LidTop {
+  /** The grid's points (row by row, as the ground's heights) where the lid stands above the ground, in order. */
+  cells: Uint32Array;
+  /** The lid's height over each, in metres. */
+  height: Float32Array;
+  /** The lid's cover at each: its grass is 0 wherever blades blended between the grid's points would not stand on the drawn lid. */
+  grass: Uint8Array;
+  rock: Uint8Array;
+  variation: Uint8Array;
+  /**
+   * The grid's points, on a lid or on the ground, touching a cell where the heights blended between the grid's points
+   * stray from what is drawn (at a portal, or where a lid's edge stands above the ground), in order: no blade stands there.
+   */
+  rough: Uint32Array;
+}
+
 /** A stretch of the lap the road runs through in a tunnel (M6.2), numbered as a bridge's span is; it may wrap past the end of the lap. */
 export type TunnelSpan = BridgeSpan;
 
@@ -510,7 +530,7 @@ export interface Road {
    * portals as triangles, and the lids over them in the ground's colours (M6.2b); and how far each lid reaches left
    * and right of the centre line at each sample, 0 off the tunnels.
    */
-  tunnels: { spans: TunnelSpan[]; mesh: MeshData; lid: CoveredMesh; left: Float64Array; right: Float64Array };
+  tunnels: { spans: TunnelSpan[]; mesh: MeshData; lid: CoveredMesh; left: Float64Array; right: Float64Array; top: LidTop };
   /** The gates a lap is counted by (M5.4d): their samples of the winner's centre line in order round the lap, and their triangles. */
   lapGates: { samples: number[]; mesh: MeshData };
 }
