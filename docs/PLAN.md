@@ -122,7 +122,14 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M6.2b-3** Grass and trees on a tunnel's lid (Tane, 2026-11-27): the grass, the trees and the land's shadows read the lid's heights (2026-11-27)
   - [x] **M6.2c** The chase camera under the lid; dimmer light inside; `look=tunnel`; pictures (2026-11-28)
 - [x] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels (2026-11-28: it looks good, no changes)
-- [ ] **M6.3** The look issues Tane picks (split into lettered parts at its start, generator ones first)
+- **M6.3** The look issues Tane picked (2026-11-28: numbers 1, 2, 3, 4, 6, 7 and 11 of the list offered; generator ones first):
+  - [ ] **M6.3a** The massif's foot uneven, not a round cone (generator)
+  - [ ] **M6.3b** Wider blends beside deep cuttings on steep ground (generator)
+  - [ ] **M6.3c** Mountain rock with soft, uneven edges; a less lumpy peak (generator)
+  - [ ] **M6.3d** The saw-tooth tops of sea cliffs and cut banks (drawing; a generator fallback if Tane asks)
+  - [ ] **M6.3e** The sun's glare on the sea from above (drawing)
+  - [ ] **M6.3f** The time of day: clouds at a low sun, dawn and dusk light, the evening sky, the light's names (drawing)
+  - [ ] **M6.3g** Smaller flower dabs near the chase camera (drawing)
 - **M6.4** Sound:
   - [ ] **M6.4a** Sound, pure (`src/audio/`)
   - [ ] **M6.4b** Sound on the page; M mutes
@@ -212,20 +219,23 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | --- | --- |
 | The start line can sit on a steep slope (seed 5, 8%, since the 20 m road; seed 42 before) | **M4.1** |
 | A gorge can hold the start gate (seed 28496 at 12 m; on the 20 m road the gorges are seeds 39898 and 42, not at the start) | M4.1 checks it; 5d's camera clearance is tested through seed 42's gorge |
-| Mountain placement near-misses on test islands of seed 5 (6h-3) | **M6.3** (Tane picks) |
+| Mountain placement near-misses on test islands of seed 5 (6h-3) | Left (Tane, M6.3, 2026-11-28: checking feet at 64 points would also remove the gorges) |
 | Wall ends are ramps; hillsides of up to 40% open beside mountain roads | **7b** (the wall end met head on), **4e** and **8** (climbing back up, sliding down) |
 | Few roadsides open onto the sea; beaches open; the 40% wall rule | Tane, **check-in 1** (question 6): answered 2026-11-17, the walls are fine as they are |
 | Nobody has watched the grass move; from the road it reads as a fine texture | Tane, **check-in 1** (the chase camera is lower and closer than the flying one) |
 | Near and far tree shapes swap a whole square at once | Watched while driving at **check-in 1**; fixed in **M6.7** if it shows |
 | Mountain worlds are the slowest to build (3.0 to 3.3 s headless); Firefox 1.6 times slower than Chromium | **M6.7** (the budget test uses seed 7 and passes) |
 | The grass's 176,000 triangles; the most wooded islands' 589,000 from above; the water shader's cost; Low gains least from above; the page draws every frame | **M6.7**, and **10b** checks the chase view |
-| Sea cliffs and cut banks have a saw-tooth top edge on the 3 m grid | **M6.3** (Tane picks) |
-| The sun's glare from above is a wide pale patch with wave stripes | **M6.3** |
-| Clouds dark grey-brown at 07:00 and 19:30; those times quite dark; 18:30 called "evening light" with a blue sky; 10:00 called "midday light" | **M6.3** (all one look at `render/daylight.ts` and `lightName`) |
-| The coast cuts high ground into curved rock bands; the round cone under a massif; mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3** if Tane picks them; they are generator changes, so before **M6.8** |
-| Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3** |
-| Flat seeds show large sandy patches; the mown strip is the same width everywhere; nothing cleared round trees in long grass; the wind blows the same way on every island | **M6.3** candidates (small) |
-| From far above, islands look fairly bare; tree shadows small at midday | Tane, **M6.3** (`world.decor.trees` levels) |
+| Sea cliffs and cut banks have a saw-tooth top edge on the 3 m grid | **M6.3d** |
+| The sun's glare from above is a wide pale patch with wave stripes | **M6.3e** |
+| Clouds dark grey-brown at 07:00 and 19:30; those times quite dark; 18:30 called "evening light" with a blue sky; 10:00 called "midday light" | **M6.3f** (all one look at `render/daylight.ts` and `lightName`) |
+| The round cone under a massif | **M6.3a** |
+| Mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3c** |
+| The coast cuts high ground into curved rock bands | Left (Tane, M6.3, 2026-11-28: the biggest and riskiest of the list) |
+| Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3b** |
+| Flat seeds show large sandy patches; the mown strip is the same width everywhere; nothing cleared round trees in long grass; the wind blows the same way on every island | Left (Tane, M6.3, 2026-11-28) |
+| From far above, islands look fairly bare; tree shadows small at midday | Left (Tane, M6.3, 2026-11-28) |
+| From the chase camera in long meadow grass, the flower dabs look large and busy | **M6.3g** |
 | The circling camera frames only part of the biggest islands; it can look through clouds | Behind the title and results cards it circles close in round the track (the check-in after M4.4); elsewhere left (a debug view) |
 | A close camera checks the ground, not trees | Left (close views are for screenshots) |
 | The verge dips a little at its outer edge on steep banks | Left; the barrier footing hides it |
