@@ -123,7 +123,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M6.2c** The chase camera under the lid; dimmer light inside; `look=tunnel`; pictures (2026-11-28)
 - [x] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels (2026-11-28: it looks good, no changes)
 - **M6.3** The look issues Tane picked (2026-11-28: numbers 1, 2, 3, 4, 6, 7 and 11 of the list offered; generator ones first):
-  - [ ] **M6.3a** The massif's foot uneven, not a round cone (generator)
+  - [x] **M6.3a** The massif's foot uneven, not a round cone (generator): **dropped** (Tane, 2026-11-28: tried, it barely showed)
   - [ ] **M6.3b** Wider blends beside deep cuttings on steep ground (generator)
   - [ ] **M6.3c** Mountain rock with soft, uneven edges; a less lumpy peak (generator)
   - [ ] **M6.3d** The saw-tooth tops of sea cliffs and cut banks (drawing; a generator fallback if Tane asks)
@@ -229,7 +229,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | Sea cliffs and cut banks have a saw-tooth top edge on the 3 m grid | **M6.3d** |
 | The sun's glare from above is a wide pale patch with wave stripes | **M6.3e** |
 | Clouds dark grey-brown at 07:00 and 19:30; those times quite dark; 18:30 called "evening light" with a blue sky; 10:00 called "midday light" | **M6.3f** (all one look at `render/daylight.ts` and `lightName`) |
-| The round cone under a massif | **M6.3a** |
+| The round cone under a massif | Left (Tane, M6.3a, 2026-11-28: a lobed foot barely showed; the round look is the coast's cliffs) |
 | Mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3c** |
 | The coast cuts high ground into curved rock bands | Left (Tane, M6.3, 2026-11-28: the biggest and riskiest of the list) |
 | Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3b** |
