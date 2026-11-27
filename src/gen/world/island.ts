@@ -7,6 +7,7 @@ import type { Vec2 } from '../../core/vec2';
 import type { CenterLine, Character, CoastKind, HeightField, RoadProfile } from '../types';
 import { createField, sampleGrid, worldX, worldZ } from './heightfield';
 import { buildLandform, type Landform } from './landforms';
+import { fitReach } from './fit';
 import { edgeDistance, insideLoop, nearestRoad, type NearestRoad } from './nearest';
 import { trackRulesFor } from '../track/rules';
 import { createRelief, placeHighland, placeMassif, type Highland, type Massif, type Relief } from './relief';
@@ -217,7 +218,7 @@ export function buildIsland(
     return out;
   };
   const half = tile.extent / 2;
-  const fitReach = widest / 2 + cfg.road.verge + cfg.road.blendMax + 2 * tile.cell;
+  const roadReach = fitReach(widest, cfg) + 2 * tile.cell;
   for (let iz = 0; iz < size; iz++) {
     const z = worldZ(inland, iz);
     for (let ix = 0; ix < size; ix++) {
@@ -295,7 +296,7 @@ export function buildIsland(
       const c = iz * size + ix;
       const limit = cap[c]!;
       // Out at sea and out of reach of the road, the inland ground is never looked at.
-      if (limit <= 0 && near.distance[c]! > fitReach) {
+      if (limit <= 0 && near.distance[c]! > roadReach) {
         inland.height[c] = limit;
         continue;
       }

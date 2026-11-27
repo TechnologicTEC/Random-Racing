@@ -208,7 +208,7 @@ export function buildTunnels(
       const { outer } = tunnelWallOffsets(width, i, road);
       const met: [boolean, boolean] = [false, false];
       for (const side of [-1, 1] as const) {
-        let limit = width[i]! / 2 + road.verge + road.blendMax + REACH_SPARE;
+        let limit = width[i]! / 2 + road.verge + Math.max(road.blendMax, road.blendCutMax) + REACH_SPARE;
         const bend = line.curvature[i]! * side;
         if (bend > 0) limit = Math.min(limit, CURVE_SHARE / bend);
         let reach = outer;

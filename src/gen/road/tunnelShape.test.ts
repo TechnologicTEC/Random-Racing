@@ -13,6 +13,7 @@ const cfg: Pick<GenConfig, 'road'> = {
     barrierWidth: 0.3,
     verge: 4,
     blendMax: 25,
+    blendCutMax: 45,
     tunnels: { ...config.road.tunnels, clearance: 6.5, cover: 1.5, wall: 0.6, lidStep: 3, lidSlope: 1 },
   },
 };

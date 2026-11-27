@@ -47,6 +47,48 @@ function onBridge(bridged: Uint8Array, i: number, n: number): boolean {
   return true;
 }
 
+/**
+ * The furthest from the centre line any cutting or embankment can reach, for a road `width` metres wide: half of it,
+ * a verge and the longer of the two blends (M6.3b: a cutting's may be longer than an embankment's).
+ */
+export function fitReach(width: number, cfg: GenConfig): number {
+  return width / 2 + cfg.road.verge + Math.max(cfg.road.blendMax, cfg.road.blendCutMax);
+}
+
+/**
+ * Inside a corner a cutting's wider blend (M6.3b) stops at this share of the corner's radius from the centre line, as
+ * a tunnel's lid does: towards a corner's middle the nearest point of the road jumps from one part of it to another,
+ * at another height, and a blend reaching there would leave a step in the ground.
+ */
+const CORNER_SHARE = 0.8;
+
+/**
+ * How sharply the lap bends towards each side at each sample, smoothed along it so a cutting's reach inside a corner
+ * changes gradually (an arc meets its straights with a jump in curvature): the sharpest bend within `window` metres
+ * either way, then averaged over the same stretch. `right` is the bend towards the right of the direction of travel,
+ * `left` towards the left, both 0 or more, in 1/metres.
+ */
+export function smoothBends(line: CenterLine, window: number): { right: Float64Array; left: Float64Array } {
+  const n = line.count;
+  const w = Math.max(1, Math.round(window / line.spacing));
+  const smooth = (sign: number): Float64Array => {
+    const sharpest = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let most = 0;
+      for (let k = -w; k <= w; k++) most = Math.max(most, sign * line.curvature[(((i + k) % n) + n) % n]!);
+      sharpest[i] = most;
+    }
+    const out = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let sum = 0;
+      for (let k = -w; k <= w; k++) sum += sharpest[(((i + k) % n) + n) % n]!;
+      out[i] = sum / (2 * w + 1);
+    }
+    return out;
+  };
+  return { right: smooth(1), left: smooth(-1) };
+}
+
 /** A cell can be within reach of this many separate sections of the lap at once. */
 const MAX_SECTIONS = 3;
 
@@ -55,7 +97,8 @@ const MAX_SECTIONS = 3;
  *
  * Under the road and its verges the ground follows the road surface, a little
  * below it. Beyond the verge it eases back to the natural ground over 10 to
- * 25 m, wider where the difference is larger, making cuttings and embankments.
+ * 25 m, wider where the difference is larger, making cuttings and embankments;
+ * a deep cutting may take up to `road.blendCutMax` (M6.3b), so it lies back.
  *
  * Where two sections of the lap are close together, the ground between them
  * is worked out from both at once: one surface running from one verge to the
@@ -71,8 +114,9 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
   let widest = 0;
   for (let i = 0; i < n; i++) widest = Math.max(widest, width[i]!);
   // The furthest from the centre line that any cutting or embankment can reach.
-  const reach = widest / 2 + road.verge + road.blendMax;
+  const reach = fitReach(widest, cfg);
 
+  const bends = smoothBends(line, road.blendCutMax);
   const ground: HeightField = { ...natural, height: Float32Array.from(natural.height) };
   const corridor = new Uint8Array(size * size);
 
@@ -91,6 +135,8 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
   const sectionCorridor = new Float64Array(MAX_SECTIONS);
   /** 1 where the section's nearest piece is on a bridge. */
   const sectionBridged = new Uint8Array(MAX_SECTIONS);
+  /** The longest a cutting's blend may be there: `road.blendCutMax`, less inside a tight corner. */
+  const sectionCutMax = new Float64Array(MAX_SECTIONS);
 
   for (let iz = 0; iz < size; iz++) {
     const z = worldZ(natural, iz);
@@ -118,7 +164,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
             const pz = z - (az + abz * t);
             const distance = Math.sqrt(px * px + pz * pz);
             const corridorHalf = (width[i]! + (width[j]! - width[i]!) * t) / 2 + road.verge;
-            if (distance > corridorHalf + road.blendMax) continue;
+            if (distance > corridorHalf + Math.max(road.blendMax, road.blendCutMax)) continue;
 
             // Which section of the lap does this belong to? One we have already met, or a new one.
             let slot = -1;
@@ -150,6 +196,10 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
             sectionCorridor[slot] = corridorHalf;
             sectionHeight[slot] = centre + lateral * tilt - road.sink;
             sectionBridged[slot] = bridged && onBridge(bridged, i, n) ? 1 : 0;
+            // How sharply the road bends towards this side here (lateral is to the right of the direction of travel).
+            const side = lateral >= 0 ? bends.right : bends.left;
+            const bend = side[i]! + (side[j]! - side[i]!) * t;
+            sectionCutMax[slot] = bend > 0 ? Math.max(road.blendMax, Math.min(road.blendCutMax, CORNER_SHARE / bend - corridorHalf)) : road.blendCutMax;
           }
         }
       }
@@ -180,7 +230,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       for (let s = 0; s < sections; s++) {
         // A bridge pulls no embankment round it; a cutting beside it is blended as anywhere else.
         if (sectionBridged[s] && wild < sectionHeight[s]!) continue;
-        const blend = clamp(Math.abs(wild - sectionHeight[s]!) / road.blendSlope, road.blendMin, road.blendMax);
+        const blend = clamp(Math.abs(wild - sectionHeight[s]!) / road.blendSlope, road.blendMin, wild > sectionHeight[s]! ? sectionCutMax[s]! : road.blendMax);
         const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - sectionCorridor[s]!);
         if (pull >= 1 && (atEdge < 0 || sectionDistance[s]! < sectionDistance[atEdge]!)) atEdge = s;
       }
@@ -194,7 +244,7 @@ export function fitRoad(input: FitInput, cfg: GenConfig): FitResult {
       for (let s = 0; s < sections; s++) {
         if (sectionBridged[s] && wild < sectionHeight[s]!) continue;
         const target = sectionHeight[s]!;
-        const blend = clamp(Math.abs(wild - target) / road.blendSlope, road.blendMin, road.blendMax);
+        const blend = clamp(Math.abs(wild - target) / road.blendSlope, road.blendMin, wild > target ? sectionCutMax[s]! : road.blendMax);
         const pull = 1 - smoothstep(0, blend, sectionDistance[s]! - sectionCorridor[s]!);
         if (pull <= 0) continue;
         untouched *= 1 - pull;

@@ -124,7 +124,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - [x] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels (2026-11-28: it looks good, no changes)
 - **M6.3** The look issues Tane picked (2026-11-28: numbers 1, 2, 3, 4, 6, 7 and 11 of the list offered; generator ones first):
   - [x] **M6.3a** The massif's foot uneven, not a round cone (generator): **dropped** (Tane, 2026-11-28: tried, it barely showed)
-  - [ ] **M6.3b** Wider blends beside deep cuttings on steep ground (generator)
+  - [x] **M6.3b** Wider blends beside deep cuttings on steep ground (generator) (2026-11-28; 45 m, Tane)
   - [ ] **M6.3c** Mountain rock with soft, uneven edges; a less lumpy peak (generator)
   - [ ] **M6.3d** The saw-tooth tops of sea cliffs and cut banks (drawing; a generator fallback if Tane asks)
   - [ ] **M6.3e** The sun's glare on the sea from above (drawing)
@@ -232,7 +232,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | The round cone under a massif | Left (Tane, M6.3a, 2026-11-28: a lobed foot barely showed; the round look is the coast's cliffs) |
 | Mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3c** |
 | The coast cuts high ground into curved rock bands | Left (Tane, M6.3, 2026-11-28: the biggest and riskiest of the list) |
-| Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3b** |
+| Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3b** (done: they lie back; the coast's cut into high ground, left, makes the trenches) |
 | Flat seeds show large sandy patches; the mown strip is the same width everywhere; nothing cleared round trees in long grass; the wind blows the same way on every island | Left (Tane, M6.3, 2026-11-28) |
 | From far above, islands look fairly bare; tree shadows small at midday | Left (Tane, M6.3, 2026-11-28) |
 | From the chase camera in long meadow grass, the flower dabs look large and busy | **M6.3g** |

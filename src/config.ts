@@ -462,6 +462,8 @@ export interface RoadConfig {
   /** Beyond the verge, the ground blends back to natural over at least and at most this distance, in metres (brief: 10 to 25). */
   blendMin: number;
   blendMax: number;
+  /** A cutting may blend back over up to this, in metres (M6.3b): wider than an embankment, so a deep cut in a steep hillside lies back. */
+  blendCutMax: number;
   /** The blend is made wide enough that a cutting or embankment averages about this slope, as a fraction. */
   blendSlope: number;
   /** Width of the white line along each edge of the road, in metres. */
@@ -2150,6 +2152,7 @@ export const config: GameConfig = {
     sink: 0.25,
     blendMin: 10,
     blendMax: 25,
+    blendCutMax: 45,
     blendSlope: 0.4,
     edgeLine: 0.35,
     centreLine: 0.25,

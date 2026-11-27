@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { circleLine, stadiumLine, swellingWidth, uniformWidth } from '../../testing/trackFixtures';
 import type { CenterLine, HeightField } from '../types';
-import { fitRoad } from './fit';
+import { fitReach, fitRoad, smoothBends } from './fit';
 import { createField, sampleField, worldX, worldZ } from './heightfield';
 import { nearestRoad } from './nearest';
 
@@ -132,6 +132,48 @@ describe('fitRoad digging a cutting', () => {
     expect(sampleField(fitted, 100 - CORRIDOR - 6, 0, 0)).toBeGreaterThan(15.2);
     expect(sampleField(fitted, 100 + CORRIDOR + road.blendMax, 0, 0)).toBeCloseTo(20, 3);
     expect(sampleField(fitted, 100 - CORRIDOR - road.blendMax, 0, 0)).toBeCloseTo(20, 3);
+  });
+
+  it('lets a deep cutting blend back further than an embankment may, so it lies back (M6.3b)', () => {
+    expect(road.blendCutMax).toBeGreaterThan(road.blendMax);
+    // A 25 m cut wants a 62 m blend at its usual slope: held to the cutting's own longest.
+    const deep = fit(line, ground(400, () => 40), () => 15).ground;
+    expect(sampleField(deep, 100 + CORRIDOR + road.blendMax, 0, 0)).toBeLessThan(39);
+    expect(sampleField(deep, 100 + CORRIDOR + road.blendCutMax + 2, 0, 0)).toBeCloseTo(40, 3);
+    expect(steepest(deep)).toBeLessThan(1);
+    // A 25 m embankment is still held to the embankment's longest.
+    const tall = fit(line, ground(400, () => 10), () => 35).ground;
+    expect(sampleField(tall, 100 + CORRIDOR + road.blendMax + 2, 0, 0)).toBeCloseTo(10, 3);
+  });
+
+  it('keeps a cutting wider than an embankment out of the middle of a tight corner', () => {
+    // Inside a 60 m circle, where the nearest point of the road jumps round the corner, the wider blend stops at
+    // 0.8 of the radius (as a tunnel's lid does), 48 m in; the embankments' 25 m still reaches as far as it did.
+    const tight = circleLine(60);
+    const deep = fit(tight, ground(400, () => 40), () => 15).ground;
+    expect(sampleField(deep, 60 - CORRIDOR - road.blendMax + 2, 0, 0)).toBeLessThan(39.9);
+    expect(sampleField(deep, 60 - 50, 0, 0)).toBe(40);
+    // Outside the corner it reaches its whole width.
+    expect(sampleField(deep, 60 + CORRIDOR + road.blendMax, 0, 0)).toBeLessThan(39);
+  });
+
+  it('takes the bend from a curvature smoothed along the lap, so it never jumps where an arc meets a straight', () => {
+    const line = stadiumLine(200, 40);
+    const { right, left } = smoothBends(line, road.blendCutMax);
+    // The stadium turns one way only: the bend on that side reaches a 40 m arc's in the middle of each end.
+    const bends = Math.max(...right) > Math.max(...left) ? right : left;
+    const other = bends === right ? left : right;
+    expect(Math.max(...bends)).toBeCloseTo(1 / 40, 4);
+    expect(Math.max(...other)).toBeCloseTo(0, 6);
+    for (let i = 0; i < line.count; i++) {
+      // From one sample to the next the bend changes by at most a 40 m arc's over the window's length.
+      const step = Math.abs(bends[(i + 1) % line.count]! - bends[i]!);
+      expect(step).toBeLessThan((1 / 40) * (line.spacing / road.blendCutMax));
+    }
+  });
+
+  it('reaches as far as its widest blend (fitReach)', () => {
+    expect(fitReach(config.track.roadWidth, config)).toBe(HALF + road.verge + Math.max(road.blendMax, road.blendCutMax));
   });
 });
 

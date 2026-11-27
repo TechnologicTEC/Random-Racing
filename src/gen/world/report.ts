@@ -2,6 +2,7 @@ import type { GenConfig } from '../../config';
 import { Grid } from '../../core/grid';
 import type { CenterLine, FitReport, FitSpot, HeightField } from '../types';
 import { sampleField, worldX, worldZ } from './heightfield';
+import { fitReach } from './fit';
 import type { NearestRoad } from './nearest';
 
 export interface ReportInput {
@@ -55,7 +56,7 @@ export function fitReport(input: ReportInput, cfg: GenConfig): FitReport {
   const n = line.count;
   let widest = 0;
   for (let i = 0; i < n; i++) widest = Math.max(widest, width[i]!);
-  const reach = widest / 2 + cfg.road.verge + cfg.road.blendMax;
+  const reach = fitReach(widest, cfg);
 
   const spot = (): FitSpot => ({ x: line.x[0]!, z: line.z[0]!, value: 0, sample: 0 });
   const deepestCut = spot();
