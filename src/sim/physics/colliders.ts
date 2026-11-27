@@ -2,7 +2,9 @@ import type { PhysicsConfig } from '../../config';
 import { dcos, dsin } from '../../core/dmath';
 import { BARRIER_FOOTING, wallPieces, type WallPiece } from '../../gen/road/barriers';
 import { bridgePillars, deckBoxes } from '../../gen/road/bridges';
+import { ROAD_MATERIAL } from '../../gen/road/ribbon';
 import { gateBoxes } from '../../gen/road/startGate';
+import { trianglesOf, tunnelBoxes } from '../../gen/road/tunnels';
 import { sampleField } from '../../gen/world/heightfield';
 import type { HeightField, MeshData, WorldResult } from '../../gen/types';
 import { TREE_KINDS } from '../../gen/world/decor';
@@ -161,6 +163,26 @@ export function bridgeColliders(rapier: Rapier, world: WorldResult, cfg: Physics
 }
 
 /**
+ * The tunnels as they are drawn (M6.2b): their walls and ceilings as solid boxes, three a piece (`tunnelBoxes`), hit
+ * as walls; their portals' faces as one surface, hit as walls; and their lids as one surface the wheels can drive
+ * on, as the ground, for a car that comes over the hill onto one. Null for a surface with no triangles.
+ */
+export function tunnelColliders(rapier: Rapier, world: WorldResult, cfg: PhysicsConfig): { boxes: ColliderDesc[]; portals: ColliderDesc | null; lid: ColliderDesc | null } {
+  const { line, profile } = world.track.candidates[world.track.winnerIndex]!;
+  const { cross, width, tunnels } = world.road;
+  const boxes = tunnelBoxes(line, profile.height, cross, width, tunnels.spans, cfg).map(({ centre, half, across, up, along }) =>
+    rapier.ColliderDesc.cuboid(half.x, half.y, half.z)
+      .setTranslation(centre.x, centre.y, centre.z)
+      .setRotation(quatFromAxes(across, up, along))
+      .setCollisionGroups(STANDING),
+  );
+  const faces = trianglesOf(tunnels.mesh, ROAD_MATERIAL.portal);
+  const portals = faces.indices.length > 0 ? rapier.ColliderDesc.trimesh(faces.positions, faces.indices).setCollisionGroups(STANDING) : null;
+  const lid = tunnels.lid.indices.length > 0 ? rapier.ColliderDesc.trimesh(tunnels.lid.positions, tunnels.lid.indices) : null;
+  return { boxes, portals, lid };
+}
+
+/**
  * Every tree as an upright post where its trunk is, in the order of the world's
  * list of trees. Leaves and branches are not hit: the car passes under them.
  */
@@ -252,6 +274,10 @@ export interface WorldColliders {
   gate: number[];
   /** Every bridge's pillars, then its decks' boxes, in the order of `bridgeColliders` (M6.1b). */
   bridges: number[];
+  /** Every tunnel's walls and ceilings, then its portals' faces, in the order of `tunnelColliders` (M6.2b); hit as walls. */
+  tunnels: number[];
+  /** The tunnels' lids (M6.2b), driven on as the ground; `NO_COLLIDER` with no tunnel. */
+  lid: number;
   /** One for each tree, in the order of the world's list. */
   trees: number[];
   /** One for each rock, in the order of the world's list; `NO_COLLIDER` for a rock too low to be hit. */
@@ -261,7 +287,7 @@ export interface WorldColliders {
 /**
  * Adds everything in a world that the car can touch to a physics world, always
  * in the same order: the ground, the road, the kerbs, the walls, the gate, the
- * bridges, the trees, the rocks. The same world therefore gets the same handles every time,
+ * bridges, the tunnels and their lids (M6.2b), the trees, the rocks. The same world therefore gets the same handles every time,
  * on every computer, and what a wheel or the car's body met can be looked up
  * from its handle.
  */
@@ -274,6 +300,7 @@ export function addWorldColliders(rapier: Rapier, physics: PhysicsWorld, world: 
     walls: wallColliders(rapier, world, cfg).map(add),
     gate: gateColliders(rapier, world, cfg).map(add),
     bridges: bridgeColliders(rapier, world, cfg).map(add),
+    ...tunnelHandles(tunnelColliders(rapier, world, cfg), add),
     trees: treeColliders(rapier, world, cfg).map(add),
     rocks: rockColliders(rapier, world, cfg).map((collider) => (collider ? add(collider) : NO_COLLIDER)),
   };
@@ -297,6 +324,8 @@ export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course
     ),
     gate: [],
     bridges: [],
+    tunnels: [],
+    lid: NO_COLLIDER,
     trees: (course.posts ?? []).map(({ x, z, radius, bottom, top }) =>
       solid(rapier.ColliderDesc.cylinder((top - bottom) / 2, radius).setTranslation(x, (top + bottom) / 2, z)),
     ),
@@ -305,4 +334,14 @@ export function addCourseColliders(rapier: Rapier, physics: PhysicsWorld, course
       return post ? physics.createCollider(postCollider(rapier, post)).handle : NO_COLLIDER;
     }),
   };
+}
+
+/** Adds a world's tunnels in their order (the boxes, the portals' faces, then the lids), naming each handle. */
+function tunnelHandles(
+  colliders: { boxes: ColliderDesc[]; portals: ColliderDesc | null; lid: ColliderDesc | null },
+  add: (collider: ColliderDesc) => number,
+): { tunnels: number[]; lid: number } {
+  const tunnels = colliders.boxes.map(add);
+  if (colliders.portals) tunnels.push(add(colliders.portals));
+  return { tunnels, lid: colliders.lid ? add(colliders.lid) : NO_COLLIDER };
 }

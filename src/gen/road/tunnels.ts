@@ -1,6 +1,6 @@
 import type { GenConfig, RoadConfig } from '../../config';
 import type { CenterLine, MeshData, RoadProfile, TunnelSpan, Violation } from '../types';
-import { closeGaps, runsOf } from './bridges';
+import { closeGaps, runsOf, type DeckBox } from './bridges';
 import { MeshBuilder, type Point } from './meshBuilder';
 import { ROAD_MATERIAL } from './ribbon';
 import { cutAndFill, type RoadEdges } from './profile';
@@ -365,4 +365,82 @@ export function underLid(reach: Pick<TunnelShape, 'left' | 'right'>, line: Cente
     if (lateral >= -reach.left[j]! - margin && lateral <= reach.right[j]! + margin) return true;
   }
   return false;
+}
+
+/** A tunnel's boxes run this far past both ends of their piece, in metres, so no slit opens between them where the road bends. */
+const BOX_OVERLAP = 0.03;
+
+/**
+ * A tunnel's walls and ceiling as solid boxes (M6.2b), three a piece of each tunnel, in order along it: the left wall,
+ * the right wall, the ceiling. A wall stands upright as it is drawn, `road.tunnels.wall` thick from its inner face
+ * against the barrier's outer face, from half a metre under the road to the ceiling; the ceiling is a slab `cover`
+ * thick on top of the walls, tilted with the road.
+ */
+export function tunnelBoxes(
+  line: CenterLine,
+  height: Float64Array,
+  cross: Float64Array | null,
+  width: Float64Array,
+  spans: readonly TunnelSpan[],
+  cfg: Pick<GenConfig, 'road'>,
+): DeckBox[] {
+  const road = cfg.road;
+  const rules = road.tunnels;
+  const n = line.count;
+  const boxes: DeckBox[] = [];
+  const tilt = (i: number): number => (cross ? cross[i]! : 0);
+  const unit = (v: Vec): Vec => {
+    const length = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return { x: v.x / length, y: v.y / length, z: v.z / length };
+  };
+  const cross3 = (a: Vec, b: Vec): Vec => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+  /** The box of a piece from `a` to `b` (its middle line), `leftward` its way across, half `halfAcross` wide and `halfUp` tall. */
+  const box = (a: Vec, b: Vec, leftward: Vec, halfAcross: number, halfUp: number): DeckBox => {
+    const along = unit({ x: b.x - a.x, y: b.y - a.y, z: b.z - a.z });
+    const d = dot(leftward, along);
+    const across = unit({ x: leftward.x - along.x * d, y: leftward.y - along.y * d, z: leftward.z - along.z * d });
+    const up = cross3(along, across);
+    const length = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2 + (b.z - a.z) ** 2);
+    return { centre: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 }, half: { x: halfAcross, y: halfUp, z: length / 2 + BOX_OVERLAP }, across, up, along };
+  };
+  const at = (i: number, lateral: number, up: number): Vec => ({
+    x: line.x[i]! - line.tz[i]! * lateral,
+    y: height[i]! + tilt(i) * lateral + up,
+    z: line.z[i]! + line.tx[i]! * lateral,
+  });
+  const middle = (rules.clearance - FOOT) / 2;
+  for (const span of spans) {
+    for (let k = 0; k + 1 < span.sampleCount; k++) {
+      const i = (span.startIndex + k) % n;
+      const j = (i + 1) % n;
+      const [wi, wj] = [tunnelWallOffsets(width, i, road), tunnelWallOffsets(width, j, road)];
+      // Level across, so the walls stand upright as they are drawn.
+      const level = { x: (line.tz[i]! + line.tz[j]!) / 2, y: 0, z: -(line.tx[i]! + line.tx[j]!) / 2 };
+      for (const side of [-1, 1] as const) {
+        const li = side * (wi.inner + rules.wall / 2);
+        const lj = side * (wj.inner + rules.wall / 2);
+        boxes.push(box(at(i, li, middle), at(j, lj, middle), level, rules.wall / 2, (rules.clearance + FOOT) / 2));
+      }
+      // Tilted with the road.
+      const tilted = { x: level.x, y: -(tilt(i) + tilt(j)) / 2, z: level.z };
+      const top = rules.clearance + rules.cover / 2;
+      boxes.push(box(at(i, 0, top), at(j, 0, top), tilted, (wi.outer + wj.outer) / 2, rules.cover / 2));
+    }
+  }
+  return boxes;
+}
+
+/** The triangles of a mesh of one material, as a mesh of their own. */
+export function trianglesOf(mesh: MeshData, material: number): { positions: Float32Array; indices: Uint32Array } {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    if (mesh.materials[mesh.indices[t]!] !== material) continue;
+    for (let c = 0; c < 3; c++) {
+      const v = mesh.indices[t + c]!;
+      indices.push(positions.length / 3);
+      positions.push(mesh.positions[v * 3]!, mesh.positions[v * 3 + 1]!, mesh.positions[v * 3 + 2]!);
+    }
+  }
+  return { positions: Float32Array.from(positions), indices: Uint32Array.from(indices) };
 }

@@ -22,7 +22,7 @@ import { createRoadMaterial, createRoadMesh } from './road';
 import { shadowReach } from './nearShadows';
 import { createShadeView } from './shadeView';
 import { createSkyDome } from './sky';
-import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
+import { buildTerrainChunks, chunkStrides, coveredColours, detailOptions } from './terrainChunks';
 import { createWater, type Water } from './water';
 import { waterDepthGrid } from './waterDepth';
 
@@ -301,13 +301,28 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       const lapGates = createRoadMesh(world.road.lapGates.mesh, roadMaterial);
       // The bridges' decks and pillars (M6.1b).
       const bridges = createRoadMesh(world.road.bridges.mesh, roadMaterial);
-      for (const mesh of [asphalt, kerbs, barriers, gate, lapGates, bridges]) mesh.receiveShadow = true;
-      // Kerbs lie flat on the road; the barriers, the gates and the bridges stand up and cast.
-      for (const mesh of [barriers, gate, lapGates, bridges]) {
+      // The tunnels' walls, ceilings and portals (M6.2b).
+      const tunnels = createRoadMesh(world.road.tunnels.mesh, roadMaterial);
+      for (const mesh of [asphalt, kerbs, barriers, gate, lapGates, bridges, tunnels]) mesh.receiveShadow = true;
+      // Kerbs lie flat on the road; the barriers, the gates, the bridges and the tunnels stand up and cast.
+      for (const mesh of [barriers, gate, lapGates, bridges, tunnels]) {
         mesh.castShadow = true;
         mesh.layers.enable(CASTER_LAYER);
       }
-      road.add(asphalt, kerbs, barriers, gate, lapGates, bridges);
+      road.add(asphalt, kerbs, barriers, gate, lapGates, bridges, tunnels);
+      // The tunnels' lids (M6.2b): the hillside given back over each cutting, drawn as the ground is, and casting over the road.
+      if (world.road.tunnels.lid.indices.length > 0) {
+        const shape = new THREE.BufferGeometry();
+        shape.setAttribute('position', new THREE.BufferAttribute(world.road.tunnels.lid.positions, 3));
+        shape.setAttribute('color', new THREE.BufferAttribute(coveredColours(world.road.tunnels.lid), 3));
+        shape.setIndex(new THREE.BufferAttribute(world.road.tunnels.lid.indices, 1));
+        shape.computeBoundingSphere();
+        const lid = new THREE.Mesh(shape, groundMaterial);
+        lid.receiveShadow = true;
+        lid.castShadow = true;
+        lid.layers.enable(CASTER_LAYER);
+        ground.add(lid);
+      }
       decor.load(world.decor);
       shade.setGround(world.ground);
       shade.setClouds(world.clouds);

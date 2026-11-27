@@ -136,6 +136,8 @@ export function createCarPhysics(rapier: Rapier, course: Course, cfg: PhysicsCon
   for (const handle of colliders.gate) things.set(handle, 'gate');
   // A bridge's deck or pillar is hit as a wall (M6.1b).
   for (const handle of colliders.bridges) things.set(handle, 'wall');
+  // So is a tunnel's wall, ceiling or portal (M6.2b); its lid is driven on as the ground.
+  for (const handle of colliders.tunnels) things.set(handle, 'wall');
   for (const handle of colliders.trees) things.set(handle, 'tree');
   for (const handle of colliders.rocks) if (handle !== NO_COLLIDER) things.set(handle, 'rock');
   const wheel = new rapier.Ball(cfg.car.wheels.radius);

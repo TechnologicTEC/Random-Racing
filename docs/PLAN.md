@@ -118,7 +118,8 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M6.2** Tunnels:
   - [x] **M6.2a** Tunnel spans, pure; the earthworks rule skips cut in a span; measured over seeds 1 to 200 (2026-11-27)
   - [x] **M6.2b-1** The tunnel's shape in the world, not drawn: walls, ceiling, lid and portals; walls both sides; no lap gate, grass, tree or rock under a lid (2026-11-27)
-  - [ ] **M6.2b-2** The tunnel drawn and hit: the lid in the ground's colours, walls, ceiling and portals; their colliders; pictures for Tane's yes
+  - [x] **M6.2b-2** The tunnel drawn and hit: the lid in the ground's colours, walls, ceiling and portals; their colliders; pictures for Tane's yes (2026-11-27)
+  - [ ] **M6.2b-3** Grass and trees on a tunnel's lid (Tane, 2026-11-27): the grass, the trees and the land's shadows read the lid's heights
   - [ ] **M6.2c** The chase camera under the lid; dimmer light inside; `look=tunnel`; pictures
 - [ ] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels
 - [ ] **M6.3** The look issues Tane picks (split into lettered parts at its start, generator ones first)
