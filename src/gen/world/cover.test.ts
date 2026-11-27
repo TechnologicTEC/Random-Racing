@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { circleLine, uniformWidth } from '../../testing/trackFixtures';
 import type { HeightField } from '../types';
-import { buildCover } from './cover';
+import { buildCover, coverSampler } from './cover';
 import { fitRoad } from './fit';
 import { createField, worldX, worldZ } from './heightfield';
 import { edgeDistance, nearestRoad } from './nearest';
@@ -99,5 +99,28 @@ describe('buildCover', () => {
     expect(again).toEqual(a);
     expect(other).not.toEqual(a);
     expect(new Set(a).size).toBeGreaterThan(50);
+  });
+});
+
+describe('coverSampler (M6.2b)', () => {
+  it('gives at any point the cover buildCover gives a cell away from the road, from its height and slope', () => {
+    // A hillside rising to the east, steep enough in places for rock and high enough for some snow.
+    const { ground, cover } = coverFor((x) => 30 + Math.max(0, x) * 1.2, 9);
+    const sample = coverSampler(9, config, 'peak');
+    const { size, cell } = ground;
+    for (const [x, z] of [
+      [150, 150],
+      [-170, 160],
+      [180, -150],
+      [-150, -180],
+    ] as const) {
+      const ix = Math.round((x - ground.origin) / cell);
+      const iz = Math.round((z - ground.origin) / cell);
+      const c = iz * size + ix;
+      const h = ground.height;
+      const slope = Math.hypot(h[c + 1]! - h[c - 1]!, h[c + size]! - h[c - size]!) / (2 * cell);
+      const got = sample(worldX(ground, ix), worldZ(ground, iz), h[c]!, slope);
+      expect([got.grass, got.sand, got.rock, got.snow, got.variation]).toEqual([cover.grass[c], cover.sand[c], cover.rock[c], cover.snow[c], cover.variation[c]]);
+    }
   });
 });

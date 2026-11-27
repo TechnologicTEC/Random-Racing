@@ -35,6 +35,10 @@ export const ROAD_MATERIAL = {
   timber: 18,
   /** A concrete bridge's white steel railings (M6.1c). */
   steel: 19,
+  /** A tunnel's walls, its ceiling, and the faces of its portals (M6.2b). */
+  tunnelWall: 20,
+  tunnelCeiling: 21,
+  portal: 22,
 } as const;
 
 /** What stands under each piece of the road (M6.1c, `deckPieces`): no bridge, a wooden one or a concrete one. */

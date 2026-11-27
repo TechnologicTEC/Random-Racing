@@ -361,6 +361,20 @@ export interface TunnelConfig {
   mergeGap: number;
   /** A layout with a tunnel nearer the start line than this, either way, is rejected, in metres: the start gate stands in the open. */
   startClear: number;
+  /** The ceiling stands this far above the road surface, parallel to its tilt, in metres (M6.2b). */
+  clearance: number;
+  /** The lid over a tunnel stands at least this far above its ceiling, in metres. */
+  cover: number;
+  /** A tunnel's walls are this thick, from the barriers' outer faces outwards, in metres. */
+  wall: number;
+  /** The lid's points across the road are about this far apart, in metres. */
+  lidStep: number;
+  /** Where the hill beside a tunnel is lower than the lid's least height, the lid falls this many metres a metre outwards until it meets it. */
+  lidSlope: number;
+  /** A portal's face rises no more than this over the lid's least height, in metres; behind it the lid climbs back to the hill at `lidSlope`. */
+  portalHeight: number;
+  /** No lap gate stands in a tunnel nor within this distance of either end of one, in metres. */
+  gateClear: number;
 }
 
 /**
@@ -2183,6 +2197,14 @@ export const config: GameConfig = {
       maxLength: 250,
       mergeGap: 40,
       startClear: 50,
+      // M6.2b: starting values. A 24 m wide box 6.5 m tall: the chase camera rides 2.4 m up.
+      clearance: 6.5,
+      cover: 1.5,
+      wall: 0.6,
+      lidStep: 3,
+      lidSlope: 1,
+      portalHeight: 3,
+      gateClear: 30,
     },
   },
   world: {

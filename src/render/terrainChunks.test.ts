@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Cover, HeightField } from '../gen/types';
 import { createField, worldX, worldZ } from '../gen/world/heightfield';
-import { terrainColour } from './palette';
+import { terrainColour, toLinear } from './palette';
 import { config } from '../config';
 import { generateWorld } from '../gen/generate';
-import { buildTerrainChunks, chunkStrides, detailOptions } from './terrainChunks';
+import { buildTerrainChunks, chunkStrides, coveredColours, detailOptions } from './terrainChunks';
 
 /** A small world from formulas: heights, and one cover value for every cell. */
 function world(extent: number, cell: number, heightAt: (x: number, z: number) => number, cover: Partial<Record<keyof Cover, number>> = {}) {
@@ -375,5 +375,26 @@ describe('the ground of real islands, drawn at the configured levels of detail',
     const chunks = buildTerrainChunks(world.ground, world.cover, { ...options, skipBelow: -Infinity });
     expect(chunks).toHaveLength(detail.across * detail.across);
     chunks.forEach((chunk, k) => expect(chunk.stride).toBe(detail.strides[k]));
+  });
+});
+
+describe('coveredColours (M6.2b)', () => {
+  it('colours each corner of a covered mesh as the ground is coloured at its height and with its cover', () => {
+    const cover: Cover = {
+      grass: Uint8Array.from([255, 0]),
+      sand: Uint8Array.from([0, 0]),
+      rock: Uint8Array.from([0, 200]),
+      snow: Uint8Array.from([0, 30]),
+      variation: Uint8Array.from([64, 190]),
+    };
+    const mesh = { positions: Float32Array.from([0, 12, 0, 5, 140, 5]), indices: Uint32Array.from([0, 1, 0]), cover };
+    const colours = coveredColours(mesh);
+    expect(colours).toHaveLength(6);
+    for (const v of [0, 1]) {
+      const [r, g, b] = terrainColour(mesh.positions[v * 3 + 1]!, cover.grass[v]! / 255, 0, cover.rock[v]! / 255, cover.snow[v]! / 255, cover.variation[v]! / 255);
+      expect(colours[v * 3]).toBeCloseTo(toLinear(r), 6);
+      expect(colours[v * 3 + 1]).toBeCloseTo(toLinear(g), 6);
+      expect(colours[v * 3 + 2]).toBeCloseTo(toLinear(b), 6);
+    }
   });
 });

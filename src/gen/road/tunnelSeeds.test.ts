@@ -5,7 +5,9 @@ import { generateTrack } from '../track/pipeline';
 import type { Candidate, TrackResult } from '../types';
 import { bridgedMask, spanLength } from './bridges';
 import { cutAndFill } from './profile';
-import { checkTunnelStart } from './tunnels';
+import { ROAD_MATERIAL } from './ribbon';
+import { checkTunnelStart, underLid } from './tunnels';
+import { walledPieces } from './walls';
 
 const winnerOf = (result: TrackResult): Candidate => result.candidates[result.winnerIndex]!;
 
@@ -45,5 +47,73 @@ describe('tunnels on real seeds (M6.2a)', () => {
     const world = generateWorld(11, config);
     expect(world.road.tunnels.spans.length).toBeGreaterThan(0);
     expect(world.road.tunnels.spans).toEqual(winnerOf(world.track).tunnels);
+  });
+});
+
+// Seed 35's second lap gate stood in its tunnel before M6.2b.
+describe('the tunnel in the world (M6.2b), on seeds 11, 13 and 35', () => {
+  const worlds = [11, 13, 35].map((seed) => generateWorld(seed, config));
+
+  it('builds each tunnel’s walls, ceiling and portals, and its lid with a cover for every corner', () => {
+    for (const world of worlds) {
+      const { mesh, lid } = world.road.tunnels;
+      const materials = new Set(mesh.materials);
+      for (const m of [ROAD_MATERIAL.tunnelWall, ROAD_MATERIAL.tunnelCeiling, ROAD_MATERIAL.portal]) expect(materials.has(m), `seed ${world.seed}`).toBe(true);
+      const corners = lid.positions.length / 3;
+      expect(corners).toBeGreaterThan(0);
+      for (const map of [lid.cover.grass, lid.cover.sand, lid.cover.rock, lid.cover.snow, lid.cover.variation]) expect(map).toHaveLength(corners);
+    }
+  });
+
+  it('walls both sides of the road all through every tunnel', () => {
+    for (const world of worlds) {
+      const n = world.road.width.length;
+      for (const side of [-1, 1] as const) {
+        const walled = walledPieces(world.road.walls, n, side);
+        for (const span of world.road.tunnels.spans) {
+          for (let k = 0; k < span.sampleCount - 1; k++) expect(walled[(span.startIndex + k) % n], `seed ${world.seed} side ${side}`).toBe(1);
+        }
+      }
+    }
+  });
+
+  it(`stands no lap gate in a tunnel or within ${config.road.tunnels.gateClear} m of one`, () => {
+    for (const world of worlds) {
+      const { line } = winnerOf(world.track);
+      const n = line.count;
+      const clear = Math.ceil(config.road.tunnels.gateClear / line.spacing);
+      for (const gate of world.road.lapGates.samples) {
+        for (const span of world.road.tunnels.spans) {
+          const k = (((gate - span.startIndex) % n) + n) % n;
+          expect(k < span.sampleCount + clear || k > n - clear - 1, `seed ${world.seed} gate ${gate}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('leaves no tree or rock standing under a lid, and no grass growing under one', () => {
+    for (const world of worlds) {
+      const { line } = winnerOf(world.track);
+      const tunnels = world.road.tunnels;
+      for (const scatter of [world.decor.trees, world.decor.rocks]) {
+        for (let k = 0; k < scatter.count; k++) {
+          const [x, z] = [scatter.x[k]!, scatter.z[k]!];
+          expect(underLid(tunnels, line, tunnels.spans, x, z), `seed ${world.seed}`).toBe(false);
+        }
+      }
+      // Every cell of the grid within the lid's bounds.
+      const { size, cell, origin } = world.ground;
+      const p = tunnels.lid.positions;
+      let [minX, maxX, minZ, maxZ] = [Infinity, -Infinity, Infinity, -Infinity];
+      for (let v = 0; v < p.length; v += 3) [minX, maxX, minZ, maxZ] = [Math.min(minX, p[v]!), Math.max(maxX, p[v]!), Math.min(minZ, p[v + 2]!), Math.max(maxZ, p[v + 2]!)];
+      let checked = 0;
+      for (let c = 0; c < size * size; c++) {
+        const [x, z] = [origin + (c % size) * cell, origin + Math.floor(c / size) * cell];
+        if (x < minX || x > maxX || z < minZ || z > maxZ || !underLid(tunnels, line, tunnels.spans, x, z)) continue;
+        checked++;
+        expect(world.cover.grass[c], `seed ${world.seed} cell ${c}`).toBe(0);
+      }
+      expect(checked).toBeGreaterThan(100);
+    }
   });
 });

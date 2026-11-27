@@ -416,6 +416,14 @@ export interface BridgeSpan {
   sampleCount: number;
 }
 
+/** A mesh each of whose corners has its own cover, drawn in the ground's colours (M6.2b: a tunnel's lid). */
+export interface CoveredMesh {
+  positions: Float32Array;
+  indices: Uint32Array;
+  /** One value a corner of each kind of cover, as `Cover` has one a cell. */
+  cover: Cover;
+}
+
 /** A stretch of the lap the road runs through in a tunnel (M6.2), numbered as a bridge's span is; it may wrap past the end of the lap. */
 export type TunnelSpan = BridgeSpan;
 
@@ -497,8 +505,12 @@ export interface Road {
    * and the decks, planks and pillars as triangles (M6.1b).
    */
   bridges: { spans: BridgeSpan[]; kinds: BridgeKind[]; mesh: MeshData };
-  /** Where the road runs in tunnels (M6.2): the winner's spans numbered from the start line. */
-  tunnels: { spans: TunnelSpan[] };
+  /**
+   * Where the road runs in tunnels (M6.2): the winner's spans numbered from the start line; the walls, ceilings and
+   * portals as triangles, and the lids over them in the ground's colours (M6.2b); and how far each lid reaches left
+   * and right of the centre line at each sample, 0 off the tunnels.
+   */
+  tunnels: { spans: TunnelSpan[]; mesh: MeshData; lid: CoveredMesh; left: Float64Array; right: Float64Array };
   /** The gates a lap is counted by (M5.4d): their samples of the winner's centre line in order round the lap, and their triangles. */
   lapGates: { samples: number[]; mesh: MeshData };
 }

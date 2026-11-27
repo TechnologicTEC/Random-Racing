@@ -65,6 +65,23 @@ describe('placing the lap gates (placeLapGates)', () => {
     // The straight's middle 200 m further than the apex: the corner.
     expect(placeLapGates(line, [corner(205), straight(320), ...far], rules)[0]).toBe(205);
   });
+
+  it('stands no gate where it may not: in a tunnel or near one (M6.2b), not even at its aim when nothing else fits', () => {
+    const line = { count: 1000, spacing: 2, length: 2000 } as CenterLine;
+    const corner = (apexIndex: number): Section => ({ type: 'corner', startIndex: apexIndex - 10, sampleCount: 20, length: 40, direction: 'left', turnDegrees: 90, minRadius: 40, meanRadius: 50, apexIndex, kind: 'sweeper' });
+    const straight = (middle: number): Section => ({ type: 'straight', startIndex: middle - 20, sampleCount: 40, length: 80 });
+    const far = [corner(400), corner(600), corner(800)];
+    // Samples 180 to 239 are in a tunnel: the straight at 220 is passed over for the next nearest, the corner at 400.
+    const blocked = new Uint8Array(1000);
+    blocked.fill(1, 180, 240);
+    expect(placeLapGates(line, [straight(220), ...far], rules)[0]).toBe(220);
+    expect(placeLapGates(line, [straight(220), ...far], rules, blocked)[0]).toBe(400);
+    // With nothing to choose from the gates stand at their aims, but never on a blocked sample: the first aim, 200, is.
+    const aims = placeLapGates(line, [], rules, blocked);
+    expect(aims[0]).not.toBe(200);
+    expect(blocked[aims[0]!]).toBe(0);
+    expect(aims.slice(1)).toEqual([400, 600, 800]);
+  });
 });
 
 describe("a lap gate's posts and beam (gateBoxes at a gate)", () => {

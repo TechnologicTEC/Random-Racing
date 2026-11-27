@@ -25,6 +25,9 @@ const BY_MATERIAL = new Map<number, Rgb>([
   [ROAD_MATERIAL.plankGap, ROAD.plankGap],
   [ROAD_MATERIAL.timber, ROAD.timber],
   [ROAD_MATERIAL.steel, ROAD.steel],
+  [ROAD_MATERIAL.tunnelWall, ROAD.tunnelWall],
+  [ROAD_MATERIAL.tunnelCeiling, ROAD.tunnelCeiling],
+  [ROAD_MATERIAL.portal, ROAD.portal],
 ]);
 
 /**

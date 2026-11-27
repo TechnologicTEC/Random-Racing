@@ -23,9 +23,12 @@ import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
 import { fitReport } from './world/report';
 import { pickSky } from './world/sky';
+import { buildTunnelWorld, outOfTunnels, tunnelGateBlock, withoutGrassUnderLids } from './world/tunnelWorld';
 
 /** Trees and rocks stand at least this far from a hill river's still water, in metres (M6.1d-3). */
 const STILL_WATER_CLEAR = 1;
+/** No tree or rock stands within this many metres of a tunnel's lid (M6.2b), so none pokes through its edge. */
+const TUNNEL_CLEAR = 1;
 
 /**
  * Generates everything for a seed: the track, the island around it, the road
@@ -38,8 +41,8 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   // Chosen only now that the winner is known, so the width never changes which layout wins.
   const width = solveWidth(track.seed, line, winner.sections, track.character.width, config);
   const island = buildIsland(track.seed, line, profile, width, config, track.character);
-  // The gates a lap is counted by (M5.4d).
-  const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates);
+  // The gates a lap is counted by (M5.4d), none in a tunnel or near one (M6.2b).
+  const lapGateSamples = placeLapGates(line, winner.sections, config.road.lapGates, tunnelGateBlock(winner.tunnels, line, config));
 
   // The lap's crossing over water or a ravine (M6.1d), carved into the island. It is taken only if, on the carved
   // ground, the road over it becomes a bridge no longer than the longest; otherwise the next site is tried.
@@ -80,17 +83,26 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
   // A hill river's still water (M6.1d-3): nothing grows under it and nothing stands in it.
   const stillWater = crossing ? buildStillWater(crossing, ground, config) : null;
   const plainCover = buildCover(track.seed, ground, fitted.corridor, island.edge, config, track.character.landform);
-  const cover = stillWater && crossing ? withoutGrassUnder(plainCover, ground, stillWater, crossing.path) : plainCover;
+  // The tunnels (M6.2b): over the cutting the fit made in the inland ground, their lids in the colours of the hillside.
+  const tunnels = buildTunnelWorld(track.seed, line, profile.height, cross, width, winner.tunnels, inland, ground, plainCover, island.near, track.character.landform, config);
+  const wetCover = stillWater && crossing ? withoutGrassUnder(plainCover, ground, stillWater, crossing.path) : plainCover;
+  // No grass under a lid, nor a tree or a rock: nothing pokes through it.
+  const cover = withoutGrassUnderLids(wetCover, ground, tunnels.shape, line, winner.tunnels);
   const plainDecor = buildDecor(track.seed, ground, cover, island.edge, config);
-  const decor =
+  const wetDecor =
     stillWater && crossing
       ? { ...plainDecor, trees: outOfStillWater(plainDecor.trees, stillWater, crossing.path, STILL_WATER_CLEAR), rocks: outOfStillWater(plainDecor.rocks, stillWater, crossing.path, STILL_WATER_CLEAR) }
       : plainDecor;
+  const decor = {
+    ...wetDecor,
+    trees: outOfTunnels(wetDecor.trees, tunnels.shape, line, winner.tunnels, TUNNEL_CLEAR),
+    rocks: outOfTunnels(wetDecor.rocks, tunnels.shape, line, winner.tunnels, TUNNEL_CLEAR),
+  };
   let highest = 0;
   for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);
   const kerbSpans = findKerbs(line, winner.sections, config.road);
   // Looked for on the finished ground, so a wall stands wherever a cutting, an embankment or a cliff ended up beside the road.
-  const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground, bridges }, config);
+  const walls = findWalls({ line, height: profile.height, cross, width, sections: winner.sections, ground, bridges, tunnels: winner.tunnels }, config);
   // Each bridge's look by its size (M6.1c): which pieces of the road are on which, and the railings' run past each end.
   const kinds = bridgeKinds(bridges, under.height, under.ground, line.spacing, config.road.bridges.look);
   const decks = deckPieces(bridges, kinds, line.count);
@@ -118,8 +130,8 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
         kinds,
         mesh: buildBridges(line, profile.height, cross, width, bridges, (x, z) => sampleField(ground, x, z, 0), config, kinds),
       },
-      // Where the road runs in tunnels (M6.2a). Until M6.2b the world still digs an open cutting there.
-      tunnels: { spans: winner.tunnels },
+      // Where the road runs in tunnels (M6.2a), and their walls, ceilings, portals and lids (M6.2b).
+      tunnels: { spans: winner.tunnels, mesh: tunnels.shape.mesh, lid: tunnels.lid, left: tunnels.shape.left, right: tunnels.shape.right },
       barriers: buildBarriers(line, profile.height, cross, width, winner.sections, walls, config, railings),
       gate: buildStartGate(line, profile.height, cross, width, config),
       lapGates: { samples: lapGateSamples, mesh: buildLapGates(line, profile.height, cross, width, lapGateSamples, (x, z) => sampleField(ground, x, z, 0), config) },
@@ -155,8 +167,16 @@ export function hashWorld(world: WorldResult): string {
   for (const wall of world.road.walls) hasher.numbers([wall.startIndex, wall.pieceCount, wall.side]);
   for (const span of world.road.bridges.spans) hasher.numbers([span.startIndex, span.sampleCount]);
   hasher.text(world.road.bridges.kinds.join(','));
-  // Tunnels (M6.2a): nothing is added for a world without one.
-  for (const span of world.road.tunnels.spans) hasher.numbers([span.startIndex, span.sampleCount]);
+  // Tunnels (M6.2a, M6.2b): nothing is added for a world without one.
+  const { tunnels } = world.road;
+  if (tunnels.spans.length > 0) {
+    for (const span of tunnels.spans) hasher.numbers([span.startIndex, span.sampleCount]);
+    hasher.numbers(tunnels.mesh.positions).numbers(tunnels.mesh.indices).numbers(tunnels.mesh.materials);
+    hasher.numbers(tunnels.lid.positions).numbers(tunnels.lid.indices);
+    const lid = tunnels.lid.cover;
+    hasher.numbers(lid.grass).numbers(lid.sand).numbers(lid.rock).numbers(lid.snow).numbers(lid.variation);
+    hasher.numbers(tunnels.left).numbers(tunnels.right);
+  }
   const { report } = world;
   for (const spot of [report.deepestCut, report.tallestFill, report.steepestBank, report.nearestWater, report.closestSections]) {
     if (spot) hasher.numbers([spot.x, spot.z, spot.value, spot.sample]);

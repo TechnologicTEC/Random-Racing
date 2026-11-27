@@ -50,6 +50,10 @@ export const ROAD = {
   timber: [0.42, 0.29, 0.18] as Rgb,
   /** A concrete bridge's white steel railings (M6.1c), matching its concrete. */
   steel: [0.9, 0.91, 0.9] as Rgb,
+  /** A tunnel (M6.2b): pale concrete walls, a darker ceiling, and its portals' faces in the bridges' concrete. */
+  tunnelWall: [0.7, 0.69, 0.66] as Rgb,
+  tunnelCeiling: [0.45, 0.45, 0.44] as Rgb,
+  portal: [0.64, 0.64, 0.61] as Rgb,
 };
 
 /** The sea: deep and shallow water, and foam. From the island demo. */

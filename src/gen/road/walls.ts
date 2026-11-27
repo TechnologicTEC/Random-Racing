@@ -16,6 +16,8 @@ export interface WallInput {
   ground: HeightField;
   /** Where the road runs on bridges (M6.1b): both sides walled, the walls' railings. */
   bridges?: readonly BridgeSpan[];
+  /** Where the road runs in tunnels (M6.2b): both sides walled, in front of the tunnel's own walls. */
+  tunnels?: readonly BridgeSpan[];
 }
 
 /**
@@ -29,7 +31,7 @@ export interface WallInput {
  * - where the ground beside the road rises or falls steeply: cuttings, embankments, cliffs, gorges;
  * - beside the start gate, whose posts stand outside the walls;
  * - along both sides of a bridge, as its railings (M6.1b), running on past each end far enough that their sloping
- *   ends are off the bridge.
+ *   ends are off the bridge; and so through a tunnel (M6.2b), their sloping ends outside its portals.
  *
  * Everywhere else the roadside is open: grass to run wide onto, and gentle
  * sand down to the sea. Openings too short to be worth having are closed, and
@@ -61,7 +63,7 @@ export function findWalls(input: WallInput, cfg: GenConfig): WallSpan[] {
     }
     for (let k = -gate; k < gate; k++) mark(k);
     const runOn = railingRunOn(line.spacing, rules);
-    for (const span of input.bridges ?? []) {
+    for (const span of [...(input.bridges ?? []), ...(input.tunnels ?? [])]) {
       for (let k = -runOn; k < span.sampleCount - 1 + runOn; k++) mark(span.startIndex + k);
     }
     const close = side > 0 ? beside.right : beside.left;

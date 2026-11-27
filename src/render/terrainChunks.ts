@@ -1,5 +1,5 @@
 import type { RenderConfig } from '../config';
-import type { Cover, HeightField } from '../gen/types';
+import type { Cover, CoveredMesh, HeightField } from '../gen/types';
 import { terrainColour, toLinear } from './palette';
 
 /**
@@ -210,4 +210,21 @@ export function buildTerrainChunks(ground: HeightField, cover: Cover, options: C
     }
   }
   return chunks;
+}
+
+/**
+ * The colour of each corner of a mesh with its own cover (M6.2b: a tunnel's lid), as the ground is coloured at that
+ * height with that cover: red, green and blue per corner, in linear light.
+ */
+export function coveredColours(mesh: Pick<CoveredMesh, 'positions' | 'cover'>): Float32Array {
+  const { positions, cover } = mesh;
+  const corners = positions.length / 3;
+  const colours = new Float32Array(corners * 3);
+  for (let v = 0; v < corners; v++) {
+    const [r, g, b] = terrainColour(positions[v * 3 + 1]!, cover.grass[v]! / 255, cover.sand[v]! / 255, cover.rock[v]! / 255, cover.snow[v]! / 255, cover.variation[v]! / 255);
+    colours[v * 3] = toLinear(r);
+    colours[v * 3 + 1] = toLinear(g);
+    colours[v * 3 + 2] = toLinear(b);
+  }
+  return colours;
 }

@@ -5,7 +5,7 @@ import { generateWorld } from '../generate';
 import { analyseSections } from '../track/analysis';
 import type { CenterLine, HeightField, WallSpan } from '../types';
 import { createField, worldX, worldZ } from '../world/heightfield';
-import { findWalls, tidyWalls, walledPieces } from './walls';
+import { findWalls, railingRunOn, tidyWalls, walledPieces } from './walls';
 
 const rules = config.road.walls;
 const ROAD = config.track.roadWidth;
@@ -115,6 +115,30 @@ describe('findWalls on a level square lap, driven clockwise', () => {
         if (run.value === 0) expect(length).toBeGreaterThanOrEqual(rules.minGap - line.spacing);
         else expect(length).toBeGreaterThanOrEqual(rules.minWall - line.spacing);
       }
+    }
+  });
+});
+
+describe('findWalls through a tunnel (M6.2b)', () => {
+  it('walls both sides all through a tunnel, and on past each portal as far as a bridge railing runs', () => {
+    // The middle of a straight of the square lap, where its outside is open.
+    const line = roundedSquareLine(300, 40);
+    const tunnel = { startIndex: 100, sampleCount: 30 };
+    const input = {
+      line,
+      height: new Float64Array(line.count).fill(10),
+      cross: new Float64Array(line.count),
+      width: uniformWidth(line, ROAD),
+      sections: analyseSections(line, config.track),
+      ground: flat,
+    };
+    const open = findWalls(input, config);
+    expect(walledPieces(open, line.count, 1)[115]).toBe(0);
+    const spans = findWalls({ ...input, tunnels: [tunnel] }, config);
+    const runOn = railingRunOn(line.spacing, config.road.walls);
+    for (const side of [-1, 1] as const) {
+      const walled = walledPieces(spans, line.count, side);
+      for (let k = -runOn; k < tunnel.sampleCount - 1 + runOn; k++) expect(walled[tunnel.startIndex + k], `side ${side} piece ${k}`).toBe(1);
     }
   });
 });
