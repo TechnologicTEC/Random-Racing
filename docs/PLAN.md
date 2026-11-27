@@ -121,7 +121,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M6.2b-2** The tunnel drawn and hit: the lid in the ground's colours, walls, ceiling and portals; their colliders; pictures for Tane's yes (2026-11-27)
   - [x] **M6.2b-3** Grass and trees on a tunnel's lid (Tane, 2026-11-27): the grass, the trees and the land's shadows read the lid's heights (2026-11-27)
   - [x] **M6.2c** The chase camera under the lid; dimmer light inside; `look=tunnel`; pictures (2026-11-28)
-- [ ] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels
+- [x] **Check-in 1 with Tane** after M6.2: drive over bridges and through tunnels (2026-11-28: it looks good, no changes)
 - [ ] **M6.3** The look issues Tane picks (split into lettered parts at its start, generator ones first)
 - **M6.4** Sound:
   - [ ] **M6.4a** Sound, pure (`src/audio/`)

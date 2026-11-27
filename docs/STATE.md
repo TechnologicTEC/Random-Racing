@@ -9,7 +9,8 @@ The step-by-step record of Milestones 1 and 2 (plans, measurements, check-ins an
 - **Current milestone:** **Milestone 6, Polish** ([issue #6](https://github.com/TechnologicTEC/Random-Racing/issues/6)), planned and approved by Tane on 2026-11-25 (below). Milestones 1 to 5 are merged and signed off (PR #7, #9, #10, #11, #12; Milestone 5 signed off by Tane 2026-11-25)
 - **Branch:** `milestone-6-polish`, made from `main` at 009260e. `main` is protected by a GitHub ruleset (no force pushes, no deletion, pull request required); one branch and pull request per milestone, merged after Tane signs off
 - **Last finished part:** M6.2c, the chase camera under the lid, dimmer light inside, `look=tunnel`; Tane chose the light (2026-11-28)
-- **Next:** **check-in 1 with Tane**: drive over the bridges and through the tunnels (tunnelled seeds 11, 13, 35, 50, 82, 130, 136, 140, 146, 171, 174, 176, 179; `look=bridge`, `look=tunnel`). Then M6.3, the look issues Tane picks
+- **Check-in 1 with Tane (2026-11-28):** after M6.2, the bridges and the tunnels: "it looks good, no real changes needed"
+- **Next:** **M6.3**, the look issues Tane picks: at its start, offer Tane the M6.3 lines of `docs/PLAN.md`'s table "Where each known issue is dealt with", then split the picked ones into lettered parts, generator ones first (`docs/plan/M6-polish.md`)
 - **Hand-over, 2026-11-16.** Fable 5.2 built Milestones 1 and 2 and Milestone 3 up to 4c, then planned the rest: `docs/PLAN.md` (every part to release, in order, with its rules, starting values and "done when" tests) and `docs/VISUAL_BAR.md`. Opus 5.5 finished the plan's later sections the same day and builds from here
 
 ## Milestone 6: polish (2026-11-25)
@@ -38,7 +39,7 @@ Planned in plan mode and approved by Tane on 2026-11-25 (plan file: `C:\Users\ta
 | M6.2b-2 | The tunnel drawn and hit: the lid in the ground's colours, walls, ceiling, portals; their colliders; pictures for Tane's yes | **Done** (below) |
 | M6.2b-3 | Grass and trees on a tunnel's lid (Tane, 2026-11-27) | **Done** (below) |
 | M6.2c | The chase camera under the lid (tested along every tunnel of seeds 1 to 200); dimmer light inside; `look=tunnel`; pictures | **Done** (below) |
-| | **Check-in 1 with Tane**: drive over bridges and through tunnels | To do |
+| | **Check-in 1 with Tane**: drive over bridges and through tunnels | **Done** 2026-11-28: looks good, no changes |
 | M6.3a… | The look issues Tane picks at its start, each its own part, generator ones first | To do |
 | M6.4a | Sound, pure (`src/audio/`): engine, screech, boost, thud from the simulation's state | To do |
 | M6.4b | Sound on the page: Web Audio after the first key or click; M mutes | To do |
