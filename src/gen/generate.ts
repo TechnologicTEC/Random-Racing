@@ -9,6 +9,7 @@ import { placeLapGates } from './road/lapGates';
 import { sampleField } from './world/heightfield';
 import { buildLapGates, buildStartGate } from './road/startGate';
 import { findWalls, railingRunOn } from './road/walls';
+import { tunnelRooms } from './road/tunnels';
 import { solveWidth } from './road/width';
 import { hashTrack } from './track/hash';
 import { generateTrack } from './track/pipeline';
@@ -23,7 +24,7 @@ import { fitRoad } from './world/fit';
 import { buildIsland, carveCoast } from './world/island';
 import { fitReport } from './world/report';
 import { pickSky } from './world/sky';
-import { buildTunnelWorld, clearOfRough, decorOnLids, lidTop, surfaceOf, tunnelGateBlock } from './world/tunnelWorld';
+import { buildTunnelWorld, clearOfCeilings, clearOfRough, decorOnLids, lidTop, rockExtent, surfaceOf, treeExtent, tunnelGateBlock } from './world/tunnelWorld';
 
 /** Trees and rocks stand at least this far from a hill river's still water, in metres (M6.1d-3). */
 const STILL_WATER_CLEAR = 1;
@@ -94,10 +95,13 @@ export function generateWorld(seed: number, config: GenConfig): WorldResult {
     stillWater && crossing
       ? { ...plainDecor, trees: outOfStillWater(plainDecor.trees, stillWater, crossing.path, STILL_WATER_CLEAR), rocks: outOfStillWater(plainDecor.rocks, stillWater, crossing.path, STILL_WATER_CLEAR) }
       : plainDecor;
+  // None by a rough point, and none reaching down through a tunnel's ceiling (M6.2c).
+  const rules = config.road.tunnels;
+  const rooms = tunnelRooms(line, profile.height, cross, width, winner.tunnels, tunnels.shape, config);
   const decor = {
     ...wetDecor,
-    trees: clearOfRough(wetDecor.trees, ground, lids.rough, config.road.tunnels.top.clear),
-    rocks: clearOfRough(wetDecor.rocks, ground, lids.rough, config.road.tunnels.top.clear),
+    trees: clearOfCeilings(clearOfRough(wetDecor.trees, ground, lids.rough, rules.top.clear), rooms, treeExtent, rules.wall, rules.ceilingGap),
+    rocks: clearOfCeilings(clearOfRough(wetDecor.rocks, ground, lids.rough, rules.top.clear), rooms, rockExtent(config.world.decor.rocks.sink), rules.wall, rules.ceilingGap),
   };
   let highest = 0;
   for (let c = 0; c < ground.height.length; c++) highest = Math.max(highest, ground.height[c]!);

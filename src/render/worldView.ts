@@ -4,6 +4,7 @@ import type { Point3 } from '../camera/flyAlong';
 import type { RenderConfig } from '../config';
 import type { HeightField, WorldResult } from '../gen/types';
 import { sampleField } from '../gen/world/heightfield';
+import type { TunnelRoom } from '../gen/road/tunnels';
 import { surfaceOf } from '../gen/world/tunnelWorld';
 import { createBloom } from './bloom';
 import type { KartPose } from './carShape';
@@ -26,6 +27,7 @@ import { createSkyDome } from './sky';
 import { buildTerrainChunks, chunkStrides, coveredColours, detailOptions } from './terrainChunks';
 import { createWater, type Water } from './water';
 import { waterDepthGrid } from './waterDepth';
+import { dimColours, tunnelLightAt } from './tunnelLight';
 
 /** What the renderer is drawing, for checks and the performance pass. */
 export interface ViewStats {
@@ -83,8 +85,8 @@ export interface PixelCounts {
 
 /** The 3D picture of a world. It only draws data it is given; it decides nothing about the world. */
 export interface WorldView {
-  /** Replaces whatever is shown with this world. */
-  load(world: WorldResult): void;
+  /** Replaces whatever is shown with this world; `rooms` (`tunnelRooms`) dims what lies inside its tunnels (M6.2c). */
+  load(world: WorldResult, rooms?: (x: number, z: number) => TunnelRoom | null): void;
   /** Lights the world, and colours its sky and haze, for a moment of the day. */
   setDaylight(light: Daylight): void;
   /** Moves the sea's waves to this many seconds on their clock. */
@@ -199,6 +201,9 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   scene.add(floor);
 
   const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 });
+  // Of what is drawn with it only the tunnels' lids cast (M6.2c): a lid is one sheet facing up, which Three.js leaves out of
+  // the shadow maps (it draws a material's other side there), so the trees on it cast into the tunnel under it.
+  groundMaterial.shadowSide = THREE.DoubleSide;
   shade.patch(groundMaterial);
   const ground = new THREE.Group();
   scene.add(ground);
@@ -238,6 +243,8 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   let levels: [number, number, number] = [0, 0, 0];
   /** The ground of the world shown, to tell how high the camera is above it. */
   let land: HeightField | null = null;
+  /** The share of the light at a point of the world shown, less inside its tunnels (M6.2c); null with no tunnel. */
+  let lightAt: ((x: number, y: number, z: number) => number) | null = null;
   /** The point the camera was last aimed at. */
   const aim = new THREE.Vector3();
   const onePixel = new Uint8Array(4);
@@ -262,8 +269,11 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   };
 
   return {
-    load(world) {
+    load(world, rooms) {
       clearGround();
+      // The light left at a point, inside a tunnel less (M6.2c).
+      lightAt = rooms ? (x, y, z) => tunnelLightAt(rooms(x, z), y, cfg.tunnels) : null;
+      car.setShare(1);
       const winner = world.track.candidates[world.track.winnerIndex]!;
       // Ground far from the road is only ever seen from a distance, so it is drawn with fewer triangles; so is deep sea bed.
       const options = detailOptions(cfg, winner.line);
@@ -300,6 +310,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       for (const chunk of chunks) {
         levels[chunk.stride >= 4 ? 2 : chunk.stride >= 2 ? 1 : 0]++;
         const geometry = new THREE.BufferGeometry();
+        if (lightAt) dimColours(chunk.positions, chunk.colors, lightAt);
         geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(chunk.colors, 3));
         geometry.setIndex(new THREE.BufferAttribute(chunk.indices, 1));
@@ -321,6 +332,13 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
       // The tunnels' walls, ceilings and portals (M6.2b).
       const tunnels = createRoadMesh(world.road.tunnels.mesh, roadMaterial);
       for (const mesh of [asphalt, kerbs, barriers, gate, lapGates, bridges, tunnels]) mesh.receiveShadow = true;
+      // What lies inside a tunnel is dimmed; its lid is not, being the top of the land.
+      if (lightAt) {
+        for (const mesh of [asphalt, kerbs, barriers, tunnels]) {
+          const { position, color } = mesh.geometry.attributes as Record<string, THREE.BufferAttribute>;
+          dimColours(position!.array as Float32Array, color!.array as Float32Array, lightAt);
+        }
+      }
       // Kerbs lie flat on the road; the barriers, the gates, the bridges and the tunnels stand up and cast.
       for (const mesh of [barriers, gate, lapGates, bridges, tunnels]) {
         mesh.castShadow = true;
@@ -422,6 +440,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
 
     setCar(pose) {
       car.set(pose);
+      if (pose) car.setShare(lightAt ? lightAt(pose.position.x, pose.position.y, pose.position.z) : 1);
     },
 
     setGhost(pose, opacity) {

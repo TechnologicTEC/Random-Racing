@@ -1,5 +1,5 @@
 import type { GenConfig, TunnelConfig } from '../../config';
-import { buildTunnels, type TunnelShape } from '../road/tunnels';
+import { buildTunnels, type TunnelRoom, type TunnelShape } from '../road/tunnels';
 import type { CenterLine, Cover, CoveredMesh, HeightField, LandformKind, LidTop, Scatter, TunnelSpan } from '../types';
 import { coverSampler } from './cover';
 import { sampleField } from './heightfield';
@@ -321,6 +321,65 @@ export function decorOnLids(cover: Cover, edge: Float32Array, top: LidTop): { co
   return { cover: out, edge: far };
 }
 
+/** A drawn rock is a lumpy ball no further across than this many times its size (`rockShape`'s lumps reach 1.14). */
+export const ROCK_EXTENT = 1.15;
+/** A tree's trunk reaches no further than this round its foot, nor further under it, in metres (as its collider). */
+const TRUNK_REACH = 0.5;
+const TRUNK_DEPTH = 1;
+
+/**
+ * How far round its foot and under it a rock of a size and height reaches (M6.2c), its middle sunk `sink` of its size
+ * under its foot (`world.decor.rocks.sink`), however it leans.
+ */
+export function rockExtent(sink: number): (size: number, tall: number) => { reach: number; depth: number } {
+  return (size, tall) => {
+    const reach = ROCK_EXTENT * size * Math.max(1, tall);
+    return { reach, depth: sink * size + reach };
+  };
+}
+
+/** How far round its foot and under it a tree's trunk reaches (M6.2c). */
+export function treeExtent(): { reach: number; depth: number } {
+  return { reach: TRUNK_REACH, depth: TRUNK_DEPTH };
+}
+
+/** Points looked at round a tree's or rock's foot, all the way out and half way, for `clearOfCeilings`. */
+const ROUND = 32;
+/** Taken as over a wall this much further out than its outer face, in metres, for the points between those looked at. */
+const BETWEEN = 0.1;
+
+/**
+ * A scatter of trees or rocks less those that would reach down through a tunnel's ceiling (M6.2c), in the same order:
+ * one whose drawn bottom, `depth` metres under its foot (`extentOf`), lies nearer than `gap` to the ceiling anywhere
+ * within `reach` of its foot that is under a lid and no further out than the walls' outer faces (`wall` metres beyond
+ * their inner faces). The ceiling is drawn between the walls, and its edge on them: a big rock on a thin lid shows
+ * through it from inside.
+ */
+export function clearOfCeilings(
+  scatter: Scatter,
+  rooms: (x: number, z: number) => TunnelRoom | null,
+  extentOf: (size: number, tall: number) => { reach: number; depth: number },
+  wall: number,
+  gap: number,
+): Scatter {
+  const keep: number[] = [];
+  for (let k = 0; k < scatter.count; k++) {
+    const [x, z] = [scatter.x[k]!, scatter.z[k]!];
+    const { reach, depth } = extentOf(scatter.size[k]!, scatter.tall[k]!);
+    const bottom = scatter.y[k]! - depth;
+    let through = false;
+    for (let p = 0; p <= 2 * ROUND && !through; p++) {
+      const out = p === 0 ? 0 : p <= ROUND ? reach : reach / 2;
+      const angle = (p * 2 * Math.PI) / ROUND;
+      const room = rooms(x + out * Math.cos(angle), z + out * Math.sin(angle));
+      if (!room?.under || Math.abs(room.lateral) > room.inner + wall + BETWEEN) continue;
+      if (bottom < room.ceiling + gap) through = true;
+    }
+    if (!through) keep.push(k);
+  }
+  return keepOnly(scatter, keep);
+}
+
 /** A scatter of trees or rocks less those standing within `clear` metres of a rough point of the grid (M6.2b-3), in the same order. */
 export function clearOfRough(scatter: Scatter, ground: HeightField, rough: Uint32Array, clear: number): Scatter {
   if (rough.length === 0) return scatter;
@@ -339,6 +398,11 @@ export function clearOfRough(scatter: Scatter, ground: HeightField, rough: Uint3
     }
     if (!near) keep.push(k);
   }
+  return keepOnly(scatter, keep);
+}
+
+/** A scatter of only those listed, in order; the same scatter when that is all of them. */
+function keepOnly(scatter: Scatter, keep: readonly number[]): Scatter {
   if (keep.length === scatter.count) return scatter;
   const pick = <T extends Float32Array | Uint8Array>(values: T): T => {
     const out = new (values.constructor as new (n: number) => T)(keep.length);

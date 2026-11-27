@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TreeKind } from '../gen/types';
 import { TREE_KINDS } from '../gen/world/decor';
+import { ROCK_EXTENT } from '../gen/world/tunnelWorld';
 import { puffShape, rockShape, treeShape, type Shape } from './treeShapes';
 
 const triangles = (shape: Shape): number => shape.indices.length / 3;
@@ -126,6 +127,16 @@ describe('treeShape', () => {
 });
 
 describe('rockShape', () => {
+  it('stays within the reach the generator keeps clear of a tunnel’s ceiling for it (M6.2c)', () => {
+    for (const detail of ['near', 'far'] as const) {
+      const shape = rockShape(detail);
+      for (let v = 0; v < vertices(shape); v++) {
+        const [x, y, z] = [shape.positions[v * 3]!, shape.positions[v * 3 + 1]!, shape.positions[v * 3 + 2]!];
+        expect(Math.hypot(x, y, z), detail).toBeLessThanOrEqual(ROCK_EXTENT);
+      }
+    }
+  });
+
   it('is a sound, lumpy ball about a metre in radius, cheaper far away', () => {
     const near = rockShape('near');
     const far = rockShape('far');

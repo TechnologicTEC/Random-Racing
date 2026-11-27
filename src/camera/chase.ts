@@ -12,6 +12,22 @@ export interface ChaseCar {
   drift?: Pick<DriftView, 'phase' | 'dir' | 'boostLeft'>;
 }
 
+/**
+ * What a point on the map is to the tunnels (M6.2c; `tunnelRooms` in gen/road/tunnels.ts gives one): under a lid
+ * (`under`), or in front of a portal; how far right of the centre line, how far out the walls' inner faces stand, how
+ * high the ceiling is, and how far in from the nearer portal (negative in front of one).
+ */
+export interface ChaseRoom {
+  under: boolean;
+  lateral: number;
+  inner: number;
+  ceiling: number;
+  depth: number;
+}
+
+/** The tunnels' room at a point, or null where there is no tunnel. */
+export type ChaseRoomAt = (x: number, z: number) => ChaseRoom | null;
+
 /** The chase camera at one frame. */
 export interface ChaseView {
   /**
@@ -43,16 +59,16 @@ export interface ChaseView {
  * turning steadily is then followed the same at any frame rate. It never comes
  * within `clearance` of the ground under it.
  */
-export function chaseStart(car: ChaseCar, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
+export function chaseStart(car: ChaseCar, groundAt: (x: number, z: number) => number, cfg: ChaseConfig, room?: ChaseRoomAt): ChaseView {
   const target = travelAngle(car, cfg, 0);
-  return place(car, target, target, swingWanted(car, cfg), fieldWanted(car, cfg), groundAt, cfg);
+  return place(car, target, target, swingWanted(car, cfg), fieldWanted(car, cfg), groundAt, cfg, room);
 }
 
 /** The chase camera one frame on, `frameSeconds` after `prev`. */
-export function chaseNext(prev: ChaseView, car: ChaseCar, frameSeconds: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
+export function chaseNext(prev: ChaseView, car: ChaseCar, frameSeconds: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig, room?: ChaseRoomAt): ChaseView {
   // The new target, unwrapped to lie within a half turn of the last one.
   const target = prev.target + wrap(travelAngle(car, cfg, prev.target) - prev.target);
-  if (!(frameSeconds > 0)) return place(car, prev.heading, target, prev.swing, prev.fieldOfView, groundAt, cfg);
+  if (!(frameSeconds > 0)) return place(car, prev.heading, target, prev.swing, prev.fieldOfView, groundAt, cfg, room);
   // The target taken as turning evenly from the last frame's to this one's: the exact answer for easing towards it.
   const rate = (target - prev.target) / frameSeconds;
   const keep = Math.exp(-frameSeconds / cfg.follow);
@@ -62,7 +78,7 @@ export function chaseNext(prev: ChaseView, car: ChaseCar, frameSeconds: number, 
   const swing = ease(prev.swing, swingWanted(car, cfg), frameSeconds, cfg.swingTime);
   const wanted = fieldWanted(car, cfg);
   const fieldOfView = ease(prev.fieldOfView, wanted, frameSeconds, wanted > prev.fieldOfView ? cfg.boostIn : cfg.boostOut);
-  return place(car, heading, target, swing, fieldOfView, groundAt, cfg);
+  return place(car, heading, target, swing, fieldOfView, groundAt, cfg, room);
 }
 
 /** A value eased towards a target over a frame, two thirds of the way in `time`; exactly the target once there. */
@@ -86,16 +102,46 @@ function fieldWanted(car: ChaseCar, cfg: ChaseConfig): number {
  * car by the swing, and still looks ahead along the line of travel, so a
  * swung camera sees across the corner.
  */
-function place(car: ChaseCar, heading: number, target: number, swing: number, fieldOfView: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig): ChaseView {
+function place(car: ChaseCar, heading: number, target: number, swing: number, fieldOfView: number, groundAt: (x: number, z: number) => number, cfg: ChaseConfig, room?: ChaseRoomAt): ChaseView {
   const ax = Math.sin(heading);
   const az = Math.cos(heading);
   const { x, y, z } = car.position;
   // Turning the eye's own heading by the swing moves it round the car: a positive swing to the car's right.
   const ex = swing === 0 ? ax : Math.sin(heading + swing);
   const ez = swing === 0 ? az : Math.cos(heading + swing);
-  const eye = { x: x - ex * cfg.back, y: y + cfg.height, z: z - ez * cfg.back };
+  let eye = { x: x - ex * cfg.back, y: y + cfg.height, z: z - ez * cfg.back };
+  if (room) eye = inRoom(car.position, eye, room, cfg.clearance);
   eye.y = Math.max(eye.y, groundAt(eye.x, eye.z) + cfg.clearance);
+  // Under a tunnel's lid, the ceiling is felt as the ground is (M6.2c).
+  const over = room?.(eye.x, eye.z);
+  if (over?.under) eye.y = Math.min(eye.y, over.ceiling - cfg.clearance);
   return { heading, target, eye, look: { x: x + ax * cfg.lookAhead, y: y + cfg.lookHeight, z: z + az * cfg.lookAhead }, swing, fieldOfView };
+}
+
+/** The eye is drawn in from where it would stand towards the car in steps no longer than this, in metres. */
+const ROOM_STEP = 0.25;
+
+/**
+ * Keeps the eye in a tunnel's room (M6.2c). Walked back from the car towards where the eye would stand, the eye stops
+ * at the last point before it would come within `margin` of a wall's inner face under a lid or within `margin` of a
+ * portal's plane, or pass that plane beside the opening in either direction: so it never stands in the rock beyond a
+ * wall, in a portal's face, or in front of one with the car behind it; its height is kept. A car itself out of the room (beyond a wall) leaves the eye where it is.
+ */
+function inRoom(car: Point3, eye: Point3, room: ChaseRoomAt, margin: number): Point3 {
+  let last = room(car.x, car.z);
+  if (last?.under && Math.abs(last.lateral) > last.inner) return eye;
+  const steps = Math.max(1, Math.ceil(Math.hypot(eye.x - car.x, eye.z - car.z) / ROOM_STEP));
+  let kept = 0;
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    const here = room(car.x + (eye.x - car.x) * t, car.z + (eye.z - car.z) * t);
+    const crossing = here !== null && last !== null && here.under !== last.under;
+    if (here && Math.abs(here.lateral) > here.inner - margin && (here.under || crossing || here.depth > -margin)) break;
+    kept = t;
+    last = here;
+  }
+  if (kept === 1) return eye;
+  return { x: car.x + (eye.x - car.x) * kept, y: eye.y, z: car.z + (eye.z - car.z) * kept };
 }
 
 /**

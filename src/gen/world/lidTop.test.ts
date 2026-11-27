@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { config, type GenConfig } from '../../config';
 import { stadiumLine } from '../../testing/trackFixtures';
-import { buildTunnels, type TunnelGround } from '../road/tunnels';
+import { buildTunnels, type TunnelGround, type TunnelRoom } from '../road/tunnels';
 import type { CenterLine, Cover, CoveredMesh, HeightField, Scatter, TunnelSpan } from '../types';
 import { sampleField } from './heightfield';
-import { clearOfRough, lidTop, surfaceOf } from './tunnelWorld';
+import { clearOfCeilings, clearOfRough, lidTop, surfaceOf } from './tunnelWorld';
 
 // Fixed rules, so these tests do not move when the config is tuned.
 const cfg: Pick<GenConfig, 'road'> = {
@@ -264,5 +264,52 @@ describe('clearOfRough: no tree or rock by a rough point (M6.2b-3)', () => {
   it('keeps every one with no rough point', () => {
     const scatter = scatterOf([[0, 0]]);
     expect(clearOfRough(scatter, ground, new Uint32Array(0), 5)).toBe(scatter);
+  });
+});
+
+describe('clearOfCeilings: nothing on a lid reaches down through a tunnel’s ceiling (M6.2c)', () => {
+  // A tunnel along x from 0 to 100, its right towards +z: the walls’ inner faces 12 m out, 0.6 m thick, the ceiling at 10 m.
+  const rooms = (x: number, z: number): TunnelRoom | null =>
+    x >= 0 && x <= 100 && Math.abs(z) <= 30 ? { under: true, lateral: z, inner: 12, reach: 30, ceiling: 10, depth: Math.min(x, 100 - x) } : null;
+  /** Each reaches 2 m round its foot and 3 m under it. */
+  const extent = (): { reach: number; depth: number } => ({ reach: 2, depth: 3 });
+  const scatterOf = (points: [number, number, number][]): Scatter => {
+    const k = points.length;
+    const values = (f: (i: number) => number): Float32Array => Float32Array.from({ length: k }, (_, i) => f(i));
+    return {
+      count: k,
+      x: values((i) => points[i]![0]),
+      y: values((i) => points[i]![1]),
+      z: values((i) => points[i]![2]),
+      size: values(() => 1),
+      tall: values(() => 1),
+      turn: values(() => 0),
+      lean: values(() => 0),
+      kind: Uint8Array.from({ length: k }, () => 0),
+      shade: Uint8Array.from({ length: k }, (_, i) => i),
+    };
+  };
+
+  it('drops what would reach within the gap of the ceiling over the tunnel or its walls, and keeps the rest, in order', () => {
+    const scatter = scatterOf([
+      // Over the middle: its bottom 2.5 m and 0.3 m over the ceiling (kept), then 0.1 m (dropped).
+      [50, 15.5, 0],
+      [50, 13.3, 5],
+      [50, 13.1, -5],
+      // Beside the walls: its foot 1.5 m beyond their outer faces, so it reaches over a wall (dropped); 3 m beyond (kept).
+      [50, 11, 14.1],
+      [50, 11, -15.6],
+      // Past the portals.
+      [-3, 11, 0],
+      [104, 11, 0],
+    ]);
+    const kept = clearOfCeilings(scatter, rooms, extent, 0.6, 0.2);
+    expect(Array.from(kept.shade)).toEqual([0, 1, 4, 5, 6]);
+    expect(Array.from(kept.z)).toEqual([0, 5, -15.6, 0, 0].map(Math.fround));
+  });
+
+  it('keeps the very same scatter when nothing is dropped', () => {
+    const scatter = scatterOf([[50, 20, 0]]);
+    expect(clearOfCeilings(scatter, rooms, extent, 0.6, 0.2)).toBe(scatter);
   });
 });

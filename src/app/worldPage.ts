@@ -3,10 +3,11 @@ import { chaseStart, type ChaseView } from '../camera/chase';
 import { createFlyPath, type FlyPath } from '../camera/flyAlong';
 import { dragOrbit, orbitEye, zoomOrbit, type Orbit } from '../camera/orbit';
 import { clearOrbit, titleOrbit } from '../camera/orbitFit';
-import { lookAtBridge, lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack } from '../camera/spots';
+import { lookAtBridge, lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, lookAtTunnel } from '../camera/spots';
 import { config, GENERATOR_VERSION } from '../config';
 import { formatSeedCode, MAX_SEED, parseSeedInput, seedInputProblem } from '../core/seedCode';
 import type { CloudCover, FitReport, WoodsKind, WorldResult } from '../gen';
+import { tunnelRooms, type TunnelRoom } from '../gen/road/tunnels';
 import { sampleField } from '../gen/world/heightfield';
 import { formatClock, lightName, parseClock, shortCharacter, shortScenery } from '../debug/trackLab/format';
 import { daylightAt } from '../render/daylight';
@@ -212,7 +213,8 @@ const NEXT_VIEW: Record<CameraMode, string> = { chase: 'Drive', fly: 'Fly the la
  * Address options: `seed=42`; `cam=fly` to open flying the lap and `cam=orbit` to open circling (the car stays
  * where it is until the driving view is back); `lap=0.5` to open flying, half way round the lap; `still=1` to open
  * paused, with the car held at its start; `look=cut` (or fill, bank,
- * close, water, hairpin, start, summit, climb, sun, car, or bridge: the crossing's bridge or the lap's longest) or `at=x,z` for a close view of one place;
+ * close, water, hairpin, start, summit, climb, sun, car, bridge: the crossing's bridge or the lap's longest, or tunnel: in front
+ * of the lap's longest tunnel, looking in) or `at=x,z` for a close view of one place;
  * `time=17:45` to open at that time of day instead of the seed's own (held to daylight);
  * `decor=off` to leave out the trees, rocks and clouds; `grass=off` to leave out the grass blades;
  * `water=off` to leave out the surface of the sea; `fps=1` to open with the frame times showing (the F key shows and hides them);
@@ -401,6 +403,8 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
   let waitingView: ChaseView | null = null;
   /** The height of the ground of the world shown, for the cameras. */
   const groundAt = (x: number, z: number): number => (shown ? sampleField(shown.ground, x, z, 0) : 0);
+  /** The tunnels' room at a point of the world shown, for the chase camera and the light inside (M6.2c); none with no tunnel. */
+  let roomAt: ((x: number, z: number) => TunnelRoom | null) | undefined;
   /** The car as it is drawn: between the last two steps while driving, as the simulation has it otherwise. */
   const carState = (): CarState | null => (sim ? (driving.shown() ?? sim.state()) : null);
   /** The race's cards as last written, so each is written again only when it changes. */
@@ -706,7 +710,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
     // The controller's Back reaches the simulation in the input record, as R does: it puts the car back itself.
     // Driving: the fixed-step loop takes its own measure of the frame (at most five steps), unless the picture is held still.
     // Paused, on the title and on the results, no step is taken and nothing pressed is recorded.
-    if (steps(screen) && mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt)) drawCar();
+    if (steps(screen) && mode === 'chase' && sim && !building && driving.frame(gap / 1000, makeInput(devices.read()), !holdStill, groundAt, roomAt)) drawCar();
     checkFinished();
     // Behind the title and results cards the camera circles the island by itself.
     if (!still && mode === 'orbit' && (screen.name === 'title' || screen.name === 'results' || screen.name === 'favourites') && !dragging) {
@@ -1011,7 +1015,13 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       // A newer island was asked for while this one was being raised: drop this one.
       if (wantedSeed !== seed) return;
       building = false;
-      view.load(result);
+      {
+        const { line, profile } = result.track.candidates[result.track.winnerIndex]!;
+        const { cross, width, tunnels } = result.road;
+        // In front of a portal as far as the chase camera stands behind the car.
+        roomAt = tunnels.spans.length > 0 ? tunnelRooms(line, profile.height, cross, width, tunnels.spans, tunnels, config, config.camera.chase.back + 2) : undefined;
+      }
+      view.load(result, roomAt);
       report = result.report;
       shown = result;
       void loadGhost(result);
@@ -1023,7 +1033,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
       const winner = result.track.candidates[result.track.winnerIndex]!;
       driven = false;
       // The chase camera, until the simulation is built: behind the car's start pose.
-      waitingView = chaseStart({ ...startPose(result, config), velocity: { x: 0, y: 0, z: 0 } }, groundAt, config.camera.chase);
+      waitingView = chaseStart({ ...startPose(result, config), velocity: { x: 0, y: 0, z: 0 } }, groundAt, config.camera.chase, roomAt);
       flight = createFlyPath(winner.line, winner.profile.height, groundAt, fly);
       frameIsland(result);
 
@@ -1035,6 +1045,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
           ? (lookAtSpot(look, result.report, groundAt) ??
             lookAtTrack(look, winner.line, winner.sections, groundAt) ??
             lookAtBridge(look, winner.line, result.road.bridges.spans, result.crossing?.sample ?? null, groundAt) ??
+            lookAtTunnel(look, winner.line, winner.profile.height, result.road.tunnels.spans) ??
             lookAtRoad(look, winner.line, winner.profile.height, result.mountains, groundAt) ??
             (look === 'sun' ? lookAtSun(winner.line.x[0]!, winner.line.z[0]!, winner.profile.height[0]!) : null) ??
             (look === 'car' ? lookAtCar(startPose(result, config)) : null))
@@ -1459,7 +1470,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         applyTuning();
         const state = driving.run(count, makeInput(raw));
         // Drawn at once, with no step of the page's own and the camera straight behind the car.
-        driving.frame(0, makeInput({}), false, groundAt);
+        driving.frame(0, makeInput({}), false, groundAt, roomAt);
         drawCar();
         checkFinished();
         aimCamera();
@@ -1472,7 +1483,7 @@ export function mountWorldPage(root: HTMLElement): ViewHandle {
         applyTuning();
         let state = sim.state();
         for (const packed of inputs) state = driving.run(1, unpackInput(packed));
-        driving.frame(0, makeInput({}), false, groundAt);
+        driving.frame(0, makeInput({}), false, groundAt, roomAt);
         drawCar();
         checkFinished();
         aimCamera();

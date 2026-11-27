@@ -4,7 +4,7 @@ import { config } from '../config';
 import { analyseSections } from '../gen/track/analysis';
 import { stadiumLine } from '../testing/trackFixtures';
 import { orbitEye, type Orbit } from './orbit';
-import { lookAtBridge, lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, ROAD_SPOT_NAMES, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
+import { lookAtBridge, lookAtCar, lookAtPoint, lookAtRoad, lookAtSpot, lookAtTrack, lookAtTunnel, ROAD_SPOT_NAMES, SPOT_NAMES, TRACK_SPOT_NAMES } from './spots';
 
 const spot = (x: number, z: number, sample = 0) => ({ x, z, value: 1, sample });
 const report: FitReport = {
@@ -278,5 +278,43 @@ describe('lookAtBridge (look=bridge, M6.1e)', () => {
   it('has nothing to look at with no bridge, or for another name', () => {
     expect(lookAtBridge('bridge', line, [], null, heightAt)).toBeNull();
     expect(lookAtBridge('hairpin', line, spans, 25, heightAt)).toBeNull();
+  });
+});
+
+describe('lookAtTunnel (look=tunnel, M6.2c)', () => {
+  const line = stadiumLine(400, 20);
+  const n = line.count;
+  // Both on the first straight, which runs along +x: the second the longer.
+  const spans = [
+    { startIndex: 20, sampleCount: 20 },
+    { startIndex: 60, sampleCount: 50 },
+  ];
+  const height = new Float64Array(n).fill(30);
+  const view = { back: 30, lift: 3.5, ahead: 20, rise: 2 };
+
+  it('stands on the road in front of the longest tunnel’s first portal, looking in along it', () => {
+    const orbit = lookAtTunnel('tunnel', line, height, spans, view)!;
+    const eye = orbitEye(orbit);
+    const portal = spans[1]!.startIndex;
+    // 30 m back along the road, 3.5 m over it.
+    expect(eye.x).toBeCloseTo(line.x[portal]! - 30, 0);
+    expect(eye.z).toBeCloseTo(line.z[portal]!, 6);
+    expect(eye.y).toBeCloseTo(30 + 3.5, 6);
+    // Looking at a point 20 m in, 2 m over the road.
+    expect(orbit.targetX).toBeCloseTo(line.x[portal]! + 20, 0);
+    expect(orbit.targetY).toBeCloseTo(30 + 2, 6);
+  });
+
+  it('finds a tunnel across the start of the lap', () => {
+    const across = [{ startIndex: n - 10, sampleCount: 30 }];
+    const orbit = lookAtTunnel('tunnel', line, height, across, view)!;
+    const eye = orbitEye(orbit);
+    const back = Math.round(30 / line.spacing);
+    expect(eye.x).toBeCloseTo(line.x[n - 10 - back]!, 3);
+  });
+
+  it('has nothing to look at with no tunnel, or for another name', () => {
+    expect(lookAtTunnel('tunnel', line, height, [], view)).toBeNull();
+    expect(lookAtTunnel('bridge', line, height, spans, view)).toBeNull();
   });
 });

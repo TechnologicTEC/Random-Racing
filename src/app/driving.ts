@@ -1,4 +1,4 @@
-import { chaseNext, chaseStart, type ChaseView } from '../camera/chase';
+import { chaseNext, chaseStart, type ChaseRoomAt, type ChaseView } from '../camera/chase';
 import type { GameConfig } from '../config';
 import type { InputRecord } from '../sim/input';
 import type { CarState, Sim } from '../sim/sim';
@@ -21,9 +21,9 @@ export interface Driving {
   /**
    * One frame of the page, `seconds` after the last. While `stepping`, the simulation takes the steps the loop
    * gives (`advance`) with `input`; otherwise it takes none and no time is carried over. Then the car to draw and
-   * the camera are worked out. Returns whether anything to draw changed.
+   * the camera are worked out (kept in a tunnel's room by `room`, M6.2c). Returns whether anything to draw changed.
    */
-  frame(seconds: number, input: InputRecord, stepping: boolean, groundAt: (x: number, z: number) => number): boolean;
+  frame(seconds: number, input: InputRecord, stepping: boolean, groundAt: (x: number, z: number) => number, room?: ChaseRoomAt): boolean;
   /**
    * Takes `steps` steps at once with `input`, for browser tests and the console. The page's next frame takes no
    * step of its own and shows exactly where the steps ended, with the camera straight behind the car.
@@ -73,7 +73,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
     },
     sim: () => sim,
 
-    frame(seconds, input, stepping, groundAt) {
+    frame(seconds, input, stepping, groundAt, room) {
       if (!sim || !after) return false;
       let steps = 0;
       let blend = 0;
@@ -100,7 +100,7 @@ export function createDriving(cfg: Pick<GameConfig, 'sim' | 'camera'>): Driving 
       moment = blend > 0 && before ? before.step + (after.step - before.step) * blend : after.step;
       const changed = steps > 0 || shown === null || snapNext || wasHeld || drawn !== shown;
       shown = drawn;
-      view = snapNext || !view ? chaseStart(drawn, groundAt, cfg.camera.chase) : chaseNext(view, drawn, seconds, groundAt, cfg.camera.chase);
+      view = snapNext || !view ? chaseStart(drawn, groundAt, cfg.camera.chase, room) : chaseNext(view, drawn, seconds, groundAt, cfg.camera.chase, room);
       snapNext = false;
       return changed;
     },

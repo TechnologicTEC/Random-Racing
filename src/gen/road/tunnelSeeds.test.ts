@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { config } from '../../config';
 import { generateWorld } from '../generate';
 import { sampleField } from '../world/heightfield';
-import { surfaceOf } from '../world/tunnelWorld';
+import { rockExtent, surfaceOf, treeExtent } from '../world/tunnelWorld';
 import { generateTrack } from '../track/pipeline';
 import type { Candidate, TrackResult } from '../types';
 import { bridgedMask, spanLength } from './bridges';
 import { cutAndFill } from './profile';
 import { ROAD_MATERIAL } from './ribbon';
-import { checkTunnelStart, underLid } from './tunnels';
+import { checkTunnelStart, tunnelRooms, underLid } from './tunnels';
 import { walledPieces } from './walls';
 
 const winnerOf = (result: TrackResult): Candidate => result.candidates[result.winnerIndex]!;
@@ -130,6 +130,36 @@ describe('the tunnel in the world (M6.2b), on seeds 11, 13 and 35', () => {
       }
     }
     expect(onLids).toBeGreaterThan(10);
+  });
+
+  // Seeds 11 and 130 had rocks on their lids poking down through the ceiling before M6.2c.
+  it('lets no rock or tree on a lid reach down through a tunnel’s ceiling (M6.2c)', { timeout: 60_000 }, () => {
+    const { wall, ceilingGap } = config.road.tunnels;
+    let checked = 0;
+    for (const world of [...worlds, generateWorld(82, config), generateWorld(130, config)]) {
+      const { line, profile } = winnerOf(world.track);
+      const { cross, width, tunnels } = world.road;
+      const rooms = tunnelRooms(line, profile.height, cross, width, tunnels.spans, tunnels, config);
+      for (const [scatter, extentOf] of [
+        [world.decor.rocks, rockExtent(config.world.decor.rocks.sink)],
+        [world.decor.trees, treeExtent],
+      ] as const) {
+        for (let k = 0; k < scatter.count; k++) {
+          const { reach, depth } = extentOf(scatter.size[k]!, scatter.tall[k]!);
+          const bottom = scatter.y[k]! - depth;
+          // The foot and 32 points round it, half way out and all the way.
+          for (let p = 0; p <= 32; p++) {
+            const out = p === 0 ? 0 : reach * (p % 2 === 0 ? 1 : 0.5);
+            const angle = (p * Math.PI) / 16;
+            const room = rooms(scatter.x[k]! + out * Math.cos(angle), scatter.z[k]! + out * Math.sin(angle));
+            if (!room?.under || Math.abs(room.lateral) > room.inner + wall) continue;
+            checked++;
+            expect(bottom, `seed ${world.seed} at ${scatter.x[k]}, ${scatter.z[k]}`).toBeGreaterThanOrEqual(room.ceiling + ceilingGap - 1e-4);
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(100);
   });
 
 });

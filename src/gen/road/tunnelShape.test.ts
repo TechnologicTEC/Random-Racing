@@ -3,7 +3,7 @@ import { config, type GenConfig } from '../../config';
 import { stadiumLine } from '../../testing/trackFixtures';
 import type { CenterLine, MeshData, TunnelSpan } from '../types';
 import { ROAD_MATERIAL } from './ribbon';
-import { buildTunnels, tunnelWallOffsets, underLid, type TunnelGround } from './tunnels';
+import { buildTunnels, tunnelRooms, tunnelWallOffsets, underLid, type TunnelGround } from './tunnels';
 
 // Fixed rules, so these tests do not move when the config is tuned.
 const cfg: Pick<GenConfig, 'road'> = {
@@ -266,6 +266,71 @@ describe('what lies under a tunnel’s lid (M6.2b)', () => {
     expect(underLid(shape, line, [SPAN], after.x, after.z)).toBe(false);
     const away = at(400, 0);
     expect(underLid(shape, line, [SPAN], away.x, away.z)).toBe(false);
+  });
+});
+
+describe('a tunnel’s room, for the cameras and the light inside (M6.2c)', () => {
+  const rooms = tunnelRooms(line, height, null, width, [SPAN], shape, cfg, 8);
+
+  it('gives a point under the lid its place across the road, the walls’ inner faces, the ceiling over it and how far in it is', () => {
+    const p = at(150, 5);
+    const room = rooms(p.x, p.z)!;
+    expect(room.under).toBe(true);
+    expect(room.lateral).toBeCloseTo(5, 6);
+    expect(room.inner).toBeCloseTo(inner, 9);
+    expect(room.ceiling).toBeCloseTo(CEILING, 6);
+    // Sample 150 is 45 samples of about 2 m from the first portal and 45 from the last.
+    expect(room.depth).toBeCloseTo(45 * line.spacing, 6);
+    expect(room.reach).toBeCloseTo(shape.right[150]!, 9);
+    const left = at(150, -5);
+    expect(rooms(left.x, left.z)!.reach).toBeCloseTo(shape.left[150]!, 9);
+    // Half way between two samples, 10 m in from the first portal.
+    const near = rooms(line.x[SPAN.startIndex + 5]! + 1, -100)!;
+    expect(near.depth).toBeCloseTo(5 * line.spacing + 1, 6);
+  });
+
+  it('gives a point beyond the walls under the lid its place too, with the ceiling as it is at the wall', () => {
+    const p = at(150, 16);
+    const room = rooms(p.x, p.z)!;
+    expect(room.under).toBe(true);
+    expect(room.lateral).toBeCloseTo(16, 6);
+    expect(Math.abs(room.lateral)).toBeGreaterThan(room.inner);
+    expect(room.ceiling).toBeCloseTo(CEILING, 6);
+  });
+
+  it('tilts the ceiling with a banked road, and takes it between samples where the road climbs', () => {
+    const cross = new Float64Array(n).fill(0.05);
+    const banked = tunnelRooms(line, height, cross, width, [SPAN], shape, cfg)(at(150, 5).x, at(150, 5).z)!;
+    expect(banked.ceiling).toBeCloseTo(CEILING + 0.05 * 5, 6);
+    const beyond = tunnelRooms(line, height, cross, width, [SPAN], shape, cfg)(at(150, -16).x, at(150, -16).z)!;
+    expect(beyond.ceiling).toBeCloseTo(CEILING - 0.05 * inner, 6);
+    // Climbing 0.1 m a metre through the tunnel.
+    const climbing = Float64Array.from(height, (h, i) => h + 0.1 * line.x[i]!);
+    const between = tunnelRooms(line, climbing, null, width, [SPAN], shape, cfg)(line.x[150]! + 1, -100)!;
+    expect(between.ceiling).toBeCloseTo(CEILING + 0.1 * (line.x[150]! + 1), 6);
+  });
+
+  it('marks a point in front of a portal, within the apron, as not under the lid, with how far out it is', () => {
+    const before = rooms(line.x[SPAN.startIndex]! - 5, -100 + 3)!;
+    expect(before.under).toBe(false);
+    expect(before.depth).toBeCloseTo(-5, 6);
+    expect(before.lateral).toBeCloseTo(3, 6);
+    const after = rooms(line.x[SPAN.startIndex + SPAN.sampleCount - 1]! + 6, -100 - 13)!;
+    expect(after.under).toBe(false);
+    expect(after.depth).toBeCloseTo(-6, 6);
+    expect(after.lateral).toBeCloseTo(-13, 6);
+    // Further out than the apron, and with no apron at all.
+    expect(rooms(line.x[SPAN.startIndex]! - 9, -100)).toBeNull();
+    expect(tunnelRooms(line, height, null, width, [SPAN], shape, cfg)(line.x[SPAN.startIndex]! - 5, -100)).toBeNull();
+  });
+
+  it('has no room past the lid’s edges, on other road, or with no tunnel', () => {
+    const past = at(150, 40);
+    expect(rooms(past.x, past.z)).toBeNull();
+    const away = at(400, 0);
+    expect(rooms(away.x, away.z)).toBeNull();
+    const none = tunnelRooms(line, height, null, width, [], shape, cfg, 8);
+    expect(none(at(150, 0).x, at(150, 0).z)).toBeNull();
   });
 });
 

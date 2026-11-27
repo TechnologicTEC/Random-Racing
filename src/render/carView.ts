@@ -21,6 +21,8 @@ export interface CarView {
   setTextures(textures: EffectTextures): void;
   /** The light the smoke is seen in (linear, 0 to 1 a channel): the smoke is not lit by the sun's shader, so it is told. */
   setLight(colour: THREE.Color): void;
+  /** The share of the light where the kart is, 0 to 1 (`tunnelLightAt`, M6.2c): its colours and its smoke's light are multiplied by it. */
+  setShare(share: number): void;
   /**
    * Readies it for the bloom's own picture, or back for the screen: there the kart is drawn into depth only, so it hides
    * what is behind it, and the glowing effects as bright as they are.
@@ -203,6 +205,9 @@ function spriteMesh(kind: SpriteKind, map: THREE.Texture, glow: number): SpriteM
 export function createCarView(look: KartViewConfig, prepare?: (material: THREE.Material) => void): CarView {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0 });
   prepare?.(material);
+  /** The smoke's light as told, and the share of it where the kart is. */
+  const smokeLight = new THREE.Color(1, 1, 1);
+  let share = 1;
   const bodyGeometry = toGeometry(kartBody());
   const wheelGeometry = toGeometry(kartWheel(look));
   const object = new THREE.Group();
@@ -254,7 +259,14 @@ export function createCarView(look: KartViewConfig, prepare?: (material: THREE.M
       for (const kind of KINDS) sprites[kind].material.uniforms['map']!.value = textures[kind];
     },
     setLight(colour) {
-      (sprites.smoke.material.uniforms['light']!.value as THREE.Color).copy(colour);
+      smokeLight.copy(colour);
+      (sprites.smoke.material.uniforms['light']!.value as THREE.Color).copy(colour).multiplyScalar(share);
+    },
+    setShare(next) {
+      if (next === share) return;
+      share = next;
+      material.color.setScalar(share);
+      (sprites.smoke.material.uniforms['light']!.value as THREE.Color).copy(smokeLight).multiplyScalar(share);
     },
     setForBloom(on) {
       material.colorWrite = !on;

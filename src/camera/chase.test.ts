@@ -3,7 +3,7 @@ import { config } from '../config';
 import { generateWorld } from '../gen';
 import { sampleField } from '../gen/world/heightfield';
 import { quatFromAxes, type Quat, type Vec3 } from '../sim/quat';
-import { chaseNext, chaseStart, type ChaseCar, type ChaseView } from './chase';
+import { chaseNext, chaseStart, type ChaseCar, type ChaseRoomAt, type ChaseView } from './chase';
 
 const cfg = config.camera.chase;
 const flat = (): number => 0;
@@ -252,6 +252,93 @@ describe('the chase camera in a drift', () => {
       z -= SPEED * dt;
       view = chaseNext(view, driving(z, slide(1)), dt, (x) => bank(x), cfg);
       expect(view.eye.y).toBeGreaterThanOrEqual(bank(view.eye.x) + cfg.clearance - 1e-9);
+    }
+  });
+});
+
+/**
+ * A straight tunnel for the camera (M6.2c): the road at height 0 runs along +x from a portal at x = 0 to one at
+ * x = 100, its right towards +z; the walls' inner faces 12 m out, the lid reaching 30 m, an apron of 8 m in front of
+ * each portal.
+ */
+function straightTunnel(ceiling: number): ChaseRoomAt {
+  return (x, z) => {
+    if (Math.abs(z) > 30 || x < -8 || x > 108) return null;
+    const under = x >= 0 && x <= 100;
+    return { under, lateral: z, inner: 12, ceiling, depth: under ? Math.min(x, 100 - x) : -(x < 0 ? -x : x - 100) };
+  };
+}
+
+describe('the chase camera in a tunnel (M6.2c)', () => {
+  const margin = cfg.clearance;
+
+  it('stays the clearance under a low ceiling', () => {
+    const view = chaseStart(car({ x: 50, y: 0.56, z: 0 }, [1, 0]), flat, cfg, straightTunnel(3));
+    expect(view.eye.y).toBeCloseTo(3 - margin, 9);
+    expect(view.eye.x).toBeCloseTo(50 - cfg.back, 9);
+  });
+
+  it('is where it would be anywhere else under a ceiling high enough, and outside the tunnel', () => {
+    for (const at of [
+      { x: 50, z: 0 },
+      { x: 50, z: 8 },
+      { x: 200, z: 0 },
+      { x: 4, z: 0 },
+    ]) {
+      const open = chaseStart(car({ x: at.x, y: 0.56, z: at.z }, [1, 0]), flat, cfg);
+      const inside = chaseStart(car({ x: at.x, y: 0.56, z: at.z }, [1, 0]), flat, cfg, straightTunnel(6.5));
+      expect(inside.eye).toEqual(open.eye);
+    }
+  });
+
+  it('comes in towards the car rather than stand in the rock beyond a wall', () => {
+    // Facing the left wall: the eye would stand 6.5 m behind the car, 4.5 m past the right wall.
+    const at = { x: 50, y: 0.56, z: 10 };
+    const view = chaseStart(car(at, [0, -1]), flat, cfg, straightTunnel(6.5));
+    expect(view.eye.z).toBeLessThanOrEqual(12 - margin + 1e-9);
+    expect(view.eye.z).toBeGreaterThan(12 - margin - 0.3);
+    expect(view.eye.x).toBeCloseTo(50, 9);
+  });
+
+  it('never stands beside a portal’s opening, in front of its face, with the car inside', () => {
+    // Just inside the first portal, by the right wall, heading 30 degrees across towards the left: the eye would stand
+    // outside the portal, 13 m right of the centre line, in front of the portal’s face.
+    const at = { x: 2, y: 0.56, z: 10.8 };
+    const nose: [number, number] = [Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
+    const open = chaseStart(car(at, nose), flat, cfg);
+    expect(open.eye.x).toBeLessThan(0);
+    expect(open.eye.z).toBeGreaterThan(12);
+    const view = chaseStart(car(at, nose), flat, cfg, straightTunnel(6.5));
+    expect(view.eye.x).toBeGreaterThanOrEqual(0);
+    expect(view.eye.z).toBeLessThanOrEqual(12 - margin + 1e-9);
+    // Still on the line from the car back to where it would have been.
+    const t = (view.eye.x - at.x) / (open.eye.x - at.x);
+    expect(view.eye.z).toBeCloseTo(at.z + (open.eye.z - at.z) * t, 6);
+  });
+
+  it('never stands inside beside the opening with the car outside in front of the last portal', () => {
+    const at = { x: 102, y: 0.56, z: 10.8 };
+    const nose: [number, number] = [Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
+    const view = chaseStart(car(at, nose), flat, cfg, straightTunnel(6.5));
+    expect(view.eye.x).toBeGreaterThan(100);
+  });
+
+  it('never stands in a portal’s face beside the opening, with the car on the portal’s plane facing across', () => {
+    for (const x of [0, -0.3, 0.3, 100]) {
+      const view = chaseStart(car({ x, y: 0.56, z: 10.8 }, [0, -1]), flat, cfg, straightTunnel(6.5));
+      expect(view.eye.z, `x ${x}`).toBeLessThanOrEqual(12 - margin + 1e-9);
+    }
+    // Far enough out in front of the portal, the open cutting beside the road is no part of the tunnel.
+    const out = chaseStart(car({ x: -5, y: 0.56, z: 10.8 }, [0, -1]), flat, cfg, straightTunnel(6.5));
+    expect(out.eye.z).toBeCloseTo(10.8 + cfg.back, 9);
+  });
+
+  it('keeps to the room in chaseNext too, frame after frame', () => {
+    let view = chaseStart(car({ x: 50, y: 0.56, z: 0 }, [1, 0]), flat, cfg, straightTunnel(3));
+    for (let k = 0; k < 30; k++) {
+      view = chaseNext(view, car({ x: 50, y: 0.56, z: 10 }, [0, -1]), 1 / 60, flat, cfg, straightTunnel(3));
+      expect(view.eye.y).toBeLessThanOrEqual(3 - margin + 1e-9);
+      expect(view.eye.z).toBeLessThanOrEqual(12 - margin + 1e-9);
     }
   });
 });

@@ -1,5 +1,5 @@
 import { config } from '../config';
-import type { BridgeSpan, CenterLine, FitReport, FitSpot, MountainSummit, Section } from '../gen/types';
+import type { BridgeSpan, CenterLine, FitReport, FitSpot, MountainSummit, Section, TunnelSpan } from '../gen/types';
 import { orbitEye, type Orbit } from './orbit';
 import { rotate, type Quat, type Vec3 } from '../sim/quat';
 
@@ -77,6 +77,21 @@ export function lookAtBridge(
   const span = over ?? spans.reduce((a, b) => (b.sampleCount > a.sampleCount ? b : a));
   const middle = (span.startIndex + Math.floor(span.sampleCount / 2)) % n;
   return closeView(line.x[middle]!, line.z[middle]!, heightAt, view);
+}
+
+/**
+ * A close camera at a tunnel (`look=tunnel`, M6.2c): on the road `view.back` metres before the first portal of the
+ * lap's longest tunnel, `view.lift` over it, looking in along the road at a point `view.ahead` metres inside,
+ * `view.rise` over it. Returns null for any other name, or a lap with no tunnel.
+ */
+export function lookAtTunnel(name: string, line: CenterLine, height: ArrayLike<number>, spans: readonly TunnelSpan[], view = config.camera.tunnel): Orbit | null {
+  if (name !== 'tunnel' || spans.length === 0) return null;
+  const n = line.count;
+  const span = spans.reduce((a, b) => (b.sampleCount > a.sampleCount ? b : a));
+  const at = (i: number, up: number): Point => ({ x: line.x[i]!, y: height[i]! + up, z: line.z[i]! });
+  const before = (((span.startIndex - Math.round(view.back / line.spacing)) % n) + n) % n;
+  const inside = (span.startIndex + Math.min(span.sampleCount - 1, Math.round(view.ahead / line.spacing))) % n;
+  return orbitFrom(at(before, view.lift), at(inside, view.rise));
 }
 
 /** Places on the road found from its heights, by the names used in the address bar. */

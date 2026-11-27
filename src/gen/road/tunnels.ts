@@ -367,6 +367,90 @@ export function underLid(reach: Pick<TunnelShape, 'left' | 'right'>, line: Cente
   return false;
 }
 
+/** What a point on the map is to the tunnels (M6.2c), for the cameras and the light inside. */
+export interface TunnelRoom {
+  /** True behind a portal, under the lid; false in front of one, within the apron asked for. */
+  under: boolean;
+  /** How far right of the centre line it is, at the tunnel's sample nearest it, in metres (negative to the left). */
+  lateral: number;
+  /** How far the walls' inner faces stand from the centre line there. */
+  inner: number;
+  /** How far the lid reaches on its side there. */
+  reach: number;
+  /** The ceiling's height over it; beyond a wall, the ceiling's at that wall. */
+  ceiling: number;
+  /** How far in from the nearer portal it is along the road, in metres; in front of a portal, minus how far out. */
+  depth: number;
+}
+
+/**
+ * What each point on the map is to the tunnels (M6.2c): measured from the tunnel's sample nearest it, as `underLid`
+ * does, a point within the lid's reach between the portals is under the lid; one no more than `apron` metres in front
+ * of a portal, and no further across than the lid reaches there, is in front of it. Any other point has no room. The
+ * ceiling is read between the two samples either side of the point, so it follows the road as it climbs.
+ */
+export function tunnelRooms(
+  line: CenterLine,
+  height: Float64Array,
+  cross: Float64Array | null,
+  width: Float64Array,
+  spans: readonly TunnelSpan[],
+  reach: Pick<TunnelShape, 'left' | 'right'>,
+  cfg: Pick<GenConfig, 'road'>,
+  apron = 0,
+): (x: number, z: number) => TunnelRoom | null {
+  const road = cfg.road;
+  const n = line.count;
+  // Each tunnel's samples, and a box on the map round everything that could be in its room, so most points are turned away at once.
+  const tunnels = spans.map((span) => {
+    const samples = Array.from({ length: span.sampleCount }, (_, k) => (span.startIndex + k) % n);
+    let furthest = 0;
+    let [minX, maxX, minZ, maxZ] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const i of samples) {
+      furthest = Math.max(furthest, reach.left[i]!, reach.right[i]!);
+      [minX, maxX, minZ, maxZ] = [Math.min(minX, line.x[i]!), Math.max(maxX, line.x[i]!), Math.min(minZ, line.z[i]!), Math.max(maxZ, line.z[i]!)];
+    }
+    const pad = furthest + apron + line.spacing;
+    return { samples, minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
+  });
+  const surface = (i: number, lateral: number): number => height[i]! + (cross ? cross[i]! * lateral : 0);
+
+  return (x, z) => {
+    for (const { samples, minX, maxX, minZ, maxZ } of tunnels) {
+      if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+      let k = 0;
+      let best = Infinity;
+      for (let s = 0; s < samples.length; s++) {
+        const i = samples[s]!;
+        const d = (line.x[i]! - x) ** 2 + (line.z[i]! - z) ** 2;
+        if (d < best) [k, best] = [s, d];
+      }
+      const j = samples[k]!;
+      const dx = x - line.x[j]!;
+      const dz = z - line.z[j]!;
+      const along = dx * line.tx[j]! + dz * line.tz[j]!;
+      const lateral = -dx * line.tz[j]! + dz * line.tx[j]!;
+      const side = lateral < 0 ? reach.left[j]! : reach.right[j]!;
+      if (Math.abs(lateral) > side) continue;
+      const last = samples.length - 1;
+      const outBefore = k === 0 && along < 0;
+      const outAfter = k === last && along > 0;
+      if ((outBefore || outAfter) && Math.abs(along) > apron) continue;
+      const { inner } = tunnelWallOffsets(width, j, road);
+      const across = Math.max(-inner, Math.min(inner, lateral));
+      // The ceiling between this sample and the next one the point lies towards, inside the tunnel.
+      const t = along / line.spacing;
+      const other = samples[Math.max(0, Math.min(last, k + Math.sign(t)))]!;
+      const share = other === j ? 0 : Math.min(1, Math.abs(t));
+      const ceiling = surface(j, across) * (1 - share) + surface(other, across) * share + road.tunnels.clearance;
+      const fromStart = k * line.spacing + along;
+      const depth = outBefore ? along : outAfter ? -along : Math.min(fromStart, last * line.spacing - fromStart);
+      return { under: !(outBefore || outAfter), lateral, inner, reach: side, ceiling, depth };
+    }
+    return null;
+  };
+}
+
 /** A tunnel's boxes run this far past both ends of their piece, in metres, so no slit opens between them where the road bends. */
 const BOX_OVERLAP = 0.03;
 

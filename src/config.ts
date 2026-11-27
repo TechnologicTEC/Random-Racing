@@ -375,6 +375,8 @@ export interface TunnelConfig {
   portalHeight: number;
   /** No lap gate stands in a tunnel nor within this distance of either end of one, in metres. */
   gateClear: number;
+  /** No tree or rock on a lid reaches nearer than this to the ceiling over the tunnel or its walls, in metres (M6.2c). */
+  ceilingGap: number;
   /**
    * Grass and trees on a lid (M6.2b-3). Grass blades stand on the ground's grid, blended between its points; a blade
    * may stand on a lid only where that blend lies no more than `float` metres above the drawn lid nor `sink` metres
@@ -911,6 +913,8 @@ export interface DecorConfig {
  * ground, small rocks along the shore, and the odd boulder out on the grass.
  */
 export interface RockConfig {
+  /** A rock's middle lies this share of its size under the ground, as it is drawn and hit (`ROCK_SINK`). */
+  sink: number;
   /** Width of a square, and how far a rock lies from its middle (see `TreeConfig`). */
   spacing: number;
   jitter: number;
@@ -1132,6 +1136,21 @@ export interface RenderConfig {
   clouds: CloudViewConfig;
   grass: GrassConfig;
   shadows: ShadowConfig;
+  tunnels: TunnelLightConfig;
+}
+
+/**
+ * The light inside a tunnel (M6.2c), drawing only: the colours of what lies inside (the road, its kerbs and barriers,
+ * the walls, the ceiling, the ground by the road) and of the car while it is inside are multiplied by a share of the
+ * light, which fades in from all of it at each portal. The lid's shadow already keeps the sun off inside.
+ */
+export interface TunnelLightConfig {
+  /** The share left deep inside, 0 to 1. */
+  light: number;
+  /** It fades in over this many metres from each portal. */
+  fade: number;
+  /** The hidden ground is dimmed to this far beyond the walls' inner faces, and never nearer than this to the lid's edge, in metres. */
+  spread: number;
 }
 
 /**
@@ -1567,6 +1586,11 @@ export interface CameraConfig {
    * road's line and tipped up `tilt` radians; it tips up further if it would be within `clearance` metres of the ground.
    */
   climb: { window: number; distance: number; side: number; tilt: number; clearance: number };
+  /**
+   * The close view of a tunnel (`&look=tunnel`, M6.2c): on the road `back` metres before the lap's longest tunnel's
+   * first portal, `lift` over it, looking at a point `ahead` metres inside, `rise` over the road.
+   */
+  tunnel: { back: number; lift: number; ahead: number; rise: number };
   /** The camera that flies the lap. */
   fly: FlyConfig;
   /** The camera behind the car while driving. */
@@ -2211,6 +2235,8 @@ export const config: GameConfig = {
       lidSlope: 1,
       portalHeight: 3,
       gateClear: 30,
+      // M6.2c: seeds 11 and 130 had rocks on their lids poking down through the ceiling.
+      ceilingGap: 0.2,
       // M6.2b-3: starting values.
       top: { float: 0.15, sink: 1, clear: 5 },
     },
@@ -2351,6 +2377,7 @@ export const config: GameConfig = {
         max: 22000,
       },
       rocks: {
+        sink: ROCK_SINK,
         spacing: 12,
         jitter: 0.35,
         minRock: 0.35,
@@ -2641,6 +2668,8 @@ export const config: GameConfig = {
       land: { edge: 6, bias: 0.3, lowest: 0.05 },
       clouds: { size: 512, strength: 0.55, solid: 0.5 },
     },
+    // M6.2c: starting values, judged from pictures.
+    tunnels: { light: 0.45, fade: 25, spread: 4.5 },
   },
   camera: {
     orbit: {
@@ -2658,6 +2687,7 @@ export const config: GameConfig = {
     },
     spot: { angle: 0.6, tilt: 0.42, distance: 90 },
     car: { distance: 7, tilt: 0.3, side: 0.7 },
+    tunnel: { back: 30, lift: 3.5, ahead: 20, rise: 2 },
     summit: { back: 70, lift: 15, spread: 0.6, ahead: 300, clearance: 4 },
     climb: { window: 40, distance: 80, side: 0.3, tilt: 0.12, clearance: 4 },
     fly: { speed: 28, speedRange: [8, 70], height: 4, lookAhead: 30, lookHeight: 1, smoothing: 16, clearance: 2.5 },
