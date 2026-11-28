@@ -1497,6 +1497,12 @@ export interface WaterConfig {
    */
   glintSpread: number;
   glintDim: number;
+  /**
+   * M6.3e: seen from high up, the glints spread less and are fainter, so the sun's glare is a soft sparkle rather than
+   * a wide pale patch striped by the long waves: from `from` metres above the water to `to` the spread falls to
+   * `spread` of itself and the strength to `strength`. From the road (a few metres up) nothing changes.
+   */
+  glintHigh: { from: number; to: number; spread: number; strength: number };
   /** Seconds on the wave clock at which the waves stand for a still picture. */
   stillTime: number;
 }
@@ -2632,6 +2638,7 @@ export const config: GameConfig = {
       glintStrength: 0.75,
       glintSpread: 1.5,
       glintDim: 0.65,
+      glintHigh: { from: 60, to: 250, spread: 1, strength: 0.3 },
       stillTime: 0,
     },
     decor: { groupSize: 450, detailDistance: 350, treeSink: 0.35, rockSink: ROCK_SINK, shade: [0.8, 1.12] },

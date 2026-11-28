@@ -98,7 +98,7 @@ The car was drawn in step 5c, to the proposal below, and Tane approved it at che
 ## Flaws these pictures already have (known issues, not the bar)
 
 - The edge of a slope under 70% steep is still a saw-tooth (the cliff's foot on the beach in `shore.jpg`; the bank inside the corner in `road-corner-woods.jpg`); since M6.3d steeper cliffs' edges are lines (seed 1 `look=water`).
-- From above, the sun's glare on the sea is a wide pale patch with wave stripes (`island-from-above.jpg`, right).
+- From above, the sun's glare on the sea still shows faint wave stripes (`island-from-above.jpg`, right; a faint sparkle since M6.3e).
 - At 07:00 the clouds are grey-brown against the pink sky (`sunrise.jpg`).
 - On a lone peak much steeper than its foot, rock still begins along a fairly crisp line at the foot (`mountain.jpg`; softer since M6.3c).
 - `time=18:30` is named "evening light" but its sky is still plain blue (`road-corner-woods.jpg`).

@@ -127,7 +127,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
   - [x] **M6.3b** Wider blends beside deep cuttings on steep ground (generator) (2026-11-28; 45 m, Tane)
   - [x] **M6.3c** Mountain rock with soft, uneven edges; a less lumpy peak (generator) (2026-11-28; the peak left as it is, Tane)
   - [x] **M6.3d** The saw-tooth tops of sea cliffs and cut banks (drawing; a generator fallback if Tane asks) (2026-11-28; over 70% steep, Tane)
-  - [ ] **M6.3e** The sun's glare on the sea from above (drawing)
+  - [x] **M6.3e** The sun's glare on the sea from above (drawing) (2026-11-28; 30% from high up, Tane)
   - [ ] **M6.3f** The time of day: clouds at a low sun, dawn and dusk light, the evening sky, the light's names (drawing)
   - [ ] **M6.3g** Smaller flower dabs near the chase camera (drawing)
 - **M6.4** Sound:
@@ -227,7 +227,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | Mountain worlds are the slowest to build (3.0 to 3.3 s headless); Firefox 1.6 times slower than Chromium | **M6.7** (the budget test uses seed 7 and passes) |
 | The grass's 176,000 triangles; the most wooded islands' 589,000 from above; the water shader's cost; Low gains least from above; the page draws every frame | **M6.7**, and **10b** checks the chase view |
 | Sea cliffs and cut banks have a saw-tooth top edge on the 3 m grid | **M6.3d** (done: squares over 70% steep split along the slope's edge) |
-| The sun's glare from above is a wide pale patch with wave stripes | **M6.3e** |
+| The sun's glare from above is a wide pale patch with wave stripes | **M6.3e** (done: 30% from high up) |
 | Clouds dark grey-brown at 07:00 and 19:30; those times quite dark; 18:30 called "evening light" with a blue sky; 10:00 called "midday light" | **M6.3f** (all one look at `render/daylight.ts` and `lightName`) |
 | The round cone under a massif | Left (Tane, M6.3a, 2026-11-28: a lobed foot barely showed; the round look is the coast's cliffs) |
 | Mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3c** (done: the edges wander; the peak left, Tane) |

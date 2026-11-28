@@ -130,8 +130,10 @@ export function createWater(size: number, cfg: WaterConfig, shade?: WaterShade, 
         col = mix(col, uSky, clamp(fres * 0.9, 0.0, ${float(cfg.fresnelMost)}));
         vec3 R = reflect(-uSunDir, n);
         // Where waves were left out, the sun's glints spread and soften, as light off unseen waves does.
-        float sharp = ${float(cfg.glint)} / (1.0 + ${float(cfg.glint * cfg.glintSpread)} * lost);
-        float glints = pow(sharp / ${float(cfg.glint)}, ${float(cfg.glintDim)});
+        // From high up they spread less and are fainter, so the glare is no wide striped patch (M6.3e).
+        float high = smoothstep(${float(cfg.glintHigh.from)}, ${float(cfg.glintHigh.to)}, cameraPosition.y - uLevel);
+        float sharp = ${float(cfg.glint)} / (1.0 + ${float(cfg.glint * cfg.glintSpread)} * lost * mix(1.0, ${float(cfg.glintHigh.spread)}, high));
+        float glints = pow(sharp / ${float(cfg.glint)}, ${float(cfg.glintDim)}) * mix(1.0, ${float(cfg.glintHigh.strength)}, high);
         col += uGlint * pow(max(dot(R, V), 0.0), sharp) * ${float(cfg.glintStrength)} * glints * sunLit;
 
         float band = sin(depth * ${float(cfg.foamBands)} - uTime * ${float(cfg.foamSpeed)} + sin(p.x * 0.15 + p.y * 0.12) * 2.0) * 0.5 + 0.5;
