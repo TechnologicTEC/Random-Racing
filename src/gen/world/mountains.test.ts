@@ -292,7 +292,8 @@ describe('snow', () => {
       const [from, to] = built.cfg.world.cover.snowHeight;
       for (let c = 0; c < built.island.natural.height.length; c++) {
         const height = built.island.natural.height[c]!;
-        if (height < from - 10) expect(cover.snow[c], `seed ${built.seed}`).toBe(0);
+        // The snow line wanders by up to `cover.edge.snow` metres (M6.3c).
+        if (height < from - 10 - built.cfg.world.cover.edge.snow) expect(cover.snow[c], `seed ${built.seed}`).toBe(0);
         if (height > to + 10 && cover.snow[c]! > 200) snowy++;
       }
     }

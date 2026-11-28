@@ -29,20 +29,29 @@ export function coverSampler(seed: number, cfg: GenConfig, landform: LandformKin
   const noise = createNoise(rng);
   const offsetX = rng.range(-500, 500);
   const offsetZ = rng.range(-500, 500);
+  // The broad wander of the rock's and the snow's edges (M6.3c), its own stream so the rest is unchanged.
+  const edgeRng = rng.fork('edge');
+  const edgeNoise = createNoise(edgeRng);
+  const edgeX = edgeRng.range(-500, 500);
+  const edgeZ = edgeRng.range(-500, 500);
+  const { edge } = rules;
 
   return (x, z, here, slope, grows = 1) => {
     const variation = clamp01(0.5 + 0.6 * fbm(noise, x / rules.variationScale + offsetX, z / rules.variationScale + offsetZ, 3));
     // The edge of the sand wanders a little with the variation, so it is not a contour line.
+    const wander = fbm(edgeNoise, x / edge.scale + edgeX, z / edge.scale + edgeZ, 3);
     const sand = 1 - smoothstep(rules.sandTop[0], rules.sandTop[1], here + (variation - 0.5) * 1.2);
     const rock =
       here <= 0
         ? 0
         : Math.max(
-            alpine ? smoothstep(rules.rockHeight[0], rules.rockHeight[1], here + variation * 6) : 0,
-            smoothstep(rules.rockSlope[0], rules.rockSlope[1], slope),
+            alpine ? smoothstep(rules.rockHeight[0], rules.rockHeight[1], here + variation * 6 + wander * edge.height) : 0,
+            // The wander may always draw grass up a slope, but pushes rock down only onto ground nearly steep enough
+            // for it, so gentle ground stays grass.
+            smoothstep(rules.rockSlope[0], rules.rockSlope[1], slope + wander * edge.slope * (wander > 0 ? smoothstep(rules.rockSlope[0] - edge.reach, rules.rockSlope[0], slope) : 1)),
           );
     // The snow line wanders a little with the variation, like the edge of the sand.
-    const snow = alpine ? smoothstep(rules.snowHeight[0], rules.snowHeight[1], here + (variation - 0.5) * 6) : 0;
+    const snow = alpine ? smoothstep(rules.snowHeight[0], rules.snowHeight[1], here + (variation - 0.5) * 6 + wander * edge.snow) : 0;
     const grass = here > 0 && grows > 0 ? (1 - sand) * (1 - rock) * (1 - snow) * grows : 0;
     return {
       grass: Math.round(grass * 255),

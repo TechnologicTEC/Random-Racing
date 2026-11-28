@@ -102,6 +102,56 @@ describe('buildCover', () => {
   });
 });
 
+describe('the edges of the rock and the snow (M6.3c)', () => {
+  const sample = coverSampler(3, config, 'peak');
+  /** What the sampler gives at points 15 m apart over a 600 m square, all at one height and slope. */
+  const over = (here: number, slope: number, pick: (c: ReturnType<typeof sample>) => number): number[] => {
+    const got: number[] = [];
+    for (let x = -300; x <= 300; x += 15) for (let z = -300; z <= 300; z += 15) got.push(pick(sample(x, z, here, slope)));
+    return got;
+  };
+  /** The share of values below a quarter and above three quarters of the scale. */
+  const ends = (values: number[]): [number, number] => [values.filter((v) => v < 64).length / values.length, values.filter((v) => v > 191).length / values.length];
+
+  it('wander across an even slope: in the middle of the rock band some places are mostly grass and some mostly rock', () => {
+    const [grassy, rocky] = ends(over(60, (config.world.cover.rockSlope[0] + config.world.cover.rockSlope[1]) / 2, (c) => c.rock));
+    expect(grassy).toBeGreaterThan(0.1);
+    expect(rocky).toBeGreaterThan(0.1);
+  });
+
+  it('never push rock onto gentle low ground', () => {
+    const { rockSlope, edge } = config.world.cover;
+    expect(Math.max(...over(60, rockSlope[0] - edge.reach - 0.01, (c) => c.rock))).toBe(0);
+  });
+
+  it('wander across high ground, so rock does not begin along a contour', () => {
+    const [grassy, rocky] = ends(over((config.world.cover.rockHeight[0] + config.world.cover.rockHeight[1]) / 2, 0.1, (c) => c.rock));
+    expect(grassy).toBeGreaterThan(0.1);
+    expect(rocky).toBeGreaterThan(0.1);
+  });
+
+  it('wander across the snow line', () => {
+    const [bare, snowy] = ends(over((config.world.cover.snowHeight[0] + config.world.cover.snowHeight[1]) / 2, 0.1, (c) => c.snow));
+    expect(bare).toBeGreaterThan(0.1);
+    expect(snowy).toBeGreaterThan(0.1);
+  });
+
+  it('wander broadly: points 3 m apart differ far less than points far apart', () => {
+    let near = 0;
+    let far = 0;
+    let count = 0;
+    for (let x = -300; x <= 300; x += 15) {
+      for (let z = -300; z <= 300; z += 60) {
+        const here = sample(x, z, 60, 0.75).rock;
+        near += Math.abs(here - sample(x + 3, z, 60, 0.75).rock);
+        far += Math.abs(here - sample(x + 150, z + 150, 60, 0.75).rock);
+        count++;
+      }
+    }
+    expect(near / count).toBeLessThan((far / count) / 4);
+  });
+});
+
 describe('coverSampler (M6.2b)', () => {
   it('gives at any point the cover buildCover gives a cell away from the road, from its height and slope', () => {
     // A hillside rising to the east, steep enough in places for rock and high enough for some snow.

@@ -125,7 +125,7 @@ Written 2026-11-16 by the model that built Milestones 1 and 2 and Milestone 3 up
 - **M6.3** The look issues Tane picked (2026-11-28: numbers 1, 2, 3, 4, 6, 7 and 11 of the list offered; generator ones first):
   - [x] **M6.3a** The massif's foot uneven, not a round cone (generator): **dropped** (Tane, 2026-11-28: tried, it barely showed)
   - [x] **M6.3b** Wider blends beside deep cuttings on steep ground (generator) (2026-11-28; 45 m, Tane)
-  - [ ] **M6.3c** Mountain rock with soft, uneven edges; a less lumpy peak (generator)
+  - [x] **M6.3c** Mountain rock with soft, uneven edges; a less lumpy peak (generator) (2026-11-28; the peak left as it is, Tane)
   - [ ] **M6.3d** The saw-tooth tops of sea cliffs and cut banks (drawing; a generator fallback if Tane asks)
   - [ ] **M6.3e** The sun's glare on the sea from above (drawing)
   - [ ] **M6.3f** The time of day: clouds at a low sun, dawn and dusk light, the evening sky, the light's names (drawing)
@@ -230,7 +230,7 @@ Every item under "Known issues and risks" in `docs/STATE.md`, by the step that d
 | The sun's glare from above is a wide pale patch with wave stripes | **M6.3e** |
 | Clouds dark grey-brown at 07:00 and 19:30; those times quite dark; 18:30 called "evening light" with a blue sky; 10:00 called "midday light" | **M6.3f** (all one look at `render/daylight.ts` and `lightName`) |
 | The round cone under a massif | Left (Tane, M6.3a, 2026-11-28: a lobed foot barely showed; the round look is the coast's cliffs) |
-| Mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3c** |
+| Mountain rock in hard-edged bands; the peak a bit lumpy | **M6.3c** (done: the edges wander; the peak left, Tane) |
 | The coast cuts high ground into curved rock bands | Left (Tane, M6.3, 2026-11-28: the biggest and riskiest of the list) |
 | Steep rock cuttings beside mountain roads | **M6.2** (tunnels take the deepest), then **M6.3b** (done: they lie back; the coast's cut into high ground, left, makes the trenches) |
 | Flat seeds show large sandy patches; the mown strip is the same width everywhere; nothing cleared round trees in long grass; the wind blows the same way on every island | Left (Tane, M6.3, 2026-11-28) |

@@ -884,6 +884,14 @@ export interface CoverConfig {
   roadsideFade: number;
   /** Size of the patches of lusher and drier ground: metres per unit of noise. */
   variationScale: number;
+  /**
+   * M6.3c: the edges of the rock and the snow wander up and down the hill with a broad noise of this size
+   * (metres per unit), so rock reaches down in tongues and grass climbs between them, not along a contour: the rock's
+   * slopes shift by up to `slope`, its heights by up to `height` metres and the snow line by up to `snow` metres.
+   * The wander may always draw grass up a slope, but pushes rock only onto slopes at most `reach` gentler than
+   * `rockSlope`'s start, so gentle ground stays grass.
+   */
+  edge: { scale: number; slope: number; height: number; snow: number; reach: number };
 }
 
 /**
@@ -2352,10 +2360,11 @@ export const config: GameConfig = {
     cover: {
       sandTop: [1.0, 2.6],
       rockHeight: [130, 160],
-      rockSlope: [0.55, 0.85],
+      rockSlope: [0.5, 1.0],
       snowHeight: [180, 200],
       roadsideFade: 3,
       variationScale: 55,
+      edge: { scale: 70, slope: 0.5, height: 40, snow: 20, reach: 0.15 },
     },
     sky: { hours: [7, 19.5] },
     decor: {
