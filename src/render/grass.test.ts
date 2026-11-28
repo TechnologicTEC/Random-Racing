@@ -27,6 +27,8 @@ import { buildTerrainChunks } from './terrainChunks';
 
 const cfg = config.render.grass;
 const wind = config.render.water.wind;
+/** Steep cells of the drawn ground may be split the other way (M6.3d): the grass follows the mesh. */
+const STEEP = config.render.groundSplitSteep;
 const reach = cfg.mown.width + cfg.mown.ease;
 const blades = grassBlades(cfg);
 const TAU = 2 * Math.PI;
@@ -60,7 +62,7 @@ const eyeAt = (x: number, z = 0): GrassEye => grassEye({ x, y: 9, z }, { x: x + 
 /** Every blade of the field as it stands for a camera, at a moment. */
 function field(eye: GrassEye, land: { ground: HeightField; grid: GrassGrid }, seconds = 0, step = 1): Blade[] {
   const all: Blade[] = [];
-  for (let i = 0; i < blades.count; i += step) all.push(bladeAt(blades, i, eye, land.grid, land.ground, seconds, cfg, wind));
+  for (let i = 0; i < blades.count; i += step) all.push(bladeAt(blades, i, eye, land.grid, land.ground, seconds, cfg, wind, STEEP));
   return all;
 }
 
@@ -476,10 +478,10 @@ describe('bladeAt: the whole field for a camera, on an open meadow', () => {
   it('never pops: a blade has shrunk to nothing when it jumps from the edge behind to the edge ahead', () => {
     const picked: number[] = [];
     for (let i = 0; i < blades.count; i += 211) picked.push(i);
-    let before = picked.map((i) => bladeAt(blades, i, eyeAt(-150), land.grid, land.ground, 0, cfg, wind));
+    let before = picked.map((i) => bladeAt(blades, i, eyeAt(-150), land.grid, land.ground, 0, cfg, wind, STEEP));
     let jumps = 0;
     for (let x = -150 + 0.5; x <= 150; x += 0.5) {
-      const now = picked.map((i) => bladeAt(blades, i, eyeAt(x), land.grid, land.ground, 0, cfg, wind));
+      const now = picked.map((i) => bladeAt(blades, i, eyeAt(x), land.grid, land.ground, 0, cfg, wind, STEEP));
       now.forEach((blade, k) => {
         const was = before[k]!;
         if (blade.x === was.x && blade.z === was.z) return;
@@ -497,10 +499,10 @@ describe('bladeAt: the whole field for a camera, on an open meadow', () => {
     const picked: number[] = [];
     for (let i = 0; i < blades.count; i += 211) picked.push(i);
     const turned = (angle: number): GrassEye => grassEye({ x: 0, y: 9, z: 0 }, { x: Math.cos(angle) * 30, y: 9, z: Math.sin(angle) * 30 });
-    let before = picked.map((i) => bladeAt(blades, i, turned(0), land.grid, land.ground, 0, cfg, wind));
+    let before = picked.map((i) => bladeAt(blades, i, turned(0), land.grid, land.ground, 0, cfg, wind, STEEP));
     let jumps = 0;
     for (let angle = 0.004; angle <= TAU; angle += 0.004) {
-      const now = picked.map((i) => bladeAt(blades, i, turned(angle), land.grid, land.ground, 0, cfg, wind));
+      const now = picked.map((i) => bladeAt(blades, i, turned(angle), land.grid, land.ground, 0, cfg, wind, STEEP));
       now.forEach((blade, k) => {
         const was = before[k]!;
         if (blade.x === was.x && blade.z === was.z) return;
@@ -583,7 +585,7 @@ describe('the grass on a real island (seed 7)', () => {
   const edge = edgeDistance(nearestRoad(winner.line, ground), world.road.width);
 
   it('puts every foot on the drawn ground: the same height as the ground mesh s triangle under it, to a millimetre', () => {
-    const chunks = buildTerrainChunks(ground, cover, { chunkCells: config.render.chunkCells, skipBelow: -Infinity });
+    const chunks = buildTerrainChunks(ground, cover, { chunkCells: config.render.chunkCells, skipBelow: -Infinity, steep: STEEP });
     const next = numbers(5);
     let checked = 0;
     while (checked < 500) {
@@ -601,13 +603,13 @@ describe('the grass on a real island (seed 7)', () => {
       const x = a[0] + (b[0] - a[0]) * u + (c[0] - a[0]) * v;
       const y = a[1] + (b[1] - a[1]) * u + (c[1] - a[1]) * v;
       const z = a[2] + (b[2] - a[2]) * u + (c[2] - a[2]) * v;
-      expect(Math.abs(groundHeightAt(ground, x, z) - y)).toBeLessThan(0.001);
+      expect(Math.abs(groundHeightAt(ground, x, z, STEEP) - y)).toBeLessThan(0.001);
       checked++;
     }
   });
 
   it('knows which way the ground under a blade faces: the same as the ground mesh s triangle, so both take the same light', () => {
-    const chunks = buildTerrainChunks(ground, cover, { chunkCells: config.render.chunkCells, skipBelow: -Infinity });
+    const chunks = buildTerrainChunks(ground, cover, { chunkCells: config.render.chunkCells, skipBelow: -Infinity, steep: STEEP });
     const next = numbers(6);
     let steep = 0;
     for (let checked = 0; checked < 500; checked++) {
@@ -627,7 +629,7 @@ describe('the grass on a real island (seed 7)', () => {
       // A point well inside the triangle.
       const x = (a[0] + b[0] + c[0]) / 3;
       const z = (a[2] + b[2] + c[2]) / 3;
-      const facing = groundNormalAt(ground, x, z);
+      const facing = groundNormalAt(ground, x, z, STEEP);
       expect(facing.x).toBeCloseTo(n[0]! / length, 5);
       expect(facing.y).toBeCloseTo(n[1]! / length, 5);
       expect(facing.z).toBeCloseTo(n[2]! / length, 5);
@@ -650,7 +652,7 @@ describe('the grass on a real island (seed 7)', () => {
         { x: winner.line.x[s]! + winner.line.tx[s]! * 30, y: height - 3, z: winner.line.z[s]! + winner.line.tz[s]! * 30 },
       );
       for (let i = 0; i < blades.count; i += 5) {
-        const blade = bladeAt(blades, i, eye, grid, ground, 0, cfg, wind);
+        const blade = bladeAt(blades, i, eye, grid, ground, 0, cfg, wind, STEEP);
         if (blade.height <= 0) continue;
         standing++;
         if (sampleGrid(ground, edge, blade.x, blade.z, 99) < -0.5) onRoad++;
@@ -711,7 +713,7 @@ describe('the grass on a real island (seed 7)', () => {
         { x: winner.line.x[s]! + winner.line.tx[s]! * 30, y: height, z: winner.line.z[s]! + winner.line.tz[s]! * 30 },
       );
       for (let i = 0; i < blades.count; i += 9) {
-        const blade = bladeAt(blades, i, eye, grid, ground, 0, cfg, wind);
+        const blade = bladeAt(blades, i, eye, grid, ground, 0, cfg, wind, STEEP);
         if (!blade.lives) continue;
         const beyond = sampleGrid(ground, edge, blade.x, blade.z, 99);
         if (beyond < cfg.mown.width - 2) {
@@ -735,8 +737,45 @@ describe('the grass on a real island (seed 7)', () => {
   });
 });
 
+describe('the drawn ground on a steep square split the other way (M6.3d)', () => {
+  // A fold running corner to corner of each square: flat to one side, rising at 300% to the other.
+  const fold = (x: number, z: number): number => 3 * Math.max(0, x - z);
+  const ground = createField(30, 3);
+  for (let iz = 0; iz < ground.size; iz++) {
+    for (let ix = 0; ix < ground.size; ix++) ground.height[iz * ground.size + ix] = fold(ground.origin + ix * ground.cell, ground.origin + iz * ground.cell);
+  }
+  const STEEP = config.render.groundSplitSteep;
+
+  it('gives the height of the triangle the mesh draws: on the fold, the fold itself', () => {
+    const next = numbers(11);
+    for (let k = 0; k < 300; k++) {
+      const x = -12 + next() * 24;
+      const z = -12 + next() * 24;
+      expect(groundHeightAt(ground, x, z, STEEP)).toBeCloseTo(fold(x, z), 9);
+    }
+  });
+
+  it('faces each blade the way its triangle faces: flat on one side of the fold, sloping on the other', () => {
+    const next = numbers(12);
+    const length = Math.hypot(3, 1, 3);
+    for (let k = 0; k < 300; k++) {
+      const x = -12 + next() * 24;
+      const z = -12 + next() * 24;
+      if (Math.abs(x - z) < 0.01) continue;
+      const facing = groundNormalAt(ground, x, z, STEEP);
+      if (x < z) {
+        expect(facing.y).toBeCloseTo(1, 9);
+      } else {
+        expect(facing.x).toBeCloseTo(-3 / length, 9);
+        expect(facing.y).toBeCloseTo(1 / length, 9);
+        expect(facing.z).toBeCloseTo(3 / length, 9);
+      }
+    }
+  });
+});
+
 describe('grassGlsl: the same sums for the shader', () => {
-  const text = grassGlsl(cfg, wind);
+  const text = grassGlsl(cfg, wind, STEEP);
   /** The shader text without its comments. */
   const code = text.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -770,15 +809,21 @@ describe('grassGlsl: the same sums for the shader', () => {
     ]) {
       expect(code).toContain(number(value));
     }
-    const other = grassGlsl({ ...cfg, sink: 0.123, mown: { ...cfg.mown, height: 0.077 } }, wind);
+    const other = grassGlsl({ ...cfg, sink: 0.123, mown: { ...cfg.mown, height: 0.077 } }, wind, STEEP);
     expect(other).toContain('0.123');
     expect(other).toContain('0.077');
     expect(other).not.toBe(text);
   });
 
+  it('splits steep squares the way the ground mesh does, at the threshold it is given (M6.3d)', () => {
+    expect(code).toContain('abs(a - d) < abs(b - c)');
+    expect(code).toContain(`steepest > ${config.render.groundSplitSteep}`);
+    expect(grassGlsl(cfg, wind, 0.45)).toContain('0.45');
+  });
+
   it('blows down the wind it is given', () => {
     const length = Math.hypot(wind[0], wind[1]);
     expect(code).toContain(String(wind[0] / length));
-    expect(grassGlsl(cfg, [0, 1])).not.toBe(text);
+    expect(grassGlsl(cfg, [0, 1], STEEP)).not.toBe(text);
   });
 });

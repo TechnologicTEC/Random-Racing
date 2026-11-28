@@ -83,6 +83,41 @@ describe('buildTerrainChunks', () => {
     }
   });
 
+  it('splits a steep square along the diagonal that follows its slope s edge, so a fold is drawn as a line (M6.3d)', () => {
+    // A fold running corner to corner: flat to one side, rising at 300% to the other.
+    const fold = (x: number, z: number): number => 3 * Math.max(0, x - z);
+    const { ground, cover } = world(16, 2, fold);
+    /** How far the middle of each triangle is from the fold, most. */
+    const worst = (steep?: number): number => {
+      let most = 0;
+      for (const chunk of buildTerrainChunks(ground, cover, { chunkCells: 4, skipBelow: -100, steep })) {
+        const p = chunk.positions;
+        for (let t = 0; t < chunk.indices.length; t += 3) {
+          const [a, b, c] = [chunk.indices[t]! * 3, chunk.indices[t + 1]! * 3, chunk.indices[t + 2]! * 3];
+          const x = (p[a]! + p[b]! + p[c]!) / 3;
+          const z = (p[a + 2]! + p[b + 2]! + p[c + 2]!) / 3;
+          most = Math.max(most, Math.abs((p[a + 1]! + p[b + 1]! + p[c + 1]!) / 3 - fold(x, z)));
+        }
+      }
+      return most;
+    };
+    expect(worst(config.render.groundSplitSteep)).toBeLessThan(1e-9);
+    // Split the usual way, triangles straddle the fold.
+    expect(worst()).toBeGreaterThan(1);
+  });
+
+  it('keeps the usual split on squares no steeper than the threshold', () => {
+    const { ground, cover } = world(16, 2, (x, z) => 0.5 * Math.max(0, x - z));
+    const usual = buildTerrainChunks(ground, cover, { chunkCells: 4, skipBelow: -100 });
+    const steep = buildTerrainChunks(ground, cover, { chunkCells: 4, skipBelow: -100, steep: config.render.groundSplitSteep });
+    expect(steep.map((chunk) => Array.from(chunk.indices))).toEqual(usual.map((chunk) => Array.from(chunk.indices)));
+  });
+
+  it('draws the 3D view s ground with the configured threshold', () => {
+    const line = { x: [0], z: [0] };
+    expect(detailOptions(config.render, line).steep).toBe(config.render.groundSplitSteep);
+  });
+
   it('leaves out chunks that are entirely deep under the sea', () => {
     // Land on the left half, deep sea on the right.
     const { ground, cover } = world(32, 2, (x) => (x < 0 ? 5 : -20));

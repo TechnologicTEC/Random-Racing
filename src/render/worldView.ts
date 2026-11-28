@@ -230,7 +230,7 @@ export function createWorldView(canvas: HTMLCanvasElement, cfg: RenderConfig, pi
   scene.add(clouds.object);
 
   // Grass blades in fields that follow the camera, swayed by the sea's wind.
-  const grass = createGrassView(cfg.grass, cfg.water.wind, shade);
+  const grass = createGrassView(cfg.grass, cfg.water.wind, cfg.groundSplitSteep, shade);
   scene.add(grass.object);
   let grassShown = true;
   /** The land's top for the grass where a tunnel's lid is over the ground (M6.2b-3); null where it reads the water's heights. */

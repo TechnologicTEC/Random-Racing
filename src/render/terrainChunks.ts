@@ -1,5 +1,6 @@
 import type { RenderConfig } from '../config';
 import type { Cover, CoveredMesh, HeightField } from '../gen/types';
+import { splitsAcross } from './groundSplit';
 import { terrainColour, toLinear } from './palette';
 
 /**
@@ -39,6 +40,8 @@ export interface ChunkOptions {
   far?: { x: ArrayLike<number>; z: ArrayLike<number>; levels: readonly DetailLevel[] };
   /** A chunk of sea bed whose highest point is at or below `below` metres takes at least this stride, however near the road. */
   seaBed?: { below: number; stride: number };
+  /** A square steeper than this (a fraction) is split along the diagonal that follows its slope's edge (`splitsAcross`, M6.3d); none if left out. */
+  steep?: number;
 }
 
 /** The stride of every chunk, row by row: what `buildTerrainChunks` uses, for whatever else must know where ground is drawn coarse. */
@@ -52,7 +55,7 @@ export interface GroundDetail {
 
 /** The chunk options the 3D view draws an island with: the configured levels of detail, measured from the road's centre line. */
 export function detailOptions(
-  render: Pick<RenderConfig, 'chunkCells' | 'skipSeaBedBelow' | 'detail'>,
+  render: Pick<RenderConfig, 'chunkCells' | 'skipSeaBedBelow' | 'detail' | 'groundSplitSteep'>,
   line: { x: ArrayLike<number>; z: ArrayLike<number> },
 ): ChunkOptions {
   return {
@@ -60,6 +63,7 @@ export function detailOptions(
     skipBelow: render.skipSeaBedBelow,
     far: { x: line.x, z: line.z, levels: render.detail.levels },
     seaBed: render.detail.seaBed,
+    steep: render.groundSplitSteep,
   };
 }
 
@@ -190,20 +194,33 @@ export function buildTerrainChunks(ground: HeightField, cover: Cover, options: C
         });
       });
 
-      // Two triangles per square, wound so they face upwards.
+      // Two triangles per square, wound so they face upwards: split from b to c, or on a steep square along the
+      // diagonal that follows its slope's edge (M6.3d).
       const indices = new Uint32Array((row - 1) * (zs.length - 1) * 6);
+      const steep = options.steep ?? Infinity;
+      const span = cell * stride;
       let k = 0;
       for (let rz = 0; rz < zs.length - 1; rz++) {
         for (let rx = 0; rx < row - 1; rx++) {
           const a = rz * row + rx;
           const b = a + 1;
           const below = a + row;
-          indices[k++] = a;
-          indices[k++] = below;
-          indices[k++] = b;
-          indices[k++] = b;
-          indices[k++] = below;
-          indices[k++] = below + 1;
+          const across = splitsAcross(positions[a * 3 + 1]!, positions[b * 3 + 1]!, positions[below * 3 + 1]!, positions[(below + 1) * 3 + 1]!, span, steep);
+          if (across) {
+            indices[k++] = a;
+            indices[k++] = below;
+            indices[k++] = below + 1;
+            indices[k++] = a;
+            indices[k++] = below + 1;
+            indices[k++] = b;
+          } else {
+            indices[k++] = a;
+            indices[k++] = below;
+            indices[k++] = b;
+            indices[k++] = b;
+            indices[k++] = below;
+            indices[k++] = below + 1;
+          }
         }
       }
       chunks.push({ positions, colors, indices, minY, maxY, stride });

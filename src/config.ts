@@ -1116,6 +1116,11 @@ export interface RenderConfig {
   skipSeaBedBelow: number;
   /** How coarsely ground away from the road is drawn. */
   detail: GroundDetailConfig;
+  /**
+   * M6.3d: a square of the ground steeper than this (a fraction) is drawn split along whichever diagonal follows its
+   * slope's edge, so cliff and bank tops are lines, not teeth. Gentler squares keep the split the car's ground has.
+   */
+  groundSplitSteep: number;
   /** Camera field of view, top to bottom, in degrees. */
   fieldOfView: number;
   /** Distance at which haze starts, and at which it hides everything, in metres. */
@@ -2543,6 +2548,7 @@ export const config: GameConfig = {
   render: {
     chunkCells: 64,
     skipSeaBedBelow: -15,
+    groundSplitSteep: 0.7,
     detail: {
       levels: [
         { distance: 250, stride: 2 },

@@ -1,6 +1,7 @@
 import type { GrassConfig, SwayConfig } from '../config';
 import { createRng } from '../core/rng';
 import type { HeightField } from '../gen/types';
+import { splitsAcross } from './groundSplit';
 import { grassAt, type GrassGrid } from './grassMaps';
 
 /**
@@ -166,8 +167,10 @@ export function edgeFade(distance: number, half: number, share: number): number 
  * Height of the drawn ground at a point, in metres: the ground mesh splits
  * each cell of the grid into two triangles (`terrainChunks.ts`), and this
  * reads the triangle the point is over. Off the tile it is the height at the tile's edge.
+ *
+ * @param steep a cell steeper than this is split the way `splitsAcross` says (`render.groundSplitSteep`, M6.3d)
  */
-export function groundHeightAt(ground: HeightField, x: number, z: number): number {
+export function groundHeightAt(ground: HeightField, x: number, z: number, steep: number): number {
   const last = ground.size - 1;
   const gx = Math.min(last, Math.max(0, (x - ground.origin) / ground.cell));
   const gz = Math.min(last, Math.max(0, (z - ground.origin) / ground.cell));
@@ -180,7 +183,8 @@ export function groundHeightAt(ground: HeightField, x: number, z: number): numbe
   const b = ground.height[i + 1]!;
   const c = ground.height[i + ground.size]!;
   const d = ground.height[i + ground.size + 1]!;
-  // The mesh's diagonal runs from b to c.
+  // On a steep cell the mesh's diagonal may run from a to d (M6.3d); otherwise from b to c.
+  if (splitsAcross(a, b, c, d, ground.cell, steep)) return fx >= fz ? a + (b - a) * fx + (d - b) * fz : a + (c - a) * fz + (d - c) * fx;
   return fx + fz <= 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
 }
 
@@ -189,7 +193,7 @@ export function groundHeightAt(ground: HeightField, x: number, z: number): numbe
  * the ground mesh's triangle there. A blade takes the light its ground takes,
  * so a field of blades is no lighter or darker than the hillside it stands on.
  */
-export function groundNormalAt(ground: HeightField, x: number, z: number): { x: number; y: number; z: number } {
+export function groundNormalAt(ground: HeightField, x: number, z: number, steep: number): { x: number; y: number; z: number } {
   const last = ground.size - 1;
   const gx = Math.min(last, Math.max(0, (x - ground.origin) / ground.cell));
   const gz = Math.min(last, Math.max(0, (z - ground.origin) / ground.cell));
@@ -200,9 +204,12 @@ export function groundNormalAt(ground: HeightField, x: number, z: number): { x: 
   const b = ground.height[i + 1]!;
   const c = ground.height[i + ground.size]!;
   const d = ground.height[i + ground.size + 1]!;
-  const first = gx - ix + (gz - iz) <= 1;
+  const fx = gx - ix;
+  const fz = gz - iz;
+  const across = splitsAcross(a, b, c, d, ground.cell, steep);
+  const first = across ? fx >= fz : fx + fz <= 1;
   const nx = first ? a - b : c - d;
-  const nz = first ? a - c : b - d;
+  const nz = across ? (first ? b - d : a - c) : first ? a - c : b - d;
   const length = Math.hypot(nx, ground.cell, nz);
   return { x: nx / length, y: ground.cell / length, z: nz / length };
 }
@@ -291,6 +298,7 @@ export function bladeAt(
   seconds: number,
   cfg: GrassConfig,
   wind: readonly [number, number],
+  steep: number,
 ): Blade {
   let k = 0;
   while (k < blades.tiers.length - 1 && i >= blades.tiers[k]!.start + blades.tiers[k]!.count) k++;
@@ -310,7 +318,7 @@ export function bladeAt(
   }
 
   const here = grassAt(grid, x, z);
-  const foot = groundHeightAt(ground, x, z);
+  const foot = groundHeightAt(ground, x, z, steep);
   const lives = bladeLives(rank, here.grass, cfg.thin) && foot > cfg.dry;
   const length = bladeLength(here.variation, here.roadside, share, cfg);
   const height = lives ? length * fade : 0;
@@ -354,7 +362,7 @@ const float = (value: number): string => (Number.isInteger(value) ? `${value}.0`
  *
  * @param wind the way the wind blows across the map (x, z)
  */
-export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): string {
+export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number], steep: number): string {
   const windLength = Math.hypot(wind[0], wind[1]) || 1;
   const wx = wind[0] / windLength;
   const wz = wind[1] / windLength;
@@ -385,6 +393,13 @@ export function grassGlsl(cfg: GrassConfig, wind: readonly [number, number]): st
       float b = groundAt(i + vec2(1.0, 0.0));
       float c = groundAt(i + vec2(0.0, 1.0));
       float d = groundAt(i + vec2(1.0, 1.0));
+      // On a steep cell the ground mesh may be split from a to d (splitsAcross, M6.3d).
+      float steepest = max(max(abs(a - b), abs(c - d)), max(abs(a - c), abs(b - d))) / uGroundCell;
+      if (steepest > ${float(steep)} && abs(a - d) < abs(b - c)) {
+        bool upper = f.x >= f.y;
+        facing = normalize(upper ? vec3(a - b, uGroundCell, b - d) : vec3(c - d, uGroundCell, a - c));
+        return upper ? a + (b - a) * f.x + (d - b) * f.y : a + (c - a) * f.y + (d - c) * f.x;
+      }
       bool first = f.x + f.y <= 1.0;
       facing = normalize(first ? vec3(a - b, uGroundCell, a - c) : vec3(c - d, uGroundCell, b - d));
       return first ? a + (b - a) * f.x + (c - a) * f.y : d + (c - d) * (1.0 - f.x) + (b - d) * (1.0 - f.y);

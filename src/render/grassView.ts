@@ -49,7 +49,7 @@ export interface GrassShade {
   uniforms: Record<string, THREE.IUniform>;
 }
 
-export function createGrassView(cfg: GrassConfig, wind: readonly [number, number], shade?: GrassShade): GrassView {
+export function createGrassView(cfg: GrassConfig, wind: readonly [number, number], steep: number, shade?: GrassShade): GrassView {
   const object = new THREE.Group();
   const blades = grassBlades(cfg);
 
@@ -101,7 +101,7 @@ export function createGrassView(cfg: GrassConfig, wind: readonly [number, number
       #include <shadowmap_pars_vertex>
       ${DEPTH_GLSL}
       ${shade ? shade.glsl : 'float sunShade(vec3 world) { return 1.0; } float skyShade(float sunLit) { return 1.0; }'}
-      ${grassGlsl(cfg, wind)}
+      ${grassGlsl(cfg, wind, steep)}
       attribute vec2 aOffset;
       attribute vec4 aTrait;
       attribute vec4 aTier;
